@@ -1480,7 +1480,10 @@ function primitiveAnchor(primitive, w, h) {
     const points = Array.isArray(props.points) ? props.points : [];
     if (points.length) return normalizedPoint(points[Math.floor(points.length / 2)], w, h);
   }
-  if (primitive?.kind === "particle_field" && props.emitter) return normalizedPoint(props.emitter, w, h);
+  if (primitive?.kind === "particle_field") {
+    const emitters = particleFieldEmitters(props, w, h);
+    if (emitters.length) return emitters[0].point;
+  }
   return {x: w * 0.5, y: h * 0.48};
 }
 
@@ -4270,32 +4273,51 @@ function drawDataRain(primitive, w, h, now) {
 
 function drawParticleField(primitive, w, h, now) {
   const props = primitive.props || {};
-  const count = Math.max(0, Math.min(120, Number(props.count || 0)));
+  const emitters = particleFieldEmitters(props, w, h);
+  if (!emitters.length) return;
+  const count = Math.max(0, Math.min(160, Number(props.count || emitters.length * 24)));
   const velocity = Number(props.velocity || 0.25);
-  const emitter = normalizedPoint(props.emitter || {x: 0.5, y: 0.5}, w, h);
-  const tone = props.color || "cyan";
   ctx.save();
   ctx.globalCompositeOperation = props.blend === "screen" ? "screen" : "source-over";
   ctx.lineCap = "round";
-  for (let index = 0; index < count; index++) {
-    const phase = ((now * velocity * 0.00025) + index * 0.071 + Number(props.seed || 0) * 0.013) % 1;
-    const angle = -0.82 + index * 0.37;
-    const distance = phase * Math.max(w, h) * 0.62;
-    const x = emitter.x + Math.cos(angle) * distance;
-    const y = emitter.y + Math.sin(angle) * distance * 0.62;
-    const alpha = Math.max(0, 1 - phase);
-    ctx.strokeStyle = toneColor(tone, alpha * 0.34);
-    ctx.lineWidth = 1.4 * devicePixelRatio;
-    ctx.beginPath();
-    ctx.moveTo(x, y);
-    ctx.lineTo(x - Math.cos(angle) * 22 * devicePixelRatio, y - Math.sin(angle) * 14 * devicePixelRatio);
-    ctx.stroke();
-    ctx.fillStyle = toneColor("white", alpha * 0.74);
-    ctx.beginPath();
-    ctx.arc(x, y, 2.2 * devicePixelRatio, 0, Math.PI * 2);
-    ctx.fill();
+  const perEmitter = Math.max(1, Math.ceil(count / emitters.length));
+  for (const emitter of emitters) {
+    const emitterCount = Math.max(0, Math.min(perEmitter, Number(emitter.config.count || perEmitter)));
+    const tone = emitter.config.color || emitter.config.tone || props.color || "cyan";
+    const seed = Number(emitter.config.seed ?? props.seed ?? 0);
+    const spread = Number(emitter.config.spread || 0.37);
+    const angleBase = Number(emitter.config.angle || -0.82);
+    for (let index = 0; index < emitterCount; index++) {
+      const phase = ((now * velocity * 0.00025) + index * 0.071 + seed * 0.013) % 1;
+      const angle = angleBase + index * spread + emitter.index * 0.19;
+      const distance = phase * Math.max(w, h) * 0.62;
+      const x = emitter.point.x + Math.cos(angle) * distance;
+      const y = emitter.point.y + Math.sin(angle) * distance * 0.62;
+      const alpha = Math.max(0, 1 - phase);
+      ctx.strokeStyle = toneColor(tone, alpha * 0.34);
+      ctx.lineWidth = 1.4 * devicePixelRatio;
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(x - Math.cos(angle) * 22 * devicePixelRatio, y - Math.sin(angle) * 14 * devicePixelRatio);
+      ctx.stroke();
+      ctx.fillStyle = toneColor("white", alpha * 0.74);
+      ctx.beginPath();
+      ctx.arc(x, y, 2.2 * devicePixelRatio, 0, Math.PI * 2);
+      ctx.fill();
+    }
   }
   ctx.restore();
+}
+
+function particleFieldEmitters(props, w, h) {
+  const raw = Array.isArray(props.emitters) && props.emitters.length
+    ? props.emitters
+    : [props.emitter || {x: 0.5, y: 0.5}];
+  return raw.slice(0, 12).map((value, index) => {
+    const config = value && typeof value === "object" ? value : {};
+    const point = normalizedPoint(config.position || config, w, h);
+    return {config, index, point};
+  });
 }
 
 function pushEvent(event) {

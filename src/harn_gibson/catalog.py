@@ -266,7 +266,7 @@ def default_visual_catalog() -> VisualCatalog:
                 "particle_field",
                 "primitive",
                 "Low-level particles for packets, sparks, rain, snow, stars, or data motes.",
-                ("count", "velocity", "emitter", "color", "blend"),
+                ("count", "velocity", "emitter", "emitters", "color", "blend", "label", "seed"),
                 ("generic", "motion"),
             ),
             CatalogEntry(

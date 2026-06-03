@@ -22,6 +22,14 @@
         "contains": "4 touched"
       },
       {
+        "path": "primitives.dogfood-file-sparks.kind",
+        "equals": "particle_field"
+      },
+      {
+        "path": "primitives.dogfood-file-sparks.props.label",
+        "equals": "4 TOUCHED FILES"
+      },
+      {
         "path": "primitives.dogfood-route.props.focusHopId",
         "equals": "target-0"
       },

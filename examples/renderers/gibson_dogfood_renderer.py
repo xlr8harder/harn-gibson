@@ -47,6 +47,7 @@ def main() -> None:
         _upsert_scope(event_type, phase, tone, accent, sequence, touched),
         _upsert_route(event_type, phase, tone, accent, sequence, touched),
         _upsert_city(entries, touched, event_type, tone, accent, sequence),
+        _upsert_file_particles(entries, touched, tone, accent, sequence),
         _upsert_hologram(project_name, event_type, tone, accent, sequence, touched, entries),
         _upsert_sigil(event_type, summary, tone, accent, sequence, touched),
         _timeline_cue_animation(event_type, phase, sequence, timestamp_ms, duration_ms, tone, accent, touched),
@@ -367,6 +368,79 @@ def _upsert_hologram(
     }
 
 
+def _upsert_file_particles(
+    entries: list[dict[str, Any]],
+    touched: list[dict[str, Any]],
+    tone: str,
+    accent: str,
+    sequence: int,
+) -> dict[str, Any]:
+    emitters = _file_particle_emitters(entries, touched, tone, accent, sequence)
+    return {
+        "op": "upsert",
+        "primitive": {
+            "id": "dogfood-file-sparks",
+            "kind": "particle_field",
+            "region": "stage",
+            "props": {
+                "count": sum(_int(item.get("count"), 0) for item in emitters),
+                "velocity": 0.74,
+                "emitter": emitters[0],
+                "emitters": emitters,
+                "color": accent,
+                "blend": "screen",
+                "label": f"{len(touched)} TOUCHED FILES" if touched else "EVENT SPARKS",
+                "seed": sequence + 109,
+            },
+        },
+    }
+
+
+def _file_particle_emitters(
+    entries: list[dict[str, Any]],
+    touched: list[dict[str, Any]],
+    tone: str,
+    accent: str,
+    sequence: int,
+) -> list[dict[str, Any]]:
+    if not touched:
+        return [
+            {
+                "x": 0.28,
+                "y": 0.62,
+                "count": 28,
+                "color": tone,
+                "label": "EVENT",
+                "seed": sequence + 11,
+                "spread": 0.41,
+            }
+        ]
+    emitters = []
+    for index, item in enumerate(touched[:8]):
+        path = _text(item.get("path"), f"event-{index}")
+        entry_index = _entry_index_for_path(entries, path)
+        if entry_index is None:
+            x = round(0.20 + (index % 4) * 0.075, 3)
+            y = round(0.64 - (index // 4) * 0.10, 3)
+        else:
+            x = round(0.17 + (entry_index % 4) * 0.085, 3)
+            y = round(0.625 - (entry_index // 4) * 0.12, 3)
+        signal_count = len(_list(item.get("phases"))) * 2 + len(_list(item.get("sources"))) + index
+        emitters.append(
+            {
+                "x": x,
+                "y": y,
+                "count": 18 + min(10, signal_count),
+                "color": "magenta" if index % 2 == 0 else accent,
+                "label": _path_label(path),
+                "seed": sequence + index * 17,
+                "angle": round(-0.95 + index * 0.12, 3),
+                "spread": round(0.30 + (index % 3) * 0.04, 3),
+            }
+        )
+    return emitters
+
+
 def _upsert_sigil(
     event_type: str,
     summary: str,
@@ -657,6 +731,14 @@ def _city_focus(blocks: list[dict[str, Any]]) -> str:
         if block.get("touched"):
             return _text(block.get("id"), "dogfood-city-core")
     return _text(blocks[min(1, len(blocks) - 1)].get("id"), "dogfood-city-core")
+
+
+def _entry_index_for_path(entries: list[dict[str, Any]], path: str) -> int | None:
+    for index, entry in enumerate(entries[:8]):
+        entry_path = _text(entry.get("path") or entry.get("name"), "")
+        if entry_path and (path == entry_path or path.startswith(f"{entry_path}/")):
+            return index
+    return None
 
 
 def _phase_tone(phase: str, event_type: str) -> str:

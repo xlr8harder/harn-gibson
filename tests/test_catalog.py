@@ -108,6 +108,9 @@ def test_default_visual_catalog_has_generic_and_cinematic_building_blocks() -> N
     assert data_rain is not None
     assert {"glyphs", "columns", "density", "speed", "direction", "bands", "glitch"} <= set(data_rain.props)
     assert {"cinematic", "motion", "text"} <= set(data_rain.tags)
+    particle_field = catalog.entry("particle_field")
+    assert particle_field is not None
+    assert {"emitter", "emitters", "count", "velocity", "label", "seed"} <= set(particle_field.props)
     hologram = catalog.entry("hologram")
     assert hologram is not None
     assert {"rings", "beams", "panels", "motes", "scan", "spin", "label"} <= set(hologram.props)
