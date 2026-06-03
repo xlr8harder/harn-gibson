@@ -164,6 +164,7 @@ uv run harn-gibson replay examples/replays/stream-and-diagnostic.json \
   --output-result test-artifacts/replays/result.json \
   --output-render-contexts test-artifacts/replays/renderer-contexts.json \
   --output-render-prompts test-artifacts/replays/renderer-prompts.json \
+  --output-render-chunks test-artifacts/replays/renderer-chunks.json \
   --render-prompt-review test-artifacts/replays/renderer-prompts.html \
   --output-render-intents test-artifacts/replays/render-intents.json \
   --render-intent-review test-artifacts/replays/render-intents.html \

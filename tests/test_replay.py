@@ -43,6 +43,7 @@ from harn_gibson.replay import (
     replay_baseline_scene,
     replay_data_from_event_log,
     replay_frame_screenshot_manifest,
+    replay_renderer_chunks_from_result,
     replay_renderer_contexts_from_result,
     replay_renderer_prompts_from_result,
     replay_renderer_prompts_review_html,
@@ -52,6 +53,7 @@ from harn_gibson.replay import (
     write_replay_frame_screenshot_manifest,
     write_replay_render_intents,
     write_replay_render_intents_review_html,
+    write_replay_renderer_chunks,
     write_replay_renderer_contexts,
     write_replay_renderer_prompts,
     write_replay_renderer_prompts_review_html,
@@ -197,6 +199,46 @@ def test_replay_event_steps_file_io_and_writers(tmp_path: Path, monkeypatch: pyt
     assert "event replay renderer prompt review" in prompts_review
     assert "window.__gibsonRendererPrompts" in prompts_review
     assert "tool_call" in prompts_review
+    chunks_path = tmp_path / "out" / "renderer-chunks.json"
+    second_context = json.loads(json.dumps(context_result.renderer_contexts[0].context))
+    second_context["mode"] = "rolling"
+    second_context["renderInput"]["timeline"] = {"startMs": 2000, "endMs": 2400, "durationMs": 400}
+    multi_context_result = ReplayResult(
+        schema="harn-gibson.replay.v1",
+        name="chunked context replay",
+        steps=context_result.steps,
+        scene=context_result.scene,
+        metadata={"fixture": "chunks"},
+        renderer_contexts=(
+            context_result.renderer_contexts[0],
+            ReplayRendererContext(1, second_context),
+        ),
+    )
+    chunks = replay_renderer_chunks_from_result(multi_context_result, chunk_size=2)
+    write_replay_renderer_chunks(chunks_path, multi_context_result, chunk_size=1)
+    chunk_file = json.loads(chunks_path.read_text(encoding="utf-8"))
+
+    assert chunks["schema"] == "harn-gibson.replay-renderer-chunks.v1"
+    assert chunks["contextCount"] == 2
+    assert chunks["chunkCount"] == 1
+    assert chunks["chunkSize"] == 2
+    assert chunks["metadata"] == {"fixture": "chunks"}
+    assert chunks["chunks"][0]["contextIndexes"] == [0, 1]
+    assert chunks["chunks"][0]["modes"] == ["compaction", "rolling"]
+    assert chunks["chunks"][0]["eventTypes"] == ["tool_call"]
+    assert chunks["chunks"][0]["routes"] == ["renderer_agent"]
+    assert chunks["chunks"][0]["requestCount"] == 2
+    assert chunks["chunks"][0]["timeline"] == {"startMs": 1001, "endMs": 2400, "durationMs": 1399}
+    assert chunks["chunks"][0]["prompts"][1]["mode"] == "rolling"
+    assert chunks["chunks"][0]["contexts"][0]["context"]["mode"] == "compaction"
+    assert chunks["chunks"][0]["messageChars"] > chunks["chunks"][0]["contextChars"]
+    assert chunk_file["chunkCount"] == 2
+    assert chunk_file["chunks"][1]["contextStart"] == 1
+    assert replay_renderer_chunks_from_result(result)["chunks"] == []
+    with pytest.raises(ValueError, match="render chunk size"):
+        replay_renderer_chunks_from_result(context_result, chunk_size=0)
+    with pytest.raises(ValueError, match="render chunk size"):
+        replay_renderer_chunks_from_result(context_result, chunk_size="bad")  # type: ignore[arg-type]
     assert "<\\/script>" in replay_renderer_prompts_review_html(
         {
             "replayName": "</script>",
@@ -333,12 +375,16 @@ def test_replay_event_steps_file_io_and_writers(tmp_path: Path, monkeypatch: pyt
     assert bundle_manifest["contextCount"] == 1
     assert bundle_manifest["intentCount"] == 2
     assert bundle_manifest["promptCount"] == 1
+    assert bundle_manifest["chunkCount"] == 1
+    assert bundle_manifest["renderChunkSize"] == 4
     assert bundle_manifest["screenshotCount"] == 2
     assert bundle_manifest["artifacts"]["frameReview"] == "frames/index.html"
+    assert bundle_manifest["artifacts"]["rendererChunks"] == "renderer-chunks.json"
     assert bundle_manifest["artifacts"]["rendererPromptReview"] == "renderer-prompts.html"
     assert bundle_manifest_file == bundle_manifest
     assert json.loads((bundle_path / "renderer-contexts.json").read_text(encoding="utf-8"))["contextCount"] == 1
     assert json.loads((bundle_path / "renderer-prompts.json").read_text(encoding="utf-8"))["promptCount"] == 1
+    assert json.loads((bundle_path / "renderer-chunks.json").read_text(encoding="utf-8"))["chunkCount"] == 1
     assert json.loads((bundle_path / "render-intents.json").read_text(encoding="utf-8"))["intentCount"] == 2
     assert json.loads((bundle_path / "frames" / "manifest.json").read_text(encoding="utf-8"))["screenshotCount"] == 2
     assert "renderer prompt review" in (bundle_path / "renderer-prompts.html").read_text(encoding="utf-8")

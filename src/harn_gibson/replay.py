@@ -823,6 +823,35 @@ def write_replay_renderer_prompts(path: str | Path, result: ReplayResult) -> Non
     )
 
 
+def replay_renderer_chunks_from_result(result: ReplayResult, *, chunk_size: int = 4) -> dict[str, Any]:
+    size = _positive_render_chunk_size(chunk_size)
+    contexts = tuple(result.renderer_contexts)
+    chunks = [
+        _renderer_context_chunk_payload(index, contexts[start : start + size])
+        for index, start in enumerate(range(0, len(contexts), size))
+    ]
+    return {
+        "schema": "harn-gibson.replay-renderer-chunks.v1",
+        "replayName": result.name,
+        "replaySchema": result.schema,
+        "stepCount": len(result.steps),
+        "contextCount": len(contexts),
+        "chunkCount": len(chunks),
+        "chunkSize": size,
+        "chunks": chunks,
+        "metadata": result.metadata,
+    }
+
+
+def write_replay_renderer_chunks(path: str | Path, result: ReplayResult, *, chunk_size: int = 4) -> None:
+    chunks_path = Path(path)
+    chunks_path.parent.mkdir(parents=True, exist_ok=True)
+    chunks_path.write_text(
+        json.dumps(replay_renderer_chunks_from_result(result, chunk_size=chunk_size), indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+
 def replay_render_intents_from_result(result: ReplayResult) -> dict[str, Any]:
     intents = _render_intents_from_scene_metadata(result.scene.metadata)
     return {
@@ -1328,10 +1357,13 @@ def replay_review_bundle_manifest(
     result: ReplayResult,
     screenshots: Iterable[ReplayFrameScreenshot],
     artifacts: Mapping[str, str],
+    *,
+    render_chunk_size: int = 4,
 ) -> dict[str, Any]:
     rendered_screenshots = tuple(screenshots)
     render_intents = replay_render_intents_from_result(result)
     renderer_prompts = replay_renderer_prompts_from_result(result)
+    renderer_chunks = replay_renderer_chunks_from_result(result, chunk_size=render_chunk_size)
     return {
         "schema": "harn-gibson.replay-review-bundle.v1",
         "replayName": result.name,
@@ -1343,6 +1375,8 @@ def replay_review_bundle_manifest(
         "contextCount": len(result.renderer_contexts),
         "intentCount": int(render_intents["intentCount"]),
         "promptCount": int(renderer_prompts["promptCount"]),
+        "chunkCount": int(renderer_chunks["chunkCount"]),
+        "renderChunkSize": int(renderer_chunks["chunkSize"]),
         "artifacts": dict(artifacts),
         "metadata": result.metadata,
     }
@@ -1361,6 +1395,7 @@ def replay_review_bundle_index_html(manifest: Mapping[str, Any]) -> str:
             ("renderer contexts", "contextCount"),
             ("render intents", "intentCount"),
             ("renderer prompts", "promptCount"),
+            ("renderer chunks", "chunkCount"),
         )
     )
     artifact_links = "\n".join(
@@ -1440,6 +1475,8 @@ def write_replay_review_bundle(
     path: str | Path,
     result: ReplayResult,
     screenshots: Iterable[ReplayFrameScreenshot],
+    *,
+    render_chunk_size: int = 4,
 ) -> dict[str, Any]:
     bundle_path = Path(path)
     frames_path = bundle_path / "frames"
@@ -1454,6 +1491,7 @@ def write_replay_review_bundle(
         "timeline": "timeline.json",
         "rendererContexts": "renderer-contexts.json",
         "rendererPrompts": "renderer-prompts.json",
+        "rendererChunks": "renderer-chunks.json",
         "rendererPromptReview": "renderer-prompts.html",
         "renderIntents": "render-intents.json",
         "renderIntentReview": "render-intents.html",
@@ -1465,6 +1503,7 @@ def write_replay_review_bundle(
     write_replay_timeline(bundle_path / artifacts["timeline"], result)
     write_replay_renderer_contexts(bundle_path / artifacts["rendererContexts"], result)
     write_replay_renderer_prompts(bundle_path / artifacts["rendererPrompts"], result)
+    write_replay_renderer_chunks(bundle_path / artifacts["rendererChunks"], result, chunk_size=render_chunk_size)
     write_replay_renderer_prompts_review_html(
         bundle_path / artifacts["rendererPromptReview"],
         replay_renderer_prompts_from_result(result),
@@ -1479,7 +1518,12 @@ def write_replay_review_bundle(
         frames_path / "index.html",
         replay_frame_screenshot_manifest(result, rendered_screenshots),
     )
-    manifest = replay_review_bundle_manifest(result, rendered_screenshots, artifacts)
+    manifest = replay_review_bundle_manifest(
+        result,
+        rendered_screenshots,
+        artifacts,
+        render_chunk_size=render_chunk_size,
+    )
     (bundle_path / artifacts["manifest"]).write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
     (bundle_path / artifacts["overview"]).write_text(replay_review_bundle_index_html(manifest), encoding="utf-8")
     return manifest
@@ -1506,6 +1550,7 @@ def _replay_review_artifacts(value: Any) -> tuple[tuple[str, str], ...]:
         "frameReview": "Timeline Frame Review",
         "renderIntentReview": "Render Intent Review",
         "rendererPromptReview": "Renderer Prompt Review",
+        "rendererChunks": "Renderer Chunks JSON",
         "scene": "Final Scene JSON",
         "result": "Replay Result JSON",
         "timeline": "Timeline JSON",
@@ -1520,6 +1565,84 @@ def _replay_review_artifacts(value: Any) -> tuple[tuple[str, str], ...]:
 
 def _replay_review_artifact_link(label: str, href: str) -> str:
     return f'      <a href="{escape(href)}">{escape(label)}<br><code>{escape(href)}</code></a>'
+
+
+def _renderer_context_chunk_payload(index: int, contexts: tuple[ReplayRendererContext, ...]) -> dict[str, Any]:
+    prompts = [renderer_prompt_from_context(context.context, context_index=context.index) for context in contexts]
+    summary = _renderer_context_chunk_summary(prompts)
+    return {
+        "index": index,
+        "contextStart": contexts[0].index,
+        "contextEnd": contexts[-1].index,
+        "contextIndexes": [context.index for context in contexts],
+        "contextCount": len(contexts),
+        "promptCount": len(prompts),
+        **summary,
+        "contexts": [context.to_dict() for context in contexts],
+        "prompts": prompts,
+    }
+
+
+def _renderer_context_chunk_summary(prompts: list[dict[str, Any]]) -> dict[str, Any]:
+    event_types: list[str] = []
+    routes: list[str] = []
+    modes: list[str] = []
+    display_styles: list[str] = []
+    starts: list[int] = []
+    ends: list[int] = []
+    durations: list[int] = []
+    message_chars = 0
+    context_chars = 0
+    request_count = 0
+    for prompt in prompts:
+        metadata = prompt["metadata"]
+        timeline = metadata["timeline"]
+        _append_unique(modes, str(prompt["mode"]))
+        _extend_unique(event_types, metadata["eventTypes"])
+        _extend_unique(routes, metadata["routes"])
+        _append_unique(display_styles, str(metadata["displayStyle"]))
+        starts.append(_coerce_int(timeline["startMs"], 0))
+        ends.append(_coerce_int(timeline["endMs"], 0))
+        durations.append(_coerce_int(timeline["durationMs"], 0))
+        message_chars += _coerce_int(metadata["messageChars"], 0)
+        context_chars += _coerce_int(metadata["contextChars"], 0)
+        request_count += _coerce_int(metadata["requestCount"], 0)
+    start_ms = min(starts)
+    end_ms = max(ends)
+    return {
+        "modes": modes,
+        "displayStyles": display_styles,
+        "eventTypes": event_types,
+        "routes": routes,
+        "requestCount": request_count,
+        "timeline": {
+            "startMs": start_ms,
+            "endMs": end_ms,
+            "durationMs": max(max(0, end_ms - start_ms), sum(durations)),
+        },
+        "messageChars": message_chars,
+        "contextChars": context_chars,
+    }
+
+
+def _extend_unique(items: list[str], values: Iterable[Any]) -> None:
+    for value in values:
+        _append_unique(items, str(value))
+
+
+def _append_unique(items: list[str], item: str) -> None:
+    if item not in items:
+        items.append(item)
+
+
+def _positive_render_chunk_size(value: int) -> int:
+    try:
+        size = int(value)
+    except (TypeError, ValueError) as error:
+        raise ValueError("render chunk size must be positive") from error
+    if size <= 0:
+        raise ValueError("render chunk size must be positive")
+    return size
 
 
 def _render_intents_from_scene_metadata(metadata: Mapping[str, Any]) -> tuple[dict[str, Any], ...]:
@@ -1789,6 +1912,7 @@ __all__ = [
     "replay_frame_screenshot_manifest",
     "replay_frame_review_html",
     "replay_renderer_contexts_from_result",
+    "replay_renderer_chunks_from_result",
     "replay_renderer_prompts_from_result",
     "replay_renderer_prompts_review_html",
     "replay_render_intents_from_result",
@@ -1803,6 +1927,7 @@ __all__ = [
     "write_replay_frame_screenshot_manifest",
     "write_replay_frame_review_html",
     "write_replay_renderer_contexts",
+    "write_replay_renderer_chunks",
     "write_replay_renderer_prompts",
     "write_replay_renderer_prompts_review_html",
     "write_replay_render_intents",

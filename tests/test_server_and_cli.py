@@ -633,6 +633,10 @@ def test_cli_parser_and_run(monkeypatch: Any, capsys: Any) -> None:
             "contexts.json",
             "--output-render-prompts",
             "prompts.json",
+            "--output-render-chunks",
+            "chunks.json",
+            "--render-chunk-size",
+            "3",
             "--render-prompt-review",
             "prompts.html",
             "--output-render-intents",
@@ -665,6 +669,8 @@ def test_cli_parser_and_run(monkeypatch: Any, capsys: Any) -> None:
     assert parsed_replay.output_result == "result.json"
     assert parsed_replay.output_render_contexts == "contexts.json"
     assert parsed_replay.output_render_prompts == "prompts.json"
+    assert parsed_replay.output_render_chunks == "chunks.json"
+    assert parsed_replay.render_chunk_size == 3
     assert parsed_replay.render_prompt_review == "prompts.html"
     assert parsed_replay.output_render_intents == "intents.json"
     assert parsed_replay.render_intent_review == "intents.html"
@@ -788,6 +794,7 @@ def test_cli_replay_writes_outputs(tmp_path: Any, capsys: Any) -> None:
     result_path = tmp_path / "result.json"
     contexts_path = tmp_path / "contexts.json"
     prompts_path = tmp_path / "prompts.json"
+    chunks_path = tmp_path / "chunks.json"
     prompts_review_path = tmp_path / "prompts.html"
     intents_path = tmp_path / "intents.json"
     intents_review_path = tmp_path / "intents.html"
@@ -817,6 +824,10 @@ def test_cli_replay_writes_outputs(tmp_path: Any, capsys: Any) -> None:
                 str(contexts_path),
                 "--output-render-prompts",
                 str(prompts_path),
+                "--output-render-chunks",
+                str(chunks_path),
+                "--render-chunk-size",
+                "1",
                 "--render-prompt-review",
                 str(prompts_review_path),
                 "--output-render-intents",
@@ -838,6 +849,7 @@ def test_cli_replay_writes_outputs(tmp_path: Any, capsys: Any) -> None:
     result = json.loads(result_path.read_text(encoding="utf-8"))
     contexts = json.loads(contexts_path.read_text(encoding="utf-8"))
     prompts = json.loads(prompts_path.read_text(encoding="utf-8"))
+    chunks = json.loads(chunks_path.read_text(encoding="utf-8"))
     prompts_review = prompts_review_path.read_text(encoding="utf-8")
     intents = json.loads(intents_path.read_text(encoding="utf-8"))
     intents_review = intents_review_path.read_text(encoding="utf-8")
@@ -849,6 +861,11 @@ def test_cli_replay_writes_outputs(tmp_path: Any, capsys: Any) -> None:
     assert prompts["schema"] == "harn-gibson.replay-renderer-prompts.v1"
     assert prompts["promptCount"] == 1
     assert prompts["prompts"][0]["metadata"]["displayStyle"] == "mainframe"
+    assert chunks["schema"] == "harn-gibson.replay-renderer-chunks.v1"
+    assert chunks["chunkCount"] == 1
+    assert chunks["chunkSize"] == 1
+    assert chunks["chunks"][0]["displayStyles"] == ["mainframe"]
+    assert chunks["chunks"][0]["prompts"][0]["metadata"]["eventTypes"] == ["tool_call"]
     assert "renderer prompt review" in prompts_review
     assert "window.__gibsonRendererPrompts" in prompts_review
     assert intents["schema"] == "harn-gibson.replay-render-intents.v1"
@@ -1024,6 +1041,7 @@ def test_cli_replay_writes_review_bundle(tmp_path: Any, monkeypatch: Any, capsys
     result = json.loads((review_dir / "result.json").read_text(encoding="utf-8"))
     contexts = json.loads((review_dir / "renderer-contexts.json").read_text(encoding="utf-8"))
     prompts = json.loads((review_dir / "renderer-prompts.json").read_text(encoding="utf-8"))
+    chunks = json.loads((review_dir / "renderer-chunks.json").read_text(encoding="utf-8"))
     intents = json.loads((review_dir / "render-intents.json").read_text(encoding="utf-8"))
     frame_manifest = json.loads((review_dir / "frames" / "manifest.json").read_text(encoding="utf-8"))
     overview = (review_dir / "index.html").read_text(encoding="utf-8")
@@ -1034,20 +1052,26 @@ def test_cli_replay_writes_review_bundle(tmp_path: Any, monkeypatch: Any, capsys
     assert manifest["schema"] == "harn-gibson.replay-review-bundle.v1"
     assert manifest["artifacts"]["rendererContexts"] == "renderer-contexts.json"
     assert manifest["artifacts"]["rendererPrompts"] == "renderer-prompts.json"
+    assert manifest["artifacts"]["rendererChunks"] == "renderer-chunks.json"
     assert manifest["artifacts"]["rendererPromptReview"] == "renderer-prompts.html"
     assert manifest["artifacts"]["frameReview"] == "frames/index.html"
     assert manifest["contextCount"] == 1
     assert manifest["promptCount"] == 1
+    assert manifest["chunkCount"] == 1
+    assert manifest["renderChunkSize"] == 4
     assert manifest["intentCount"] == 1
     assert manifest["screenshotCount"] == 1
     assert result["rendererContexts"][0]["context"]["mode"] == "compaction"
     assert contexts["contextCount"] == 1
     assert prompts["promptCount"] == 1
+    assert chunks["chunkCount"] == 1
+    assert chunks["chunks"][0]["contextIndexes"] == [0]
     assert intents["intentCount"] == 1
     assert frame_manifest["screenshotCount"] == 1
     assert "unnamed replay replay review" in overview
     assert 'href="frames/index.html"' in overview
     assert "window.__gibsonReplayReview" in overview
+    assert "Renderer Chunks JSON" in overview
     assert "window.__gibsonReplayFrames" in frame_review
     assert "renderer prompt review" in (review_dir / "renderer-prompts.html").read_text(encoding="utf-8")
     assert "render intent review" in intent_review
