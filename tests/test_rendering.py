@@ -728,6 +728,8 @@ def test_deterministic_renderer_adds_repo_graph_from_context(tmp_path: Path) -> 
     assert city_blocks["repo-city-src-harn_gibson"]["tone"] == "magenta"
     assert city_blocks["repo-city-docs-renderer-agent-md"]["files"] == 1
     assert city_blocks["repo-city-README-link-md"]["tone"] == "amber"
+    assert repo_city.props["cameraPath"]["keyframes"][1]["scale"] == 1.043
+    assert repo_city.props["cameraPath"]["durationMs"] == 7600
     assert touch_field is not None
     assert touch_field.props["paths"] == [
         "src/harn_gibson/rendering.py",

@@ -108,14 +108,19 @@ def test_browser_display_renders_events_debug_and_input_queue() -> None:
                 )
                 assert accepted == {"ok": True, "renderMode": "blocking", "sceneRevision": 1}
                 page.wait_for_function("window.__gibsonScene?.primitives?.['gibson-city']")
+                page.wait_for_function("window.__gibsonCityState?.['gibson-city']?.cameraKeyframeCount === 3")
+                page.wait_for_function("window.__gibsonCityState?.['repo-city']?.cameraKeyframeCount === 3")
                 browser_scene = page.evaluate(
                     """() => ({
                       cityKind: window.__gibsonScene.primitives["gibson-city"].kind,
                       cityBlocks: window.__gibsonScene.primitives["gibson-city"].props.blocks.length,
+                      cityCameraKeys: window.__gibsonCityState["gibson-city"].cameraKeyframeCount,
+                      cityCameraScale: window.__gibsonCityState["gibson-city"].cameraScale,
                       graphKind: window.__gibsonScene.primitives["signal-graph"].kind,
                       packetKind: window.__gibsonScene.primitives["packet-field"].kind,
                       repoKind: window.__gibsonScene.primitives["repo-map"].kind,
                       repoCityKind: window.__gibsonScene.primitives["repo-city"].kind,
+                      repoCameraKeys: window.__gibsonCityState["repo-city"].cameraKeyframeCount,
                       pulseKind: window.__gibsonScene.animations["pulse-7"].kind,
                       animationIds: window.__gibsonAnimationState.ids,
                       animationKinds: window.__gibsonAnimationState.kinds,
@@ -124,14 +129,18 @@ def test_browser_display_renders_events_debug_and_input_queue() -> None:
                 assert browser_scene == {
                     "cityKind": "city_block",
                     "cityBlocks": 7,
+                    "cityCameraKeys": 3,
+                    "cityCameraScale": browser_scene["cityCameraScale"],
                     "graphKind": "node_graph",
                     "packetKind": "particle_field",
                     "repoKind": "node_graph",
                     "repoCityKind": "city_block",
+                    "repoCameraKeys": 3,
                     "pulseKind": "phase-pulse",
                     "animationIds": ["pulse-7"],
                     "animationKinds": ["phase-pulse"],
                 }
+                assert browser_scene["cityCameraScale"] > 0
                 expect(page.locator("#phase")).to_have_text("before")
                 expect(page.locator("#eventType")).to_have_text("tool_call")
                 expect(page.locator("#sequence")).to_have_text("7")
@@ -234,6 +243,7 @@ def test_browser_display_renders_vector_symbols_and_data_rain() -> None:
                 page.wait_for_function("window.__gibsonVectorAnimationState?.['gallery-vector']?.keyframeCount === 6")
                 page.wait_for_function("window.__gibsonVectorEffectState?.['gallery-vector']?.filterCount === 2")
                 page.wait_for_function("window.__gibsonHologramState?.['gallery-hologram']?.ringCount === 6")
+                page.wait_for_function("window.__gibsonCityState?.['gallery-city']?.cameraKeyframeCount === 3")
                 page.wait_for_function("window.__gibsonDataRainState?.['gallery-rain']?.visibleColumns > 0")
                 page.wait_for_function("window.__gibsonTraceRouteState?.['gallery-trace']?.packetCount === 18")
                 vector_state = page.evaluate(
@@ -247,6 +257,9 @@ def test_browser_display_renders_vector_symbols_and_data_rain() -> None:
                 )
                 hologram_state = page.evaluate(
                     """() => window.__gibsonHologramState["gallery-hologram"]"""
+                )
+                city_state = page.evaluate(
+                    """() => window.__gibsonCityState["gallery-city"]"""
                 )
                 data_rain_state = page.evaluate(
                     """() => window.__gibsonDataRainState["gallery-rain"]"""
@@ -294,6 +307,11 @@ def test_browser_display_renders_vector_symbols_and_data_rain() -> None:
                     "accentTone": "magenta",
                     "hasScan": True,
                 }
+                assert city_state["blockCount"] == 4
+                assert city_state["focusBlockId"] == "core-2"
+                assert city_state["cameraKeyframeCount"] == 3
+                assert 0 <= city_state["cameraProgress"] <= 1
+                assert city_state["cameraScale"] > 0
                 assert data_rain_state == {
                     "columns": 42,
                     "direction": "down",

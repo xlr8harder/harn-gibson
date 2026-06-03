@@ -1830,6 +1830,28 @@ def _repo_city_props(
         "labels": [root_name, f"{len(touched_paths)} touched", f"seq {event.sequence}"],
         "touchedFiles": [dict(item) for item in touched_files],
         "eventSequence": event.sequence,
+        "cameraPath": _repo_city_camera_path(event, len(touched_paths)),
+    }
+
+
+def _repo_city_camera_path(event: GibsonEvent, touched_count: int) -> dict[str, Any]:
+    direction = -1 if event.sequence % 2 else 1
+    touch_push = min(0.018, touched_count * 0.006)
+    return {
+        "durationMs": 7600,
+        "loop": True,
+        "yoyo": True,
+        "keyframes": [
+            {"at": 0, "x": round(-0.010 * direction, 3), "y": 0.006, "scale": 0.99},
+            {
+                "at": 0.46,
+                "x": round((0.018 + touch_push) * direction, 3),
+                "y": round(-0.012 - touch_push, 3),
+                "scale": round(1.025 + touch_push, 3),
+                "rotation": round(0.010 * direction, 3),
+            },
+            {"at": 1, "x": round(0.004 * direction, 3), "y": 0.004, "scale": 1.0},
+        ],
     }
 
 

@@ -248,6 +248,7 @@ def test_default_mutations_and_scene_update_payload() -> None:
     assert scene.primitives["gibson-city"].kind == "city_block"
     assert len(scene.primitives["gibson-city"].props["blocks"]) == 7
     assert scene.primitives["gibson-city"].props["focusBlockId"] == "district-4"
+    assert scene.primitives["gibson-city"].props["cameraPath"]["keyframes"][1]["scale"] == 1.035
     assert scene.primitives["signal-graph"].kind == "node_graph"
     assert scene.primitives["signal-graph"].props["focusNodeId"] == "event"
     assert scene.primitives["data-ribbon"].kind == "ribbon"

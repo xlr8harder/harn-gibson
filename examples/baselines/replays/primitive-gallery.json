@@ -214,6 +214,34 @@
               "y": 0.45
             }
           ],
+          "cameraPath": {
+            "durationMs": 6400,
+            "keyframes": [
+              {
+                "at": 0,
+                "rotation": -0.018,
+                "scale": 0.98,
+                "x": -0.018,
+                "y": 0.012
+              },
+              {
+                "at": 0.5,
+                "rotation": 0.022,
+                "scale": 1.04,
+                "x": 0.026,
+                "y": -0.018
+              },
+              {
+                "at": 1,
+                "rotation": -0.006,
+                "scale": 1.0,
+                "x": 0.004,
+                "y": 0.008
+              }
+            ],
+            "loop": true,
+            "yoyo": true
+          },
           "focusBlockId": "core-2",
           "heightScale": 1.1
         },

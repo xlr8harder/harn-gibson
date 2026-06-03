@@ -227,7 +227,7 @@ def default_visual_catalog() -> VisualCatalog:
                 "city_block",
                 "primitive",
                 "Extruded blocks suitable for Gibson-style city grids or 3D filesystem districts.",
-                ("blocks", "heightScale", "streets", "labels", "cameraPath"),
+                ("blocks", "heightScale", "streets", "labels", "cameraPath", "cameraDurationMs", "cameraLoop"),
                 ("gibson", "3d", "map"),
             ),
             CatalogEntry(

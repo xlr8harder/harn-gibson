@@ -1190,7 +1190,7 @@ function drawScenePrimitives(scene, w, h, now) {
 
 function drawPrimitive(primitive, w, h, now) {
   if (primitive.kind === "mesh") drawMesh(primitive, w, h, now);
-  if (primitive.kind === "city_block") drawCityBlock(primitive, w, h);
+  if (primitive.kind === "city_block") drawCityBlock(primitive, w, h, now);
   if (primitive.kind === "hologram") drawHologram(primitive, w, h, now);
   if (primitive.kind === "svg_layer") drawSvgLayer(primitive, w, h, now);
   if (primitive.kind === "node_graph") drawNodeGraph(primitive, w, h);
@@ -1426,10 +1426,60 @@ function drawHoldAnimation(animation, scene, w, h, progress) {
   ctx.restore();
 }
 
-function drawCityBlock(primitive, w, h) {
+function cityCameraSource(props) {
+  const rawPath = props.cameraPath;
+  if (Array.isArray(rawPath)) {
+    return {
+      keyframes: rawPath,
+      durationMs: props.cameraDurationMs ?? props.durationMs,
+      delayMs: props.cameraDelayMs,
+      loop: props.cameraLoop ?? props.loop,
+      yoyo: props.cameraYoyo ?? props.yoyo,
+    };
+  }
+  if (rawPath && typeof rawPath === "object") return rawPath;
+  return {};
+}
+
+function cityCameraOffset(value, extent) {
+  const numeric = Number(value || 0);
+  if (!Number.isFinite(numeric)) return 0;
+  return Math.abs(numeric) <= 1 ? numeric * extent : numeric * devicePixelRatio;
+}
+
+function cityCameraTransform(props, w, h, now) {
+  const source = cityCameraSource(props);
+  const transform = vectorKeyframeTransform(source, now);
+  return {
+    ...transform,
+    x: cityCameraOffset(transform.x, w),
+    y: cityCameraOffset(transform.y, h),
+  };
+}
+
+function drawCityBlock(primitive, w, h, now) {
   const props = primitive.props || {};
   const blocks = Array.isArray(props.blocks) ? props.blocks : [];
+  const camera = cityCameraTransform(props, w, h, now);
+  if (typeof window !== "undefined") {
+    window.__gibsonCityState = window.__gibsonCityState || {};
+    window.__gibsonCityState[primitive.id] = {
+      blockCount: blocks.length,
+      focusBlockId: props.focusBlockId || null,
+      cameraKeyframeCount: camera.keyframeCount,
+      cameraProgress: vectorRounded(camera.progress),
+      cameraX: vectorRounded(camera.x),
+      cameraY: vectorRounded(camera.y),
+      cameraScale: vectorRounded(camera.scale),
+      cameraRotation: vectorRounded(camera.rotation),
+    };
+  }
   ctx.save();
+  ctx.translate(camera.x, camera.y);
+  ctx.translate(w * 0.5, h * 0.54);
+  ctx.rotate(camera.rotation);
+  ctx.scale(camera.scale, camera.scale);
+  ctx.translate(-w * 0.5, -h * 0.54);
   ctx.lineWidth = 1.4 * devicePixelRatio;
   ctx.font = `${11 * devicePixelRatio}px ui-monospace, monospace`;
   ctx.textAlign = "center";

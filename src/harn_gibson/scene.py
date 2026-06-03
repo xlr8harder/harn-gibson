@@ -322,6 +322,7 @@ def default_mutations_for_event(event: GibsonEvent, decisions: Iterable[Mapping[
                     "heightScale": 1.0,
                     "labels": [event.phase, event.event_type],
                     "focusBlockId": f"district-{event.sequence % 7}",
+                    "cameraPath": _city_camera_path_for_event(event),
                 },
             ),
         ),
@@ -463,6 +464,27 @@ def _city_blocks_for_event(event: GibsonEvent, tone: str) -> list[dict[str, Any]
         }
         for index in range(7)
     ]
+
+
+def _city_camera_path_for_event(event: GibsonEvent) -> dict[str, Any]:
+    direction = -1 if event.sequence % 2 else 1
+    phase = (event.sequence % 5) * 0.004
+    return {
+        "durationMs": 6200,
+        "loop": True,
+        "yoyo": True,
+        "keyframes": [
+            {"at": 0, "x": round(-0.012 * direction, 3), "y": round(0.010 + phase, 3), "scale": 0.985},
+            {
+                "at": 0.52,
+                "x": round(0.020 * direction, 3),
+                "y": round(-0.014 - phase, 3),
+                "scale": 1.035,
+                "rotation": round(0.012 * direction, 3),
+            },
+            {"at": 1, "x": round(0.004 * direction, 3), "y": 0.006, "scale": 1.0},
+        ],
+    }
 
 
 def _node_graph_for_event(event: GibsonEvent, tone: str) -> dict[str, Any]:

@@ -47,6 +47,9 @@ def test_default_visual_catalog_has_generic_and_cinematic_building_blocks() -> N
     assert {"glitch", "flythrough", "packet_burst", "vector_trace", "vector_keyframes", "hold"} <= effect_ids
     assert catalog.entry("city_block") is not None
     assert "gibson" in catalog.entry("city_block").tags  # type: ignore[union-attr]
+    city_block = catalog.entry("city_block")
+    assert city_block is not None
+    assert {"cameraPath", "cameraDurationMs", "cameraLoop"} <= set(city_block.props)
     svg_layer = catalog.entry("svg_layer")
     assert svg_layer is not None
     assert {

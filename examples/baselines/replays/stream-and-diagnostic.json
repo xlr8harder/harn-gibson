@@ -457,6 +457,32 @@
               "y": 0.62
             }
           ],
+          "cameraPath": {
+            "durationMs": 6200,
+            "keyframes": [
+              {
+                "at": 0,
+                "scale": 0.985,
+                "x": 0.012,
+                "y": 0.014
+              },
+              {
+                "at": 0.52,
+                "rotation": -0.012,
+                "scale": 1.035,
+                "x": -0.02,
+                "y": -0.018
+              },
+              {
+                "at": 1,
+                "scale": 1.0,
+                "x": -0.004,
+                "y": 0.006
+              }
+            ],
+            "loop": true,
+            "yoyo": true
+          },
           "focusBlockId": "district-1",
           "heightScale": 1.0,
           "labels": [
@@ -818,6 +844,32 @@
               "y": 0.58
             }
           ],
+          "cameraPath": {
+            "durationMs": 7600,
+            "keyframes": [
+              {
+                "at": 0,
+                "scale": 0.99,
+                "x": 0.01,
+                "y": 0.006
+              },
+              {
+                "at": 0.46,
+                "rotation": -0.01,
+                "scale": 1.025,
+                "x": -0.018,
+                "y": -0.012
+              },
+              {
+                "at": 1,
+                "scale": 1.0,
+                "x": -0.004,
+                "y": 0.004
+              }
+            ],
+            "loop": true,
+            "yoyo": true
+          },
           "eventSequence": 1,
           "focusBlockId": "repo-city-root",
           "heightScale": 1.12,
