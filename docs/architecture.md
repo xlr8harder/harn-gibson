@@ -72,6 +72,8 @@ The pipeline also builds a `RendererContext` for renderers that opt into `render
 
 The deterministic renderer returns one render step per event today. An external renderer command can also receive the same context as JSON on stdin and return render-plan JSON on stdout. That process adapter is the first dogfoodable renderer-agent boundary; command failures are converted into visible trace/debug scene state while the deterministic renderer keeps harn progress fail-open. A model-backed renderer should return the same `RenderPlan` shape and may include multiple delayed steps for sequential effects.
 
+Repo topology is already visual input, not only prompt metadata. The deterministic renderer maps the bounded depth-2 repo sample into both a `node_graph` and a Gibson-style `city_block`: top-level entries become districts, sampled children become smaller nearby blocks, visible file/directory counts drive height, and touched files recolor/focus the matching district with particle and extrusion effects.
+
 ## Hook Phases
 
 Each harn event is assigned a phase:

@@ -615,6 +615,7 @@ def _repo_visual_mutations(context: RendererContext, event: GibsonEvent) -> tupl
     if not repo_entries and not touched_files:
         return ()
     graph_props = _repo_graph_props(topology, repo_entries, touched_files, event)
+    city_props = _repo_city_props(topology, repo_entries, touched_files, event)
     mutations = [
         SceneMutation(
             op="upsert",
@@ -623,6 +624,15 @@ def _repo_visual_mutations(context: RendererContext, event: GibsonEvent) -> tupl
                 kind="node_graph",
                 region="stage",
                 props=graph_props,
+            ),
+        ),
+        SceneMutation(
+            op="upsert",
+            primitive=ScenePrimitive(
+                id="repo-city",
+                kind="city_block",
+                region="stage",
+                props=city_props,
             ),
         )
     ]
@@ -655,6 +665,22 @@ def _repo_visual_mutations(context: RendererContext, event: GibsonEvent) -> tupl
                         kind="packet_burst",
                         started_at_ms=event.timestamp_ms,
                         duration_ms=2200,
+                        props={
+                            "phase": event.phase,
+                            "tone": "magenta",
+                            "sequence": event.sequence,
+                            "paths": touched_paths,
+                        },
+                    ),
+                ),
+                SceneMutation(
+                    op="start_animation",
+                    animation=SceneAnimation(
+                        id=f"repo-city-touch-{event.sequence}",
+                        target_id="repo-city",
+                        kind="extrude",
+                        started_at_ms=event.timestamp_ms,
+                        duration_ms=2600,
                         props={
                             "phase": event.phase,
                             "tone": "magenta",
@@ -736,6 +762,151 @@ def _repo_graph_props(
         "eventSequence": event.sequence,
         "labels": [root_name, f"{len(touched_files)} touched"],
     }
+
+
+def _repo_city_props(
+    topology: Any,
+    repo_entries: Sequence[Mapping[str, Any]],
+    touched_files: Sequence[Mapping[str, Any]],
+    event: GibsonEvent,
+) -> dict[str, Any]:
+    root_name = str(topology.get("rootName") if isinstance(topology, Mapping) else "repo") or "repo"
+    touched_paths = [str(item.get("path")) for item in touched_files if item.get("path")]
+    blocks: list[dict[str, Any]] = [
+        {
+            "id": "repo-city-root",
+            "path": ".",
+            "x": 0.04,
+            "y": 0.70,
+            "w": 0.055,
+            "d": 0.065,
+            "h": 0.16,
+            "tone": "amber",
+            "label": root_name[:10],
+            "kind": "root",
+            "files": 0,
+            "dirs": 0,
+            "touched": 0,
+        }
+    ]
+    block_paths: list[tuple[str, str]] = [(".", "repo-city-root")]
+    for index, entry in enumerate(repo_entries):
+        path = str(entry.get("path") or entry.get("name") or f"entry-{index}")
+        children = _repo_entry_children(entry)
+        touched_count = _repo_touch_count(path, touched_paths)
+        file_count = _repo_visible_file_count(entry, children)
+        dir_count = _repo_visible_dir_count(entry, children)
+        block_id = _repo_city_block_id(path)
+        x = round(0.08 + (index % 5) * 0.082, 3)
+        y = round(0.68 - (index // 5) * 0.10, 3)
+        blocks.append(
+            {
+                "id": block_id,
+                "path": path,
+                "x": x,
+                "y": y,
+                "w": 0.058,
+                "d": 0.066,
+                "h": _repo_city_height(file_count, dir_count, touched_count),
+                "tone": "magenta" if touched_count else _repo_entry_tone(str(entry.get("kind") or "")),
+                "label": _repo_node_label(path),
+                "kind": str(entry.get("kind") or "entry"),
+                "files": file_count,
+                "dirs": dir_count,
+                "touched": touched_count,
+            }
+        )
+        block_paths.append((path, block_id))
+        blocks.extend(_repo_child_city_blocks(path, children, touched_paths, x, y, block_paths))
+    return {
+        "focusBlockId": _repo_city_focus_block_id(block_paths, touched_paths),
+        "heightScale": 1.12,
+        "layout": "repo-bfs-depth-2",
+        "rootName": root_name,
+        "blocks": blocks,
+        "labels": [root_name, f"{len(touched_paths)} touched", f"seq {event.sequence}"],
+        "touchedFiles": [dict(item) for item in touched_files],
+        "eventSequence": event.sequence,
+    }
+
+
+def _repo_entry_children(entry: Mapping[str, Any]) -> tuple[dict[str, Any], ...]:
+    children = entry.get("children")
+    if not isinstance(children, list):
+        return ()
+    return tuple(dict(child) for child in children[:4] if isinstance(child, Mapping))
+
+
+def _repo_child_city_blocks(
+    parent_path: str,
+    children: Sequence[Mapping[str, Any]],
+    touched_paths: Sequence[str],
+    parent_x: float,
+    parent_y: float,
+    block_paths: list[tuple[str, str]],
+) -> list[dict[str, Any]]:
+    blocks: list[dict[str, Any]] = []
+    for index, child in enumerate(children):
+        path = str(child.get("path") or f"{parent_path}/child-{index}")
+        touched_count = _repo_touch_count(path, touched_paths)
+        block_id = _repo_city_block_id(path)
+        block_paths.append((path, block_id))
+        blocks.append(
+            {
+                "id": block_id,
+                "path": path,
+                "x": round(parent_x + 0.012 + (index % 2) * 0.031, 3),
+                "y": round(parent_y + 0.035 + (index // 2) * 0.028, 3),
+                "w": 0.024,
+                "d": 0.030,
+                "h": round(0.075 + min(0.10, len(path) * 0.002) + touched_count * 0.055, 3),
+                "tone": "magenta" if touched_count else _repo_entry_tone(str(child.get("kind") or "")),
+                "label": _repo_node_label(path),
+                "kind": str(child.get("kind") or "entry"),
+                "files": 1 if child.get("kind") in {"file", "symlink"} else 0,
+                "dirs": 1 if child.get("kind") == "dir" else 0,
+                "touched": touched_count,
+            }
+        )
+    return blocks
+
+
+def _repo_visible_file_count(entry: Mapping[str, Any], children: Sequence[Mapping[str, Any]]) -> int:
+    if entry.get("kind") in {"file", "symlink"}:
+        return 1
+    return sum(1 for child in children if child.get("kind") in {"file", "symlink"})
+
+
+def _repo_visible_dir_count(entry: Mapping[str, Any], children: Sequence[Mapping[str, Any]]) -> int:
+    if entry.get("kind") == "dir":
+        return max(1, sum(1 for child in children if child.get("kind") == "dir"))
+    return 0
+
+
+def _repo_city_height(file_count: int, dir_count: int, touched_count: int) -> float:
+    visible_units = max(1, file_count + dir_count)
+    return round(0.12 + min(0.46, visible_units * 0.055) + min(0.24, touched_count * 0.08), 3)
+
+
+def _repo_touch_count(path: str, touched_paths: Sequence[str]) -> int:
+    return sum(1 for touched_path in touched_paths if touched_path == path or touched_path.startswith(f"{path}/"))
+
+
+def _repo_city_focus_block_id(block_paths: Sequence[tuple[str, str]], touched_paths: Sequence[str]) -> str:
+    for touched_path in touched_paths:
+        matches = [
+            (path, block_id)
+            for path, block_id in block_paths
+            if path != "." and (touched_path == path or touched_path.startswith(f"{path}/"))
+        ]
+        if matches:
+            return max(matches, key=lambda item: len(item[0]))[1]
+    return "repo-city-root"
+
+
+def _repo_city_block_id(path: str) -> str:
+    slug = re.sub(r"[^A-Za-z0-9_-]+", "-", path).strip("-")[:56]
+    return f"repo-city-{slug or 'root'}"
 
 
 def _repo_node_label(path: str) -> str:

@@ -317,6 +317,9 @@ def test_deterministic_renderer_adds_repo_graph_from_context(tmp_path: Path) -> 
     repo_map = next(
         mutation.primitive for mutation in mutations if mutation.primitive and mutation.primitive.id == "repo-map"
     )
+    repo_city = next(
+        mutation.primitive for mutation in mutations if mutation.primitive and mutation.primitive.id == "repo-city"
+    )
     touch_field = next(
         mutation.primitive
         for mutation in mutations
@@ -324,6 +327,11 @@ def test_deterministic_renderer_adds_repo_graph_from_context(tmp_path: Path) -> 
     )
     repo_animation = next(
         mutation.animation for mutation in mutations if mutation.animation and mutation.animation.id == "repo-touch-8"
+    )
+    repo_city_animation = next(
+        mutation.animation
+        for mutation in mutations
+        if mutation.animation and mutation.animation.id == "repo-city-touch-8"
     )
     intent = render_intent_from_plan(plan)
 
@@ -336,6 +344,18 @@ def test_deterministic_renderer_adds_repo_graph_from_context(tmp_path: Path) -> 
     assert repo_map.props["touchedFiles"][0]["path"] == "src/harn_gibson/rendering.py"
     fallback_edge = next(edge for edge in repo_map.props["edges"] if edge["target"] == "touch:2")
     assert fallback_edge["source"] == "repo-root"
+    assert repo_city is not None
+    assert repo_city.kind == "city_block"
+    assert repo_city.props["layout"] == "repo-bfs-depth-2"
+    assert repo_city.props["focusBlockId"] == "repo-city-src-harn_gibson"
+    city_blocks = {block["id"]: block for block in repo_city.props["blocks"]}
+    assert city_blocks["repo-city-root"]["label"] == "repo"
+    assert city_blocks["repo-city-src"]["dirs"] == 1
+    assert city_blocks["repo-city-src"]["touched"] == 1
+    assert city_blocks["repo-city-src"]["h"] == 0.255
+    assert city_blocks["repo-city-src-harn_gibson"]["tone"] == "magenta"
+    assert city_blocks["repo-city-docs-renderer-agent-md"]["files"] == 1
+    assert city_blocks["repo-city-README-link-md"]["tone"] == "amber"
     assert touch_field is not None
     assert touch_field.props["paths"] == [
         "src/harn_gibson/rendering.py",
@@ -344,9 +364,14 @@ def test_deterministic_renderer_adds_repo_graph_from_context(tmp_path: Path) -> 
     ]
     assert repo_animation is not None
     assert repo_animation.target_id == "repo-map"
+    assert repo_city_animation is not None
+    assert repo_city_animation.target_id == "repo-city"
+    assert repo_city_animation.kind == "extrude"
     assert "repo-map" in intent["targets"]
+    assert "repo-city" in intent["targets"]
     assert "repo-touch-field" in intent["targets"]
     assert "animation:packet_burst" in intent["effects"]
+    assert "animation:extrude" in intent["effects"]
 
     missing_context = RendererContextBuilder(RendererContextConfig(project_root=str(tmp_path / "missing"))).build(
         RenderInputBatch.from_requests((RenderRequest(event(4)),)),
@@ -360,6 +385,9 @@ def test_deterministic_renderer_adds_repo_graph_from_context(tmp_path: Path) -> 
     )
     assert all(
         mutation.primitive is None or mutation.primitive.id != "repo-map" for mutation in fallback.steps[0].mutations
+    )
+    assert all(
+        mutation.primitive is None or mutation.primitive.id != "repo-city" for mutation in fallback.steps[0].mutations
     )
     bad_context = RendererContext(
         "compaction",
@@ -385,7 +413,40 @@ def test_deterministic_renderer_adds_repo_graph_from_context(tmp_path: Path) -> 
         .steps[0]
         .mutations
     )
+    assert all(
+        mutation.primitive is None or mutation.primitive.id != "repo-city"
+        for mutation in DeterministicSceneRenderer()
+        .render_with_context((RenderRequest(event(6)),), scene.state, bad_shape_context)
+        .steps[0]
+        .mutations
+    )
     assert DeterministicSceneRenderer().render_with_context((), scene.state, context).steps == ()
+
+    unknown_touch_event = GibsonEvent.from_raw(
+        {
+            "type": "tool_call",
+            "toolName": "bash",
+            "input": {"command": "cat unknown/path.py"},
+        },
+        10,
+        timestamp_ms=1000,
+    )
+    unknown_context = RendererContextBuilder(RendererContextConfig(project_root=str(repo_root))).build(
+        RenderInputBatch.from_requests((RenderRequest(unknown_touch_event),)),
+        scene.state,
+        pipeline_catalog(),
+    )
+    unknown_plan = DeterministicSceneRenderer().render_with_context(
+        (RenderRequest(unknown_touch_event),),
+        scene.state,
+        unknown_context,
+    )
+    unknown_city = next(
+        mutation.primitive
+        for mutation in unknown_plan.steps[0].mutations
+        if mutation.primitive and mutation.primitive.id == "repo-city"
+    )
+    assert unknown_city.props["focusBlockId"] == "repo-city-root"
 
 
 def test_renderer_context_builder_compaction_rolling_and_history(tmp_path: Path) -> None:

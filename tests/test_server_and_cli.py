@@ -130,6 +130,7 @@ def test_http_server_routes() -> None:
         assert scene["primitives"]["signal-graph"]["kind"] == "node_graph"
         assert scene["primitives"]["packet-field"]["kind"] == "particle_field"
         assert scene["primitives"]["repo-map"]["kind"] == "node_graph"
+        assert scene["primitives"]["repo-city"]["kind"] == "city_block"
         health = json.loads(request_text(f"{base}/healthz")[2])
         assert health["ok"] is True
         assert health["events"] == 1
