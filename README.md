@@ -179,14 +179,11 @@ For long captures, split the event log into a replay fixture directory:
 uv run harn-gibson event-log-to-replay .harn-gibson.jsonl \
   --output-dir test-artifacts/replays/captured-session-split \
   --split-every 200 \
-  --visual-fixture
-
-uv run harn-gibson replay-dir test-artifacts/replays/captured-session-split \
-  --screenshot-dir test-artifacts/replays/captured-session-split-screenshots \
+  --visual-fixture \
   --review-dir test-artifacts/replays/captured-session-split-review
 ```
 
-Split conversion writes one fixture per chunk plus `manifest.json`. `replay-dir` skips that manifest and replays the chunk fixtures directly. `--review-dir` writes one complete per-chunk review bundle under `files/` plus a top-level suite overview that links the chunk frame players, renderer contexts, prompts, chunks, and render-intent reviews.
+Split conversion writes one fixture per chunk plus `manifest.json`. With `--review-dir`, conversion immediately replays the generated directory and writes one complete per-chunk review bundle under `files/` plus a top-level suite overview that links the chunk frame players, renderer contexts, prompts, chunks, and render-intent reviews. You can still run `replay-dir` on the generated directory later; it skips the split manifest and replays the chunk fixtures directly.
 
 Replay fixtures can drive the same scene pipeline without a live harn process:
 

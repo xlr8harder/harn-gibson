@@ -63,10 +63,11 @@ uv run harn-gibson event-log-to-replay .harn-gibson.jsonl \
   --output-dir test-artifacts/replays/captured-session-split \
   --split-every 200 \
   --name "captured dogfood session" \
-  --visual-fixture
+  --visual-fixture \
+  --review-dir test-artifacts/replays/captured-session-split-review
 ```
 
-Split mode writes `manifest.json` plus numbered replay fixtures such as `captured-dogfood-session-0001.json`. Each fixture has `metadata.eventLogChunk` with the chunk index, total chunk count, event offsets, and total capture size; each visual fixture also carries chunk-level capture-summary metadata and screenshot expectations. The split manifest has schema `harn-gibson.event-log-split.v1`, the full capture summary, and the relative fixture filenames. `--split-every` requires `--output-dir` and does not combine with `--output` or `--review-dir`; use `replay-dir` on the generated directory to render screenshots:
+Split mode writes `manifest.json` plus numbered replay fixtures such as `captured-dogfood-session-0001.json`. Each fixture has `metadata.eventLogChunk` with the chunk index, total chunk count, event offsets, and total capture size; each visual fixture also carries chunk-level capture-summary metadata and screenshot expectations. The split manifest has schema `harn-gibson.event-log-split.v1`, the full capture summary, and the relative fixture filenames. `--split-every` requires `--output-dir` and does not combine with `--output`. When `--review-dir` is present, conversion immediately replays the generated split directory, captures per-chunk browser frames, renderer contexts, prompts, renderer chunks, render intents, final scenes, and result JSON, then writes a suite overview. You can also run `replay-dir` on the generated directory later:
 
 ```bash
 uv run harn-gibson replay-dir test-artifacts/replays/captured-session-split \

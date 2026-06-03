@@ -64,7 +64,7 @@ uv run harn-gibson dogfood-capture --style neon-noir -- -p "bootstrap a tiny pro
 
 It sets the showcase renderer, records normalized JSONL under ignored artifacts by default, and prints the matching `event-log-to-replay --review-dir ...` command when harn exits.
 
-For 15-20 minute captures, use `event-log-to-replay --split-every N --output-dir DIR` instead of one large fixture, then run `replay-dir DIR --review-dir ...` to get a suite overview plus per-chunk frame players, renderer contexts, prompts, renderer chunks, render intents, final scenes, and result JSON.
+For 15-20 minute captures, use `event-log-to-replay --split-every N --output-dir DIR --review-dir REVIEW` instead of one large fixture. It writes the split fixture directory and immediately builds a suite overview plus per-chunk frame players, renderer contexts, prompts, renderer chunks, render intents, final scenes, and result JSON. `replay-dir DIR --review-dir ...` can rerun that same review later.
 
 `examples/renderers/gibson_dogfood_renderer.py` is the current hard-coded showcase renderer for live sessions. It is deterministic, but it uses real renderer context: event phase/type, coalesced timing, touched files, repo topology, and current style. It emits a staged scene with data rain, tunnel grids, signal scopes, trace routes, repo city blocks, structured SVG sigils, timeline cues, camera paths, camera jolts, packet bursts, breach waves, scans, and extrusion. `examples/renderers/gibson_echo_renderer.py` remains the smallest external-renderer contract example.
 

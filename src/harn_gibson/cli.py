@@ -587,6 +587,7 @@ def run(argv: Sequence[str] | None = None) -> int:
             split_replay_data_from_event_log,
             split_replay_fixture_filename,
             write_replay_review_bundle,
+            write_replay_suite_review_bundle,
         )
 
         if args.split_every is not None:
@@ -598,12 +599,6 @@ def run(argv: Sequence[str] | None = None) -> int:
                 return 2
             if args.output is not None:
                 print("--split-every cannot be used with --output", file=sys.stderr)
-                return 2
-            if args.review_dir is not None:
-                print(
-                    "--split-every cannot be used with --review-dir; use replay-dir on --output-dir instead",
-                    file=sys.stderr,
-                )
                 return 2
             fixtures, manifest = split_replay_data_from_event_log(
                 args.path,
@@ -627,6 +622,24 @@ def run(argv: Sequence[str] | None = None) -> int:
                 f"wrote event-log split manifest: {manifest_path} "
                 f"({manifest['chunkCount']} chunks, {manifest['eventCount']} events)"
             )
+            if args.review_dir:
+                state_factory = (
+                    (lambda: _replay_state_from_args(args)) if _explicit_replay_renderer_env_from_args(args) else None
+                )
+                review_manifest = write_replay_suite_review_bundle(
+                    args.review_dir,
+                    output_dir,
+                    screenshot_width=args.screenshot_width,
+                    screenshot_height=args.screenshot_height,
+                    render_chunk_size=args.render_chunk_size,
+                    style=args.style,
+                    state_factory=state_factory,
+                )
+                print(
+                    f"wrote event-log split review bundle: {args.review_dir} "
+                    f"({review_manifest['total']} chunks, {review_manifest['failed']} failed)"
+                )
+                return 0 if review_manifest["ok"] else 1
             return 0
         if args.output_dir is not None:
             print("--output-dir requires --split-every", file=sys.stderr)

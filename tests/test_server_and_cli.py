@@ -1783,24 +1783,93 @@ def test_cli_event_log_to_replay_split_argument_errors(tmp_path: Any, capsys: An
         == 2
     )
     assert "--split-every cannot be used with --output" in capsys.readouterr().err
+    assert cli.run(["event-log-to-replay", str(event_log), "--output-dir", str(output_dir)]) == 2
+    assert "--output-dir requires --split-every" in capsys.readouterr().err
+
+
+def test_cli_event_log_to_replay_split_writes_review_bundle(
+    tmp_path: Any,
+    monkeypatch: Any,
+    capsys: Any,
+) -> None:
+    event_log = tmp_path / "events.jsonl"
+    output_dir = tmp_path / "split"
+    review_dir = tmp_path / "review"
+    events = [
+        {
+            "sequence": index,
+            "timestampMs": 10 + index,
+            "source": "test",
+            "eventType": "tool_call",
+            "phase": "before",
+            "title": "Tool preflight",
+            "summary": "bash starting",
+            "payload": {"type": "tool_call", "toolName": "bash"},
+        }
+        for index in range(1, 4)
+    ]
+    event_log.write_text("\n".join(json.dumps(event) for event in events) + "\n", encoding="utf-8")
+    calls: list[tuple[str, Path, int, int]] = []
+
+    def fake_capture(result: Any, output_dir: str | Path, *, width: int, height: int) -> tuple[Any, ...]:
+        calls.append((result.name, Path(output_dir), width, height))
+        screenshot = BrowserScreenshotResult(
+            Path(output_dir) / "frame-0000.png",
+            "http://127.0.0.1:1",
+            result.frames[0].scene["revision"],
+            width,
+            height,
+            {"nonblank": True},
+        )
+        return (ReplayFrameScreenshot(0, result.steps[0], screenshot.to_dict()),)
+
+    monkeypatch.setattr("harn_gibson.replay.capture_replay_frame_screenshots", fake_capture)
+
     assert (
         cli.run(
             [
                 "event-log-to-replay",
                 str(event_log),
-                "--split-every",
-                "2",
                 "--output-dir",
                 str(output_dir),
+                "--split-every",
+                "2",
+                "--name",
+                "captured dogfood",
+                "--visual-fixture",
                 "--review-dir",
-                str(tmp_path / "review"),
+                str(review_dir),
+                "--screenshot-width",
+                "640",
+                "--screenshot-height",
+                "480",
+                "--render-chunk-size",
+                "2",
             ]
         )
-        == 2
+        == 0
     )
-    assert "--split-every cannot be used with --review-dir" in capsys.readouterr().err
-    assert cli.run(["event-log-to-replay", str(event_log), "--output-dir", str(output_dir)]) == 2
-    assert "--output-dir requires --split-every" in capsys.readouterr().err
+
+    manifest = json.loads((output_dir / "manifest.json").read_text(encoding="utf-8"))
+    review_manifest = json.loads((review_dir / "manifest.json").read_text(encoding="utf-8"))
+    assert calls == [
+        ("captured dogfood chunk 1/2", review_dir / "files" / "captured-dogfood-0001" / "frames", 640, 480),
+        ("captured dogfood chunk 2/2", review_dir / "files" / "captured-dogfood-0002" / "frames", 640, 480),
+    ]
+    assert manifest["chunkCount"] == 2
+    assert review_manifest["schema"] == "harn-gibson.replay-suite-review.v1"
+    assert review_manifest["total"] == 2
+    assert review_manifest["failed"] == 0
+    assert review_manifest["renderChunkSize"] == 2
+    assert review_manifest["splitManifest"]["chunkCount"] == 2
+    assert review_manifest["captureSummary"]["eventTypeCounts"] == {"tool_call": 3}
+    assert (review_dir / "files" / "captured-dogfood-0001" / "renderer-chunks.html").exists()
+    assert capsys.readouterr().out.splitlines() == [
+        f"wrote replay fixture chunk: {output_dir / 'captured-dogfood-0001.json'} (2 events)",
+        f"wrote replay fixture chunk: {output_dir / 'captured-dogfood-0002.json'} (1 events)",
+        f"wrote event-log split manifest: {output_dir / 'manifest.json'} (2 chunks, 3 events)",
+        f"wrote event-log split review bundle: {review_dir} (2 chunks, 0 failed)",
+    ]
 
 
 def test_cli_event_log_to_replay_writes_review_bundle(
