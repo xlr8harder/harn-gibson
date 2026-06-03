@@ -580,10 +580,26 @@ def test_cli_parser_and_run(monkeypatch: Any, capsys: Any) -> None:
     assert parsed_replay.screenshot == "scene.png"
     assert parsed_replay.screenshot_width == 800
     assert parsed_replay.screenshot_height == 600
-    parsed_replay_dir = parser.parse_args(["replay-dir", "examples/replays", "--output-result", "suite.json"])
+    parsed_replay_dir = parser.parse_args(
+        [
+            "replay-dir",
+            "examples/replays",
+            "--output-result",
+            "suite.json",
+            "--screenshot-dir",
+            "shots",
+            "--screenshot-width",
+            "1024",
+            "--screenshot-height",
+            "768",
+        ]
+    )
     assert parsed_replay_dir.command == "replay-dir"
     assert parsed_replay_dir.path == "examples/replays"
     assert parsed_replay_dir.output_result == "suite.json"
+    assert parsed_replay_dir.screenshot_dir == "shots"
+    assert parsed_replay_dir.screenshot_width == 1024
+    assert parsed_replay_dir.screenshot_height == 768
     assert cli.run(["extension-path"]) == 0
     assert capsys.readouterr().out.strip().endswith("extension.py")
 
@@ -742,9 +758,11 @@ def test_cli_replay_reports_expectation_failures(tmp_path: Any, capsys: Any) -> 
     ]
 
 
-def test_cli_replay_dir_writes_suite_result(tmp_path: Any, capsys: Any) -> None:
+def test_cli_replay_dir_writes_suite_result(tmp_path: Any, monkeypatch: Any, capsys: Any) -> None:
     replay_dir = tmp_path / "replays"
     output = tmp_path / "out" / "suite.json"
+    screenshot_dir = tmp_path / "shots"
+    captures: list[tuple[int, int, int]] = []
     replay_dir.mkdir()
     event = {
         "sequence": 1,
@@ -761,10 +779,50 @@ def test_cli_replay_dir_writes_suite_result(tmp_path: Any, capsys: Any) -> None:
         encoding="utf-8",
     )
 
-    assert cli.run(["replay-dir", str(replay_dir), "--output-result", str(output)]) == 0
-    assert json.loads(output.read_text(encoding="utf-8"))["ok"] is True
+    def fake_capture(state: Any, path: str | Path, *, width: int, height: int) -> BrowserScreenshotResult:
+        captures.append((state.scene.state.revision, width, height))
+        return BrowserScreenshotResult(Path(path), "http://127.0.0.1:1", state.scene.state.revision, width, height)
+
+    monkeypatch.setattr("harn_gibson.browser_capture.capture_scene_screenshot", fake_capture)
+
+    assert (
+        cli.run(
+            [
+                "replay-dir",
+                str(replay_dir),
+                "--output-result",
+                str(output),
+                "--screenshot-dir",
+                str(screenshot_dir),
+                "--screenshot-width",
+                "1024",
+                "--screenshot-height",
+                "768",
+            ]
+        )
+        == 0
+    )
+    payload = json.loads(output.read_text(encoding="utf-8"))
+    assert payload["ok"] is True
+    assert payload["files"][0]["screenshot"]["path"] == str(screenshot_dir / "ok.png")
+    assert captures == [(1, 1024, 768)]
     assert capsys.readouterr().out.splitlines() == [
-        "ok ok.json: 1 steps, revision 1",
+        f"ok ok.json: 1 steps, revision 1, screenshot {screenshot_dir / 'ok.png'}",
+        "replayed 1 replay files; 0 failed",
+    ]
+
+
+def test_cli_replay_dir_writes_suite_result_without_screenshots(tmp_path: Any, capsys: Any) -> None:
+    replay_dir = tmp_path / "replays"
+    replay_dir.mkdir()
+    (replay_dir / "ok.json").write_text(
+        json.dumps({"steps": [{"type": "mutations", "mutations": []}], "expect": {"sceneRevision": 0}}),
+        encoding="utf-8",
+    )
+
+    assert cli.run(["replay-dir", str(replay_dir)]) == 0
+    assert capsys.readouterr().out.splitlines() == [
+        "ok ok.json: 1 steps, revision 0",
         "replayed 1 replay files; 0 failed",
     ]
 

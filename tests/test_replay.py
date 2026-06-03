@@ -5,7 +5,14 @@ from pathlib import Path
 
 import pytest
 
-from harn_gibson import ReplayExpectationError, ReplayResult, ReplayStepResult, run_replay_data, run_replay_file
+from harn_gibson import (
+    BrowserScreenshotResult,
+    ReplayExpectationError,
+    ReplayResult,
+    ReplayStepResult,
+    run_replay_data,
+    run_replay_file,
+)
 from harn_gibson.events import GibsonEvent
 from harn_gibson.replay import (
     ReplayExpectationResult,
@@ -292,6 +299,79 @@ def test_replay_suite_discovers_runs_and_serializes(tmp_path: Path) -> None:
     assert suite.files[1].expectation_failures[0].path == "primitives.status.props.text"
     assert suite.to_dict()["files"][1]["expectationFailures"][0]["passed"] is False
     assert run_replay_suite(first).to_dict()["files"][0]["path"] == first.as_posix()
+
+
+def test_replay_suite_captures_screenshots(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    fixture_dir = tmp_path / "fixtures"
+    nested = fixture_dir / "nested"
+    screenshot_dir = tmp_path / "screenshots"
+    nested.mkdir(parents=True)
+    first = fixture_dir / "first.json"
+    second = nested / "second.json"
+    event = event_payload(1, "message_update", {"assistantMessageEvent": {"delta": "ok"}})
+    for replay_file in (first, second):
+        replay_file.write_text(
+            json.dumps({"steps": [{"type": "event", "event": event}], "expect": {"sceneRevision": 1}}),
+            "utf-8",
+        )
+    captures: list[tuple[str, int, int, int]] = []
+
+    def fake_capture(state: GibsonServerState, path: str | Path, *, width: int, height: int) -> BrowserScreenshotResult:
+        output = Path(path)
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_bytes(b"fake screenshot")
+        try:
+            label = output.relative_to(screenshot_dir).as_posix()
+        except ValueError:
+            label = output.name
+        captures.append((label, state.scene.state.revision, width, height))
+        return BrowserScreenshotResult(output, "http://127.0.0.1:1", state.scene.state.revision, width, height)
+
+    monkeypatch.setattr("harn_gibson.browser_capture.capture_scene_screenshot", fake_capture)
+
+    suite = run_replay_suite(fixture_dir, screenshot_dir=screenshot_dir, screenshot_width=640, screenshot_height=480)
+
+    assert suite.ok is True
+    assert captures == [
+        ("first.png", 1, 640, 480),
+        ("nested/second.png", 1, 640, 480),
+    ]
+    assert suite.files[0].screenshot == {
+        "path": str(screenshot_dir / "first.png"),
+        "url": "http://127.0.0.1:1",
+        "sceneRevision": 1,
+        "width": 640,
+        "height": 480,
+    }
+    assert suite.to_dict()["files"][1]["screenshot"]["path"] == str(screenshot_dir / "nested" / "second.png")
+    assert (screenshot_dir / "nested" / "second.png").read_bytes() == b"fake screenshot"
+
+    single = run_replay_suite(first, screenshot_dir=tmp_path / "single-screenshot")
+    assert single.files[0].screenshot["path"] == str(tmp_path / "single-screenshot" / "first.png")
+
+
+def test_replay_suite_reports_screenshot_failures(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    replay_path = tmp_path / "fixture.json"
+    event = event_payload(1, "message_update", {"assistantMessageEvent": {"delta": "ok"}})
+    replay_path.write_text(
+        json.dumps({"steps": [{"type": "event", "event": event}], "expect": {"sceneRevision": 1}}),
+        "utf-8",
+    )
+
+    def fake_capture(state: GibsonServerState, path: str | Path, *, width: int, height: int) -> BrowserScreenshotResult:
+        raise RuntimeError(f"browser unavailable for {Path(path).name} at {width}x{height}")
+
+    monkeypatch.setattr("harn_gibson.browser_capture.capture_scene_screenshot", fake_capture)
+
+    suite = run_replay_suite(replay_path, screenshot_dir=tmp_path / "screenshots", screenshot_width=320)
+
+    assert suite.ok is False
+    assert suite.failed == 1
+    assert suite.files[0].path == replay_path.as_posix()
+    assert suite.files[0].steps == 1
+    assert suite.files[0].scene_revision == 1
+    assert suite.files[0].expectations == 1
+    assert "browser unavailable for fixture.png at 320x900" == suite.files[0].error
 
 
 def test_replay_suite_validation(tmp_path: Path) -> None:

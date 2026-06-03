@@ -48,6 +48,9 @@ def build_parser() -> argparse.ArgumentParser:
     replay_dir = subcommands.add_parser("replay-dir", help="run every replay JSON fixture under a directory")
     replay_dir.add_argument("path", help="directory or replay JSON file")
     replay_dir.add_argument("--output-result", default=None, help="write replay suite result JSON to this path")
+    replay_dir.add_argument("--screenshot-dir", default=None, help="write one browser screenshot per replay file")
+    replay_dir.add_argument("--screenshot-width", type=int, default=1280, help="screenshot viewport width")
+    replay_dir.add_argument("--screenshot-height", type=int, default=900, help="screenshot viewport height")
 
     subcommands.add_parser("extension-path", help="print the harn extension file path")
     return parser
@@ -189,13 +192,21 @@ def run(argv: Sequence[str] | None = None) -> int:
 
         from harn_gibson.replay import run_replay_suite
 
-        result = run_replay_suite(args.path)
+        result = run_replay_suite(
+            args.path,
+            screenshot_dir=args.screenshot_dir,
+            screenshot_width=args.screenshot_width,
+            screenshot_height=args.screenshot_height,
+        )
         if args.output_result:
             Path(args.output_result).parent.mkdir(parents=True, exist_ok=True)
             Path(args.output_result).write_text(json.dumps(result.to_dict(), indent=2) + "\n", encoding="utf-8")
         for file_result in result.files:
             if file_result.ok:
-                print(f"ok {file_result.path}: {file_result.steps} steps, revision {file_result.scene_revision}")
+                line = f"ok {file_result.path}: {file_result.steps} steps, revision {file_result.scene_revision}"
+                if file_result.screenshot is not None:
+                    line = f"{line}, screenshot {file_result.screenshot['path']}"
+                print(line)
             else:
                 print(f"failed {file_result.path}: {file_result.error}", file=sys.stderr)
         print(f"replayed {result.total} replay files; {result.failed} failed")

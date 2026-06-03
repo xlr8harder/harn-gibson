@@ -78,6 +78,7 @@ class ReplayFileResult:
     expectations: int = 0
     error: str = ""
     expectation_failures: tuple[ReplayExpectationResult, ...] = ()
+    screenshot: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         payload: dict[str, Any] = {
@@ -92,6 +93,8 @@ class ReplayFileResult:
             payload["error"] = self.error
         if self.expectation_failures:
             payload["expectationFailures"] = [failure.to_dict() for failure in self.expectation_failures]
+        if self.screenshot is not None:
+            payload["screenshot"] = self.screenshot
         return payload
 
 
@@ -148,14 +151,32 @@ def run_replay_file(path: str | Path, state: GibsonServerState | None = None) ->
     return run_replay_data(load_replay_file(path), state)
 
 
-def run_replay_suite(path: str | Path) -> ReplaySuiteResult:
+def run_replay_suite(
+    path: str | Path,
+    *,
+    screenshot_dir: str | Path | None = None,
+    screenshot_width: int = 1280,
+    screenshot_height: int = 900,
+) -> ReplaySuiteResult:
     root = Path(path)
     files = discover_replay_files(root)
+    screenshot_root = Path(screenshot_dir) if screenshot_dir is not None else None
     results = []
     for replay_file in files:
         state = GibsonServerState()
+        result: ReplayResult | None = None
         try:
             result = run_replay_file(replay_file, state)
+            screenshot = None
+            if screenshot_root is not None:
+                screenshot = _capture_suite_screenshot(
+                    root,
+                    replay_file,
+                    screenshot_root,
+                    state,
+                    width=screenshot_width,
+                    height=screenshot_height,
+                )
         except ReplayExpectationError as error:
             results.append(
                 ReplayFileResult(
@@ -171,7 +192,9 @@ def run_replay_suite(path: str | Path) -> ReplaySuiteResult:
                 ReplayFileResult(
                     path=_suite_path(root, replay_file),
                     ok=False,
-                    scene_revision=state.scene.state.revision,
+                    steps=len(result.steps) if result is not None else 0,
+                    scene_revision=result.scene.revision if result is not None else state.scene.state.revision,
+                    expectations=len(result.expectations) if result is not None else 0,
                     error=str(error),
                 )
             )
@@ -183,6 +206,7 @@ def run_replay_suite(path: str | Path) -> ReplaySuiteResult:
                     steps=len(result.steps),
                     scene_revision=result.scene.revision,
                     expectations=len(result.expectations),
+                    screenshot=screenshot,
                 )
             )
         finally:
@@ -356,6 +380,29 @@ def _suite_path(root: Path, path: Path) -> str:
     if root.is_dir():
         return path.relative_to(root).as_posix()
     return path.as_posix()
+
+
+def _suite_screenshot_path(root: Path, path: Path, screenshot_root: Path) -> Path:
+    if root.is_dir():
+        relative_path = path.relative_to(root)
+    else:
+        relative_path = Path(path.name)
+    return screenshot_root / relative_path.with_suffix(".png")
+
+
+def _capture_suite_screenshot(
+    root: Path,
+    path: Path,
+    screenshot_root: Path,
+    state: GibsonServerState,
+    *,
+    width: int,
+    height: int,
+) -> dict[str, Any]:
+    from harn_gibson.browser_capture import capture_scene_screenshot
+
+    screenshot_path = _suite_screenshot_path(root, path, screenshot_root)
+    return capture_scene_screenshot(state, screenshot_path, width=width, height=height).to_dict()
 
 
 def _run_event_step(index: int, step: Mapping[str, Any], state: GibsonServerState) -> ReplayStepResult:

@@ -44,10 +44,11 @@ Run every replay JSON under a directory with `replay-dir`:
 
 ```bash
 uv run harn-gibson replay-dir examples/replays \
-  --output-result test-artifacts/replays/suite.json
+  --output-result test-artifacts/replays/suite.json \
+  --screenshot-dir test-artifacts/replays/screenshots
 ```
 
-The command exits with status `1` if any fixture fails to load, replay, or satisfy expectations. The suite result JSON uses `harn-gibson.replay-suite-result.v1` and records per-file step counts, scene revisions, expectation counts, and failures.
+The command exits with status `1` if any fixture fails to load, replay, satisfy expectations, or render its requested browser screenshot. The suite result JSON uses `harn-gibson.replay-suite-result.v1` and records per-file step counts, scene revisions, expectation counts, screenshot metadata, and failures.
 
 ## Screenshot Review
 
