@@ -250,6 +250,75 @@ def default_mutations_for_event(event: GibsonEvent, decisions: Iterable[Mapping[
             props={"text": rendered_decisions},
         ),
         SceneMutation(
+            op="upsert",
+            primitive=ScenePrimitive(
+                id="gibson-city",
+                kind="city_block",
+                region="stage",
+                props={
+                    "blocks": _city_blocks_for_event(event, tone),
+                    "heightScale": 1.0,
+                    "labels": [event.phase, event.event_type],
+                    "focusBlockId": f"district-{event.sequence % 7}",
+                },
+            ),
+        ),
+        SceneMutation(
+            op="upsert",
+            primitive=ScenePrimitive(
+                id="signal-graph",
+                kind="node_graph",
+                region="stage",
+                props=_node_graph_for_event(event, tone),
+            ),
+        ),
+        SceneMutation(
+            op="upsert",
+            primitive=ScenePrimitive(
+                id="data-ribbon",
+                kind="ribbon",
+                region="stage",
+                props={
+                    "points": _ribbon_points_for_event(event),
+                    "width": 3,
+                    "material": tone,
+                    "direction": "forward",
+                    "labels": [event.event_type],
+                },
+            ),
+        ),
+        SceneMutation(
+            op="upsert",
+            primitive=ScenePrimitive(
+                id="glyph-layer",
+                kind="glyph_layer",
+                region="stage",
+                props={
+                    "text": _glyph_text_for_event(event),
+                    "density": 0.72,
+                    "motion": event.phase,
+                    "palette": tone,
+                    "seed": event.sequence,
+                },
+            ),
+        ),
+        SceneMutation(
+            op="upsert",
+            primitive=ScenePrimitive(
+                id="packet-field",
+                kind="particle_field",
+                region="stage",
+                props={
+                    "count": 18 + (event.sequence % 11),
+                    "velocity": 0.24 + (event.sequence % 5) * 0.04,
+                    "emitter": {"x": 0.18, "y": 0.82},
+                    "color": tone,
+                    "blend": "screen",
+                    "seed": event.sequence,
+                },
+            ),
+        ),
+        SceneMutation(
             op="start_animation",
             animation=SceneAnimation(
                 id=f"pulse-{event.sequence}",
@@ -315,6 +384,55 @@ def _tone_for_phase(phase: str) -> str:
         "after": "magenta",
         "lifecycle": "amber",
     }.get(phase, "green")
+
+
+def _city_blocks_for_event(event: GibsonEvent, tone: str) -> list[dict[str, Any]]:
+    focus = event.sequence % 7
+    return [
+        {
+            "id": f"district-{index}",
+            "x": round(0.08 + index * 0.11, 3),
+            "y": round(0.18 + ((index * 3 + event.sequence) % 5) * 0.11, 3),
+            "w": 0.07,
+            "d": 0.08,
+            "h": round(0.14 + ((event.sequence + index * 2) % 6) * 0.055, 3),
+            "tone": tone if index == focus else "cyan",
+            "label": event.event_type if index == focus else f"{index:02x}",
+        }
+        for index in range(7)
+    ]
+
+
+def _node_graph_for_event(event: GibsonEvent, tone: str) -> dict[str, Any]:
+    return {
+        "focusNodeId": "event",
+        "layout": "triad",
+        "nodes": [
+            {"id": "harn", "label": "harn", "x": 0.18, "y": 0.74, "tone": "green"},
+            {"id": "event", "label": event.event_type, "x": 0.50, "y": 0.42, "tone": tone},
+            {"id": "scene", "label": "scene", "x": 0.82, "y": 0.70, "tone": "cyan"},
+        ],
+        "edges": [
+            {"source": "harn", "target": "event", "label": event.phase},
+            {"source": "event", "target": "scene", "label": "mutate"},
+        ],
+    }
+
+
+def _ribbon_points_for_event(event: GibsonEvent) -> list[dict[str, float]]:
+    wobble = (event.sequence % 5) * 0.025
+    return [
+        {"x": 0.10, "y": round(0.82 - wobble, 3)},
+        {"x": 0.32, "y": round(0.62 + wobble, 3)},
+        {"x": 0.56, "y": round(0.50 - wobble, 3)},
+        {"x": 0.78, "y": round(0.28 + wobble, 3)},
+        {"x": 0.92, "y": round(0.20 - wobble, 3)},
+    ]
+
+
+def _glyph_text_for_event(event: GibsonEvent) -> str:
+    summary = event.summary.replace(" ", "_")[:36]
+    return f"{event.phase.upper()}::{event.event_type.upper()}::{summary}::{event.sequence:04x}"
 
 
 def _trace_entry_for_event(event: GibsonEvent) -> dict[str, Any] | None:

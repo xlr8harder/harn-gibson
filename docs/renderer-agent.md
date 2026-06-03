@@ -104,6 +104,8 @@ The renderer agent should not receive a full new transcript on every event. Use 
 
 - Stable project metadata: repo name, current renderer schema, primitive catalog, active display style.
 - Current renderer state: compact `SceneState` summary, not screenshots.
+- Bounded repo topology: project root name, top-level directories/files, and an optional clipped file-tree sample.
+- Touched files: recent file paths from harn/tool events or coalesced batches, with operation hints when available.
 - Recent harn events: the newest event batch plus short summaries of recent prior events.
 - Recent visualization context: recent render intents, render plans, and active animations/effects.
 
@@ -122,9 +124,11 @@ This mirrors harn session compaction, but it is separate from the primary agent 
 
 Streaming deltas need special handling before a remote renderer agent is added. `message_update` and similar stream events should update local stream buffers or named text primitives with throttled display refreshes. The renderer agent should receive coarse stream milestones or compact summaries, not every streaming delta as a separate model turn.
 
+Repo topology should follow the same rule. A future renderer may use top-level directories, selected file nodes, and touched-file event batches to create directory graphs, edited-file pulses, or flythrough paths. That context should be compacted and diffed over time instead of resending a full repository listing for every renderer request.
+
 ## Visual Catalog
 
-The renderer interface is generic, but prompts can include a visual catalog. The current default catalog exposes low-level primitives such as `mesh`, `glyph_layer`, `particle_field`, `city_block`, `ribbon`, and `text_stream`, plus effects such as `glitch`, `flythrough`, `extrude`, `packet_burst`, `typewriter`, and `hold`. This keeps useful renderers possible while still giving the Gibson prompt enough raw material for 3D filesystem cities, data corridors, and gratuitous animation.
+The renderer interface is generic, but prompts can include a visual catalog. The current default catalog exposes low-level primitives such as `mesh`, `glyph_layer`, `particle_field`, `city_block`, `ribbon`, and `text_stream`, plus effects such as `glitch`, `flythrough`, `extrude`, `packet_burst`, `typewriter`, and `hold`. The deterministic fallback now emits browser-rendered `city_block`, `node_graph`, `ribbon`, `glyph_layer`, and `particle_field` primitives. This keeps useful renderers possible while still giving the Gibson prompt enough raw material for 3D filesystem cities, data corridors, and gratuitous animation.
 
 ## Hook Reuse
 

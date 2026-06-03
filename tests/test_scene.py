@@ -162,13 +162,34 @@ def test_default_mutations_and_scene_update_payload() -> None:
     scene = engine.apply(mutations)
     payload = scene_update_payload(event, mutations, scene)
 
-    assert [mutation.op for mutation in mutations] == ["patch", "append_log", "patch", "start_animation"]
+    assert [mutation.op for mutation in mutations] == [
+        "patch",
+        "append_log",
+        "patch",
+        "upsert",
+        "upsert",
+        "upsert",
+        "upsert",
+        "upsert",
+        "start_animation",
+    ]
     assert scene.primitives["status"].props["text"] == "after:tool_result"
     assert scene.primitives["decision-log"].props["text"] == decisions
     assert scene.primitives["trace-log"].props["text"] == []
+    assert scene.primitives["gibson-city"].kind == "city_block"
+    assert len(scene.primitives["gibson-city"].props["blocks"]) == 7
+    assert scene.primitives["gibson-city"].props["focusBlockId"] == "district-4"
+    assert scene.primitives["signal-graph"].kind == "node_graph"
+    assert scene.primitives["signal-graph"].props["focusNodeId"] == "event"
+    assert scene.primitives["data-ribbon"].kind == "ribbon"
+    assert len(scene.primitives["data-ribbon"].props["points"]) == 5
+    assert scene.primitives["glyph-layer"].kind == "glyph_layer"
+    assert "TOOL_RESULT" in scene.primitives["glyph-layer"].props["text"]
+    assert scene.primitives["packet-field"].kind == "particle_field"
+    assert scene.primitives["packet-field"].props["count"] == 22
     assert scene.animations["pulse-4"].props["tone"] == "magenta"
     assert payload["event"]["eventType"] == "tool_result"
-    assert payload["mutations"][3]["animation"]["targetId"] == "scan-grid"
+    assert payload["mutations"][8]["animation"]["targetId"] == "scan-grid"
 
 
 def test_default_mutations_capture_tracebacks() -> None:
@@ -184,7 +205,18 @@ def test_default_mutations_capture_tracebacks() -> None:
     mutations = default_mutations_for_event(event)
     scene = SceneEngine().apply(mutations)
 
-    assert [mutation.op for mutation in mutations] == ["patch", "append_log", "patch", "start_animation", "patch"]
+    assert [mutation.op for mutation in mutations] == [
+        "patch",
+        "append_log",
+        "patch",
+        "upsert",
+        "upsert",
+        "upsert",
+        "upsert",
+        "upsert",
+        "start_animation",
+        "patch",
+    ]
     trace = scene.primitives["trace-log"].props["text"]
     assert trace == [
         {

@@ -106,6 +106,21 @@ def test_browser_display_renders_events_debug_and_input_queue() -> None:
                     },
                 )
                 assert accepted == {"ok": True, "renderMode": "blocking", "sceneRevision": 1}
+                page.wait_for_function("window.__gibsonScene?.primitives?.['gibson-city']")
+                browser_scene = page.evaluate(
+                    """() => ({
+                      cityKind: window.__gibsonScene.primitives["gibson-city"].kind,
+                      cityBlocks: window.__gibsonScene.primitives["gibson-city"].props.blocks.length,
+                      graphKind: window.__gibsonScene.primitives["signal-graph"].kind,
+                      packetKind: window.__gibsonScene.primitives["packet-field"].kind,
+                    })"""
+                )
+                assert browser_scene == {
+                    "cityKind": "city_block",
+                    "cityBlocks": 7,
+                    "graphKind": "node_graph",
+                    "packetKind": "particle_field",
+                }
                 expect(page.locator("#phase")).to_have_text("before")
                 expect(page.locator("#eventType")).to_have_text("tool_call")
                 expect(page.locator("#sequence")).to_have_text("7")

@@ -962,6 +962,7 @@ const deliverAs = document.getElementById("deliverAs");
 const inputStatus = document.getElementById("inputStatus");
 const pulses = [];
 let lastQueuedInputId = null;
+let currentScene = null;
 
 debugToggle.addEventListener("click", () => {
   const expanded = document.body.classList.toggle("debug-open");
@@ -1032,6 +1033,7 @@ function draw() {
     ctx.lineTo(w, y + h * 0.08);
     ctx.stroke();
   }
+  drawScenePrimitives(currentScene, w, h, performance.now());
   for (let i = pulses.length - 1; i >= 0; i--) {
     const pulse = pulses[i];
     pulse.age += 0.018;
@@ -1052,6 +1054,235 @@ function colorFor(phase) {
   if (phase === "during") return "rgba(88, 215, 255, 1)";
   if (phase === "lifecycle") return "rgba(255, 204, 102, 1)";
   return "rgba(105, 255, 184, 1)";
+}
+
+function toneColor(tone, alpha = 1) {
+  const colors = {
+    amber: [255, 204, 102],
+    cyan: [88, 215, 255],
+    green: [105, 255, 184],
+    magenta: [255, 91, 200],
+    red: [255, 89, 89],
+    white: [230, 255, 248],
+  };
+  const [r, g, b] = colors[tone] || colors.cyan;
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+function normalizedPoint(point, w, h) {
+  return {
+    x: Number(point?.x || 0) * w,
+    y: Number(point?.y || 0) * h,
+  };
+}
+
+function drawPolygon(points, fill, stroke) {
+  if (!points.length) return;
+  ctx.beginPath();
+  ctx.moveTo(points[0].x, points[0].y);
+  for (const point of points.slice(1)) ctx.lineTo(point.x, point.y);
+  ctx.closePath();
+  ctx.fillStyle = fill;
+  ctx.fill();
+  ctx.strokeStyle = stroke;
+  ctx.stroke();
+}
+
+function drawScenePrimitives(scene, w, h, now) {
+  if (!scene?.primitives) return;
+  const primitives = Object.values(scene.primitives).filter((primitive) => primitive.region === "stage");
+  const orderedKinds = ["particle_field", "city_block", "ribbon", "node_graph", "glyph_layer"];
+  for (const kind of orderedKinds) {
+    for (const primitive of primitives) {
+      if (primitive.kind === kind) drawPrimitive(primitive, w, h, now);
+    }
+  }
+}
+
+function drawPrimitive(primitive, w, h, now) {
+  if (primitive.kind === "city_block") drawCityBlock(primitive, w, h);
+  if (primitive.kind === "node_graph") drawNodeGraph(primitive, w, h);
+  if (primitive.kind === "ribbon") drawRibbon(primitive, w, h, now);
+  if (primitive.kind === "glyph_layer") drawGlyphLayer(primitive, w, h, now);
+  if (primitive.kind === "particle_field") drawParticleField(primitive, w, h, now);
+}
+
+function drawCityBlock(primitive, w, h) {
+  const props = primitive.props || {};
+  const blocks = Array.isArray(props.blocks) ? props.blocks : [];
+  ctx.save();
+  ctx.lineWidth = 1.4 * devicePixelRatio;
+  ctx.font = `${11 * devicePixelRatio}px ui-monospace, monospace`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  for (const block of blocks) {
+    const x = Number(block.x || 0) * w;
+    const y = Number(block.y || 0) * h;
+    const bw = Math.max(18 * devicePixelRatio, Number(block.w || 0.05) * w);
+    const bd = Math.max(16 * devicePixelRatio, Number(block.d || 0.05) * h);
+    const bh = Math.max(16 * devicePixelRatio, Number(block.h || 0.12) * h * Number(props.heightScale || 1));
+    const tone = block.tone || "cyan";
+    const focus = block.id === props.focusBlockId;
+    const top = [
+      {x, y: y - bh},
+      {x: x + bw * 0.5, y: y - bh - bd * 0.42},
+      {x: x + bw, y: y - bh},
+      {x: x + bw * 0.5, y: y - bh + bd * 0.42},
+    ];
+    const left = [
+      {x, y: y - bh},
+      {x: x + bw * 0.5, y: y - bh + bd * 0.42},
+      {x: x + bw * 0.5, y},
+      {x, y: y - bd * 0.42},
+    ];
+    const right = [
+      {x: x + bw, y: y - bh},
+      {x: x + bw * 0.5, y: y - bh + bd * 0.42},
+      {x: x + bw * 0.5, y},
+      {x: x + bw, y: y - bd * 0.42},
+    ];
+    ctx.shadowColor = toneColor(tone, focus ? 0.75 : 0.38);
+    ctx.shadowBlur = focus ? 20 * devicePixelRatio : 8 * devicePixelRatio;
+    drawPolygon(left, toneColor(tone, focus ? 0.28 : 0.16), toneColor(tone, 0.48));
+    drawPolygon(right, toneColor(tone, focus ? 0.20 : 0.12), toneColor(tone, 0.42));
+    drawPolygon(top, toneColor(tone, focus ? 0.46 : 0.26), toneColor(tone, 0.88));
+    if (block.label) {
+      ctx.shadowBlur = 4 * devicePixelRatio;
+      ctx.fillStyle = toneColor(focus ? tone : "white", focus ? 0.95 : 0.58);
+      ctx.fillText(String(block.label).slice(0, 14), x + bw * 0.5, y - bh - bd * 0.16);
+    }
+  }
+  ctx.restore();
+}
+
+function drawNodeGraph(primitive, w, h) {
+  const props = primitive.props || {};
+  const nodes = Array.isArray(props.nodes) ? props.nodes : [];
+  const edges = Array.isArray(props.edges) ? props.edges : [];
+  const nodeById = new Map(nodes.map((node) => [node.id, node]));
+  ctx.save();
+  ctx.lineWidth = 1.2 * devicePixelRatio;
+  ctx.font = `${12 * devicePixelRatio}px ui-monospace, monospace`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  for (const edge of edges) {
+    const source = nodeById.get(edge.source);
+    const target = nodeById.get(edge.target);
+    if (!source || !target) continue;
+    const a = normalizedPoint(source, w, h);
+    const b = normalizedPoint(target, w, h);
+    ctx.strokeStyle = toneColor("cyan", 0.28);
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+    ctx.stroke();
+    if (edge.label) {
+      ctx.fillStyle = toneColor("white", 0.48);
+      ctx.fillText(String(edge.label).slice(0, 12), (a.x + b.x) * 0.5, (a.y + b.y) * 0.5 - 8 * devicePixelRatio);
+    }
+  }
+  for (const node of nodes) {
+    const point = normalizedPoint(node, w, h);
+    const tone = node.tone || "cyan";
+    const focus = node.id === props.focusNodeId;
+    const radius = (focus ? 18 : 12) * devicePixelRatio;
+    ctx.shadowColor = toneColor(tone, focus ? 0.9 : 0.45);
+    ctx.shadowBlur = focus ? 22 * devicePixelRatio : 10 * devicePixelRatio;
+    ctx.fillStyle = toneColor(tone, focus ? 0.72 : 0.44);
+    ctx.beginPath();
+    ctx.arc(point.x, point.y, radius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = toneColor("white", focus ? 0.78 : 0.45);
+    ctx.stroke();
+    if (node.label) {
+      ctx.shadowBlur = 3 * devicePixelRatio;
+      ctx.fillStyle = toneColor("white", 0.82);
+      ctx.fillText(String(node.label).slice(0, 16), point.x, point.y + radius + 14 * devicePixelRatio);
+    }
+  }
+  ctx.restore();
+}
+
+function drawRibbon(primitive, w, h, now) {
+  const props = primitive.props || {};
+  const points = Array.isArray(props.points) ? props.points.map((point) => normalizedPoint(point, w, h)) : [];
+  if (points.length < 2) return;
+  const tone = props.material || "cyan";
+  const dashOffset = -(now / 28) % (34 * devicePixelRatio);
+  ctx.save();
+  ctx.lineJoin = "round";
+  ctx.lineCap = "round";
+  ctx.shadowColor = toneColor(tone, 0.8);
+  ctx.shadowBlur = 18 * devicePixelRatio;
+  ctx.strokeStyle = toneColor(tone, 0.32);
+  ctx.lineWidth = Math.max(8 * devicePixelRatio, Number(props.width || 3) * 4 * devicePixelRatio);
+  ctx.beginPath();
+  ctx.moveTo(points[0].x, points[0].y);
+  for (const point of points.slice(1)) ctx.lineTo(point.x, point.y);
+  ctx.stroke();
+  ctx.setLineDash([18 * devicePixelRatio, 16 * devicePixelRatio]);
+  ctx.lineDashOffset = dashOffset;
+  ctx.strokeStyle = toneColor("white", 0.76);
+  ctx.lineWidth = Math.max(2 * devicePixelRatio, Number(props.width || 3) * devicePixelRatio);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawGlyphLayer(primitive, w, h, now) {
+  const props = primitive.props || {};
+  const text = String(props.text || "GIBSON");
+  if (!text) return;
+  const density = Math.max(0.1, Math.min(1, Number(props.density || 0.5)));
+  const tone = props.palette || "green";
+  const columns = Math.max(8, Math.floor(18 * density));
+  const rows = Math.max(5, Math.floor(10 * density));
+  const drift = Math.floor(now / 120 + Number(props.seed || 0));
+  ctx.save();
+  ctx.font = `${12 * devicePixelRatio}px ui-monospace, monospace`;
+  ctx.textBaseline = "top";
+  ctx.shadowColor = toneColor(tone, 0.58);
+  ctx.shadowBlur = 8 * devicePixelRatio;
+  for (let col = 0; col < columns; col++) {
+    for (let row = 0; row < rows; row++) {
+      const index = (col * 7 + row * 11 + drift) % text.length;
+      const x = (0.06 + (col / columns) * 0.88) * w;
+      const y = (0.08 + (row / rows) * 0.78 + ((col + drift) % 5) * 0.008) * h;
+      const alpha = 0.18 + (((col + row + drift) % 7) / 7) * 0.42;
+      ctx.fillStyle = toneColor(tone, alpha);
+      ctx.fillText(text[index], x, y);
+    }
+  }
+  ctx.restore();
+}
+
+function drawParticleField(primitive, w, h, now) {
+  const props = primitive.props || {};
+  const count = Math.max(0, Math.min(120, Number(props.count || 0)));
+  const velocity = Number(props.velocity || 0.25);
+  const emitter = normalizedPoint(props.emitter || {x: 0.5, y: 0.5}, w, h);
+  const tone = props.color || "cyan";
+  ctx.save();
+  ctx.globalCompositeOperation = props.blend === "screen" ? "screen" : "source-over";
+  ctx.lineCap = "round";
+  for (let index = 0; index < count; index++) {
+    const phase = ((now * velocity * 0.00025) + index * 0.071 + Number(props.seed || 0) * 0.013) % 1;
+    const angle = -0.82 + index * 0.37;
+    const distance = phase * Math.max(w, h) * 0.62;
+    const x = emitter.x + Math.cos(angle) * distance;
+    const y = emitter.y + Math.sin(angle) * distance * 0.62;
+    const alpha = Math.max(0, 1 - phase);
+    ctx.strokeStyle = toneColor(tone, alpha * 0.34);
+    ctx.lineWidth = 1.4 * devicePixelRatio;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x - Math.cos(angle) * 22 * devicePixelRatio, y - Math.sin(angle) * 14 * devicePixelRatio);
+    ctx.stroke();
+    ctx.fillStyle = toneColor("white", alpha * 0.74);
+    ctx.beginPath();
+    ctx.arc(x, y, 2.2 * devicePixelRatio, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
 }
 
 function pushEvent(event) {
@@ -1096,6 +1327,8 @@ function appendFeedItem(event) {
 }
 
 function renderScene(scene) {
+  currentScene = scene;
+  window.__gibsonScene = scene;
   const status = scene.primitives?.status?.props || {};
   const stream = scene.primitives?.["assistant-stream"]?.props || {};
   if (status.text) statusEl.textContent = status.text;

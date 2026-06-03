@@ -120,6 +120,9 @@ def test_http_server_routes() -> None:
         scene = json.loads(request_text(f"{base}/scene")[2])
         assert scene["metadata"]["lastRenderIntent"]["renderer"] == "deterministic"
         assert scene["metadata"]["lastRenderIntent"]["intent"] == "visualize input"
+        assert scene["primitives"]["gibson-city"]["kind"] == "city_block"
+        assert scene["primitives"]["signal-graph"]["kind"] == "node_graph"
+        assert scene["primitives"]["packet-field"]["kind"] == "particle_field"
         health = json.loads(request_text(f"{base}/healthz")[2])
         assert health["ok"] is True
         assert health["events"] == 1

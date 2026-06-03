@@ -82,6 +82,11 @@
           "effects": [
             "patch",
             "append_log",
+            "primitive:city_block",
+            "primitive:node_graph",
+            "primitive:ribbon",
+            "primitive:glyph_layer",
+            "primitive:particle_field",
             "animation:phase-pulse"
           ],
           "eventTypes": [
@@ -91,7 +96,7 @@
           "metadata": {
             "renderer": "deterministic"
           },
-          "mutationCount": 4,
+          "mutationCount": 9,
           "renderer": "deterministic",
           "requestCount": 1,
           "routes": [
@@ -102,6 +107,11 @@
           "targets": [
             "status",
             "decision-log",
+            "gibson-city",
+            "signal-graph",
+            "data-ribbon",
+            "glyph-layer",
+            "packet-field",
             "scan-grid"
           ],
           "timeline": {
@@ -313,6 +323,42 @@
         },
         "region": "stage"
       },
+      "data-ribbon": {
+        "children": [],
+        "id": "data-ribbon",
+        "kind": "ribbon",
+        "props": {
+          "direction": "forward",
+          "labels": [
+            "tool_call"
+          ],
+          "material": "green",
+          "points": [
+            {
+              "x": 0.1,
+              "y": 0.795
+            },
+            {
+              "x": 0.32,
+              "y": 0.645
+            },
+            {
+              "x": 0.56,
+              "y": 0.475
+            },
+            {
+              "x": 0.78,
+              "y": 0.305
+            },
+            {
+              "x": 0.92,
+              "y": 0.175
+            }
+          ],
+          "width": 3
+        },
+        "region": "stage"
+      },
       "decision-log": {
         "children": [],
         "id": "decision-log",
@@ -332,12 +378,173 @@
         },
         "region": "side"
       },
+      "gibson-city": {
+        "children": [],
+        "id": "gibson-city",
+        "kind": "city_block",
+        "props": {
+          "blocks": [
+            {
+              "d": 0.08,
+              "h": 0.195,
+              "id": "district-0",
+              "label": "00",
+              "tone": "cyan",
+              "w": 0.07,
+              "x": 0.08,
+              "y": 0.29
+            },
+            {
+              "d": 0.08,
+              "h": 0.305,
+              "id": "district-1",
+              "label": "tool_call",
+              "tone": "green",
+              "w": 0.07,
+              "x": 0.19,
+              "y": 0.62
+            },
+            {
+              "d": 0.08,
+              "h": 0.415,
+              "id": "district-2",
+              "label": "02",
+              "tone": "cyan",
+              "w": 0.07,
+              "x": 0.3,
+              "y": 0.4
+            },
+            {
+              "d": 0.08,
+              "h": 0.195,
+              "id": "district-3",
+              "label": "03",
+              "tone": "cyan",
+              "w": 0.07,
+              "x": 0.41,
+              "y": 0.18
+            },
+            {
+              "d": 0.08,
+              "h": 0.305,
+              "id": "district-4",
+              "label": "04",
+              "tone": "cyan",
+              "w": 0.07,
+              "x": 0.52,
+              "y": 0.51
+            },
+            {
+              "d": 0.08,
+              "h": 0.415,
+              "id": "district-5",
+              "label": "05",
+              "tone": "cyan",
+              "w": 0.07,
+              "x": 0.63,
+              "y": 0.29
+            },
+            {
+              "d": 0.08,
+              "h": 0.195,
+              "id": "district-6",
+              "label": "06",
+              "tone": "cyan",
+              "w": 0.07,
+              "x": 0.74,
+              "y": 0.62
+            }
+          ],
+          "focusBlockId": "district-1",
+          "heightScale": 1.0,
+          "labels": [
+            "before",
+            "tool_call"
+          ]
+        },
+        "region": "stage"
+      },
+      "glyph-layer": {
+        "children": [],
+        "id": "glyph-layer",
+        "kind": "glyph_layer",
+        "props": {
+          "density": 0.72,
+          "motion": "before",
+          "palette": "green",
+          "seed": 1,
+          "text": "BEFORE::TOOL_CALL::bash_starting_with_{command}::0001"
+        },
+        "region": "stage"
+      },
+      "packet-field": {
+        "children": [],
+        "id": "packet-field",
+        "kind": "particle_field",
+        "props": {
+          "blend": "screen",
+          "color": "green",
+          "count": 19,
+          "emitter": {
+            "x": 0.18,
+            "y": 0.82
+          },
+          "seed": 1,
+          "velocity": 0.27999999999999997
+        },
+        "region": "stage"
+      },
       "scan-grid": {
         "children": [],
         "id": "scan-grid",
         "kind": "grid",
         "props": {
           "intensity": 0.2
+        },
+        "region": "stage"
+      },
+      "signal-graph": {
+        "children": [],
+        "id": "signal-graph",
+        "kind": "node_graph",
+        "props": {
+          "edges": [
+            {
+              "label": "before",
+              "source": "harn",
+              "target": "event"
+            },
+            {
+              "label": "mutate",
+              "source": "event",
+              "target": "scene"
+            }
+          ],
+          "focusNodeId": "event",
+          "layout": "triad",
+          "nodes": [
+            {
+              "id": "harn",
+              "label": "harn",
+              "tone": "green",
+              "x": 0.18,
+              "y": 0.74
+            },
+            {
+              "id": "event",
+              "label": "tool_call",
+              "tone": "green",
+              "x": 0.5,
+              "y": 0.42
+            },
+            {
+              "id": "scene",
+              "label": "scene",
+              "tone": "cyan",
+              "x": 0.82,
+              "y": 0.7
+            }
+          ]
         },
         "region": "stage"
       },
