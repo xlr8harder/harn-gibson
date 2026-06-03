@@ -299,10 +299,15 @@ def test_checked_in_replay_fixtures_cover_agent_and_renderer_sides() -> None:
     assert renderer_result.scene.primitives["decision-log"].props["text"][0]["renderer"] == "fixture"
 
     assert [step.kind for step in gallery_result.steps] == ["mutations"]
-    assert len(gallery_result.expectations) == 14
+    assert len(gallery_result.expectations) == 19
     assert gallery_result.scene.primitives["gallery-mesh"].kind == "mesh"
     assert gallery_result.scene.primitives["gallery-vector"].kind == "svg_layer"
     assert gallery_result.scene.primitives["gallery-vector"].props["gradients"][0]["id"] == "ice-gradient"
+    assert gallery_result.scene.primitives["gallery-vector"].props["rects"][0]["rx"] == 5
+    assert gallery_result.scene.primitives["gallery-vector"].props["lines"][0]["from"]["x"] == 18
+    assert gallery_result.scene.primitives["gallery-vector"].props["polylines"][0]["points"][2][0] == 45
+    assert gallery_result.scene.primitives["gallery-vector"].props["polygons"][0]["fill"] == "magenta"
+    assert gallery_result.scene.primitives["gallery-vector"].props["groups"][0]["labels"][0]["text"] == "CORE"
     assert gallery_result.scene.primitives["gallery-vector"].props["traces"][0]["count"] == 9
     assert gallery_result.scene.primitives["gallery-vector"].props["symbols"][0]["kind"] == "globe"
     assert gallery_result.scene.primitives["gallery-vector"].props["symbols"][1]["kind"] == "filesystem_gate"

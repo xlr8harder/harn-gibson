@@ -240,8 +240,16 @@ def test_browser_display_renders_svg_layer_symbols() -> None:
                     "traceCount": 1,
                     "symbolCount": 3,
                     "symbolKinds": ["globe", "filesystem_gate", "reticle"],
-                    "labelCount": 1,
+                    "labelCount": 2,
+                    "rectCount": 2,
+                    "lineCount": 2,
+                    "polylineCount": 1,
+                    "polygonCount": 1,
+                    "groupCount": 1,
+                    "ignoredMarkup": True,
                 }
+                assert page.locator("svg").count() == 0
+                assert page.locator("script", has_text="ignored").count() == 0
                 assert_canvas_nonblank(page)
             finally:
                 browser.close()

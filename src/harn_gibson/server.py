@@ -1614,6 +1614,12 @@ function vectorPoint(value) {
   return {x: Number(value?.x || 0), y: Number(value?.y || 0)};
 }
 
+function vectorNumber(value, fallback, min = -10000, max = 10000) {
+  const numeric = Number(value ?? fallback);
+  if (!Number.isFinite(numeric)) return fallback;
+  return clamp(numeric, min, max);
+}
+
 function polylineSegments(points) {
   const segments = [];
   let total = 0;
@@ -1684,6 +1690,98 @@ function drawSvgPath(pathSpec, props, now) {
     ctx.stroke(path);
   }
   ctx.restore();
+}
+
+function vectorDash(spec, now) {
+  const dash = Array.isArray(spec.dash) ? spec.dash.map(Number).filter((value) => value > 0) : [];
+  if (!dash.length) return;
+  ctx.setLineDash(dash);
+  ctx.lineDashOffset = Number(spec.offset || 0) - now * Number(spec.speed || 0);
+}
+
+function vectorStrokeAndFill(spec, props, now, drawShape, defaultFillAlpha = 0.1) {
+  const tone = spec.tone || props.tone || "cyan";
+  const gradients = Array.isArray(props.gradients) ? props.gradients : [];
+  const alpha = clamp(Number(spec.alpha ?? props.alpha ?? 0.84), 0, 1);
+  const width = Math.max(0.2, Number(spec.width || spec.strokeWidth || 1.2));
+  ctx.save();
+  ctx.lineJoin = spec.join || "round";
+  ctx.lineCap = spec.cap || "round";
+  ctx.lineWidth = width;
+  ctx.shadowColor = toneColor(tone, Math.min(0.8, alpha));
+  ctx.shadowBlur = Number(spec.glow ?? props.glow ?? 4);
+  const pulse = spec.pulse ? 1 + Math.sin(now * Number(spec.pulseSpeed || 0.005)) * 0.06 : 1;
+  if (pulse !== 1 && spec.center) {
+    const center = vectorPoint(spec.center);
+    ctx.translate(center.x, center.y);
+    ctx.scale(pulse, pulse);
+    ctx.translate(-center.x, -center.y);
+  }
+  drawShape();
+  if (spec.fill && spec.fill !== "none") {
+    ctx.fillStyle = vectorPaint(spec.fill, gradients, tone, Number(spec.fillAlpha ?? defaultFillAlpha));
+    ctx.fill();
+  }
+  if (spec.stroke !== false) {
+    vectorDash(spec, now);
+    ctx.strokeStyle = vectorPaint(spec.stroke || tone, gradients, tone, alpha);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawSvgRects(rects, props, now) {
+  for (const rect of rects) {
+    const x = vectorNumber(rect.x, 0);
+    const y = vectorNumber(rect.y, 0);
+    const width = Math.max(0, vectorNumber(rect.w ?? rect.width, 0));
+    const height = Math.max(0, vectorNumber(rect.h ?? rect.height, 0));
+    if (!width || !height) continue;
+    const radius = Math.max(0, vectorNumber(rect.rx ?? rect.r ?? 0, 0));
+    const spec = {
+      ...rect,
+      center: rect.center || {x: x + width * 0.5, y: y + height * 0.5},
+    };
+    vectorStrokeAndFill(spec, props, now, () => {
+      ctx.beginPath();
+      if (radius > 0 && typeof ctx.roundRect === "function") ctx.roundRect(x, y, width, height, radius);
+      else ctx.rect(x, y, width, height);
+    }, 0.12);
+  }
+}
+
+function lineEndpoint(line, key, xKey, yKey, fallbackX = 0, fallbackY = 0) {
+  const endpoint = line[key];
+  if (endpoint && typeof endpoint === "object") return vectorPoint(endpoint);
+  return {
+    x: vectorNumber(line[`${key}X`] ?? line[`${key}x`] ?? line[xKey], fallbackX),
+    y: vectorNumber(line[`${key}Y`] ?? line[`${key}y`] ?? line[yKey], fallbackY),
+  };
+}
+
+function drawSvgLines(lines, props, now) {
+  for (const line of lines) {
+    const from = lineEndpoint(line, "from", "x1", "y1");
+    const to = lineEndpoint(line, "to", "x2", "y2");
+    vectorStrokeAndFill({...line, fill: "none"}, props, now, () => {
+      ctx.beginPath();
+      ctx.moveTo(from.x, from.y);
+      ctx.lineTo(to.x, to.y);
+    });
+  }
+}
+
+function drawSvgPolylineLike(shapes, props, now, closed) {
+  for (const shape of shapes) {
+    const points = Array.isArray(shape.points) ? shape.points.map((point) => vectorPoint(point)) : [];
+    if (points.length < (closed ? 3 : 2)) continue;
+    vectorStrokeAndFill(shape, props, now, () => {
+      ctx.beginPath();
+      ctx.moveTo(points[0].x, points[0].y);
+      for (const point of points.slice(1)) ctx.lineTo(point.x, point.y);
+      if (closed) ctx.closePath();
+    }, closed ? 0.13 : 0);
+  }
 }
 
 function drawSvgCircles(circles, props, now) {
@@ -1768,12 +1866,14 @@ function drawSvgTraces(traces, props, now) {
 
 function drawSvgLabels(labels, props) {
   ctx.save();
-  ctx.textAlign = "center";
+  ctx.textAlign = props.textAlign || "center";
   ctx.textBaseline = "middle";
   for (const label of labels) {
     const tone = label.tone || props.tone || "white";
     const size = Math.max(3, Number(label.size || 7));
     ctx.font = `${size}px ui-monospace, monospace`;
+    ctx.textAlign = label.align || props.textAlign || "center";
+    ctx.textBaseline = label.baseline || "middle";
     ctx.fillStyle = toneColor(tone, Number(label.alpha ?? 0.86));
     ctx.shadowColor = toneColor(tone, 0.54);
     ctx.shadowBlur = Number(label.glow ?? props.glow ?? 3);
@@ -2003,25 +2103,99 @@ function drawSvgSymbols(symbols, props, now) {
   }
 }
 
+function vectorLayerStats(source, depth = 0) {
+  const groups = Array.isArray(source.groups) && depth < 3 ? source.groups : [];
+  const base = {
+    pathCount: Array.isArray(source.paths) ? source.paths.length : 0,
+    circleCount: Array.isArray(source.circles) ? source.circles.length : 0,
+    traceCount: Array.isArray(source.traces) ? source.traces.length : 0,
+    symbolCount: Array.isArray(source.symbols) ? source.symbols.length : 0,
+    symbolKinds: Array.isArray(source.symbols)
+      ? source.symbols.map((symbol) => String(symbol?.kind || symbol?.type || "reticle"))
+      : [],
+    labelCount: Array.isArray(source.labels) ? source.labels.length : 0,
+    rectCount: Array.isArray(source.rects) ? source.rects.length : 0,
+    lineCount: Array.isArray(source.lines) ? source.lines.length : 0,
+    polylineCount: Array.isArray(source.polylines) ? source.polylines.length : 0,
+    polygonCount: Array.isArray(source.polygons) ? source.polygons.length : 0,
+    groupCount: groups.length,
+    ignoredMarkup: typeof source.rawSvg === "string" || typeof source.markup === "string",
+  };
+  for (const group of groups) {
+    if (!group || typeof group !== "object") continue;
+    const child = vectorLayerStats(group, depth + 1);
+    base.pathCount += child.pathCount;
+    base.circleCount += child.circleCount;
+    base.traceCount += child.traceCount;
+    base.symbolCount += child.symbolCount;
+    base.symbolKinds.push(...child.symbolKinds);
+    base.labelCount += child.labelCount;
+    base.rectCount += child.rectCount;
+    base.lineCount += child.lineCount;
+    base.polylineCount += child.polylineCount;
+    base.polygonCount += child.polygonCount;
+    base.groupCount += child.groupCount;
+    base.ignoredMarkup = base.ignoredMarkup || child.ignoredMarkup;
+  }
+  return base;
+}
+
+function drawSvgGroups(groups, props, now, depth = 0) {
+  if (depth >= 3) return;
+  for (const group of groups) {
+    if (!group || typeof group !== "object") continue;
+    const translate = group.translate || group.position || {};
+    const localProps = {
+      ...props,
+      ...group,
+      tone: group.tone || props.tone,
+      glow: group.glow ?? props.glow,
+      gradients: Array.isArray(group.gradients) ? group.gradients : props.gradients,
+    };
+    const scale = vectorNumber(group.scale, 1, 0.01, 100);
+    ctx.save();
+    ctx.globalAlpha *= clamp(Number(group.opacity ?? 1), 0, 1);
+    ctx.translate(vectorNumber(group.x ?? translate.x, 0), vectorNumber(group.y ?? translate.y, 0));
+    ctx.rotate(Number(group.rotation || 0) + Number(group.spin || 0) * now * 0.00025);
+    ctx.scale(scale, scale);
+    drawSvgContent(group, localProps, now, depth + 1);
+    ctx.restore();
+  }
+}
+
+function drawSvgContent(source, props, now, depth = 0) {
+  const paths = Array.isArray(source.paths) ? source.paths : [];
+  const rects = Array.isArray(source.rects) ? source.rects : [];
+  const lines = Array.isArray(source.lines) ? source.lines : [];
+  const polylines = Array.isArray(source.polylines) ? source.polylines : [];
+  const polygons = Array.isArray(source.polygons) ? source.polygons : [];
+  const circles = Array.isArray(source.circles) ? source.circles : [];
+  const traces = Array.isArray(source.traces) ? source.traces : [];
+  const symbols = Array.isArray(source.symbols) ? source.symbols : [];
+  const labels = Array.isArray(source.labels) ? source.labels : [];
+  const groups = Array.isArray(source.groups) ? source.groups : [];
+  for (const pathSpec of paths) drawSvgPath(pathSpec, props, now);
+  drawSvgRects(rects, props, now);
+  drawSvgLines(lines, props, now);
+  drawSvgPolylineLike(polylines, props, now, false);
+  drawSvgPolylineLike(polygons, props, now, true);
+  drawSvgCircles(circles, props, now);
+  drawSvgTraces(traces, props, now);
+  drawSvgSymbols(symbols, props, now);
+  drawSvgLabels(labels, props);
+  drawSvgGroups(groups, props, now, depth);
+}
+
 function drawSvgLayer(primitive, w, h, now) {
   if (typeof Path2D === "undefined") return;
   const props = primitive.props || {};
-  const paths = Array.isArray(props.paths) ? props.paths : [];
-  const circles = Array.isArray(props.circles) ? props.circles : [];
-  const traces = Array.isArray(props.traces) ? props.traces : [];
-  const symbols = Array.isArray(props.symbols) ? props.symbols : [];
-  const labels = Array.isArray(props.labels) ? props.labels : [];
-  if (!paths.length && !circles.length && !traces.length && !symbols.length && !labels.length) return;
+  const stats = vectorLayerStats(props);
+  const hasVectors = stats.pathCount || stats.circleCount || stats.traceCount || stats.symbolCount
+    || stats.labelCount || stats.rectCount || stats.lineCount || stats.polylineCount || stats.polygonCount;
+  if (!hasVectors) return;
   if (typeof window !== "undefined") {
     window.__gibsonVectorState = window.__gibsonVectorState || {};
-    window.__gibsonVectorState[primitive.id] = {
-      pathCount: paths.length,
-      circleCount: circles.length,
-      traceCount: traces.length,
-      symbolCount: symbols.length,
-      symbolKinds: symbols.map((symbol) => String(symbol?.kind || symbol?.type || "reticle")),
-      labelCount: labels.length,
-    };
+    window.__gibsonVectorState[primitive.id] = stats;
   }
   const box = vectorViewBox(props.viewBox);
   const position = normalizedPoint(props.position || {x: 0.5, y: 0.45}, w, h);
@@ -2034,11 +2208,7 @@ function drawSvgLayer(primitive, w, h, now) {
   ctx.scale(unit, unit);
   ctx.translate(-(box.x + box.width * 0.5), -(box.y + box.height * 0.5));
   ctx.globalCompositeOperation = props.blend === "screen" ? "screen" : "source-over";
-  for (const pathSpec of paths) drawSvgPath(pathSpec, props, now);
-  drawSvgCircles(circles, props, now);
-  drawSvgTraces(traces, props, now);
-  drawSvgSymbols(symbols, props, now);
-  drawSvgLabels(labels, props);
+  drawSvgContent(props, props, now);
   ctx.restore();
 }
 
