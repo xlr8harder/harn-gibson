@@ -1164,7 +1164,16 @@ function drawPolygon(points, fill, stroke) {
 function drawScenePrimitives(scene, w, h, now) {
   if (!scene?.primitives) return;
   const primitives = Object.values(scene.primitives).filter((primitive) => primitive.region === "stage");
-  const orderedKinds = ["particle_field", "mesh", "city_block", "svg_layer", "ribbon", "node_graph", "glyph_layer"];
+  const orderedKinds = [
+    "data_rain",
+    "particle_field",
+    "mesh",
+    "city_block",
+    "svg_layer",
+    "ribbon",
+    "node_graph",
+    "glyph_layer",
+  ];
   for (const kind of orderedKinds) {
     for (const primitive of primitives) {
       if (primitive.kind === kind) drawPrimitive(primitive, w, h, now);
@@ -1179,6 +1188,7 @@ function drawPrimitive(primitive, w, h, now) {
   if (primitive.kind === "node_graph") drawNodeGraph(primitive, w, h);
   if (primitive.kind === "ribbon") drawRibbon(primitive, w, h, now);
   if (primitive.kind === "glyph_layer") drawGlyphLayer(primitive, w, h, now);
+  if (primitive.kind === "data_rain") drawDataRain(primitive, w, h, now);
   if (primitive.kind === "particle_field") drawParticleField(primitive, w, h, now);
 }
 
@@ -2495,6 +2505,145 @@ function drawGlyphLayer(primitive, w, h, now) {
       ctx.fillStyle = toneColor(tone, alpha);
       ctx.fillText(text[index], x, y);
     }
+  }
+  ctx.restore();
+}
+
+function seededUnit(seed) {
+  const value = Math.sin(seed * 12.9898 + 78.233) * 43758.5453;
+  return value - Math.floor(value);
+}
+
+function finiteNumber(value, fallback) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : fallback;
+}
+
+function dataRainRect(props, w, h) {
+  const size = props.size && typeof props.size === "object" ? props.size : {};
+  const hasPosition = props.position && typeof props.position === "object";
+  const rawPosition = hasPosition ? props.position : {x: 0.5, y: 0.5};
+  const position = {
+    x: finiteNumber(rawPosition.x, 0.5) * w,
+    y: finiteNumber(rawPosition.y, 0.5) * h,
+  };
+  const widthRatio = clamp(finiteNumber(size.w ?? size.width ?? props.width, 1), 0.05, 1.8);
+  const heightRatio = clamp(finiteNumber(size.h ?? size.height ?? props.height, 1), 0.05, 1.8);
+  const width = widthRatio * w;
+  const height = heightRatio * h;
+  return {
+    x: position.x - width * 0.5,
+    y: position.y - height * 0.5,
+    width,
+    height,
+  };
+}
+
+function drawDataRain(primitive, w, h, now) {
+  const props = primitive.props || {};
+  const glyphs = String(props.glyphs || "01ABCDEF#$%&*+-/<>[]{}");
+  if (!glyphs) return;
+  const columns = Math.max(4, Math.min(96, Math.floor(finiteNumber(props.columns, 34))));
+  const density = clamp(finiteNumber(props.density, 0.68), 0.05, 1);
+  const speed = Math.max(0, finiteNumber(props.speed, 0.55));
+  const tone = props.tone || props.palette || "green";
+  const accentTone = props.accentTone || props.accent || "white";
+  const direction = props.direction === "up" ? "up" : "down";
+  const opacity = clamp(finiteNumber(props.opacity, 0.74), 0, 1);
+  const trail = Math.max(3, Math.min(32, Math.floor(finiteNumber(props.trail, 9 + density * 13))));
+  const bands = Math.max(0, Math.min(8, Math.floor(finiteNumber(props.bands, 0))));
+  const glitchAmount = props.glitch === true ? 0.35 : clamp(finiteNumber(props.glitch, 0), 0, 1);
+  const seed = finiteNumber(props.seed, 0);
+  const rect = dataRainRect(props, w, h);
+  const fontSize = Math.max(8 * devicePixelRatio, finiteNumber(props.fontSize, 13) * devicePixelRatio);
+  const rowHeight = fontSize * 1.16;
+  const rows = Math.max(6, Math.ceil(rect.height / rowHeight) + trail);
+  const columnWidth = rect.width / columns;
+  let visibleColumns = 0;
+
+  if (typeof window !== "undefined") {
+    window.__gibsonDataRainState = window.__gibsonDataRainState || {};
+    window.__gibsonDataRainState[primitive.id] = {
+      columns,
+      direction,
+      density: Number(density.toFixed(3)),
+      glyphCount: glyphs.length,
+      bandCount: bands,
+      hasGlitch: glitchAmount > 0,
+      tone,
+      accentTone,
+    };
+  }
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(rect.x, rect.y, rect.width, rect.height);
+  ctx.clip();
+  ctx.globalCompositeOperation = props.blend === "source-over" ? "source-over" : "screen";
+  ctx.font = `${fontSize}px ui-monospace, monospace`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "top";
+  ctx.shadowBlur = 9 * devicePixelRatio;
+  ctx.shadowColor = toneColor(tone, 0.72);
+
+  for (let col = 0; col < columns; col++) {
+    const columnSeed = seed + col * 17.31;
+    if (seededUnit(columnSeed) > density) continue;
+    visibleColumns += 1;
+    const phase = (now * speed * 0.00018 + seededUnit(columnSeed + 4.2) + col * 0.013) % 1;
+    const head = phase * rows;
+    const x = rect.x + (col + 0.5 + (seededUnit(columnSeed + 2.6) - 0.5) * 0.32) * columnWidth;
+    const columnAlpha = 0.62 + seededUnit(columnSeed + 9.7) * 0.38;
+    for (let drop = 0; drop < trail; drop++) {
+      const row = Math.floor(head - drop);
+      const wrappedRow = ((row % rows) + rows) % rows;
+      const y = direction === "up"
+        ? rect.y + rect.height - wrappedRow * rowHeight
+        : rect.y + wrappedRow * rowHeight - trail * rowHeight;
+      if (y < rect.y - rowHeight || y > rect.y + rect.height + rowHeight) continue;
+      const fade = 1 - drop / trail;
+      const alpha = opacity * columnAlpha * Math.pow(fade, 1.45);
+      const tick = Math.floor(now / Math.max(1, finiteNumber(props.shuffleMs, 95)));
+      const glyphIndex = Math.abs(Math.floor(columnSeed * 13 + wrappedRow * 7 + drop * 19 + tick)) % glyphs.length;
+      const glyph = glyphs[glyphIndex];
+      const headGlyph = drop === 0;
+      ctx.shadowColor = toneColor(headGlyph ? accentTone : tone, headGlyph ? 0.88 : 0.54);
+      ctx.fillStyle = toneColor(headGlyph ? accentTone : tone, headGlyph ? Math.min(1, alpha + 0.18) : alpha);
+      ctx.fillText(glyph, x, y);
+    }
+  }
+
+  if (bands > 0) {
+    const bandHeight = Math.max(2 * devicePixelRatio, rowHeight * 0.45);
+    for (let band = 0; band < bands; band++) {
+      const progress = (now * speed * 0.00009 + band / bands + seed * 0.0017) % 1;
+      const y = rect.y + progress * rect.height;
+      const gradient = ctx.createLinearGradient(rect.x, y, rect.x + rect.width, y);
+      gradient.addColorStop(0, toneColor(accentTone, 0));
+      gradient.addColorStop(0.5, toneColor(accentTone, opacity * 0.26));
+      gradient.addColorStop(1, toneColor(accentTone, 0));
+      ctx.fillStyle = gradient;
+      ctx.fillRect(rect.x, y, rect.width, bandHeight);
+    }
+  }
+
+  if (glitchAmount > 0) {
+    ctx.lineWidth = Math.max(1, 1.1 * devicePixelRatio);
+    for (let index = 0; index < Math.ceil(10 * glitchAmount); index++) {
+      const jitter = seededUnit(seed + index * 11 + Math.floor(now / 120));
+      const y = rect.y + jitter * rect.height;
+      const length = rect.width * (0.12 + seededUnit(seed + index * 7.3) * 0.28);
+      const x = rect.x + seededUnit(seed + index * 19.9) * Math.max(1, rect.width - length);
+      ctx.strokeStyle = toneColor(index % 2 ? "magenta" : accentTone, opacity * 0.36);
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(x + length, y + (seededUnit(seed + index) - 0.5) * 6 * devicePixelRatio);
+      ctx.stroke();
+    }
+  }
+
+  if (typeof window !== "undefined" && window.__gibsonDataRainState?.[primitive.id]) {
+    window.__gibsonDataRainState[primitive.id].visibleColumns = visibleColumns;
   }
   ctx.restore();
 }

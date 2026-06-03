@@ -217,7 +217,7 @@ def test_browser_display_applies_scene_style_pack() -> None:
         server.server_close()
 
 
-def test_browser_display_renders_svg_layer_symbols() -> None:
+def test_browser_display_renders_vector_symbols_and_data_rain() -> None:
     state = GibsonServerState()
     run_replay_file(EXAMPLE_REPLAYS / "primitive-gallery.json", state)
     server, state, base = start_display_server(state)
@@ -231,8 +231,12 @@ def test_browser_display_renders_svg_layer_symbols() -> None:
                 page = browser.new_page(viewport={"width": 960, "height": 700})
                 page.goto(base, wait_until="domcontentloaded")
                 page.wait_for_function("window.__gibsonVectorState?.['gallery-vector']?.symbolCount === 6")
+                page.wait_for_function("window.__gibsonDataRainState?.['gallery-rain']?.visibleColumns > 0")
                 vector_state = page.evaluate(
                     """() => window.__gibsonVectorState["gallery-vector"]"""
+                )
+                data_rain_state = page.evaluate(
+                    """() => window.__gibsonDataRainState["gallery-rain"]"""
                 )
                 assert vector_state == {
                     "pathCount": 3,
@@ -255,6 +259,18 @@ def test_browser_display_renders_svg_layer_symbols() -> None:
                     "groupCount": 1,
                     "ignoredMarkup": True,
                 }
+                assert data_rain_state == {
+                    "columns": 42,
+                    "direction": "down",
+                    "density": 0.74,
+                    "glyphCount": 20,
+                    "bandCount": 3,
+                    "hasGlitch": True,
+                    "tone": "green",
+                    "accentTone": "white",
+                    "visibleColumns": data_rain_state["visibleColumns"],
+                }
+                assert 1 <= data_rain_state["visibleColumns"] <= 42
                 assert page.locator("svg").count() == 0
                 assert page.locator("script", has_text="ignored").count() == 0
                 assert_canvas_nonblank(page)

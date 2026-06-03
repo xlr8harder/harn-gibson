@@ -54,6 +54,7 @@ _BROWSER_PRIMITIVE_KINDS = frozenset(
         "node_graph",
         "ribbon",
         "glyph_layer",
+        "data_rain",
         "particle_field",
     }
 )

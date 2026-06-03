@@ -25,7 +25,7 @@
         "eventType": "primitive_gallery",
         "phase": "lifecycle",
         "sequence": 900,
-        "summary": "mesh, vector paths, vector symbols, city blocks, graphs, ribbons, glyphs, particles, stream panel",
+        "summary": "mesh, vector paths, vector symbols, city blocks, graphs, ribbons, glyphs, data rain, particles, stream panel",
         "title": "Primitive gallery"
       }
     ],
@@ -40,6 +40,7 @@
           "primitive:node_graph",
           "primitive:ribbon",
           "primitive:glyph_layer",
+          "primitive:data_rain",
           "primitive:particle_field",
           "primitive:text_stream",
           "animation:packet_burst"
@@ -52,7 +53,7 @@
           "renderer": "replay",
           "stepType": "mutations"
         },
-        "mutationCount": 11,
+        "mutationCount": 12,
         "renderer": "replay",
         "requestCount": 1,
         "routes": [
@@ -68,6 +69,7 @@
           "gallery-graph",
           "gallery-ribbon",
           "gallery-glyphs",
+          "gallery-rain",
           "gallery-packets",
           "assistant-stream"
         ],
@@ -86,6 +88,7 @@
             "primitive:node_graph",
             "primitive:ribbon",
             "primitive:glyph_layer",
+            "primitive:data_rain",
             "primitive:particle_field",
             "primitive:text_stream",
             "animation:packet_burst"
@@ -98,7 +101,7 @@
             "renderer": "replay",
             "stepType": "mutations"
           },
-          "mutationCount": 11,
+          "mutationCount": 12,
           "renderer": "replay",
           "requestCount": 1,
           "routes": [
@@ -114,6 +117,7 @@
             "gallery-graph",
             "gallery-ribbon",
             "gallery-glyphs",
+            "gallery-rain",
             "gallery-packets",
             "assistant-stream"
           ],
@@ -131,7 +135,7 @@
         "props": {
           "isStreaming": true,
           "streamId": "gallery",
-          "text": "mesh/vector/glyph/packet/city/ribbon/text primitives are available to renderer plans",
+          "text": "mesh/vector/glyph/rain/packet/city/ribbon/text primitives are available to renderer plans",
           "title": "CATALOG STREAM"
         },
         "region": "stage"
@@ -216,7 +220,7 @@
           "motion": "lifecycle",
           "palette": "green",
           "seed": 900,
-          "text": "GIBSON::PRIMITIVE::CATALOG::MESH::CITY::GRAPH::RIBBON::GLYPH::PACKET"
+          "text": "GIBSON::PRIMITIVE::CATALOG::MESH::CITY::GRAPH::RIBBON::GLYPH::RAIN::PACKET"
         },
         "region": "stage"
       },
@@ -428,6 +432,35 @@
           },
           "seed": 900,
           "velocity": 0.42
+        },
+        "region": "stage"
+      },
+      "gallery-rain": {
+        "children": [],
+        "id": "gallery-rain",
+        "kind": "data_rain",
+        "props": {
+          "accentTone": "white",
+          "bands": 3,
+          "blend": "screen",
+          "columns": 42,
+          "density": 0.74,
+          "direction": "down",
+          "glitch": 0.28,
+          "glyphs": "GIBSON01<>[]{}#$%&/\\",
+          "opacity": 0.54,
+          "position": {
+            "x": 0.5,
+            "y": 0.49
+          },
+          "seed": 901,
+          "size": {
+            "h": 0.84,
+            "w": 0.92
+          },
+          "speed": 0.62,
+          "tone": "green",
+          "trail": 15
         },
         "region": "stage"
       },

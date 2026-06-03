@@ -501,7 +501,7 @@ def test_checked_in_replay_fixtures_cover_agent_and_renderer_sides() -> None:
     assert renderer_result.scene.primitives["decision-log"].props["text"][0]["renderer"] == "fixture"
 
     assert [step.kind for step in gallery_result.steps] == ["mutations"]
-    assert len(gallery_result.expectations) == 23
+    assert len(gallery_result.expectations) == 25
     assert gallery_result.scene.primitives["gallery-mesh"].kind == "mesh"
     assert gallery_result.scene.primitives["gallery-vector"].kind == "svg_layer"
     assert gallery_result.scene.primitives["gallery-vector"].props["gradients"][0]["id"] == "ice-gradient"
@@ -518,6 +518,9 @@ def test_checked_in_replay_fixtures_cover_agent_and_renderer_sides() -> None:
     assert gallery_result.scene.primitives["gallery-vector"].props["symbols"][4]["kind"] == "ice_wall"
     assert gallery_result.scene.primitives["gallery-vector"].props["symbols"][5]["kind"] == "mainframe_core"
     assert gallery_result.scene.primitives["gallery-city"].kind == "city_block"
+    assert gallery_result.scene.primitives["gallery-rain"].kind == "data_rain"
+    assert gallery_result.scene.primitives["gallery-rain"].props["columns"] == 42
+    assert gallery_result.scene.primitives["gallery-rain"].props["bands"] == 3
     assert gallery_result.scene.primitives["assistant-stream"].props["title"] == "CATALOG STREAM"
 
     assert [step.kind for step in animation_result.steps] == ["mutations"]

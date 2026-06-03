@@ -26,6 +26,8 @@
       {"path": "primitives.gallery-graph.kind", "equals": "node_graph"},
       {"path": "primitives.gallery-ribbon.kind", "equals": "ribbon"},
       {"path": "primitives.gallery-glyphs.kind", "equals": "glyph_layer"},
+      {"path": "primitives.gallery-rain.kind", "equals": "data_rain"},
+      {"path": "primitives.gallery-rain.props.columns", "equals": 42},
       {"path": "primitives.gallery-packets.kind", "equals": "particle_field"},
       {"path": "primitives.assistant-stream.kind", "equals": "text_stream"},
       {"path": "animations.gallery-pulse.kind", "equals": "packet_burst"}
@@ -52,7 +54,7 @@
             "phase": "lifecycle",
             "eventType": "primitive_gallery",
             "title": "Primitive gallery",
-            "summary": "mesh, vector paths, vector symbols, city blocks, graphs, ribbons, glyphs, particles, stream panel"
+            "summary": "mesh, vector paths, vector symbols, city blocks, graphs, ribbons, glyphs, data rain, particles, stream panel"
           }
         },
         {
@@ -386,11 +388,36 @@
             "kind": "glyph_layer",
             "region": "stage",
             "props": {
-              "text": "GIBSON::PRIMITIVE::CATALOG::MESH::CITY::GRAPH::RIBBON::GLYPH::PACKET",
+              "text": "GIBSON::PRIMITIVE::CATALOG::MESH::CITY::GRAPH::RIBBON::GLYPH::RAIN::PACKET",
               "density": 0.88,
               "motion": "lifecycle",
               "palette": "green",
               "seed": 900
+            }
+          }
+        },
+        {
+          "op": "upsert",
+          "primitive": {
+            "id": "gallery-rain",
+            "kind": "data_rain",
+            "region": "stage",
+            "props": {
+              "glyphs": "GIBSON01<>[]{}#$%&/\\",
+              "columns": 42,
+              "density": 0.74,
+              "speed": 0.62,
+              "direction": "down",
+              "tone": "green",
+              "accentTone": "white",
+              "opacity": 0.54,
+              "position": {"x": 0.50, "y": 0.49},
+              "size": {"w": 0.92, "h": 0.84},
+              "trail": 15,
+              "bands": 3,
+              "glitch": 0.28,
+              "seed": 901,
+              "blend": "screen"
             }
           }
         },
@@ -419,7 +446,7 @@
             "props": {
               "streamId": "gallery",
               "title": "CATALOG STREAM",
-              "text": "mesh/vector/glyph/packet/city/ribbon/text primitives are available to renderer plans",
+              "text": "mesh/vector/glyph/rain/packet/city/ribbon/text primitives are available to renderer plans",
               "isStreaming": true
             }
           }
