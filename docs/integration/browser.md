@@ -30,7 +30,7 @@ uv run harn-gibson replay examples/replays/renderer-plan.json \
   --screenshot test-artifacts/replays/renderer-scene.png
 ```
 
-For historical-session review, `harn-gibson replay --timeline-screenshot-dir ...` renders each captured replay keyframe through the same browser path and writes a manifest with canvas metrics per frame.
+For historical-session review, `harn-gibson replay --timeline-screenshot-dir ...` renders each captured replay keyframe through the same browser path and writes a manifest with canvas metrics per frame plus an interactive `index.html` frame player.
 
 The integration test verifies:
 
@@ -40,3 +40,4 @@ The integration test verifies:
 - the browser input composer enqueues a message and `/input/next` drains it.
 - a non-default style pack reaches scene metadata, CSS variables, and browser runtime state.
 - the checked-in agent-side and renderer-side replay fixtures render through the browser screenshot path with nonblank canvas metrics.
+- the generated replay frame review page can switch active frames in headless Chromium.

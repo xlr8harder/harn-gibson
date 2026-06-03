@@ -801,7 +801,13 @@ def replay_frame_review_html(manifest: Mapping[str, Any], *, output_path: str | 
     title = str(manifest.get("replayName") or "replay timeline")
     frame_count = escape(str(manifest.get("screenshotCount", len(rendered_frames))))
     schema = escape(str(manifest.get("schema", "")))
-    cards = "\n".join(_replay_frame_review_card(frame, output_path) for frame in rendered_frames)
+    player_frames = _replay_frame_review_player_frames(rendered_frames, output_path)
+    player_data = _html_script_json(player_frames)
+    initial_frame = player_frames[0] if player_frames else {}
+    frame_max = max(0, len(player_frames) - 1)
+    cards = "\n".join(
+        _replay_frame_review_card(position, frame, output_path) for position, frame in enumerate(rendered_frames)
+    )
     return f"""<!doctype html>
 <html lang="en">
 <head>
@@ -821,6 +827,62 @@ def replay_frame_review_html(manifest: Mapping[str, Any], *, output_path: str | 
     }}
     h1 {{ margin: 0 0 6px; font-size: 22px; letter-spacing: 0; }}
     .meta {{ color: #7ee8d0; font-size: 13px; }}
+    .player {{
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(260px, 0.32fr);
+      gap: 18px;
+      padding: 20px 20px 4px;
+      align-items: stretch;
+    }}
+    .active-frame {{
+      margin: 0;
+      min-width: 0;
+      border: 1px solid rgba(35, 255, 214, 0.36);
+      background: #000;
+      box-shadow: 0 0 34px rgba(35, 255, 214, 0.16);
+    }}
+    .active-frame img {{
+      display: block;
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      object-fit: contain;
+      background: #000;
+    }}
+    .player-panel {{
+      display: grid;
+      align-content: start;
+      gap: 12px;
+      border: 1px solid rgba(255, 207, 99, 0.30);
+      background: rgba(6, 16, 18, 0.86);
+      padding: 14px;
+    }}
+    .player-panel h2 {{ margin: 0; font-size: 14px; color: #ffcf63; letter-spacing: 0; }}
+    .frame-meta,
+    .frame-health {{
+      min-height: 38px;
+      color: #b8fff3;
+      font-size: 12px;
+      line-height: 1.45;
+      overflow-wrap: anywhere;
+    }}
+    .frame-health[data-ok="false"] {{ color: #ff5f9d; }}
+    .controls {{ display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }}
+    button {{
+      min-height: 36px;
+      border: 1px solid rgba(35, 255, 214, 0.34);
+      background: rgba(2, 8, 10, 0.92);
+      color: #d9fff7;
+      font: inherit;
+      cursor: pointer;
+    }}
+    button:hover,
+    .frame-card.active {{
+      border-color: rgba(255, 207, 99, 0.72);
+      box-shadow: 0 0 22px rgba(255, 207, 99, 0.16);
+    }}
+    .scrubber-row {{ display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; }}
+    input[type="range"] {{ width: 100%; accent-color: #ffcf63; }}
+    #timelineCounter {{ color: #7ee8d0; font-size: 12px; }}
     main {{
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
@@ -832,10 +894,15 @@ def replay_frame_review_html(manifest: Mapping[str, Any], *, output_path: str | 
       border: 1px solid rgba(35, 255, 214, 0.28);
       background: rgba(4, 16, 18, 0.86);
     }}
+    .frame-select {{ display: block; width: 100%; padding: 0; border: 0; background: transparent; }}
     img {{ display: block; width: 100%; height: auto; background: #000; }}
     figcaption {{ display: grid; gap: 5px; padding: 12px; font-size: 12px; color: #b8fff3; }}
     code {{ color: #ffcf63; }}
     .bad {{ color: #ff5f9d; }}
+    @media (max-width: 860px) {{
+      .player {{ grid-template-columns: 1fr; }}
+      .controls {{ grid-template-columns: 1fr; }}
+    }}
   </style>
 </head>
 <body>
@@ -843,9 +910,101 @@ def replay_frame_review_html(manifest: Mapping[str, Any], *, output_path: str | 
     <h1>{escape(title)} timeline review</h1>
     <div class="meta">{frame_count} frames &middot; schema {schema}</div>
   </header>
+  <section class="player" aria-label="Replay timeline player">
+    <figure class="active-frame">
+      <img id="activeFrame" src="{escape(str(initial_frame.get("src", "")))}" alt="Active replay frame">
+    </figure>
+    <aside class="player-panel">
+      <h2>Timeline Playback</h2>
+      <div id="frameMeta" class="frame-meta">loading timeline frames</div>
+      <div id="frameHealth" class="frame-health" data-ok="true"></div>
+      <div class="controls">
+        <button id="previousFrame" type="button">PREV</button>
+        <button id="playPause" type="button">PLAY</button>
+        <button id="nextFrame" type="button">NEXT</button>
+      </div>
+      <div class="scrubber-row">
+        <input id="timelineScrubber" type="range" min="0" max="{frame_max}" value="0" step="1">
+        <span id="timelineCounter">0 / {len(player_frames)}</span>
+      </div>
+    </aside>
+  </section>
   <main>
 {cards}
   </main>
+  <script>
+    window.__gibsonReplayFrames = {player_data};
+    (() => {{
+      const frames = window.__gibsonReplayFrames;
+      const activeFrame = document.getElementById("activeFrame");
+      const frameMeta = document.getElementById("frameMeta");
+      const frameHealth = document.getElementById("frameHealth");
+      const scrubber = document.getElementById("timelineScrubber");
+      const counter = document.getElementById("timelineCounter");
+      const playPause = document.getElementById("playPause");
+      const previousFrame = document.getElementById("previousFrame");
+      const nextFrame = document.getElementById("nextFrame");
+      let current = 0;
+      let timer = null;
+
+      function stopPlayback() {{
+        if (timer !== null) window.clearInterval(timer);
+        timer = null;
+        playPause.textContent = "PLAY";
+      }}
+
+      function selectFrame(index) {{
+        if (!frames.length) {{
+          frameMeta.textContent = "no frames captured";
+          frameHealth.textContent = "";
+          counter.textContent = "0 / 0";
+          return;
+        }}
+        current = Math.max(0, Math.min(frames.length - 1, Number(index) || 0));
+        const frame = frames[current];
+        activeFrame.src = frame.src || "";
+        activeFrame.alt = `Replay frame ${{frame.index}}`;
+        frameMeta.textContent = [
+          `frame ${{frame.index}}`,
+          `step ${{frame.kind || "unknown"}}`,
+          `revision ${{frame.revision || "unknown"}}`,
+          `updates ${{frame.updates || "0"}}`,
+          `route ${{frame.route || "n/a"}}`,
+        ].join(" / ");
+        frameHealth.textContent = `canvas nonblank: ${{frame.nonblankText}}`;
+        frameHealth.dataset.ok = frame.nonblank ? "true" : "false";
+        scrubber.value = String(current);
+        counter.textContent = `${{current + 1}} / ${{frames.length}}`;
+        document.querySelectorAll("[data-frame-card]").forEach((card) => {{
+          card.classList.toggle("active", Number(card.dataset.frameCard) === current);
+        }});
+      }}
+
+      function stepFrame(delta) {{
+        if (!frames.length) return;
+        selectFrame((current + delta + frames.length) % frames.length);
+      }}
+
+      playPause.addEventListener("click", () => {{
+        if (timer !== null) {{
+          stopPlayback();
+          return;
+        }}
+        playPause.textContent = "PAUSE";
+        timer = window.setInterval(() => stepFrame(1), 900);
+      }});
+      previousFrame.addEventListener("click", () => {{ stopPlayback(); stepFrame(-1); }});
+      nextFrame.addEventListener("click", () => {{ stopPlayback(); stepFrame(1); }});
+      scrubber.addEventListener("input", () => {{ stopPlayback(); selectFrame(scrubber.value); }});
+      document.querySelectorAll("[data-frame-select]").forEach((button) => {{
+        button.addEventListener("click", () => {{
+          stopPlayback();
+          selectFrame(button.dataset.frameSelect);
+        }});
+      }});
+      selectFrame(0);
+    }})();
+  </script>
 </body>
 </html>
 """
@@ -864,31 +1023,65 @@ def _baseline_mismatch_error(expected_scene: Mapping[str, Any], actual_scene: Ma
     return f"baseline scene mismatch\n{diff}"
 
 
-def _replay_frame_review_card(frame: Mapping[str, Any], output_path: str | Path | None) -> str:
-    step = frame.get("step") if isinstance(frame.get("step"), Mapping) else {}
-    screenshot = frame.get("screenshot") if isinstance(frame.get("screenshot"), Mapping) else {}
-    index = frame.get("index", step.get("index") if isinstance(step, Mapping) else "")
-    image_src = _replay_frame_image_src(screenshot.get("path"), output_path)
-    canvas_metrics = screenshot.get("canvasMetrics")
-    nonblank = canvas_metrics.get("nonblank") if isinstance(canvas_metrics, Mapping) else None
+def _replay_frame_review_card(position: int, frame: Mapping[str, Any], output_path: str | Path | None) -> str:
+    frame_data = _replay_frame_review_player_frame(frame, output_path)
+    index = frame_data["index"]
+    image_src = frame_data["src"]
+    nonblank = frame_data["nonblank"]
     nonblank_class = "" if nonblank is True else ' class="bad"'
-    kind = escape(str(step.get("kind", "")))
-    revision = escape(str(step.get("sceneRevision", screenshot.get("sceneRevision", ""))))
-    updates = escape(str(step.get("updates", "")))
-    route = escape(str(step.get("route", "n/a")))
+    kind = escape(str(frame_data["kind"]))
+    revision = escape(str(frame_data["revision"]))
+    updates = escape(str(frame_data["updates"]))
+    route = escape(str(frame_data["route"]))
     step_line = (
         f"frame <code>{escape(str(index))}</code> &middot; "
         f"step <code>{kind}</code> &middot; revision <code>{revision}</code>"
     )
     route_line = f"updates <code>{updates}</code> &middot; route <code>{route}</code>"
-    return f"""    <figure>
-      <img src="{escape(image_src)}" alt="Replay frame {escape(str(index))}">
+    button_label = escape(str(index))
+    button_open = (
+        f'<button class="frame-select" type="button" data-frame-select="{position}" '
+        f'aria-label="Show replay frame {button_label}">'
+    )
+    return f"""    <figure class="frame-card" data-frame-card="{position}">
+      {button_open}
+        <img src="{escape(image_src)}" alt="Replay frame {escape(str(index))}">
+      </button>
       <figcaption>
         <span>{step_line}</span>
         <span>{route_line}</span>
-        <span{nonblank_class}>canvas nonblank: <code>{escape(str(nonblank))}</code></span>
+        <span{nonblank_class}>canvas nonblank: <code>{escape(str(frame_data["nonblankText"]))}</code></span>
       </figcaption>
     </figure>"""
+
+
+def _replay_frame_review_player_frames(
+    frames: Iterable[Mapping[str, Any]],
+    output_path: str | Path | None,
+) -> list[dict[str, Any]]:
+    return [_replay_frame_review_player_frame(frame, output_path) for frame in frames]
+
+
+def _replay_frame_review_player_frame(frame: Mapping[str, Any], output_path: str | Path | None) -> dict[str, Any]:
+    step = frame.get("step") if isinstance(frame.get("step"), Mapping) else {}
+    screenshot = frame.get("screenshot") if isinstance(frame.get("screenshot"), Mapping) else {}
+    index = frame.get("index", step.get("index") if isinstance(step, Mapping) else "")
+    canvas_metrics = screenshot.get("canvasMetrics")
+    nonblank = canvas_metrics.get("nonblank") if isinstance(canvas_metrics, Mapping) else None
+    return {
+        "index": str(index),
+        "src": _replay_frame_image_src(screenshot.get("path"), output_path),
+        "kind": str(step.get("kind", "")),
+        "revision": str(step.get("sceneRevision", screenshot.get("sceneRevision", ""))),
+        "updates": str(step.get("updates", "")),
+        "route": str(step.get("route", "n/a")),
+        "nonblank": nonblank is True,
+        "nonblankText": str(nonblank),
+    }
+
+
+def _html_script_json(value: Any) -> str:
+    return json.dumps(value, separators=(",", ":")).replace("</", "<\\/")
 
 
 def _replay_frame_image_src(value: Any, output_path: str | Path | None) -> str:

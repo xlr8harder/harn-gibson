@@ -164,6 +164,16 @@ def test_replay_event_steps_file_io_and_writers(tmp_path: Path, monkeypatch: pyt
     ]
     assert replay_frame_screenshot_manifest(framed, frame_screenshots)["screenshotCount"] == 2
     assert 'src="frame-0000.png"' in review_html
+    assert 'id="timelineScrubber"' in review_html
+    assert 'data-frame-select="1"' in review_html
+    assert "window.__gibsonReplayFrames" in review_html
+    assert "<\\/script>" in replay_frame_review_html(
+        {
+            "replayName": "script",
+            "schema": "test",
+            "frames": [{"index": 0, "step": {"kind": "</script>"}, "screenshot": {"path": "frame.png"}}],
+        }
+    )
     assert "event replay timeline review" in replay_frame_review_html(
         replay_frame_screenshot_manifest(framed, frame_screenshots)
     )

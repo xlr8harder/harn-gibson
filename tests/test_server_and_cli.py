@@ -825,6 +825,8 @@ def test_cli_replay_captures_timeline_screenshots(tmp_path: Any, monkeypatch: An
     assert manifest["frames"][0]["screenshot"]["path"] == str(screenshot_dir / "frame-0000.png")
     assert "unnamed replay timeline review" in review_html
     assert 'src="frame-0000.png"' in review_html
+    assert 'id="timelineScrubber"' in review_html
+    assert "window.__gibsonReplayFrames" in review_html
     assert capsys.readouterr().out.splitlines() == [
         f"captured replay timeline screenshots: {screenshot_dir} (1 frames)",
         "replayed 1 steps; scene revision 1",

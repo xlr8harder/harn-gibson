@@ -10,7 +10,7 @@ from typing import Any
 import pytest
 
 from harn_gibson.browser_capture import capture_scene_screenshot
-from harn_gibson.replay import run_replay_file
+from harn_gibson.replay import replay_frame_review_html, run_replay_file
 from harn_gibson.server import GibsonServerState, create_server
 from harn_gibson.styles import style_pack_from_name
 
@@ -257,6 +257,46 @@ def test_browser_display_renders_svg_layer_symbols() -> None:
         state.pipeline.stop()
         server.shutdown()
         server.server_close()
+
+
+def test_replay_frame_review_html_player_switches_frames() -> None:
+    html = replay_frame_review_html(
+        {
+            "schema": "harn-gibson.replay-frame-screenshots.v1",
+            "replayName": "browser review",
+            "screenshotCount": 2,
+            "frames": [
+                {
+                    "index": 0,
+                    "step": {"kind": "event", "sceneRevision": 1, "updates": 1},
+                    "screenshot": {"path": "frame-a.png", "canvasMetrics": {"nonblank": True}},
+                },
+                {
+                    "index": 1,
+                    "step": {"kind": "mutations", "sceneRevision": 2, "updates": 3, "route": "direct_scene"},
+                    "screenshot": {"path": "frame-b.png", "canvasMetrics": {"nonblank": False}},
+                },
+            ],
+        }
+    )
+    with sync_playwright() as driver:
+        try:
+            browser = driver.chromium.launch()
+        except Error as exc:
+            pytest.skip(f"Chromium is not installed for Playwright: {exc}")
+        try:
+            page = browser.new_page(viewport={"width": 900, "height": 700})
+            page.set_content(html, wait_until="domcontentloaded")
+            expect(page.locator("#timelineCounter")).to_have_text("1 / 2")
+            expect(page.locator("#frameMeta")).to_contain_text("frame 0")
+            page.locator('[data-frame-select="1"]').click()
+            expect(page.locator("#timelineCounter")).to_have_text("2 / 2")
+            expect(page.locator("#frameMeta")).to_contain_text("route direct_scene")
+            expect(page.locator("#frameHealth")).to_have_attribute("data-ok", "false")
+            assert page.locator("#activeFrame").get_attribute("src").endswith("frame-b.png")
+            assert page.evaluate("window.__gibsonReplayFrames.length") == 2
+        finally:
+            browser.close()
 
 
 @pytest.mark.parametrize(
