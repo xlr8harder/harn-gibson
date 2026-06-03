@@ -973,6 +973,7 @@ const promptInput = document.getElementById("promptInput");
 const deliverAs = document.getElementById("deliverAs");
 const inputStatus = document.getElementById("inputStatus");
 const pulses = [];
+const animationClocks = new Map();
 let lastQueuedInputId = null;
 let currentScene = null;
 
@@ -1028,6 +1029,7 @@ resize();
 function draw() {
   const w = canvas.width;
   const h = canvas.height;
+  const now = performance.now();
   ctx.fillStyle = "#05070b";
   ctx.fillRect(0, 0, w, h);
   ctx.lineWidth = 1;
@@ -1045,7 +1047,8 @@ function draw() {
     ctx.lineTo(w, y + h * 0.08);
     ctx.stroke();
   }
-  drawScenePrimitives(currentScene, w, h, performance.now());
+  drawScenePrimitives(currentScene, w, h, now);
+  drawSceneAnimations(currentScene, w, h, now);
   for (let i = pulses.length - 1; i >= 0; i--) {
     const pulse = pulses[i];
     pulse.age += 0.018;
@@ -1119,6 +1122,231 @@ function drawPrimitive(primitive, w, h, now) {
   if (primitive.kind === "ribbon") drawRibbon(primitive, w, h, now);
   if (primitive.kind === "glyph_layer") drawGlyphLayer(primitive, w, h, now);
   if (primitive.kind === "particle_field") drawParticleField(primitive, w, h, now);
+}
+
+function syncAnimationClocks(scene, now) {
+  const animations = scene?.animations || {};
+  const ids = new Set(Object.keys(animations));
+  for (const id of ids) {
+    if (!animationClocks.has(id)) animationClocks.set(id, now);
+  }
+  for (const id of Array.from(animationClocks.keys())) {
+    if (!ids.has(id)) animationClocks.delete(id);
+  }
+  window.__gibsonAnimationState = {
+    ids: Array.from(ids),
+    kinds: Object.values(animations).map((animation) => animation.kind),
+  };
+}
+
+function animationProgress(animation, now) {
+  const duration = Math.max(1, Number(animation.durationMs || 1000));
+  const start = animationClocks.get(animation.id) ?? now;
+  const elapsed = Math.max(0, now - start);
+  return animation.loop ? (elapsed % duration) / duration : Math.min(1, elapsed / duration);
+}
+
+function animationTone(animation) {
+  return animation.props?.tone || colorPhaseTone(animation.props?.phase) || "cyan";
+}
+
+function colorPhaseTone(phase) {
+  if (phase === "after") return "magenta";
+  if (phase === "during") return "cyan";
+  if (phase === "lifecycle") return "amber";
+  if (phase === "before") return "green";
+  return null;
+}
+
+function primitiveAnchor(primitive, w, h) {
+  const props = primitive?.props || {};
+  if (props.position) return normalizedPoint(props.position, w, h);
+  if (primitive?.kind === "node_graph") {
+    const nodes = Array.isArray(props.nodes) ? props.nodes : [];
+    const focus = nodes.find((node) => node.id === props.focusNodeId) || nodes[0];
+    if (focus) return normalizedPoint(focus, w, h);
+  }
+  if (primitive?.kind === "city_block") {
+    const blocks = Array.isArray(props.blocks) ? props.blocks : [];
+    const focus = blocks.find((block) => block.id === props.focusBlockId) || blocks[0];
+    if (focus) return {x: Number(focus.x || 0.5) * w, y: Number(focus.y || 0.5) * h};
+  }
+  if (primitive?.kind === "ribbon") {
+    const points = Array.isArray(props.points) ? props.points : [];
+    if (points.length) return normalizedPoint(points[Math.floor(points.length / 2)], w, h);
+  }
+  if (primitive?.kind === "particle_field" && props.emitter) return normalizedPoint(props.emitter, w, h);
+  return {x: w * 0.5, y: h * 0.48};
+}
+
+function animationAnchor(animation, scene, w, h) {
+  if (animation.targetId === "scan-grid") return {x: w * 0.5, y: h * 0.52};
+  return primitiveAnchor(scene?.primitives?.[animation.targetId], w, h);
+}
+
+function drawSceneAnimations(scene, w, h, now) {
+  if (!scene?.animations) return;
+  syncAnimationClocks(scene, now);
+  for (const animation of Object.values(scene.animations)) {
+    const progress = animationProgress(animation, now);
+    if (!animation.loop && progress >= 1) continue;
+    drawSceneAnimation(animation, scene, w, h, now, progress);
+  }
+}
+
+function drawSceneAnimation(animation, scene, w, h, now, progress) {
+  if (animation.kind === "packet_burst") drawPacketBurstAnimation(animation, scene, w, h, now, progress);
+  else if (animation.kind === "scan") drawScanAnimation(animation, w, h, progress);
+  else if (animation.kind === "glitch") drawGlitchAnimation(animation, scene, w, h, now, progress);
+  else if (animation.kind === "flythrough") drawFlythroughAnimation(animation, w, h, progress);
+  else if (animation.kind === "extrude") drawExtrudeAnimation(animation, scene, w, h, progress);
+  else if (animation.kind === "hold") drawHoldAnimation(animation, scene, w, h, progress);
+  else drawPulseAnimation(animation, scene, w, h, progress);
+}
+
+function drawPulseAnimation(animation, scene, w, h, progress) {
+  const anchor = animationAnchor(animation, scene, w, h);
+  const tone = animationTone(animation);
+  const alpha = Math.max(0, 1 - progress);
+  const radius = (0.035 + progress * 0.19) * Math.min(w, h);
+  ctx.save();
+  ctx.lineWidth = (2.2 + progress * 3) * devicePixelRatio;
+  ctx.shadowColor = toneColor(tone, alpha * 0.9);
+  ctx.shadowBlur = 24 * devicePixelRatio;
+  ctx.strokeStyle = toneColor(tone, alpha * 0.78);
+  ctx.beginPath();
+  ctx.arc(anchor.x, anchor.y, radius, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawPacketBurstAnimation(animation, scene, w, h, now, progress) {
+  const anchor = animationAnchor(animation, scene, w, h);
+  const tone = animationTone(animation);
+  const paths = Array.isArray(animation.props?.paths) ? animation.props.paths : [];
+  const count = Math.min(80, 22 + paths.length * 8);
+  const maxDistance = Math.min(w, h) * 0.26;
+  ctx.save();
+  ctx.globalCompositeOperation = "screen";
+  ctx.lineCap = "round";
+  for (let index = 0; index < count; index++) {
+    const angle = index * 2.399 + progress * 5.8 + Number(animation.props?.sequence || 0) * 0.03;
+    const distance = (0.08 + progress) * maxDistance * (0.55 + ((index % 7) / 10));
+    const x = anchor.x + Math.cos(angle) * distance;
+    const y = anchor.y + Math.sin(angle) * distance * 0.72;
+    const alpha = Math.max(0, 1 - progress) * (0.35 + (index % 5) * 0.11);
+    ctx.strokeStyle = toneColor(tone, alpha * 0.74);
+    ctx.lineWidth = 1.4 * devicePixelRatio;
+    ctx.beginPath();
+    ctx.moveTo(anchor.x, anchor.y);
+    ctx.lineTo(x, y);
+    ctx.stroke();
+    ctx.fillStyle = toneColor(index % 3 === 0 ? "white" : tone, alpha);
+    ctx.beginPath();
+    ctx.arc(x, y, (1.4 + (index % 3)) * devicePixelRatio, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+function drawScanAnimation(animation, w, h, progress) {
+  const tone = animationTone(animation);
+  const direction = animation.props?.direction || "down";
+  const position = 0.08 + progress * 0.84;
+  ctx.save();
+  ctx.globalCompositeOperation = "screen";
+  ctx.shadowColor = toneColor(tone, 0.85);
+  ctx.shadowBlur = 24 * devicePixelRatio;
+  const gradient = ctx.createLinearGradient(0, 0, direction === "right" ? w : 0, direction === "right" ? 0 : h);
+  gradient.addColorStop(0, toneColor(tone, 0));
+  gradient.addColorStop(0.5, toneColor(tone, 0.58));
+  gradient.addColorStop(1, toneColor(tone, 0));
+  ctx.strokeStyle = gradient;
+  ctx.lineWidth = 3 * devicePixelRatio;
+  ctx.beginPath();
+  if (direction === "right") {
+    const x = position * w;
+    ctx.moveTo(x - 90 * devicePixelRatio, 0);
+    ctx.lineTo(x + 90 * devicePixelRatio, h);
+  } else {
+    const y = position * h;
+    ctx.moveTo(0, y);
+    ctx.lineTo(w, y - h * 0.08);
+  }
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawGlitchAnimation(animation, scene, w, h, now, progress) {
+  const anchor = animationAnchor(animation, scene, w, h);
+  const amount = Math.max(0.2, Number(animation.props?.amount || 0.7));
+  const seed = Number(animation.props?.seed || animation.id.length);
+  const alpha = animation.loop ? 0.42 : Math.max(0, 1 - progress) * 0.56;
+  ctx.save();
+  ctx.globalCompositeOperation = "screen";
+  ctx.lineWidth = 1 * devicePixelRatio;
+  for (let index = 0; index < 12; index++) {
+    const jitter = Math.sin(now * 0.035 + seed + index * 1.7);
+    const x = anchor.x + jitter * 44 * amount * devicePixelRatio;
+    const y = anchor.y + (index - 6) * 8 * devicePixelRatio;
+    const width = (28 + (index % 4) * 18) * devicePixelRatio;
+    ctx.strokeStyle = toneColor(index % 2 ? "magenta" : "cyan", alpha);
+    ctx.strokeRect(x - width * 0.5, y, width, 3 * devicePixelRatio);
+  }
+  ctx.restore();
+}
+
+function drawFlythroughAnimation(animation, w, h, progress) {
+  const tone = animationTone(animation);
+  const center = {x: w * 0.5, y: h * 0.52};
+  ctx.save();
+  ctx.globalCompositeOperation = "screen";
+  ctx.strokeStyle = toneColor(tone, 0.30);
+  ctx.lineWidth = 1.2 * devicePixelRatio;
+  for (let index = 0; index < 16; index++) {
+    const angle = (index / 16) * Math.PI * 2;
+    const inner = (0.08 + progress * 0.18) * Math.min(w, h);
+    const outer = Math.max(w, h) * (0.72 + progress * 0.28);
+    ctx.beginPath();
+    ctx.moveTo(center.x + Math.cos(angle) * inner, center.y + Math.sin(angle) * inner * 0.58);
+    ctx.lineTo(center.x + Math.cos(angle) * outer, center.y + Math.sin(angle) * outer * 0.58);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawExtrudeAnimation(animation, scene, w, h, progress) {
+  const anchor = animationAnchor(animation, scene, w, h);
+  const tone = animationTone(animation);
+  ctx.save();
+  ctx.globalCompositeOperation = "screen";
+  for (let index = 0; index < 5; index++) {
+    const size = (34 + index * 20 + progress * 30) * devicePixelRatio;
+    const offset = (index * 8 + progress * 24) * devicePixelRatio;
+    ctx.strokeStyle = toneColor(tone, Math.max(0, 0.45 - index * 0.07));
+    ctx.strokeRect(anchor.x - size * 0.5 + offset, anchor.y - size * 0.5 - offset, size, size * 0.62);
+  }
+  ctx.restore();
+}
+
+function drawHoldAnimation(animation, scene, w, h, progress) {
+  const anchor = animationAnchor(animation, scene, w, h);
+  const tone = animationTone(animation);
+  const size = (34 + Math.sin(progress * Math.PI * 2) * 6) * devicePixelRatio;
+  ctx.save();
+  ctx.strokeStyle = toneColor(tone, 0.72);
+  ctx.lineWidth = 2 * devicePixelRatio;
+  ctx.beginPath();
+  ctx.moveTo(anchor.x - size, anchor.y - size);
+  ctx.lineTo(anchor.x - size * 0.45, anchor.y - size);
+  ctx.moveTo(anchor.x - size, anchor.y - size);
+  ctx.lineTo(anchor.x - size, anchor.y - size * 0.45);
+  ctx.moveTo(anchor.x + size, anchor.y + size);
+  ctx.lineTo(anchor.x + size * 0.45, anchor.y + size);
+  ctx.moveTo(anchor.x + size, anchor.y + size);
+  ctx.lineTo(anchor.x + size, anchor.y + size * 0.45);
+  ctx.stroke();
+  ctx.restore();
 }
 
 function drawCityBlock(primitive, w, h) {
@@ -1549,6 +1777,7 @@ function appendFeedItem(event) {
 function renderScene(scene) {
   currentScene = scene;
   window.__gibsonScene = scene;
+  syncAnimationClocks(scene, performance.now());
   const status = scene.primitives?.status?.props || {};
   const stream = scene.primitives?.["assistant-stream"]?.props || {};
   if (status.text) statusEl.textContent = status.text;

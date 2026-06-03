@@ -67,7 +67,7 @@ The command exits with status `1` if any fixture fails to load, replay, satisfy 
 
 Replay baselines are canonical final-scene snapshots. They compare the visual state that renderers leave behind, including primitives, animations, event logs, and render-intent history. Absolute render-intent start/end timestamps are normalized out of baselines; duration, effects, targets, routes, and metadata remain comparable.
 
-The checked-in fixtures include `primitive-gallery.json`, which is a browser-review fixture for the generic primitive set rather than a captured harn session.
+The checked-in fixtures include `primitive-gallery.json` and `animation-gallery.json`, which are browser-review fixtures for the generic primitive/effect set rather than captured harn sessions.
 
 Update baselines after intentionally changing visual output:
 

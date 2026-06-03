@@ -1,0 +1,417 @@
+{
+  "metadata": {
+    "purpose": "exercise persistent scene animations rendered from final replay state"
+  },
+  "replayName": "animation gallery",
+  "replaySchema": "harn-gibson.replay.v1",
+  "scene": {
+    "animations": {
+      "gallery-extrude": {
+        "durationMs": 3000,
+        "id": "gallery-extrude",
+        "kind": "extrude",
+        "loop": true,
+        "props": {
+          "phase": "during",
+          "tone": "cyan"
+        },
+        "startedAtMs": 9700,
+        "targetId": "animation-city"
+      },
+      "gallery-fly": {
+        "durationMs": 4200,
+        "id": "gallery-fly",
+        "kind": "flythrough",
+        "loop": true,
+        "props": {
+          "phase": "lifecycle",
+          "tone": "amber"
+        },
+        "startedAtMs": 9680,
+        "targetId": "scan-grid"
+      },
+      "gallery-glitch": {
+        "durationMs": 1900,
+        "id": "gallery-glitch",
+        "kind": "glitch",
+        "loop": true,
+        "props": {
+          "amount": 0.9,
+          "phase": "after",
+          "seed": 962,
+          "tone": "magenta"
+        },
+        "startedAtMs": 9660,
+        "targetId": "animation-vector"
+      },
+      "gallery-hold": {
+        "durationMs": 2800,
+        "id": "gallery-hold",
+        "kind": "hold",
+        "loop": true,
+        "props": {
+          "phase": "before",
+          "tone": "green"
+        },
+        "startedAtMs": 9720,
+        "targetId": "animation-ribbon"
+      },
+      "gallery-packets": {
+        "durationMs": 3400,
+        "id": "gallery-packets",
+        "kind": "packet_burst",
+        "loop": false,
+        "props": {
+          "paths": [
+            "src/harn_gibson/server.py",
+            "docs/renderer-agent.md"
+          ],
+          "phase": "lifecycle",
+          "sequence": 961,
+          "tone": "magenta"
+        },
+        "startedAtMs": 9620,
+        "targetId": "animation-vector"
+      },
+      "gallery-phase": {
+        "durationMs": 3200,
+        "id": "gallery-phase",
+        "kind": "phase-pulse",
+        "loop": false,
+        "props": {
+          "phase": "lifecycle",
+          "sequence": 960,
+          "tone": "cyan"
+        },
+        "startedAtMs": 9600,
+        "targetId": "animation-vector"
+      },
+      "gallery-scan": {
+        "durationMs": 2600,
+        "id": "gallery-scan",
+        "kind": "scan",
+        "loop": true,
+        "props": {
+          "direction": "down",
+          "phase": "lifecycle",
+          "tone": "green"
+        },
+        "startedAtMs": 9640,
+        "targetId": "scan-grid"
+      }
+    },
+    "log": [
+      {
+        "eventType": "animation_gallery",
+        "phase": "lifecycle",
+        "sequence": 960,
+        "summary": "persistent pulses, packets, scans, glitch, flythrough, extrusion, and hold brackets",
+        "title": "Animation gallery"
+      }
+    ],
+    "metadata": {
+      "lastRenderIntent": {
+        "effects": [
+          "patch",
+          "append_log",
+          "primitive:svg_layer",
+          "primitive:city_block",
+          "primitive:ribbon",
+          "animation:phase-pulse",
+          "animation:packet_burst",
+          "animation:scan",
+          "animation:glitch",
+          "animation:flythrough",
+          "animation:extrude",
+          "animation:hold"
+        ],
+        "eventTypes": [
+          "replay_mutations"
+        ],
+        "intent": "visualize replay_mutations",
+        "metadata": {
+          "renderer": "replay",
+          "stepType": "mutations"
+        },
+        "mutationCount": 12,
+        "renderer": "replay",
+        "requestCount": 1,
+        "routes": [
+          "direct_scene"
+        ],
+        "schema": "harn-gibson.render-intent.v1",
+        "stepCount": 1,
+        "targets": [
+          "status",
+          "animation-vector",
+          "animation-city",
+          "animation-ribbon",
+          "scan-grid"
+        ],
+        "timeline": {
+          "durationMs": 0
+        }
+      },
+      "renderIntents": [
+        {
+          "effects": [
+            "patch",
+            "append_log",
+            "primitive:svg_layer",
+            "primitive:city_block",
+            "primitive:ribbon",
+            "animation:phase-pulse",
+            "animation:packet_burst",
+            "animation:scan",
+            "animation:glitch",
+            "animation:flythrough",
+            "animation:extrude",
+            "animation:hold"
+          ],
+          "eventTypes": [
+            "replay_mutations"
+          ],
+          "intent": "visualize replay_mutations",
+          "metadata": {
+            "renderer": "replay",
+            "stepType": "mutations"
+          },
+          "mutationCount": 12,
+          "renderer": "replay",
+          "requestCount": 1,
+          "routes": [
+            "direct_scene"
+          ],
+          "schema": "harn-gibson.render-intent.v1",
+          "stepCount": 1,
+          "targets": [
+            "status",
+            "animation-vector",
+            "animation-city",
+            "animation-ribbon",
+            "scan-grid"
+          ],
+          "timeline": {
+            "durationMs": 0
+          }
+        }
+      ]
+    },
+    "primitives": {
+      "animation-city": {
+        "children": [],
+        "id": "animation-city",
+        "kind": "city_block",
+        "props": {
+          "blocks": [
+            {
+              "d": 0.08,
+              "h": 0.18,
+              "id": "fx-city-0",
+              "label": "hold",
+              "tone": "green",
+              "w": 0.07,
+              "x": 0.12,
+              "y": 0.55
+            },
+            {
+              "d": 0.08,
+              "h": 0.36,
+              "id": "fx-city-1",
+              "label": "extrude",
+              "tone": "cyan",
+              "w": 0.08,
+              "x": 0.23,
+              "y": 0.49
+            },
+            {
+              "d": 0.08,
+              "h": 0.24,
+              "id": "fx-city-2",
+              "label": "scan",
+              "tone": "amber",
+              "w": 0.07,
+              "x": 0.34,
+              "y": 0.58
+            }
+          ],
+          "focusBlockId": "fx-city-1",
+          "heightScale": 0.9
+        },
+        "region": "stage"
+      },
+      "animation-ribbon": {
+        "children": [],
+        "id": "animation-ribbon",
+        "kind": "ribbon",
+        "props": {
+          "direction": "forward",
+          "material": "amber",
+          "points": [
+            {
+              "x": 0.1,
+              "y": 0.82
+            },
+            {
+              "x": 0.3,
+              "y": 0.7
+            },
+            {
+              "x": 0.52,
+              "y": 0.63
+            },
+            {
+              "x": 0.72,
+              "y": 0.48
+            },
+            {
+              "x": 0.9,
+              "y": 0.28
+            }
+          ],
+          "width": 3
+        },
+        "region": "stage"
+      },
+      "animation-vector": {
+        "children": [],
+        "id": "animation-vector",
+        "kind": "svg_layer",
+        "props": {
+          "blend": "screen",
+          "circles": [
+            {
+              "pulse": true,
+              "r": 2.5,
+              "tone": "white",
+              "x": 50,
+              "y": 6
+            },
+            {
+              "pulse": true,
+              "r": 2.5,
+              "tone": "amber",
+              "x": 22,
+              "y": 84
+            },
+            {
+              "pulse": true,
+              "r": 2.5,
+              "tone": "green",
+              "x": 78,
+              "y": 84
+            }
+          ],
+          "labels": [
+            {
+              "size": 8,
+              "text": "FX",
+              "tone": "white",
+              "x": 50,
+              "y": 56
+            }
+          ],
+          "paths": [
+            {
+              "d": "M50 6 L88 30 L78 84 L22 84 L12 30 Z",
+              "fill": true,
+              "fillAlpha": 0.12,
+              "tone": "cyan",
+              "width": 1.6
+            },
+            {
+              "d": "M24 60 C36 22 64 22 76 60 M28 64 L50 34 L72 64",
+              "reveal": true,
+              "speed": 0.00038,
+              "tone": "magenta",
+              "width": 2.1
+            }
+          ],
+          "position": {
+            "x": 0.5,
+            "y": 0.34
+          },
+          "scale": 0.18,
+          "spin": 0.04,
+          "tone": "cyan",
+          "viewBox": [
+            0,
+            0,
+            100,
+            100
+          ]
+        },
+        "region": "stage"
+      },
+      "decision-log": {
+        "children": [],
+        "id": "decision-log",
+        "kind": "code",
+        "props": {
+          "language": "json",
+          "text": "[]"
+        },
+        "region": "side"
+      },
+      "event-feed": {
+        "children": [],
+        "id": "event-feed",
+        "kind": "feed",
+        "props": {
+          "maxItems": 80
+        },
+        "region": "side"
+      },
+      "scan-grid": {
+        "children": [],
+        "id": "scan-grid",
+        "kind": "grid",
+        "props": {
+          "intensity": 0.2
+        },
+        "region": "stage"
+      },
+      "stage": {
+        "children": [
+          "status",
+          "event-feed",
+          "trace-log",
+          "decision-log",
+          "scan-grid"
+        ],
+        "id": "stage",
+        "kind": "viewport",
+        "props": {
+          "theme": "gibson",
+          "title": "GIBSON LINK"
+        },
+        "region": "root"
+      },
+      "status": {
+        "children": [],
+        "id": "status",
+        "kind": "status",
+        "props": {
+          "phase": "lifecycle",
+          "text": "gallery:animation_effects",
+          "tone": "cyan"
+        },
+        "region": "mast"
+      },
+      "trace-log": {
+        "children": [],
+        "id": "trace-log",
+        "kind": "code",
+        "props": {
+          "language": "text",
+          "text": []
+        },
+        "region": "side"
+      }
+    },
+    "revision": 1,
+    "schema": "harn-gibson.scene.v1"
+  },
+  "schema": "harn-gibson.replay-baseline.v1",
+  "stepCount": 1
+}

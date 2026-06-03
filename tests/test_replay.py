@@ -208,6 +208,7 @@ def test_checked_in_replay_fixtures_cover_agent_and_renderer_sides() -> None:
     agent_result = run_replay_file(EXAMPLE_REPLAYS / "stream-and-diagnostic.json")
     renderer_result = run_replay_file(EXAMPLE_REPLAYS / "renderer-plan.json")
     gallery_result = run_replay_file(EXAMPLE_REPLAYS / "primitive-gallery.json")
+    animation_result = run_replay_file(EXAMPLE_REPLAYS / "animation-gallery.json")
 
     assert [step.kind for step in agent_result.steps] == ["event", "event", "mutations"]
     assert len(agent_result.expectations) == 5
@@ -228,6 +229,20 @@ def test_checked_in_replay_fixtures_cover_agent_and_renderer_sides() -> None:
     assert gallery_result.scene.primitives["gallery-vector"].kind == "svg_layer"
     assert gallery_result.scene.primitives["gallery-city"].kind == "city_block"
     assert gallery_result.scene.primitives["assistant-stream"].props["title"] == "CATALOG STREAM"
+
+    assert [step.kind for step in animation_result.steps] == ["mutations"]
+    assert len(animation_result.expectations) == 10
+    assert animation_result.scene.primitives["animation-vector"].kind == "svg_layer"
+    assert animation_result.scene.animations["gallery-packets"].kind == "packet_burst"
+    assert sorted(animation.kind for animation in animation_result.scene.animations.values()) == [
+        "extrude",
+        "flythrough",
+        "glitch",
+        "hold",
+        "packet_burst",
+        "phase-pulse",
+        "scan",
+    ]
 
 
 def test_replay_raw_events_render_plans_and_mutations() -> None:
