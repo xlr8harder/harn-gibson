@@ -109,13 +109,15 @@ Noisy event types can also be sampled before routing. This keeps one matching ev
 HARN_GIBSON_ROUTE_RULES='[{"eventType":"session_tree","route":"renderer_agent","sampleEvery":4,"fallbackRoute":"debug_only"}]'
 ```
 
-To dogfood the renderer-agent process boundary without a live model call, point the server at an external renderer command. The command receives `harn-gibson.external-renderer-request.v1` JSON on stdin and returns a render plan with `steps` on stdout:
+To dogfood the renderer-agent process boundary without a live model call, point the server at an external renderer command. The command receives `harn-gibson.external-renderer-request.v1` JSON on stdin and returns a render plan with `steps` on stdout. `examples/renderers/gibson_dogfood_renderer.py` is the hard-coded showcase renderer for live harn sessions; it reacts to event phase, event type, coalesced timing, touched files, and repo topology with a staged scene using the current cinematic primitive/effect set:
 
 ```bash
-HARN_GIBSON_RENDERER_COMMAND='uv run python examples/renderers/gibson_echo_renderer.py' \
+HARN_GIBSON_RENDERER_COMMAND='uv run python examples/renderers/gibson_dogfood_renderer.py' \
 HARN_GIBSON_RENDERER_TIMEOUT_MS=10000 \
 uv run harn-gibson dogfood
 ```
+
+Use `examples/renderers/gibson_echo_renderer.py` when you want the smallest possible external-renderer contract example.
 
 Renderer command failures are fail-open: the deterministic renderer still updates the scene, and the failure is added to the debug trace surface. Returned plans are also validated against the current scene and catalog. Unsupported but safe primitives/effects are kept with `renderPlanDiagnostics` warnings in render intent metadata; unsafe plans such as missing patch targets, raw `svg_layer` markup, or unbounded vector keyframes are rejected, replaced with deterministic fallback output, and traced in the browser debug drawer. Unsupported `svg_layer` filter or clip presets are warning-only and simply fall back to the bounded browser set.
 
@@ -138,7 +140,7 @@ uv run harn-gibson replay examples/replays/stream-and-diagnostic.json \
   --output-scene test-artifacts/replays/model-rendered-scene.json
 
 uv run harn-gibson replay-dir examples/replays \
-  --renderer-command 'uv run python examples/renderers/gibson_echo_renderer.py' \
+  --renderer-command 'uv run python examples/renderers/gibson_dogfood_renderer.py' \
   --renderer-timeout-ms 10000
 ```
 
@@ -148,6 +150,8 @@ For offline inspection, write normalized events to JSONL:
 HARN_GIBSON_EVENT_LOG=.harn-gibson.jsonl \
 harn --no-extensions -e .harn/extensions/gibson.py
 ```
+
+A useful capture workflow is to start dogfood with both `HARN_GIBSON_RENDERER_COMMAND` and `HARN_GIBSON_EVENT_LOG`, ask harn to bootstrap a tiny project in a bare directory, and preserve the resulting event trajectory as replay input. Those longer captured trajectories should become the basis for future renderer-regression fixtures and screenshot reviews.
 
 Convert a captured event log into a replay fixture:
 

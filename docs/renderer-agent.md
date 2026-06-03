@@ -51,10 +51,12 @@ Every applied plan is summarized as `harn-gibson.render-intent.v1` and stored in
 Set `HARN_GIBSON_RENDERER_COMMAND` to run a renderer as a subprocess. The command is parsed as a shell-style command string, or as a JSON array of argv strings when the value starts with `[`. `HARN_GIBSON_RENDERER_TIMEOUT_MS` controls the per-render timeout.
 
 ```bash
-HARN_GIBSON_RENDERER_COMMAND='uv run python examples/renderers/gibson_echo_renderer.py' \
+HARN_GIBSON_RENDERER_COMMAND='uv run python examples/renderers/gibson_dogfood_renderer.py' \
 HARN_GIBSON_RENDERER_TIMEOUT_MS=10000 \
 uv run harn-gibson dogfood --style neon-noir
 ```
+
+`examples/renderers/gibson_dogfood_renderer.py` is the current hard-coded showcase renderer for live sessions. It is deterministic, but it uses real renderer context: event phase/type, coalesced timing, touched files, repo topology, and current style. It emits a staged scene with data rain, tunnel grids, signal scopes, trace routes, repo city blocks, structured SVG sigils, timeline cues, camera paths, camera jolts, packet bursts, breach waves, scans, and extrusion. `examples/renderers/gibson_echo_renderer.py` remains the smallest external-renderer contract example.
 
 The command receives one JSON object on stdin:
 

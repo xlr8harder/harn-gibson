@@ -86,11 +86,13 @@ uv run harn-gibson replay examples/replays/stream-and-diagnostic.json \
   --output-scene test-artifacts/replays/model-scene.json
 
 uv run harn-gibson replay-dir examples/replays \
-  --renderer-command 'uv run python examples/renderers/gibson_echo_renderer.py' \
+  --renderer-command 'uv run python examples/renderers/gibson_dogfood_renderer.py' \
   --renderer-timeout-ms 10000
 ```
 
 The model command receives `harn-gibson.model-renderer-request.v1`; the external command receives `harn-gibson.external-renderer-request.v1`. Returned plans still go through the same validation, diagnostics, fail-open fallback, and final-scene expectation checks as live dogfood rendering.
+
+The hard-coded `gibson_dogfood_renderer.py` is meant for live harn use before the renderer-agent backend is good enough. A useful future fixture workflow is to run `uv run harn-gibson dogfood` with `HARN_GIBSON_EVENT_LOG` and `HARN_GIBSON_RENDERER_COMMAND='uv run python examples/renderers/gibson_dogfood_renderer.py'`, ask harn to spend 15-20 minutes bootstrapping a tiny project in a bare directory, then convert that event trajectory into replay fixtures and browser screenshots. Several such trajectories should become regression inputs for event coalescing, renderer timing, touched-file visualization, and visual continuity.
 
 ## Baseline Review
 

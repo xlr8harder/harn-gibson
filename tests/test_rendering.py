@@ -620,6 +620,66 @@ json.dump(
     assert plan.steps[0].mutations[0].primitive.kind == "neural_mist"
 
 
+def test_dogfood_showcase_renderer_returns_valid_event_reactive_plan(tmp_path: Path) -> None:
+    repo_root = tmp_path / "repo"
+    (repo_root / "src").mkdir(parents=True)
+    (repo_root / "docs").mkdir()
+    (repo_root / "src" / "app.py").write_text("print('hi')\n", encoding="utf-8")
+    (repo_root / "docs" / "plan.md").write_text("# plan\n", encoding="utf-8")
+    root = Path(__file__).resolve().parents[1]
+    scene = SceneEngine()
+    context_event = GibsonEvent.from_raw(
+        {
+            "type": "tool_result",
+            "toolName": "bash",
+            "input": {"command": "cat src/app.py docs/plan.md"},
+            "output": "updated src/app.py and docs/plan.md",
+        },
+        42,
+        timestamp_ms=4200,
+        recent_context=("created a tiny project",),
+    )
+    batch = RenderInputBatch.from_requests((RenderRequest(context_event),))
+    context = RendererContextBuilder(RendererContextConfig(project_root=str(repo_root))).build(
+        batch,
+        scene.state,
+        pipeline_catalog(),
+    )
+    renderer = ExternalRenderer(
+        (sys.executable, str(root / "examples" / "renderers" / "gibson_dogfood_renderer.py")),
+        timeout_seconds=5,
+        renderer_id="fixture-dogfood",
+        catalog=pipeline_catalog(),
+    )
+
+    plan = renderer.render_with_context(batch.requests, scene.state, context)
+    issues = validate_render_plan(plan, scene.state, pipeline_catalog())
+    mutations = plan.steps[0].mutations
+    primitive_kinds = {mutation.primitive.id: mutation.primitive.kind for mutation in mutations if mutation.primitive}
+    animation_kinds = {mutation.animation.id: mutation.animation.kind for mutation in mutations if mutation.animation}
+
+    assert plan.metadata["renderer"] == "gibson-dogfood-showcase"
+    assert "renderPlanDiagnostics" not in plan.metadata
+    assert issues == ()
+    assert plan.steps[0].event_index == 0
+    assert primitive_kinds == {
+        "dogfood-rain": "data_rain",
+        "dogfood-tunnel": "tunnel_grid",
+        "dogfood-scope": "signal_scope",
+        "dogfood-route": "trace_route",
+        "dogfood-city": "city_block",
+        "dogfood-sigil": "svg_layer",
+    }
+    assert animation_kinds["dogfood-camera-path"] == "camera_path"
+    assert animation_kinds["dogfood-camera-jolt"] == "camera_jolt"
+    assert animation_kinds["dogfood-breach"] == "breach_wave"
+    assert animation_kinds["dogfood-city-extrude"] == "extrude"
+    scene.apply(mutations)
+    assert scene.state.primitives["dogfood-city"].props["blocks"][1]["path"] == "docs"
+    assert scene.state.primitives["dogfood-route"].props["focusHopId"] == "target-0"
+    assert scene.state.animations["dogfood-camera-path"].props["keyframes"][1]["scale"] == 1.038
+
+
 def test_external_renderer_failures_become_trace_state(tmp_path: Path) -> None:
     failing = tmp_path / "failing_renderer.py"
     failing.write_text(
