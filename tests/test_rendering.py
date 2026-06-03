@@ -310,7 +310,35 @@ def test_render_plan_validation_covers_safe_and_missing_payload_branches() -> No
                             "safe-vector",
                             "svg_layer",
                             "stage",
-                            {"symbols": [{"kind": "globe"}]},
+                            {
+                                "animation": {"durationMs": 1200, "loop": False},
+                                "durationMs": 2400,
+                                "loop": True,
+                                "symbols": [{"kind": "globe"}],
+                                "keyframes": [
+                                    {"at": 0, "x": 0, "y": 0, "scale": 1, "rotation": 0, "opacity": 0.8},
+                                    {"timeMs": 1200, "transform": {"x": 4, "y": -2, "scale": 1.1}},
+                                ],
+                                "groups": [
+                                    {
+                                        "groups": [
+                                            {
+                                                "groups": [
+                                                    {
+                                                        "groups": [
+                                                            {
+                                                                "keyframes": [
+                                                                    {"at": 0, "scale": 1},
+                                                                ],
+                                                            }
+                                                        ]
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ],
+                            },
                         ),
                     ),
                     SceneMutation(
@@ -354,6 +382,91 @@ def test_render_plan_validation_covers_safe_and_missing_payload_branches() -> No
         "warningCount": 0,
         "issues": [],
     }
+
+
+def test_render_plan_validation_checks_svg_patch_keyframes() -> None:
+    request = RenderRequest(event(1, "tool_call"))
+    scene = SceneEngine()
+    scene.apply(
+        (
+            SceneMutation(
+                "upsert",
+                primitive=ScenePrimitive(
+                    "vector",
+                    "svg_layer",
+                    "stage",
+                    {"symbols": [{"kind": "globe"}]},
+                ),
+            ),
+        )
+    )
+    too_many_keyframes = [{"at": index / 70, "x": index} for index in range(70)]
+    plan = RenderPlan(
+        (request,),
+        (
+            RenderStep(
+                (
+                    SceneMutation(
+                        "patch",
+                        target_id="vector",
+                        props={
+                            "rawSvg": "<svg><script></script></svg>",
+                            "animation": "spin fast",
+                            "durationMs": -1,
+                            "delayMs": "soon",
+                            "loop": "forever",
+                            "yoyo": 1,
+                            "keyframes": too_many_keyframes,
+                            "groups": [
+                                {
+                                    "durationMs": "fast",
+                                    "loop": False,
+                                    "keyframes": [
+                                        {
+                                            "at": "start",
+                                            "transform": {
+                                                "x": "far",
+                                                "opacity": 0.8,
+                                                "skew": 3,
+                                            },
+                                            "morph": "circle",
+                                        },
+                                        [],
+                                        {"transform": "bad"},
+                                    ],
+                                },
+                                {"keyframes": "bad"},
+                                "ignored-group",
+                            ],
+                        },
+                    ),
+                ),
+                event_index=0,
+            ),
+        ),
+        {"renderer": "fixture"},
+    )
+
+    issues = validate_render_plan(plan, scene.state, pipeline_catalog())
+    codes = {issue.code for issue in issues}
+    payload = render_plan_diagnostics_payload(issues)
+
+    assert {
+        "invalid_svg_keyframe",
+        "invalid_svg_keyframe_animation",
+        "invalid_svg_keyframe_boolean",
+        "invalid_svg_keyframe_transform",
+        "invalid_svg_keyframe_value",
+        "invalid_svg_keyframes",
+        "nonpositive_svg_keyframe_duration",
+        "raw_svg_markup",
+        "too_many_svg_keyframes",
+        "unsupported_svg_keyframe_field",
+    } <= codes
+    assert render_plan_has_validation_errors(issues) is True
+    assert payload["status"] == "rejected"
+    assert payload["errorCount"] == 2
+    assert any(issue.target_id == "vector" and issue.value == "props.groups[0].keyframes[0].morph" for issue in issues)
 
 
 def test_external_renderer_validation_rejects_unsafe_plan_without_crashing(tmp_path: Path) -> None:

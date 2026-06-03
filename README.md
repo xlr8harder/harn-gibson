@@ -117,7 +117,7 @@ HARN_GIBSON_RENDERER_TIMEOUT_MS=10000 \
 uv run harn-gibson dogfood
 ```
 
-Renderer command failures are fail-open: the deterministic renderer still updates the scene, and the failure is added to the debug trace surface. Returned plans are also validated against the current scene and catalog. Unsupported but safe primitives/effects are kept with `renderPlanDiagnostics` warnings in render intent metadata; unsafe plans such as missing patch targets or raw `svg_layer` markup are rejected, replaced with deterministic fallback output, and traced in the browser debug drawer.
+Renderer command failures are fail-open: the deterministic renderer still updates the scene, and the failure is added to the debug trace surface. Returned plans are also validated against the current scene and catalog. Unsupported but safe primitives/effects are kept with `renderPlanDiagnostics` warnings in render intent metadata; unsafe plans such as missing patch targets, raw `svg_layer` markup, or unbounded vector keyframes are rejected, replaced with deterministic fallback output, and traced in the browser debug drawer.
 
 To dogfood the model-prompt boundary without binding to a provider SDK, use a prompt-command renderer. The command receives `harn-gibson.model-renderer-request.v1` JSON with the exact provider-neutral messages that a model would receive and returns model-style JSON text containing a render plan:
 

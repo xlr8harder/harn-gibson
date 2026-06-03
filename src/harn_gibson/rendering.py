@@ -8,6 +8,7 @@ import threading
 import time
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
+from math import isfinite
 from pathlib import Path, PurePosixPath
 from typing import Any, Literal, Protocol
 
@@ -103,6 +104,24 @@ _SVG_SYMBOL_KINDS = frozenset(
         "tunnel",
     }
 )
+_SVG_MAX_KEYFRAMES_PER_SOURCE = 64
+_SVG_KEYFRAME_NUMERIC_KEYS = frozenset(
+    {
+        "at",
+        "offset",
+        "progress",
+        "timeMs",
+        "ms",
+        "x",
+        "y",
+        "scale",
+        "rotation",
+        "opacity",
+    }
+)
+_SVG_KEYFRAME_ALLOWED_KEYS = _SVG_KEYFRAME_NUMERIC_KEYS | {"transform"}
+_SVG_KEYFRAME_PLAYBACK_NUMERIC_KEYS = frozenset({"durationMs", "delayMs"})
+_SVG_KEYFRAME_PLAYBACK_BOOLEAN_KEYS = frozenset({"loop", "yoyo"})
 
 
 @dataclass(frozen=True, slots=True)
@@ -604,6 +623,9 @@ def _validate_patch(
                 target_id=mutation.target_id,
             )
         )
+        return
+    if working_primitives[mutation.target_id] == "svg_layer":
+        _validate_svg_layer_props(mutation.target_id, mutation.props, issues, step_index, mutation_index)
 
 
 def _validate_remove(
@@ -735,7 +757,17 @@ def _validate_svg_layer(
     step_index: int,
     mutation_index: int,
 ) -> None:
-    for key in sorted(_SVG_RAW_MARKUP_KEYS & set(primitive.props)):
+    _validate_svg_layer_props(primitive.id, primitive.props, issues, step_index, mutation_index)
+
+
+def _validate_svg_layer_props(
+    target_id: str,
+    props: Mapping[str, Any],
+    issues: list[RenderPlanValidationIssue],
+    step_index: int,
+    mutation_index: int,
+) -> None:
+    for key in sorted(_SVG_RAW_MARKUP_KEYS & set(props)):
         issues.append(
             RenderPlanValidationIssue(
                 "error",
@@ -743,11 +775,12 @@ def _validate_svg_layer(
                 "svg_layer accepts structured vector data only, not raw markup or external references",
                 step_index=step_index,
                 mutation_index=mutation_index,
-                target_id=primitive.id,
+                target_id=target_id,
                 value=key,
             )
         )
-    symbols = primitive.props.get("symbols")
+    _validate_svg_keyframe_source(target_id, props, issues, step_index, mutation_index, "props", 0)
+    symbols = props.get("symbols")
     if not isinstance(symbols, list):
         return
     for index, symbol in enumerate(symbols):
@@ -759,7 +792,7 @@ def _validate_svg_layer(
                     "svg_layer symbols should be objects",
                     step_index=step_index,
                     mutation_index=mutation_index,
-                    target_id=primitive.id,
+                    target_id=target_id,
                     value=index,
                 )
             )
@@ -773,10 +806,252 @@ def _validate_svg_layer(
                     "svg_layer symbol kind is not in the curated browser symbol set",
                     step_index=step_index,
                     mutation_index=mutation_index,
-                    target_id=primitive.id,
+                    target_id=target_id,
                     value=kind,
                 )
             )
+
+
+def _validate_svg_keyframe_source(
+    target_id: str,
+    source: Mapping[str, Any],
+    issues: list[RenderPlanValidationIssue],
+    step_index: int,
+    mutation_index: int,
+    path: str,
+    depth: int,
+) -> None:
+    _validate_svg_keyframe_playback(target_id, source, issues, step_index, mutation_index, path)
+    animation = source.get("animation")
+    if isinstance(animation, Mapping):
+        _validate_svg_keyframe_playback(target_id, animation, issues, step_index, mutation_index, f"{path}.animation")
+    elif animation is not None:
+        issues.append(
+            RenderPlanValidationIssue(
+                "warning",
+                "invalid_svg_keyframe_animation",
+                "svg_layer animation config should be an object",
+                step_index=step_index,
+                mutation_index=mutation_index,
+                target_id=target_id,
+                value=f"{path}.animation",
+            )
+        )
+    _validate_svg_keyframes(target_id, source, issues, step_index, mutation_index, path)
+    groups = source.get("groups")
+    if not isinstance(groups, list) or depth >= 3:
+        return
+    for index, group in enumerate(groups):
+        if isinstance(group, Mapping):
+            _validate_svg_keyframe_source(
+                target_id,
+                group,
+                issues,
+                step_index,
+                mutation_index,
+                f"{path}.groups[{index}]",
+                depth + 1,
+            )
+
+
+def _validate_svg_keyframe_playback(
+    target_id: str,
+    source: Mapping[str, Any],
+    issues: list[RenderPlanValidationIssue],
+    step_index: int,
+    mutation_index: int,
+    path: str,
+) -> None:
+    for key in _SVG_KEYFRAME_PLAYBACK_NUMERIC_KEYS:
+        if key not in source:
+            continue
+        value = source[key]
+        if not _is_finite_number(value):
+            issues.append(
+                RenderPlanValidationIssue(
+                    "warning",
+                    "invalid_svg_keyframe_value",
+                    "svg_layer keyframe timing values should be finite JSON numbers",
+                    step_index=step_index,
+                    mutation_index=mutation_index,
+                    target_id=target_id,
+                    value=f"{path}.{key}",
+                )
+            )
+        elif key == "durationMs" and float(value) <= 0:
+            issues.append(
+                RenderPlanValidationIssue(
+                    "warning",
+                    "nonpositive_svg_keyframe_duration",
+                    "svg_layer keyframe duration should be positive; browser playback will clamp it",
+                    step_index=step_index,
+                    mutation_index=mutation_index,
+                    target_id=target_id,
+                    value=f"{path}.{key}",
+                )
+            )
+    for key in _SVG_KEYFRAME_PLAYBACK_BOOLEAN_KEYS:
+        if key in source and not isinstance(source[key], bool):
+            issues.append(
+                RenderPlanValidationIssue(
+                    "warning",
+                    "invalid_svg_keyframe_boolean",
+                    "svg_layer keyframe playback flags should be booleans",
+                    step_index=step_index,
+                    mutation_index=mutation_index,
+                    target_id=target_id,
+                    value=f"{path}.{key}",
+                )
+            )
+
+
+def _validate_svg_keyframes(
+    target_id: str,
+    source: Mapping[str, Any],
+    issues: list[RenderPlanValidationIssue],
+    step_index: int,
+    mutation_index: int,
+    path: str,
+) -> None:
+    if "keyframes" not in source:
+        return
+    keyframes = source["keyframes"]
+    keyframe_path = f"{path}.keyframes"
+    if not isinstance(keyframes, list):
+        issues.append(
+            RenderPlanValidationIssue(
+                "warning",
+                "invalid_svg_keyframes",
+                "svg_layer keyframes should be a bounded list of objects",
+                step_index=step_index,
+                mutation_index=mutation_index,
+                target_id=target_id,
+                value=keyframe_path,
+            )
+        )
+        return
+    if len(keyframes) > _SVG_MAX_KEYFRAMES_PER_SOURCE:
+        issues.append(
+            RenderPlanValidationIssue(
+                "error",
+                "too_many_svg_keyframes",
+                f"svg_layer keyframes should have at most {_SVG_MAX_KEYFRAMES_PER_SOURCE} frames per layer or group",
+                step_index=step_index,
+                mutation_index=mutation_index,
+                target_id=target_id,
+                value=len(keyframes),
+            )
+        )
+    for index, frame in enumerate(keyframes[:_SVG_MAX_KEYFRAMES_PER_SOURCE]):
+        frame_path = f"{keyframe_path}[{index}]"
+        if not isinstance(frame, Mapping):
+            issues.append(
+                RenderPlanValidationIssue(
+                    "warning",
+                    "invalid_svg_keyframe",
+                    "svg_layer keyframe entries should be objects",
+                    step_index=step_index,
+                    mutation_index=mutation_index,
+                    target_id=target_id,
+                    value=frame_path,
+                )
+            )
+            continue
+        _validate_svg_keyframe(target_id, frame, issues, step_index, mutation_index, frame_path)
+
+
+def _validate_svg_keyframe(
+    target_id: str,
+    frame: Mapping[str, Any],
+    issues: list[RenderPlanValidationIssue],
+    step_index: int,
+    mutation_index: int,
+    path: str,
+) -> None:
+    for key, value in frame.items():
+        field_path = f"{path}.{key}"
+        if key == "transform":
+            if isinstance(value, Mapping):
+                _validate_svg_keyframe_transform(target_id, value, issues, step_index, mutation_index, field_path)
+            else:
+                issues.append(
+                    RenderPlanValidationIssue(
+                        "warning",
+                        "invalid_svg_keyframe_transform",
+                        "svg_layer keyframe transform should be an object",
+                        step_index=step_index,
+                        mutation_index=mutation_index,
+                        target_id=target_id,
+                        value=field_path,
+                    )
+                )
+            continue
+        if key not in _SVG_KEYFRAME_ALLOWED_KEYS:
+            issues.append(
+                RenderPlanValidationIssue(
+                    "warning",
+                    "unsupported_svg_keyframe_field",
+                    "svg_layer keyframes support numeric timing and transform fields only",
+                    step_index=step_index,
+                    mutation_index=mutation_index,
+                    target_id=target_id,
+                    value=field_path,
+                )
+            )
+            continue
+        if not _is_finite_number(value):
+            issues.append(
+                RenderPlanValidationIssue(
+                    "warning",
+                    "invalid_svg_keyframe_value",
+                    "svg_layer keyframe values should be finite JSON numbers",
+                    step_index=step_index,
+                    mutation_index=mutation_index,
+                    target_id=target_id,
+                    value=field_path,
+                )
+            )
+
+
+def _validate_svg_keyframe_transform(
+    target_id: str,
+    transform: Mapping[str, Any],
+    issues: list[RenderPlanValidationIssue],
+    step_index: int,
+    mutation_index: int,
+    path: str,
+) -> None:
+    for key, value in transform.items():
+        field_path = f"{path}.{key}"
+        if key not in _SVG_KEYFRAME_NUMERIC_KEYS:
+            issues.append(
+                RenderPlanValidationIssue(
+                    "warning",
+                    "unsupported_svg_keyframe_field",
+                    "svg_layer keyframe transforms support numeric transform fields only",
+                    step_index=step_index,
+                    mutation_index=mutation_index,
+                    target_id=target_id,
+                    value=field_path,
+                )
+            )
+            continue
+        if not _is_finite_number(value):
+            issues.append(
+                RenderPlanValidationIssue(
+                    "warning",
+                    "invalid_svg_keyframe_value",
+                    "svg_layer keyframe transform values should be finite JSON numbers",
+                    step_index=step_index,
+                    mutation_index=mutation_index,
+                    target_id=target_id,
+                    value=field_path,
+                )
+            )
+
+
+def _is_finite_number(value: Any) -> bool:
+    return isinstance(value, int | float) and not isinstance(value, bool) and isfinite(float(value))
 
 
 class SceneRenderer(Protocol):
