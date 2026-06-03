@@ -612,6 +612,8 @@ def test_cli_parser_and_run(monkeypatch: Any, capsys: Any) -> None:
             "scene.json",
             "--output-result",
             "result.json",
+            "--output-render-contexts",
+            "contexts.json",
             "--output-timeline",
             "timeline.json",
             "--timeline-screenshot-dir",
@@ -630,6 +632,7 @@ def test_cli_parser_and_run(monkeypatch: Any, capsys: Any) -> None:
     assert parsed_replay.path == "fixture.json"
     assert parsed_replay.output_scene == "scene.json"
     assert parsed_replay.output_result == "result.json"
+    assert parsed_replay.output_render_contexts == "contexts.json"
     assert parsed_replay.output_timeline == "timeline.json"
     assert parsed_replay.timeline_screenshot_dir == "frames"
     assert parsed_replay.screenshot == "scene.png"
@@ -689,6 +692,7 @@ def test_cli_replay_writes_outputs(tmp_path: Any, capsys: Any) -> None:
     replay_path = tmp_path / "replay.json"
     scene_path = tmp_path / "scene.json"
     result_path = tmp_path / "result.json"
+    contexts_path = tmp_path / "contexts.json"
     timeline_path = tmp_path / "timeline.json"
     event = {
         "sequence": 1,
@@ -711,6 +715,8 @@ def test_cli_replay_writes_outputs(tmp_path: Any, capsys: Any) -> None:
                 str(scene_path),
                 "--output-result",
                 str(result_path),
+                "--output-render-contexts",
+                str(contexts_path),
                 "--output-timeline",
                 str(timeline_path),
                 "--style",
@@ -724,8 +730,12 @@ def test_cli_replay_writes_outputs(tmp_path: Any, capsys: Any) -> None:
     assert scene["revision"] == 1
     assert scene["metadata"]["displayStyle"] == "mainframe"
     result = json.loads(result_path.read_text(encoding="utf-8"))
+    contexts = json.loads(contexts_path.read_text(encoding="utf-8"))
     timeline = json.loads(timeline_path.read_text(encoding="utf-8"))
     assert result["steps"][0]["updates"] == 1
+    assert result["rendererContexts"][0]["context"]["mode"] == "compaction"
+    assert contexts["contextCount"] == 1
+    assert contexts["contexts"][0]["context"]["project"]["displayStyle"] == "mainframe"
     assert result["frames"][0]["scene"]["metadata"]["displayStyle"] == "mainframe"
     assert timeline["frameCount"] == 1
     assert timeline["frames"][0]["step"]["sceneRevision"] == 1

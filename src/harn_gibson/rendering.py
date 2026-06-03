@@ -364,6 +364,7 @@ class RenderPipeline:
         batch_window_ms: int = 40,
         timing_mode: RenderTimingMode = "immediate",
         sleep_fn: Callable[[float], None] = time.sleep,
+        context_recorder: Callable[[RendererContext], None] | None = None,
     ) -> None:
         if mode not in {"blocking", "async"}:
             raise ValueError("render mode must be blocking or async")
@@ -378,6 +379,7 @@ class RenderPipeline:
         self.batch_window_ms = max(0, batch_window_ms)
         self.timing_mode = timing_mode
         self._sleep = sleep_fn
+        self.context_recorder = context_recorder
         self._queue: queue.Queue[RenderRequest | None] = queue.Queue()
         self._worker: threading.Thread | None = None
         self._lock = threading.Lock()
@@ -460,6 +462,8 @@ class RenderPipeline:
         with self._lock:
             batch = RenderInputBatch.from_requests(requests, route=requests[-1].route)
             context = self.context_builder.build(batch, self.scene.state, self.catalog)
+            if self.context_recorder is not None:
+                self.context_recorder(context)
             render_with_context = getattr(self.renderer, "render_with_context", None)
             if callable(render_with_context):
                 plan = render_with_context(batch.requests, self.scene.state, context)

@@ -133,6 +133,7 @@ Replay fixtures can drive the same scene pipeline without a live harn process:
 uv run harn-gibson replay examples/replays/stream-and-diagnostic.json \
   --output-scene test-artifacts/replays/scene.json \
   --output-result test-artifacts/replays/result.json \
+  --output-render-contexts test-artifacts/replays/renderer-contexts.json \
   --screenshot test-artifacts/replays/scene.png
 
 uv run harn-gibson replay examples/replays/renderer-plan.json \

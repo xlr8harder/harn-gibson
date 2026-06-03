@@ -10,6 +10,7 @@ from harn_gibson import (
     ReplayExpectationError,
     ReplayFrame,
     ReplayFrameScreenshot,
+    ReplayRendererContext,
     ReplayResult,
     ReplayStepResult,
     replay_frame_review_html,
@@ -36,10 +37,12 @@ from harn_gibson.replay import (
     replay_baseline_scene,
     replay_data_from_event_log,
     replay_frame_screenshot_manifest,
+    replay_renderer_contexts_from_result,
     run_replay_suite,
     write_replay_baseline,
     write_replay_frame_review_html,
     write_replay_frame_screenshot_manifest,
+    write_replay_renderer_contexts,
     write_replay_result,
     write_replay_timeline,
     write_scene,
@@ -118,6 +121,33 @@ def test_replay_event_steps_file_io_and_writers(tmp_path: Path, monkeypatch: pyt
     assert json.loads(scene_path.read_text(encoding="utf-8"))["revision"] == 2
     assert json.loads(result_path.read_text(encoding="utf-8"))["name"] == "event replay"
     assert "frames" not in json.loads(result_path.read_text(encoding="utf-8"))
+
+    context_result = run_replay_file(path, capture_renderer_contexts=True)
+    context_path = tmp_path / "out" / "renderer-contexts.json"
+    write_replay_renderer_contexts(context_path, context_result)
+    context_payload = json.loads(context_path.read_text(encoding="utf-8"))
+
+    assert isinstance(context_result.renderer_contexts[0], ReplayRendererContext)
+    assert context_result.renderer_contexts[0].context["schema"] == "harn-gibson.renderer-context.v1"
+    assert context_result.renderer_contexts[0].context["mode"] == "compaction"
+    captured_event = context_result.renderer_contexts[0].context["renderInput"]["requests"][0]["event"]
+    assert captured_event["eventType"] == "tool_call"
+    assert replay_renderer_contexts_from_result(context_result)["contextCount"] == 1
+    assert context_payload["schema"] == "harn-gibson.replay-renderer-contexts.v1"
+    assert context_payload["contexts"][0]["context"]["catalog"]["schema"] == "harn-gibson.visual-catalog.v1"
+    assert context_result.to_dict()["rendererContexts"][0]["index"] == 0
+
+    forwarded_contexts = []
+
+    def record_forwarded_context(context: object) -> None:
+        forwarded_contexts.append(context)
+
+    chained_state = GibsonServerState()
+    chained_state.pipeline.context_recorder = record_forwarded_context
+    chained_result = run_replay_file(path, chained_state, capture_renderer_contexts=True)
+    assert len(forwarded_contexts) == 1
+    assert chained_result.renderer_contexts[0].context["mode"] == "compaction"
+    assert chained_state.pipeline.context_recorder is record_forwarded_context
 
     framed = run_replay_file(path, capture_frames=True)
     timeline_path = tmp_path / "out" / "timeline.json"

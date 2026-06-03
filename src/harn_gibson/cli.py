@@ -46,6 +46,7 @@ def build_parser() -> argparse.ArgumentParser:
     replay.add_argument("--output-scene", default=None, help="write final scene JSON to this path")
     replay.add_argument("--output-result", default=None, help="write full replay result JSON to this path")
     replay.add_argument("--output-timeline", default=None, help="write per-step replay frame timeline JSON")
+    replay.add_argument("--output-render-contexts", default=None, help="write captured renderer context JSON")
     replay.add_argument(
         "--timeline-screenshot-dir",
         default=None,
@@ -195,6 +196,7 @@ def run(argv: Sequence[str] | None = None) -> int:
             run_replay_file,
             write_replay_frame_review_html,
             write_replay_frame_screenshot_manifest,
+            write_replay_renderer_contexts,
             write_replay_result,
             write_replay_timeline,
             write_scene,
@@ -207,6 +209,7 @@ def run(argv: Sequence[str] | None = None) -> int:
                 args.path,
                 replay_state,
                 capture_frames=bool(args.output_timeline or args.timeline_screenshot_dir),
+                capture_renderer_contexts=bool(args.output_render_contexts),
             )
         except ReplayExpectationError as error:
             for failure in error.failures:
@@ -218,6 +221,8 @@ def run(argv: Sequence[str] | None = None) -> int:
             write_replay_result(args.output_result, result)
         if args.output_timeline:
             write_replay_timeline(args.output_timeline, result)
+        if args.output_render_contexts:
+            write_replay_renderer_contexts(args.output_render_contexts, result)
         if args.timeline_screenshot_dir:
             screenshots = capture_replay_frame_screenshots(
                 result,

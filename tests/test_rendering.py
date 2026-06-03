@@ -891,6 +891,7 @@ def test_pipeline_passes_timed_batch_to_renderer() -> None:
 
 def test_pipeline_calls_contextual_renderer_with_renderer_context() -> None:
     contexts: list[RendererContext] = []
+    recorded_contexts: list[RendererContext] = []
 
     class ContextRenderer:
         def render_with_context(
@@ -911,11 +912,13 @@ def test_pipeline_calls_contextual_renderer_with_renderer_context() -> None:
         buffer=EventBuffer(),
         renderer=ContextRenderer(),  # type: ignore[arg-type]
         mode="blocking",
+        context_recorder=recorded_contexts.append,
     )
 
     result = pipeline.submit(RenderRequest(event(1, "tool_call")))
 
     assert contexts[0].mode == "compaction"
+    assert recorded_contexts[0] is contexts[0]
     assert contexts[0].render_input["requests"][0]["event"]["eventType"] == "tool_call"
     assert result.updates[0]["renderPlan"]["metadata"] == {"renderer": "contextual", "contextMode": "compaction"}
     assert pipeline.context_builder.snapshot_history()[0]["renderer"] == "contextual"

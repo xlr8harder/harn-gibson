@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 from harn_gibson.events import GibsonEvent, diagnostic_event
-from harn_gibson.rendering import RenderPlan, RenderRequest, RenderStep, RenderSubmitResult
+from harn_gibson.rendering import RendererContext, RenderPlan, RenderRequest, RenderStep, RenderSubmitResult
 from harn_gibson.scene import SceneMutation, SceneState, mutation_from_mapping, scene_state_from_mapping
 from harn_gibson.server import GibsonServerState, event_from_payload, submit_event_to_renderer
 from harn_gibson.styles import style_pack_from_name
@@ -69,6 +69,18 @@ class ReplayFrameScreenshot:
             "index": self.index,
             "step": self.step.to_dict(),
             "screenshot": self.screenshot,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class ReplayRendererContext:
+    index: int
+    context: dict[str, Any]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "index": self.index,
+            "context": self.context,
         }
 
 
@@ -192,6 +204,7 @@ class ReplayResult:
     metadata: dict[str, Any] = field(default_factory=dict)
     expectations: tuple[ReplayExpectationResult, ...] = ()
     frames: tuple[ReplayFrame, ...] = ()
+    renderer_contexts: tuple[ReplayRendererContext, ...] = ()
 
     def to_dict(self) -> dict[str, Any]:
         payload = {
@@ -205,6 +218,8 @@ class ReplayResult:
         }
         if self.frames:
             payload["frames"] = [frame.to_dict() for frame in self.frames]
+        if self.renderer_contexts:
+            payload["rendererContexts"] = [context.to_dict() for context in self.renderer_contexts]
         return payload
 
 
@@ -213,8 +228,14 @@ def run_replay_file(
     state: GibsonServerState | None = None,
     *,
     capture_frames: bool = False,
+    capture_renderer_contexts: bool = False,
 ) -> ReplayResult:
-    return run_replay_data(load_replay_file(path), state, capture_frames=capture_frames)
+    return run_replay_data(
+        load_replay_file(path),
+        state,
+        capture_frames=capture_frames,
+        capture_renderer_contexts=capture_renderer_contexts,
+    )
 
 
 def run_replay_suite(
@@ -402,6 +423,7 @@ def run_replay_data(
     state: GibsonServerState | None = None,
     *,
     capture_frames: bool = False,
+    capture_renderer_contexts: bool = False,
 ) -> ReplayResult:
     replay_state = state or GibsonServerState()
     schema = str(data.get("schema") or "harn-gibson.replay.v1")
@@ -412,19 +434,33 @@ def run_replay_data(
 
     results: list[ReplayStepResult] = []
     frames: list[ReplayFrame] = []
-    for index, step in enumerate(steps):
-        if not isinstance(step, Mapping):
-            raise ValueError(f"replay step {index} must be an object")
-        result = _run_step(index, step, replay_state)
-        results.append(result)
-        if capture_frames:
-            frames.append(
-                ReplayFrame(
-                    index=index,
-                    step=result,
-                    scene=deepcopy(replay_state.scene.state.to_dict()),
+    renderer_contexts: list[ReplayRendererContext] = []
+    previous_context_recorder = replay_state.pipeline.context_recorder
+
+    def capture_context(context: RendererContext) -> None:
+        if previous_context_recorder is not None:
+            previous_context_recorder(context)
+        renderer_contexts.append(ReplayRendererContext(len(renderer_contexts), deepcopy(context.to_dict())))
+
+    if capture_renderer_contexts:
+        replay_state.pipeline.context_recorder = capture_context
+    try:
+        for index, step in enumerate(steps):
+            if not isinstance(step, Mapping):
+                raise ValueError(f"replay step {index} must be an object")
+            result = _run_step(index, step, replay_state)
+            results.append(result)
+            if capture_frames:
+                frames.append(
+                    ReplayFrame(
+                        index=index,
+                        step=result,
+                        scene=deepcopy(replay_state.scene.state.to_dict()),
+                    )
                 )
-            )
+    finally:
+        if capture_renderer_contexts:
+            replay_state.pipeline.context_recorder = previous_context_recorder
     expectations = evaluate_replay_expectations(replay_state.scene.state, data.get("expect"))
     failures = tuple(expectation for expectation in expectations if not expectation.passed)
     if failures:
@@ -437,6 +473,7 @@ def run_replay_data(
         metadata=dict(data.get("metadata") or {}),
         expectations=expectations,
         frames=tuple(frames),
+        renderer_contexts=tuple(renderer_contexts),
     )
 
 
@@ -736,6 +773,27 @@ def write_replay_timeline(path: str | Path, result: ReplayResult) -> None:
     timeline_path = Path(path)
     timeline_path.parent.mkdir(parents=True, exist_ok=True)
     timeline_path.write_text(json.dumps(replay_timeline_from_result(result), indent=2) + "\n", encoding="utf-8")
+
+
+def replay_renderer_contexts_from_result(result: ReplayResult) -> dict[str, Any]:
+    return {
+        "schema": "harn-gibson.replay-renderer-contexts.v1",
+        "replayName": result.name,
+        "replaySchema": result.schema,
+        "stepCount": len(result.steps),
+        "contextCount": len(result.renderer_contexts),
+        "contexts": [context.to_dict() for context in result.renderer_contexts],
+        "metadata": result.metadata,
+    }
+
+
+def write_replay_renderer_contexts(path: str | Path, result: ReplayResult) -> None:
+    contexts_path = Path(path)
+    contexts_path.parent.mkdir(parents=True, exist_ok=True)
+    contexts_path.write_text(
+        json.dumps(replay_renderer_contexts_from_result(result), indent=2) + "\n",
+        encoding="utf-8",
+    )
 
 
 def capture_replay_frame_screenshots(
@@ -1146,6 +1204,7 @@ __all__ = [
     "ReplayExpectationResult",
     "ReplayFrame",
     "ReplayFrameScreenshot",
+    "ReplayRendererContext",
     "ReplayResult",
     "ReplayStepKind",
     "ReplayStepResult",
@@ -1164,6 +1223,7 @@ __all__ = [
     "replay_baseline_scene",
     "replay_frame_screenshot_manifest",
     "replay_frame_review_html",
+    "replay_renderer_contexts_from_result",
     "replay_timeline_from_result",
     "run_replay_data",
     "run_replay_file",
@@ -1171,6 +1231,7 @@ __all__ = [
     "write_replay_result",
     "write_replay_frame_screenshot_manifest",
     "write_replay_frame_review_html",
+    "write_replay_renderer_contexts",
     "write_replay_timeline",
     "write_replay_baseline",
     "write_scene",
