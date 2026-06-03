@@ -5,17 +5,20 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shlex
 import subprocess
 import sys
 import threading
 import time
 import webbrowser
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 
 from harn_gibson.auth import import_codex_auth
 from harn_gibson.extension import extension_path
 from harn_gibson.styles import style_pack_from_name, style_pack_ids
+
+DOGFOOD_CAPTURE_RENDERER_TIMEOUT_MS = "10000"
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -36,6 +39,34 @@ def build_parser() -> argparse.ArgumentParser:
     dogfood.add_argument("--hold-on-error", action=argparse.BooleanOptionalAction, default=True)
     dogfood.add_argument("--style", choices=style_pack_ids(), default=None, help="display style pack")
     dogfood.add_argument("harn_args", nargs=argparse.REMAINDER, help="arguments forwarded to harn after --")
+
+    capture = subcommands.add_parser(
+        "dogfood-capture",
+        help="run dogfood with event logging and the hard-coded showcase renderer",
+    )
+    capture.add_argument("--host", default="127.0.0.1")
+    capture.add_argument("--port", type=int, default=0)
+    capture.add_argument("--harn-bin", default="harn", help="harn executable to launch")
+    capture.add_argument("--browser", action=argparse.BooleanOptionalAction, default=True)
+    capture.add_argument("--codex-auth-import", action=argparse.BooleanOptionalAction, default=True)
+    capture.add_argument("--hold-on-error", action=argparse.BooleanOptionalAction, default=True)
+    capture.add_argument("--style", choices=style_pack_ids(), default=None, help="display style pack")
+    capture.add_argument(
+        "--event-log",
+        default=None,
+        help="JSONL capture path; defaults to an ignored test-artifacts/captures path",
+    )
+    capture.add_argument(
+        "--renderer-command",
+        default=None,
+        help="external renderer command; defaults to examples/renderers/gibson_dogfood_renderer.py",
+    )
+    capture.add_argument(
+        "--renderer-timeout-ms",
+        default=DOGFOOD_CAPTURE_RENDERER_TIMEOUT_MS,
+        help="external renderer timeout in milliseconds",
+    )
+    capture.add_argument("harn_args", nargs=argparse.REMAINDER, help="arguments forwarded to harn after --")
 
     auth = subcommands.add_parser("import-codex-auth", help="copy Codex OAuth tokens into harn auth storage")
     auth.add_argument("--codex-auth", default=None, help="path to Codex auth.json")
@@ -180,13 +211,16 @@ def run_dogfood(
     codex_auth_import: bool = True,
     hold_on_error: bool = True,
     style: str | None = None,
+    env_overrides: Mapping[str, str] | None = None,
 ) -> int:
     from harn_gibson.server import build_state_from_env, create_server, publish_diagnostic_event
 
     env = os.environ.copy()
+    if env_overrides:
+        env.update(env_overrides)
     if style is not None:
         env["HARN_GIBSON_STYLE"] = style
-    state = build_state_from_env(env) if style is not None else build_state_from_env()
+    state = build_state_from_env(env) if style is not None or env_overrides else build_state_from_env()
     server = create_server(host, port, state)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
@@ -254,6 +288,87 @@ def run_dogfood(
         state.pipeline.stop()
         server.shutdown()
         server.server_close()
+
+
+def run_dogfood_capture(
+    *,
+    host: str = "127.0.0.1",
+    port: int = 0,
+    harn_bin: str = "harn",
+    harn_args: Sequence[str] = (),
+    launch_browser: bool = True,
+    codex_auth_import: bool = True,
+    hold_on_error: bool = True,
+    style: str | None = None,
+    event_log: str | None = None,
+    renderer_command: str | None = None,
+    renderer_timeout_ms: str = DOGFOOD_CAPTURE_RENDERER_TIMEOUT_MS,
+) -> int:
+    event_log_path = Path(event_log) if event_log is not None else _default_capture_event_log_path()
+    event_log_path.parent.mkdir(parents=True, exist_ok=True)
+    capture_renderer_command = renderer_command if renderer_command is not None else _default_dogfood_renderer_command()
+    env_overrides = {
+        "HARN_GIBSON_EVENT_LOG": str(event_log_path),
+        "HARN_GIBSON_RENDERER_COMMAND": capture_renderer_command,
+        "HARN_GIBSON_RENDERER_TIMEOUT_MS": str(renderer_timeout_ms),
+    }
+    print(f"harn-gibson capture log: {event_log_path}", file=sys.stderr)
+    print(f"harn-gibson capture renderer: {capture_renderer_command}", file=sys.stderr)
+    exit_code = run_dogfood(
+        host=host,
+        port=port,
+        harn_bin=harn_bin,
+        harn_args=harn_args,
+        launch_browser=launch_browser,
+        codex_auth_import=codex_auth_import,
+        hold_on_error=hold_on_error,
+        style=style,
+        env_overrides=env_overrides,
+    )
+    print(
+        "build a replay review from this capture with:\n"
+        f"  {_capture_replay_command(event_log_path, capture_renderer_command, str(renderer_timeout_ms), style)}",
+        file=sys.stderr,
+    )
+    return exit_code
+
+
+def _default_capture_event_log_path() -> Path:
+    return Path("test-artifacts") / "captures" / f"dogfood-{time.strftime('%Y%m%d-%H%M%S')}.jsonl"
+
+
+def _default_dogfood_renderer_command() -> str:
+    renderer_path = Path(__file__).resolve().parents[2] / "examples" / "renderers" / "gibson_dogfood_renderer.py"
+    return json.dumps([sys.executable, str(renderer_path)])
+
+
+def _capture_replay_command(
+    event_log_path: Path,
+    renderer_command: str,
+    renderer_timeout_ms: str,
+    style: str | None,
+) -> str:
+    fixture_output = event_log_path.with_suffix(".replay.json")
+    review_dir = event_log_path.with_name(f"{event_log_path.stem}-review")
+    command = [
+        "uv",
+        "run",
+        "harn-gibson",
+        "event-log-to-replay",
+        str(event_log_path),
+        "--output",
+        str(fixture_output),
+        "--visual-fixture",
+        "--review-dir",
+        str(review_dir),
+        "--renderer-command",
+        renderer_command,
+        "--renderer-timeout-ms",
+        renderer_timeout_ms,
+    ]
+    if style is not None:
+        command.extend(["--style", style])
+    return " ".join(shlex.quote(part) for part in command)
 
 
 def _hold_display_on_error(display_url: str) -> None:  # pragma: no cover - manual recovery loop
@@ -490,6 +605,20 @@ def run(argv: Sequence[str] | None = None) -> int:
             codex_auth_import=args.codex_auth_import,
             hold_on_error=args.hold_on_error,
             style=args.style,
+        )
+    if args.command == "dogfood-capture":
+        return run_dogfood_capture(
+            host=args.host,
+            port=args.port,
+            harn_bin=args.harn_bin,
+            harn_args=args.harn_args,
+            launch_browser=args.browser,
+            codex_auth_import=args.codex_auth_import,
+            hold_on_error=args.hold_on_error,
+            style=args.style,
+            event_log=args.event_log,
+            renderer_command=args.renderer_command,
+            renderer_timeout_ms=args.renderer_timeout_ms,
         )
     if args.command in {None, "serve"}:
         from harn_gibson.server import run_server

@@ -619,6 +619,30 @@ def test_cli_parser_and_run(monkeypatch: Any, capsys: Any) -> None:
     assert parsed_dogfood.browser is False
     assert parsed_dogfood.style == "neon-noir"
     assert parsed_dogfood.harn_args == ["--", "-p", "hello"]
+    parsed_capture = parser.parse_args(
+        [
+            "dogfood-capture",
+            "--no-browser",
+            "--style",
+            "mainframe",
+            "--event-log",
+            "events.jsonl",
+            "--renderer-command",
+            "python renderer.py",
+            "--renderer-timeout-ms",
+            "1234",
+            "--",
+            "-p",
+            "capture",
+        ]
+    )
+    assert parsed_capture.command == "dogfood-capture"
+    assert parsed_capture.browser is False
+    assert parsed_capture.style == "mainframe"
+    assert parsed_capture.event_log == "events.jsonl"
+    assert parsed_capture.renderer_command == "python renderer.py"
+    assert parsed_capture.renderer_timeout_ms == "1234"
+    assert parsed_capture.harn_args == ["--", "-p", "capture"]
     parsed_auth = parser.parse_args(["import-codex-auth", "--codex-auth", "codex.json", "--harn-auth", "harn.json"])
     assert parsed_auth.command == "import-codex-auth"
     parsed_replay = parser.parse_args(
@@ -1747,6 +1771,141 @@ def test_cli_dogfood_reports_missing_harn(monkeypatch: Any, capsys: Any) -> None
     assert cli.run_dogfood(harn_bin="missing-harn", launch_browser=False, codex_auth_import=False) == 127
     assert opened == []
     assert "harn executable not found: missing-harn" in capsys.readouterr().err
+
+
+def test_cli_dogfood_applies_env_overrides_to_state_and_harn(monkeypatch: Any) -> None:
+    harn_calls: list[tuple[list[str], dict[str, str]]] = []
+    build_state_envs: list[dict[str, str]] = []
+    state = GibsonServerState()
+
+    class FakeServer:
+        server_address = ("127.0.0.1", 9881)
+
+        def serve_forever(self) -> None:
+            return None
+
+        def shutdown(self) -> None:
+            return None
+
+        def server_close(self) -> None:
+            return None
+
+    def fake_build_state(env: dict[str, str] | None = None) -> GibsonServerState:
+        assert env is not None
+        build_state_envs.append(env)
+        return state
+
+    def fake_call(command: list[str], env: dict[str, str]) -> int:
+        harn_calls.append((command, env))
+        return 0
+
+    monkeypatch.setattr("harn_gibson.server.build_state_from_env", fake_build_state)
+    monkeypatch.setattr("harn_gibson.server.create_server", lambda _host, _port, _state: FakeServer())
+    monkeypatch.setattr(cli.subprocess, "call", fake_call)
+
+    assert (
+        cli.run_dogfood(
+            harn_args=["--", "-p", "capture"],
+            launch_browser=False,
+            codex_auth_import=False,
+            hold_on_error=False,
+            env_overrides={
+                "HARN_GIBSON_EVENT_LOG": "events.jsonl",
+                "HARN_GIBSON_RENDERER_COMMAND": "python renderer.py",
+            },
+        )
+        == 0
+    )
+    assert build_state_envs[0]["HARN_GIBSON_EVENT_LOG"] == "events.jsonl"
+    assert build_state_envs[0]["HARN_GIBSON_RENDERER_COMMAND"] == "python renderer.py"
+    assert harn_calls[0][0] == ["harn", "-p", "capture"]
+    assert harn_calls[0][1]["HARN_GIBSON_EVENT_LOG"] == "events.jsonl"
+    assert harn_calls[0][1]["HARN_GIBSON_RENDERER_COMMAND"] == "python renderer.py"
+    assert harn_calls[0][1]["HARN_GIBSON_ENDPOINT"] == "http://127.0.0.1:9881/events"
+
+
+def test_cli_dogfood_capture_sets_env_and_replay_hint(
+    monkeypatch: Any,
+    tmp_path: Path,
+    capsys: Any,
+) -> None:
+    dogfood_calls: list[dict[str, Any]] = []
+    event_log = tmp_path / "events.jsonl"
+
+    def fake_run_dogfood(**kwargs: Any) -> int:
+        dogfood_calls.append(kwargs)
+        return 7
+
+    monkeypatch.setattr(cli, "run_dogfood", fake_run_dogfood)
+
+    assert (
+        cli.run(
+            [
+                "dogfood-capture",
+                "--event-log",
+                str(event_log),
+                "--renderer-command",
+                "python renderer.py",
+                "--renderer-timeout-ms",
+                "1234",
+                "--style",
+                "mainframe",
+                "--no-browser",
+                "--no-codex-auth-import",
+                "--no-hold-on-error",
+                "--",
+                "-p",
+                "capture",
+            ]
+        )
+        == 7
+    )
+    assert event_log.parent.exists()
+    assert dogfood_calls == [
+        {
+            "host": "127.0.0.1",
+            "port": 0,
+            "harn_bin": "harn",
+            "harn_args": ["--", "-p", "capture"],
+            "launch_browser": False,
+            "codex_auth_import": False,
+            "hold_on_error": False,
+            "style": "mainframe",
+            "env_overrides": {
+                "HARN_GIBSON_EVENT_LOG": str(event_log),
+                "HARN_GIBSON_RENDERER_COMMAND": "python renderer.py",
+                "HARN_GIBSON_RENDERER_TIMEOUT_MS": "1234",
+            },
+        }
+    ]
+    stderr = capsys.readouterr().err
+    assert f"harn-gibson capture log: {event_log}" in stderr
+    assert "harn-gibson capture renderer: python renderer.py" in stderr
+    assert "uv run harn-gibson event-log-to-replay" in stderr
+    assert f"--output {event_log.with_suffix('.replay.json')}" in stderr
+    assert f"--review-dir {event_log.with_name('events-review')}" in stderr
+    assert "--renderer-command 'python renderer.py'" in stderr
+    assert "--renderer-timeout-ms 1234 --style mainframe" in stderr
+
+
+def test_cli_dogfood_capture_defaults_to_ignored_timestamped_log(monkeypatch: Any, capsys: Any) -> None:
+    dogfood_calls: list[dict[str, Any]] = []
+
+    def fake_run_dogfood(**kwargs: Any) -> int:
+        dogfood_calls.append(kwargs)
+        return 0
+
+    monkeypatch.setattr(cli, "run_dogfood", fake_run_dogfood)
+    monkeypatch.setattr(cli.time, "strftime", lambda _format: "20260604-001122")
+
+    assert cli.run_dogfood_capture(launch_browser=False, codex_auth_import=False, hold_on_error=False) == 0
+    env_overrides = dogfood_calls[0]["env_overrides"]
+    assert env_overrides["HARN_GIBSON_EVENT_LOG"] == "test-artifacts/captures/dogfood-20260604-001122.jsonl"
+    assert env_overrides["HARN_GIBSON_RENDERER_TIMEOUT_MS"] == cli.DOGFOOD_CAPTURE_RENDERER_TIMEOUT_MS
+    renderer_command = json.loads(env_overrides["HARN_GIBSON_RENDERER_COMMAND"])
+    assert renderer_command[0] == sys.executable
+    assert renderer_command[1].endswith("examples/renderers/gibson_dogfood_renderer.py")
+    assert "--style" not in capsys.readouterr().err
 
 
 def test_cli_import_codex_auth_command(monkeypatch: Any, capsys: Any) -> None:

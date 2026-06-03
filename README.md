@@ -117,6 +117,14 @@ HARN_GIBSON_RENDERER_TIMEOUT_MS=10000 \
 uv run harn-gibson dogfood
 ```
 
+For longer capture sessions, use the capture wrapper. It launches dogfood with the showcase renderer, writes normalized JSONL to an ignored `test-artifacts/captures/` path by default, and prints the exact replay-review command to run afterward:
+
+```bash
+uv run harn-gibson dogfood-capture -- -p "bootstrap a tiny project here"
+```
+
+Pass `--event-log path/to/session.jsonl` if you want a stable capture path. JSONL captures can contain prompts, tool output, file paths, and diagnostics, so keep them under ignored artifact paths unless you have intentionally scrubbed them.
+
 Use `examples/renderers/gibson_echo_renderer.py` when you want the smallest possible external-renderer contract example.
 
 Renderer command failures are fail-open: the deterministic renderer still updates the scene, and the failure is added to the debug trace surface. Returned plans are also validated against the current scene and catalog. Unsupported but safe primitives/effects are kept with `renderPlanDiagnostics` warnings in render intent metadata; unsafe plans such as missing patch targets, raw `svg_layer` markup, or unbounded vector keyframes are rejected, replaced with deterministic fallback output, and traced in the browser debug drawer. Unsupported `svg_layer` filter or clip presets are warning-only and simply fall back to the bounded browser set.
@@ -144,14 +152,14 @@ uv run harn-gibson replay-dir examples/replays \
   --renderer-timeout-ms 10000
 ```
 
-For offline inspection, write normalized events to JSONL:
+For offline inspection without the dogfood launcher, write normalized events to JSONL:
 
 ```bash
 HARN_GIBSON_EVENT_LOG=.harn-gibson.jsonl \
 harn --no-extensions -e .harn/extensions/gibson.py
 ```
 
-A useful capture workflow is to start dogfood with both `HARN_GIBSON_RENDERER_COMMAND` and `HARN_GIBSON_EVENT_LOG`, ask harn to bootstrap a tiny project in a bare directory, and preserve the resulting event trajectory as replay input. Those longer captured trajectories should become the basis for future renderer-regression fixtures and screenshot reviews.
+A useful capture workflow is to run `uv run harn-gibson dogfood-capture` in a bare directory, ask harn to bootstrap a tiny project, and preserve the resulting event trajectory as replay input. Those longer captured trajectories should become the basis for future renderer-regression fixtures and screenshot reviews.
 
 Convert a captured event log into a replay fixture:
 

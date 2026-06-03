@@ -35,7 +35,15 @@ Replay fixtures use `harn-gibson.replay.v1`. They can replay either side of the 
 
 ## Captured Event Logs
 
-When `HARN_GIBSON_EVENT_LOG` is set, the harn extension writes normalized event payloads as JSONL. Convert that captured log into a replay fixture with:
+For live trajectory capture, use the dogfood capture wrapper:
+
+```bash
+uv run harn-gibson dogfood-capture -- -p "bootstrap a tiny project here"
+```
+
+It launches the display with `examples/renderers/gibson_dogfood_renderer.py`, writes normalized event payloads as JSONL under ignored `test-artifacts/captures/` by default, and prints the exact conversion command for that capture. Pass `--event-log path/to/session.jsonl` for a stable path. Captures can contain prompts, tool output, file paths, diagnostics, and tracebacks, so keep them out of committed fixtures until they have been reviewed and scrubbed.
+
+When `HARN_GIBSON_EVENT_LOG` is set directly, the harn extension writes the same normalized event payloads as JSONL. Convert a captured log into a replay fixture with:
 
 ```bash
 uv run harn-gibson event-log-to-replay .harn-gibson.jsonl \
@@ -95,7 +103,7 @@ uv run harn-gibson replay-dir examples/replays \
 
 The model command receives `harn-gibson.model-renderer-request.v1`; the external command receives `harn-gibson.external-renderer-request.v1`. Returned plans still go through the same validation, diagnostics, fail-open fallback, and final-scene expectation checks as live dogfood rendering.
 
-The hard-coded `gibson_dogfood_renderer.py` is meant for live harn use before the renderer-agent backend is good enough. A useful future fixture workflow is to run `uv run harn-gibson dogfood` with `HARN_GIBSON_EVENT_LOG` and `HARN_GIBSON_RENDERER_COMMAND='uv run python examples/renderers/gibson_dogfood_renderer.py'`, ask harn to spend 15-20 minutes bootstrapping a tiny project in a bare directory, then convert that event trajectory into replay fixtures and browser screenshots. Several such trajectories should become regression inputs for event coalescing, renderer timing, touched-file visualization, and visual continuity.
+The hard-coded `gibson_dogfood_renderer.py` is meant for live harn use before the renderer-agent backend is good enough. A useful future fixture workflow is to run `uv run harn-gibson dogfood-capture`, ask harn to spend 15-20 minutes bootstrapping a tiny project in a bare directory, then convert that event trajectory into replay fixtures and browser screenshots. Several such trajectories should become regression inputs for event coalescing, renderer timing, touched-file visualization, and visual continuity.
 
 ## Baseline Review
 
