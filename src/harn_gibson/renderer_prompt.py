@@ -81,6 +81,7 @@ def renderer_prompt_messages_payload(context: Mapping[str, Any]) -> dict[str, An
 
 def _context_metadata(context: Mapping[str, Any]) -> dict[str, Any]:
     project = _mapping(context.get("project"))
+    visual_continuity = _mapping(context.get("visualContinuity"))
     render_input = _mapping(context.get("renderInput"))
     timeline = _mapping(render_input.get("timeline"))
     requests = render_input.get("requests")
@@ -103,6 +104,8 @@ def _context_metadata(context: Mapping[str, Any]) -> dict[str, Any]:
             "durationMs": _coerce_int(timeline.get("durationMs"), 0),
         },
         "requestCount": len(request_items),
+        "visualAnchorCount": _coerce_int(visual_continuity.get("anchorCount"), 0),
+        "activeAnimationCount": _coerce_int(visual_continuity.get("activeAnimationCount"), 0),
         "contextChars": len(_json_text(context)),
     }
 

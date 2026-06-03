@@ -196,8 +196,9 @@ The renderer agent should not receive a full new transcript on every event. Use 
 - Touched files: recent file paths from harn/tool events or coalesced batches, with operation hints when available.
 - Recent harn events: the newest event batch plus short summaries of recent prior events.
 - Recent visualization context: recent render intents, render plans, and active animations/effects.
+- Visual continuity: compact anchors for currently visible stage objects, active animations, recent targets/effects, and style motifs.
 
-The executable fixture for this is `RendererContext`. A renderer that only implements `render(requests, scene)` receives the existing deterministic-compatible call shape. A renderer that implements `render_with_context(requests, scene, context)` receives a `harn-gibson.renderer-context.v1` object with project metadata, bounded repo topology, touched-file summaries, catalog data, scene context, render input, recent agent context, visualization history, and compaction metadata. `context.project.displayStyle` is the selected style id and `context.project.stylePack` is a `harn-gibson.style-pack.v1` payload with tones, canvas backdrop settings, CSS variables, and motifs.
+The executable fixture for this is `RendererContext`. A renderer that only implements `render(requests, scene)` receives the existing deterministic-compatible call shape. A renderer that implements `render_with_context(requests, scene, context)` receives a `harn-gibson.renderer-context.v1` object with project metadata, bounded repo topology, touched-file summaries, catalog data, scene context, render input, recent agent context, visualization history, visual-continuity anchors, and compaction metadata. `context.project.displayStyle` is the selected style id and `context.project.stylePack` is a `harn-gibson.style-pack.v1` payload with tones, canvas backdrop settings, CSS variables, and motifs.
 
 After enough events or token growth, do a renderer compaction:
 
@@ -207,6 +208,8 @@ After enough events or token growth, do a renderer compaction:
 4. Reset the short rolling context and continue with new event batches.
 
 The first renderer context is a compaction context. Later contexts are rolling summaries until the configured event interval is reached, at which point the next context includes the full scene again. This gives a future model renderer a predictable place to refresh state without forcing every event batch to resend the whole display state.
+
+`context.visualContinuity` is always compact, even during compaction turns. It includes `anchors` for visible stage primitives, whether each anchor is currently animated, active animation summaries including `timeline_cue` labels, recent effects/targets from render-intent history, and style motifs. Use it to preserve visual motifs and avoid recreating the same objects under new ids just because a rolling context omitted the full scene.
 
 This mirrors harn session compaction, but it is separate from the primary agent conversation. The renderer agent owns visual continuity; harn owns task state.
 

@@ -171,6 +171,9 @@ def test_replay_event_steps_file_io_and_writers(tmp_path: Path, monkeypatch: pyt
     assert isinstance(context_result.renderer_contexts[0], ReplayRendererContext)
     assert context_result.renderer_contexts[0].context["schema"] == "harn-gibson.renderer-context.v1"
     assert context_result.renderer_contexts[0].context["mode"] == "compaction"
+    assert context_result.renderer_contexts[0].context["visualContinuity"]["schema"] == (
+        "harn-gibson.visual-continuity.v1"
+    )
     captured_event = context_result.renderer_contexts[0].context["renderInput"]["requests"][0]["event"]
     assert captured_event["eventType"] == "tool_call"
     assert replay_renderer_contexts_from_result(context_result)["contextCount"] == 1
@@ -193,6 +196,8 @@ def test_replay_event_steps_file_io_and_writers(tmp_path: Path, monkeypatch: pyt
     assert prompt["metadata"]["eventTypes"] == ["tool_call"]
     assert prompt["metadata"]["routes"] == ["renderer_agent"]
     assert prompt["metadata"]["displayStyle"] == "gibson"
+    assert prompt["metadata"]["visualAnchorCount"] >= 1
+    assert prompt["metadata"]["activeAnimationCount"] >= 0
     assert prompt["messages"][0]["role"] == "system"
     assert "harn-gibson.render-plan.v1" in prompt["messages"][0]["content"]
     assert "harn-gibson.renderer-context.v1" in prompt["messages"][1]["content"]

@@ -275,6 +275,8 @@ class RendererContextConfig:
     max_recent_plans: int = 6
     max_recent_log_entries: int = 12
     max_prop_preview_chars: int = 240
+    max_visual_anchors: int = 16
+    max_visual_recent_items: int = 16
     max_repo_entries: int = 64
     max_repo_children_per_dir: int = 8
     max_touched_files: int = 24
@@ -290,6 +292,7 @@ class RendererContext:
     render_input: dict[str, Any]
     recent_agent_context: tuple[str, ...] = ()
     visualization_context: tuple[dict[str, Any], ...] = ()
+    visual_continuity: dict[str, Any] = field(default_factory=dict)
     compaction: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -302,6 +305,7 @@ class RendererContext:
             "renderInput": self.render_input,
             "recentAgentContext": list(self.recent_agent_context),
             "visualizationContext": list(self.visualization_context),
+            "visualContinuity": self.visual_continuity,
             "compaction": self.compaction,
         }
 
@@ -327,6 +331,7 @@ class RendererContextBuilder:
             "compaction" if force_compaction or self._should_compact() else "rolling"
         )
         self._last_context_mode = mode
+        visualization_context = tuple(self._history[-self.config.max_recent_plans :])
         return RendererContext(
             mode=mode,
             project=self._project_metadata(batch),
@@ -334,7 +339,8 @@ class RendererContextBuilder:
             scene=_scene_context(scene, full=mode == "compaction", config=self.config),
             render_input=batch.to_dict(),
             recent_agent_context=_recent_agent_context(batch),
-            visualization_context=tuple(self._history[-self.config.max_recent_plans :]),
+            visualization_context=visualization_context,
+            visual_continuity=_visual_continuity_context(scene, visualization_context, mode, self.config),
             compaction={
                 "eventsSinceCompaction": self.events_since_compaction,
                 "intervalEvents": max(1, self.config.compaction_interval_events),
@@ -1737,6 +1743,122 @@ def _animation_summary(animation: Any) -> dict[str, Any]:
         "durationMs": animation.duration_ms,
         "loop": animation.loop,
     }
+
+
+def _visual_continuity_context(
+    scene: SceneState,
+    history: Sequence[Mapping[str, Any]],
+    mode: str,
+    config: RendererContextConfig,
+) -> dict[str, Any]:
+    style_pack = config.style_pack or style_pack_from_name(config.display_style).to_dict()
+    active_targets = {animation.target_id for animation in scene.animations.values()}
+    anchors = [
+        _visual_anchor_summary(primitive, active_targets, config.max_prop_preview_chars)
+        for primitive in sorted(scene.primitives.values(), key=lambda item: item.id)
+        if primitive.region == "stage"
+    ][: max(0, config.max_visual_anchors)]
+    recent_effects: list[str] = []
+    recent_targets: list[str] = []
+    recent_renderers: list[str] = []
+    for item in history[-config.max_recent_plans :]:
+        _append_unique(recent_renderers, str(item.get("renderer") or "unknown"))
+        intent = item.get("renderIntent") if isinstance(item.get("renderIntent"), Mapping) else {}
+        effects = intent.get("effects") if isinstance(intent, Mapping) else None
+        targets = intent.get("targets") if isinstance(intent, Mapping) else None
+        for effect in (effects if isinstance(effects, list) else ()):
+            _append_unique(recent_effects, str(effect))
+        for target in (targets if isinstance(targets, list) else ()):
+            _append_unique(recent_targets, str(target))
+    return {
+        "schema": "harn-gibson.visual-continuity.v1",
+        "mode": mode,
+        "sceneRevision": scene.revision,
+        "style": {
+            "id": config.display_style,
+            "motifs": list(style_pack.get("motifs", ())),
+        },
+        "anchorCount": len(anchors),
+        "anchors": anchors,
+        "activeAnimationCount": len(scene.animations),
+        "activeAnimations": [
+            _visual_animation_summary(animation, config.max_prop_preview_chars)
+            for animation in sorted(scene.animations.values(), key=lambda item: item.id)[
+                : max(0, config.max_visual_anchors)
+            ]
+        ],
+        "recentEffects": recent_effects[: max(0, config.max_visual_recent_items)],
+        "recentTargets": recent_targets[: max(0, config.max_visual_recent_items)],
+        "recentRenderers": recent_renderers[: max(0, config.max_visual_recent_items)],
+    }
+
+
+def _visual_anchor_summary(
+    primitive: ScenePrimitive,
+    active_targets: set[str],
+    max_chars: int,
+) -> dict[str, Any]:
+    props = primitive.props
+    summary: dict[str, Any] = {
+        "id": primitive.id,
+        "kind": primitive.kind,
+        "region": primitive.region,
+        "animated": primitive.id in active_targets,
+    }
+    tone = _visual_tone(props)
+    if tone is not None:
+        summary["tone"] = tone
+    label = _visual_label(props)
+    if label is not None:
+        summary["label"] = _clip_preview(label, max_chars)
+    focus = _visual_focus(props)
+    if focus is not None:
+        summary["focus"] = _clip_preview(focus, max_chars)
+    if props.get("isStreaming") is not None:
+        summary["isStreaming"] = bool(props.get("isStreaming"))
+    return summary
+
+
+def _visual_animation_summary(animation: SceneAnimation, max_chars: int) -> dict[str, Any]:
+    summary = _animation_summary(animation)
+    props = animation.props
+    if props:
+        summary["propsPreview"] = {
+            key: _clip_preview(props[key], max_chars)
+            for key in ("phase", "tone", "accentTone", "label")
+            if key in props
+        }
+    cues = props.get("cues")
+    if isinstance(cues, list):
+        summary["cueCount"] = len(cues)
+        labels = [cue.get("label") for cue in cues if isinstance(cue, Mapping) and cue.get("label")]
+        if labels:
+            summary["cueLabels"] = [str(label)[:32] for label in labels[:6]]
+    return summary
+
+
+def _visual_tone(props: Mapping[str, Any]) -> str | None:
+    for key in ("tone", "accentTone", "color", "material", "palette", "phase"):
+        value = props.get(key)
+        if isinstance(value, str) and value:
+            return value
+    return None
+
+
+def _visual_label(props: Mapping[str, Any]) -> Any:
+    for key in ("label", "title", "streamId", "text"):
+        value = props.get(key)
+        if value:
+            return value
+    return None
+
+
+def _visual_focus(props: Mapping[str, Any]) -> Any:
+    for key in ("focusNodeId", "focusBlockId", "focusHopId", "targetId"):
+        value = props.get(key)
+        if value:
+            return value
+    return None
 
 
 def _clip_preview(value: Any, max_chars: int) -> Any:

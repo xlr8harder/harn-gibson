@@ -909,8 +909,43 @@ def test_renderer_context_builder_compaction_rolling_and_history(tmp_path: Path)
                 ),
             ),
             SceneMutation(
+                "upsert",
+                primitive=ScenePrimitive(
+                    "continuity-graph",
+                    "node_graph",
+                    "stage",
+                    {"tone": "cyan", "focusNodeId": "renderer", "label": "context-map"},
+                ),
+            ),
+            SceneMutation(
                 "start_animation",
                 animation=SceneAnimation("fly-1", "scan-grid", "flythrough", 100, 900),
+            ),
+            SceneMutation(
+                "start_animation",
+                animation=SceneAnimation(
+                    "cue-1",
+                    "assistant-stream",
+                    "timeline_cue",
+                    120,
+                    1800,
+                    props={
+                        "tone": "green",
+                        "label": "window",
+                        "cues": [{"at": 0, "label": "START"}, {"at": 1, "label": "END"}],
+                    },
+                ),
+            ),
+            SceneMutation(
+                "start_animation",
+                animation=SceneAnimation(
+                    "cue-unlabeled",
+                    "continuity-graph",
+                    "timeline_cue",
+                    140,
+                    1200,
+                    props={"cues": [{"at": 0.5}]},
+                ),
             ),
         )
     )
@@ -986,6 +1021,28 @@ def test_renderer_context_builder_compaction_rolling_and_history(tmp_path: Path)
     assert compaction.catalog["schema"] == "harn-gibson.visual-catalog.v1"
     assert compaction.scene["schema"] == "harn-gibson.scene.v1"
     assert compaction.recent_agent_context == ("agent saw tool call", "grid was pulsing")
+    assert compaction.visual_continuity["schema"] == "harn-gibson.visual-continuity.v1"
+    assert compaction.visual_continuity["mode"] == "compaction"
+    assert compaction.visual_continuity["sceneRevision"] == scene.state.revision
+    assert compaction.visual_continuity["style"] == {"id": "mainframe", "motifs": ["phosphor-grid"]}
+    assert compaction.visual_continuity["activeAnimationCount"] == 3
+    cue_summary = next(item for item in compaction.visual_continuity["activeAnimations"] if item["id"] == "cue-1")
+    assert cue_summary["kind"] == "timeline_cue"
+    assert cue_summary["cueCount"] == 2
+    assert cue_summary["cueLabels"] == ["START", "END"]
+    assert cue_summary["propsPreview"]["label"] == "window"
+    unlabeled_cue = next(
+        item for item in compaction.visual_continuity["activeAnimations"] if item["id"] == "cue-unlabeled"
+    )
+    assert unlabeled_cue["cueCount"] == 1
+    assert "cueLabels" not in unlabeled_cue
+    graph_anchor = next(item for item in compaction.visual_continuity["anchors"] if item["id"] == "continuity-graph")
+    assert graph_anchor["focus"] == "renderer"
+    assert graph_anchor["tone"] == "cyan"
+    stream_anchor = next(item for item in compaction.visual_continuity["anchors"] if item["id"] == "assistant-stream")
+    assert stream_anchor["animated"] is True
+    assert stream_anchor["isStreaming"] is True
+    assert compaction.to_dict()["visualContinuity"]["activeAnimationCount"] == 3
 
     truncated_context = RendererContextBuilder(
         RendererContextConfig(project_root=str(repo_root), max_repo_entries=2)
@@ -1005,7 +1062,7 @@ def test_renderer_context_builder_compaction_rolling_and_history(tmp_path: Path)
     assert rolling.project["touchedFiles"]["truncated"] is True
     assert rolling.catalog["mode"] == "summary"
     assert rolling.scene["schema"] == "harn-gibson.scene-summary.v1"
-    assert rolling.scene["animationCount"] == 1
+    assert rolling.scene["animationCount"] == 3
     assert rolling.scene["recentLog"] == [{"eventType": "new"}]
     stream_summary = next(item for item in rolling.scene["primitives"] if item["id"] == "assistant-stream")
     assert stream_summary["propsPreview"]["text"] == ["abcde...", {"nested": "zyxwv..."}]
@@ -1014,6 +1071,10 @@ def test_renderer_context_builder_compaction_rolling_and_history(tmp_path: Path)
     assert rolling.visualization_context[0]["intent"] == "visualize tool_call"
     assert rolling.visualization_context[0]["renderIntent"]["renderer"] == "first"
     assert rolling.visualization_context[0]["mutationCount"] == 1
+    assert rolling.visual_continuity["mode"] == "rolling"
+    assert rolling.visual_continuity["recentEffects"] == ["append_log"]
+    assert rolling.visual_continuity["recentTargets"] == []
+    assert rolling.visual_continuity["recentRenderers"] == ["first"]
 
     builder.record_plan(RenderPlan(batch.requests, (), {"renderer": "second"}))
     interval_compaction = builder.build(batch, scene.state, pipeline_catalog())
