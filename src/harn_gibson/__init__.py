@@ -1,5 +1,6 @@
 """Public surface for harn-gibson."""
 
+from harn_gibson.browser_capture import BrowserScreenshotResult, capture_scene_screenshot
 from harn_gibson.catalog import CatalogEntry, VisualCatalog, default_visual_catalog
 from harn_gibson.events import EventPhase, GibsonEvent, phase_for_event, summarize_event, to_jsonable
 from harn_gibson.hooks import HookDecision, HookDispatcher, load_hook_module, result_for_harn
@@ -26,6 +27,7 @@ from harn_gibson.scene import (
 
 __all__ = [
     "CatalogEntry",
+    "BrowserScreenshotResult",
     "EventPhase",
     "GibsonEvent",
     "HookDecision",
@@ -49,6 +51,7 @@ __all__ = [
     "StreamBinding",
     "TimelineWindow",
     "VisualCatalog",
+    "capture_scene_screenshot",
     "default_mutations_for_event",
     "default_visual_catalog",
     "initial_scene",

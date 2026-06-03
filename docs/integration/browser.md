@@ -16,6 +16,15 @@ uv run pytest
 
 Screenshots from the browser integration test are written under `test-artifacts/screenshots/`.
 
+Replay fixtures can also render their final scene through the browser display:
+
+```bash
+uv run harn-gibson replay examples/replays/stream-and-diagnostic.json \
+  --output-scene test-artifacts/replays/scene.json \
+  --output-result test-artifacts/replays/result.json \
+  --screenshot test-artifacts/replays/scene.png
+```
+
 The integration test verifies:
 
 - the display shell renders in desktop and mobile viewports;

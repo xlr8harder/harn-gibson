@@ -44,7 +44,7 @@ The raw event details, event feed, and hook decisions are treated as debug surfa
 
 ## Replay Testing
 
-The scene layer includes a replay harness that accepts recorded harn events, browser input events, renderer decisions, saved render plans, and explicit scene mutations. A replay run can produce a final scene JSON snapshot and a full replay result JSON file. That gives us a deterministic way to compare display effects against baselines and a manual way to inspect whether staged effects leave the scene in the intended state.
+The scene layer includes a replay harness that accepts recorded harn events, browser input events, renderer decisions, saved render plans, and explicit scene mutations. A replay run can produce a final scene JSON snapshot, a full replay result JSON file, and a browser screenshot of the final scene. That gives us a deterministic way to compare display effects against baselines and a manual way to inspect whether staged effects leave the scene in the intended state.
 
 Replay works on both sides of the renderer boundary. Agent-side replay feeds historical harn events through routing, coalescing, and a renderer to generate a visualization. Renderer-side replay applies saved render plans or raw scene mutations against scene state. Those modes also support a later "full session visualization" workflow where a historical session is rendered all at once or in timed chunks.
 

@@ -5,9 +5,10 @@ import threading
 import urllib.error
 import urllib.request
 from http.server import ThreadingHTTPServer
+from pathlib import Path
 from typing import Any
 
-from harn_gibson import cli
+from harn_gibson import BrowserScreenshotResult, cli
 from harn_gibson.server import (
     BrowserInputQueue,
     GibsonServerState,
@@ -361,12 +362,28 @@ def test_cli_parser_and_run(monkeypatch: Any, capsys: Any) -> None:
     parsed_auth = parser.parse_args(["import-codex-auth", "--codex-auth", "codex.json", "--harn-auth", "harn.json"])
     assert parsed_auth.command == "import-codex-auth"
     parsed_replay = parser.parse_args(
-        ["replay", "fixture.json", "--output-scene", "scene.json", "--output-result", "result.json"]
+        [
+            "replay",
+            "fixture.json",
+            "--output-scene",
+            "scene.json",
+            "--output-result",
+            "result.json",
+            "--screenshot",
+            "scene.png",
+            "--screenshot-width",
+            "800",
+            "--screenshot-height",
+            "600",
+        ]
     )
     assert parsed_replay.command == "replay"
     assert parsed_replay.path == "fixture.json"
     assert parsed_replay.output_scene == "scene.json"
     assert parsed_replay.output_result == "result.json"
+    assert parsed_replay.screenshot == "scene.png"
+    assert parsed_replay.screenshot_width == 800
+    assert parsed_replay.screenshot_height == 600
     assert cli.run(["extension-path"]) == 0
     assert capsys.readouterr().out.strip().endswith("extension.py")
 
@@ -443,6 +460,62 @@ def test_cli_replay_without_outputs(tmp_path: Any, capsys: Any) -> None:
 
     assert cli.run(["replay", str(replay_path)]) == 0
     assert capsys.readouterr().out.strip() == "replayed 1 steps; scene revision 1"
+
+
+def test_cli_replay_captures_screenshot(tmp_path: Any, monkeypatch: Any, capsys: Any) -> None:
+    replay_path = tmp_path / "replay.json"
+    screenshot_path = tmp_path / "replay.png"
+    calls: list[tuple[int, int, int]] = []
+    replay_path.write_text(
+        json.dumps(
+            {
+                "steps": [
+                    {
+                        "type": "event",
+                        "event": {
+                            "sequence": 1,
+                            "timestampMs": 10,
+                            "source": "test",
+                            "eventType": "tool_call",
+                            "phase": "before",
+                            "title": "Tool preflight",
+                            "summary": "bash starting with {command}",
+                            "payload": {"type": "tool_call", "toolName": "bash", "input": {"command": "pwd"}},
+                        },
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    def fake_capture(state: Any, path: str, *, width: int, height: int) -> BrowserScreenshotResult:
+        calls.append((state.scene.state.revision, width, height))
+        return BrowserScreenshotResult(Path(path), "http://127.0.0.1:1", state.scene.state.revision, width, height)
+
+    monkeypatch.setattr("harn_gibson.browser_capture.capture_scene_screenshot", fake_capture)
+
+    assert (
+        cli.run(
+            [
+                "replay",
+                str(replay_path),
+                "--screenshot",
+                str(screenshot_path),
+                "--screenshot-width",
+                "1024",
+                "--screenshot-height",
+                "768",
+            ]
+        )
+        == 0
+    )
+
+    assert calls == [(1, 1024, 768)]
+    assert capsys.readouterr().out.splitlines() == [
+        f"captured replay screenshot: {screenshot_path}",
+        "replayed 1 steps; scene revision 1",
+    ]
 
 
 def test_cli_dogfood_launches_display_browser_and_harn(monkeypatch: Any, capsys: Any) -> None:

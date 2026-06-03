@@ -40,6 +40,9 @@ def build_parser() -> argparse.ArgumentParser:
     replay.add_argument("path", help="path to replay JSON")
     replay.add_argument("--output-scene", default=None, help="write final scene JSON to this path")
     replay.add_argument("--output-result", default=None, help="write full replay result JSON to this path")
+    replay.add_argument("--screenshot", default=None, help="write a browser screenshot of the final replay scene")
+    replay.add_argument("--screenshot-width", type=int, default=1280, help="screenshot viewport width")
+    replay.add_argument("--screenshot-height", type=int, default=900, help="screenshot viewport height")
 
     subcommands.add_parser("extension-path", help="print the harn extension file path")
     return parser
@@ -149,12 +152,24 @@ def run(argv: Sequence[str] | None = None) -> int:
         return 0 if result.available else 1
     if args.command == "replay":
         from harn_gibson.replay import run_replay_file, write_replay_result, write_scene
+        from harn_gibson.server import GibsonServerState
 
-        result = run_replay_file(args.path)
+        replay_state = GibsonServerState()
+        result = run_replay_file(args.path, replay_state)
         if args.output_scene:
             write_scene(args.output_scene, result.scene)
         if args.output_result:
             write_replay_result(args.output_result, result)
+        if args.screenshot:
+            from harn_gibson.browser_capture import capture_scene_screenshot
+
+            screenshot = capture_scene_screenshot(
+                replay_state,
+                args.screenshot,
+                width=args.screenshot_width,
+                height=args.screenshot_height,
+            )
+            print(f"captured replay screenshot: {screenshot.path}")
         print(
             f"replayed {len(result.steps)} steps; scene revision {result.scene.revision}",
         )
