@@ -33,15 +33,26 @@ def event(sequence: int = 1, event_type: str = "input") -> GibsonEvent:
 
 def test_render_request_step_and_plan_helpers() -> None:
     request = RenderRequest(event(1), ({"block": False},))
-    empty_request = RenderRequest(event(2))
-    step = RenderStep((SceneMutation("append_log", entry={"x": 1}),), delay_ms=5, event_index=0)
+    empty_request = RenderRequest(
+        event(2),
+        route="stream_buffer",
+        timeline_offset_ms=25,
+        coalesced_count=3,
+        metadata={"streamId": "assistant-main"},
+    )
+    step = RenderStep((SceneMutation("append_log", entry={"x": 1}),), delay_ms=5, start_offset_ms=10, event_index=0)
     no_index = RenderStep(())
     plan = RenderPlan((request, empty_request), (step, no_index), {"agent": "test"})
 
     assert request.to_dict()["decisions"] == [{"block": False}]
     assert "decisions" not in empty_request.to_dict()
+    assert empty_request.to_dict()["route"] == "stream_buffer"
+    assert empty_request.to_dict()["timelineOffsetMs"] == 25
+    assert empty_request.to_dict()["coalescedCount"] == 3
+    assert empty_request.to_dict()["metadata"] == {"streamId": "assistant-main"}
     assert step.to_dict() == {
         "delayMs": 5,
+        "startOffsetMs": 10,
         "mutations": [{"op": "append_log", "entry": {"x": 1}}],
         "eventIndex": 0,
     }
@@ -80,6 +91,7 @@ def test_blocking_pipeline_applies_and_publishes_updates() -> None:
     assert update["decisions"] == [{"block": True}]
     assert update["renderPlan"]["batchSize"] == 1
     assert update["events"][0]["eventType"] == "input"
+    assert update["renderRequests"][0]["event"]["eventType"] == "input"
     assert buffer.snapshot() == [update]
     assert render_accept_payload(result, 0) == {"ok": True, "renderMode": "blocking", "sceneRevision": 1}
 
@@ -185,6 +197,26 @@ def test_pipeline_validation_empty_and_delayed_steps() -> None:
     assert result.updates[1]["scene"]["revision"] == 1
     with pytest.raises(ValueError, match="render mode"):
         RenderPipeline(scene=SceneEngine(), buffer=EventBuffer(), mode="later")  # type: ignore[arg-type]
+
+
+def test_pipeline_direct_apply_bypasses_renderer_queue() -> None:
+    buffer = EventBuffer()
+    pipeline = RenderPipeline(scene=SceneEngine(), buffer=buffer, mode="async", batch_window_ms=0)
+    request = RenderRequest(event(9, "message_update"), route="stream_buffer")
+
+    result = pipeline.apply_direct(
+        request,
+        (SceneMutation("append_log", entry={"direct": True}),),
+        metadata={"route": {"route": "stream_buffer"}},
+    )
+
+    assert result.mode == "async"
+    assert result.scene_revision == 1
+    assert result.updates[0]["renderPlan"]["metadata"] == {
+        "renderer": "direct",
+        "route": {"route": "stream_buffer"},
+    }
+    assert buffer.snapshot() == list(result.updates)
 
 
 def test_render_update_and_coercion_helpers() -> None:

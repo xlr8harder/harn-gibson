@@ -194,7 +194,9 @@ def to_jsonable(value: Any) -> Any:
     if value is None or isinstance(value, bool | int | float):
         return value
     if isinstance(value, str):
-        return _clip(value, 4000)
+        if len(value) <= 4000:
+            return value
+        return value[:3999] + "..."
     if isinstance(value, Mapping):
         return {str(key): to_jsonable(item) for key, item in value.items()}
     if isinstance(value, list | tuple):

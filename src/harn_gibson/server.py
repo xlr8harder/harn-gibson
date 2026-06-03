@@ -12,12 +12,12 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from os import environ
 from typing import Any
 
+from harn_gibson.catalog import VisualCatalog, default_visual_catalog
 from harn_gibson.events import GibsonEvent, diagnostic_event
 from harn_gibson.rendering import (
     DeterministicSceneRenderer,
     RenderMode,
     RenderPipeline,
-    RenderRequest,
     RenderSubmitResult,
     SceneRenderer,
     coerce_batch_window_ms,
@@ -25,6 +25,7 @@ from harn_gibson.rendering import (
     decisions_from_payload,
     render_accept_payload,
 )
+from harn_gibson.routing import EventRouter
 from harn_gibson.scene import SceneEngine
 from harn_gibson.sinks import EventBuffer
 
@@ -33,8 +34,10 @@ from harn_gibson.sinks import EventBuffer
 class GibsonServerState:
     buffer: EventBuffer = field(default_factory=EventBuffer)
     scene: SceneEngine = field(default_factory=SceneEngine)
+    catalog: VisualCatalog = field(default_factory=default_visual_catalog)
     inputs: BrowserInputQueue = field(default_factory=lambda: BrowserInputQueue())
     input_bridge: HarnBridgeState = field(default_factory=lambda: HarnBridgeState())
+    router: EventRouter = field(default_factory=EventRouter)
     render_mode: RenderMode = "blocking"
     render_batch_window_ms: int = 40
     renderer: SceneRenderer = field(default_factory=DeterministicSceneRenderer)
@@ -185,6 +188,9 @@ def make_handler(state: GibsonServerState) -> type[BaseHTTPRequestHandler]:
             if self.path == "/scene":
                 self._json(HTTPStatus.OK, state.scene.state.to_dict())
                 return
+            if self.path == "/catalog":
+                self._json(HTTPStatus.OK, state.catalog.to_dict())
+                return
             if self.path == "/input/next":
                 item = state.inputs.pop()
                 state.input_bridge.record_input_poll(delivered=item is not None)
@@ -308,6 +314,7 @@ def health_payload(state: GibsonServerState) -> dict[str, Any]:
         "renderMode": state.pipeline.mode,
         "pendingRenderJobs": state.pipeline.pending_count(),
         "inputBridge": state.input_bridge.snapshot(pending_inputs=state.inputs.pending_count()),
+        "streams": state.router.stream_snapshot(),
     }
 
 
@@ -392,7 +399,14 @@ def format_sse(payload: dict[str, Any]) -> str:
 
 def submit_event_to_renderer(payload: dict[str, Any], state: GibsonServerState) -> RenderSubmitResult:
     event = event_from_payload(payload)
-    return state.pipeline.submit(RenderRequest(event=event, decisions=decisions_from_payload(payload)))
+    route = state.router.route(event, decisions_from_payload(payload))
+    if not route.uses_renderer:
+        return state.pipeline.apply_direct(
+            route.request,
+            route.direct_mutations,
+            metadata={"route": route.decision.to_dict(), "renderInput": route.batch.to_dict()},
+        )
+    return state.pipeline.submit(route.request)
 
 
 def apply_event_to_scene(payload: dict[str, Any], state: GibsonServerState) -> dict[str, Any]:
@@ -453,6 +467,10 @@ HTML = """<!doctype html>
           <span id="signalTitle">CHANNEL IDLE</span>
           <strong id="signalSummary">awaiting harn stream</strong>
         </div>
+        <section id="streamPanel" class="stream-panel" aria-label="Stream buffer" hidden>
+          <span id="streamTitle">ASSISTANT STREAM</span>
+          <pre id="streamText"></pre>
+        </section>
         <form id="inputForm" class="composer" autocomplete="off">
           <textarea id="promptInput" rows="2" placeholder="route input to harn"></textarea>
           <div class="composer-actions">
@@ -627,6 +645,38 @@ h1 {
   max-height: 94px;
   overflow: hidden;
   pointer-events: none;
+}
+.stream-panel {
+  position: absolute;
+  top: 150px;
+  right: 24px;
+  z-index: 1;
+  width: min(430px, calc(100% - 48px));
+  max-height: 260px;
+  overflow: hidden;
+  border: 1px solid rgba(88, 215, 255, 0.32);
+  background: rgba(4, 9, 12, 0.78);
+  padding: 12px;
+}
+.stream-panel[hidden] {
+  display: none;
+}
+.stream-panel span {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--amber);
+  font-size: 12px;
+  text-transform: uppercase;
+}
+.stream-panel pre {
+  margin: 0;
+  max-height: 210px;
+  overflow: hidden;
+  color: var(--green);
+  font: inherit;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 .signal-copy span,
 .panel h2 {
@@ -813,6 +863,16 @@ body.debug-open .debug-panel {
     bottom: 214px;
     max-height: 84px;
   }
+  .stream-panel {
+    top: 208px;
+    left: 16px;
+    right: 16px;
+    width: auto;
+    max-height: 180px;
+  }
+  .stream-panel pre {
+    max-height: 132px;
+  }
   .signal-copy strong { font-size: 18px; }
   .composer {
     left: 16px;
@@ -834,6 +894,9 @@ const eventEl = document.getElementById("eventType");
 const sequenceEl = document.getElementById("sequence");
 const signalTitle = document.getElementById("signalTitle");
 const signalSummary = document.getElementById("signalSummary");
+const streamPanel = document.getElementById("streamPanel");
+const streamTitle = document.getElementById("streamTitle");
+const streamText = document.getElementById("streamText");
 const decisionLog = document.getElementById("decisionLog");
 const traceLog = document.getElementById("traceLog");
 const debugToggle = document.getElementById("debugToggle");
@@ -976,7 +1039,9 @@ function appendFeedItem(event) {
 
 function renderScene(scene) {
   const status = scene.primitives?.status?.props || {};
+  const stream = scene.primitives?.["assistant-stream"]?.props || {};
   if (status.text) statusEl.textContent = status.text;
+  renderStream(stream);
   decisionLog.textContent = JSON.stringify(scene.primitives?.["decision-log"]?.props?.text || [], null, 2);
   traceLog.textContent = JSON.stringify(scene.primitives?.["trace-log"]?.props?.text || [], null, 2);
   feed.replaceChildren();
@@ -993,6 +1058,16 @@ function renderScene(scene) {
     signalTitle.textContent = latest.title || latest.eventType || "SIGNAL";
     signalSummary.textContent = latest.summary || `${latest.phase || "event"}:${latest.eventType || "unknown"}`;
   }
+}
+
+function renderStream(stream) {
+  if (!stream || !stream.text) {
+    streamPanel.hidden = true;
+    return;
+  }
+  streamPanel.hidden = false;
+  streamTitle.textContent = stream.title || "STREAM";
+  streamText.textContent = stream.text;
 }
 
 function updateBridgeStatus(bridge) {

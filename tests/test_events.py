@@ -49,7 +49,7 @@ def test_gibson_event_from_raw_and_to_dict() -> None:
         "phase": "before",
         "title": "Input intercept",
         "summary": "interactive input: hello world",
-        "payload": {"type": "input", "text": "hello world", "source": "interactive"},
+        "payload": {"type": "input", "text": "hello\nworld", "source": "interactive"},
         "recentContext": ["last user prompt"],
         "visualizationContext": ["grid online"],
     }
@@ -149,6 +149,7 @@ def test_to_jsonable_variants() -> None:
 
 def test_long_scalar_summary_is_clipped() -> None:
     assert summarize_event("unknown", {"value": "x" * 200}) == "{value}"
+    assert summarize_event("input", {"source": "test", "text": "x" * 120}).endswith("...")
     event = GibsonEvent.from_raw({"type": "unknown", "payload": "x" * 200}, 2)
     assert event.summary == "{type, payload}"
 

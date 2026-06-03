@@ -6,10 +6,30 @@ There is no model-backed renderer agent in the current implementation. The serve
 
 ## Render Plan Contract
 
+Renderer inputs use a generic render-input envelope. It preserves event timing so a 5-10 second renderer-agent turnaround can still produce a plan whose effects cover the same approximate interval:
+
+```json
+{
+  "schema": "harn-gibson.render-input.v1",
+  "route": "renderer_agent",
+  "timeline": {"startMs": 1000, "endMs": 11000, "durationMs": 10000},
+  "requests": [
+    {
+      "timelineOffsetMs": 1200,
+      "event": {"eventType": "tool_call", "summary": "bash starting with {command}"}
+    }
+  ],
+  "metadata": {}
+}
+```
+
+The renderer can answer with steps that use delays and start offsets to make the visualization feel like it is replaying the coalesced time window rather than reacting to one isolated event.
+
 ```json
 {
   "steps": [
     {
+      "startOffsetMs": 1200,
       "delayMs": 0,
       "mutations": [
         {"op": "patch", "targetId": "status", "props": {"text": "before:tool_call"}}
@@ -49,6 +69,10 @@ After enough events or token growth, do a renderer compaction:
 This mirrors harn session compaction, but it is separate from the primary agent conversation. The renderer agent owns visual continuity; harn owns task state.
 
 Streaming deltas need special handling before a remote renderer agent is added. `message_update` and similar stream events should update local stream buffers or named text primitives with throttled display refreshes. The renderer agent should receive coarse stream milestones or compact summaries, not every streaming delta as a separate model turn.
+
+## Visual Catalog
+
+The renderer interface is generic, but prompts can include a visual catalog. The current default catalog exposes low-level primitives such as `mesh`, `glyph_layer`, `particle_field`, `city_block`, `ribbon`, and `text_stream`, plus effects such as `glitch`, `flythrough`, `extrude`, `packet_burst`, `typewriter`, and `hold`. This keeps useful renderers possible while still giving the Gibson prompt enough raw material for 3D filesystem cities, data corridors, and gratuitous animation.
 
 ## Hook Reuse
 

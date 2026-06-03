@@ -46,9 +46,13 @@ The raw event details, event feed, and hook decisions are treated as debug surfa
 
 The scene layer should grow a replay harness that accepts recorded harn events, browser input events, renderer decisions, and explicit scene mutations. A replay run should produce a final scene JSON snapshot and optional Playwright screenshots. That gives us a deterministic way to compare display effects against baselines and a manual way to inspect whether staged effects leave the scene in the intended state.
 
+Replay should work on both sides of the renderer boundary. Agent-side replay feeds historical harn events through routing, coalescing, and a renderer to generate a visualization. Renderer-side replay applies saved render plans or raw scene mutations against scene state. Those modes also support a later "full session visualization" workflow where a historical session is rendered all at once or in timed chunks.
+
 ## Render Pipeline
 
-The display server accepts events into a render pipeline.
+The display server accepts routed events into a render pipeline.
+
+Before events reach a renderer, an `EventRouter` can choose whether they should go to a renderer agent, patch scene state directly, update a stream buffer, remain debug-only, or be dropped/sampled by a later policy. Streaming assistant deltas currently update a local `text_stream` primitive so a future remote renderer agent does not need to receive every token-sized update.
 
 In blocking mode, the server builds and applies a render plan before responding to harn. This guarantees the scene saw the event before harn proceeds.
 

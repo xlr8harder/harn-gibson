@@ -20,11 +20,23 @@ RenderMode = Literal["blocking", "async"]
 class RenderRequest:
     event: GibsonEvent
     decisions: tuple[dict[str, Any], ...] = ()
+    route: str = "renderer_agent"
+    timeline_offset_ms: int = 0
+    coalesced_count: int = 1
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         payload = {"event": self.event.to_dict()}
         if self.decisions:
             payload["decisions"] = list(self.decisions)
+        if self.route != "renderer_agent":
+            payload["route"] = self.route
+        if self.timeline_offset_ms:
+            payload["timelineOffsetMs"] = self.timeline_offset_ms
+        if self.coalesced_count != 1:
+            payload["coalescedCount"] = self.coalesced_count
+        if self.metadata:
+            payload["metadata"] = self.metadata
         return payload
 
 
@@ -32,6 +44,7 @@ class RenderRequest:
 class RenderStep:
     mutations: tuple[SceneMutation, ...]
     delay_ms: int = 0
+    start_offset_ms: int = 0
     event_index: int | None = None
 
     def to_dict(self) -> dict[str, Any]:
@@ -39,6 +52,8 @@ class RenderStep:
             "delayMs": self.delay_ms,
             "mutations": [mutation.to_dict() for mutation in self.mutations],
         }
+        if self.start_offset_ms:
+            payload["startOffsetMs"] = self.start_offset_ms
         if self.event_index is not None:
             payload["eventIndex"] = self.event_index
         return payload
@@ -131,6 +146,22 @@ class RenderPipeline:
         self._queue.put(request)
         return RenderSubmitResult(mode=self.mode, queued=self.pending_count())
 
+    def apply_direct(
+        self,
+        request: RenderRequest,
+        mutations: Sequence[SceneMutation],
+        *,
+        metadata: dict[str, Any] | None = None,
+    ) -> RenderSubmitResult:
+        plan = RenderPlan(
+            requests=(request,),
+            steps=(RenderStep(tuple(mutations), event_index=0),),
+            metadata={"renderer": "direct", **dict(metadata or {})},
+        )
+        with self._lock:
+            updates = tuple(self._apply_plan(plan))
+        return RenderSubmitResult(mode=self.mode, queued=self.pending_count(), updates=updates)
+
     def start(self) -> None:
         if self.mode != "async":
             return
@@ -210,6 +241,7 @@ def render_update_payload(
         "metadata": plan.metadata,
     }
     update["events"] = [current.event.to_dict() for current in plan.requests]
+    update["renderRequests"] = [current.to_dict() for current in plan.requests]
     if request.decisions:
         update["decisions"] = list(request.decisions)
     return update

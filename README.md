@@ -12,6 +12,8 @@ The current display agent is deterministic. The later LLM-driven visualization l
 
 `harn` is included as a development dependency so `uv run harn-gibson dogfood` works from this checkout. The display server and extension modules do not import `harn` or `harn-tui`; the dogfood launcher is the only place that shells out to the harn CLI. A future packaging split should keep the web relay installable without harn's terminal UI stack.
 
+There is no model-backed renderer agent yet. Events pass through a routing layer before rendering: normal events become renderer requests, streaming assistant deltas update a local `text_stream` primitive, and debug-only events can bypass renderer execution. The display server also exposes `/catalog`, a generic primitive/effect catalog for future renderer prompts.
+
 ## Development
 
 ```bash

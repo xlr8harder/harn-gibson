@@ -60,6 +60,7 @@ def test_http_server_routes() -> None:
         assert health["sceneRevision"] == 0
         assert health["renderMode"] == "blocking"
         assert health["pendingRenderJobs"] == 0
+        assert health["streams"] == {}
         assert health["inputBridge"] == {
             "pendingInputs": 0,
             "inputPollerSeen": False,
@@ -71,6 +72,9 @@ def test_http_server_routes() -> None:
             "deliveredInputs": 0,
         }
         assert json.loads(request_text(f"{base}/scene")[2])["schema"] == "harn-gibson.scene.v1"
+        catalog = json.loads(request_text(f"{base}/catalog")[2])
+        assert catalog["schema"] == "harn-gibson.visual-catalog.v1"
+        assert any(entry["id"] == "text_stream" for entry in catalog["primitives"])
         assert json.loads(request_text(f"{base}/missing")[2]) == {"error": "not found"}
         assert json.loads(request_text(f"{base}/bad", b"{}")[2]) == {"error": "not found"}
         assert json.loads(request_text(f"{base}/events", b"{")[2]) == {"error": "invalid json"}
@@ -190,6 +194,54 @@ def test_diagnostic_event_payload_and_publish() -> None:
     assert payload["payload"]["traceback"] == "Traceback..."
     assert result.scene_revision == 1
     assert state.scene.state.primitives["trace-log"].props["text"][0]["details"] == "input=input-1"
+
+
+def test_stream_update_routes_to_local_scene_buffer() -> None:
+    state = GibsonServerState()
+    payload = {
+        "sequence": 11,
+        "timestampMs": 1100,
+        "source": "unit",
+        "eventType": "message_update",
+        "phase": "during",
+        "title": "Stream update",
+        "summary": "assistant stream {type, delta}",
+        "payload": {"type": "message_update", "assistantMessageEvent": {"type": "text_delta", "delta": "booting"}},
+    }
+
+    result = submit_event_to_renderer(payload, state)
+    scene = state.scene.state
+
+    assert result.scene_revision == 1
+    assert "assistant-stream" in scene.primitives
+    assert scene.primitives["assistant-stream"].props["text"] == "booting"
+    assert scene.log == []
+    assert state.router.stream_snapshot()["assistant-main"]["text"] == "booting"
+    update = result.updates[0]
+    assert update["renderPlan"]["metadata"]["route"]["route"] == "stream_buffer"
+    assert update["renderRequests"][0]["route"] == "stream_buffer"
+
+
+def test_empty_stream_update_routes_debug_only_without_scene_mutation() -> None:
+    state = GibsonServerState()
+    payload = {
+        "sequence": 12,
+        "timestampMs": 1200,
+        "source": "unit",
+        "eventType": "message_update",
+        "phase": "during",
+        "title": "Stream update",
+        "summary": "assistant stream {type}",
+        "payload": {"type": "message_update", "assistantMessageEvent": {"type": "ping"}},
+    }
+
+    result = submit_event_to_renderer(payload, state)
+
+    assert result.scene_revision == 0
+    assert state.scene.state.revision == 0
+    assert state.router.stream_snapshot() == {}
+    assert result.updates[0]["renderPlan"]["metadata"]["route"]["route"] == "debug_only"
+    assert result.updates[0]["renderRequests"][0]["route"] == "debug_only"
 
 
 def test_event_from_payload_validation() -> None:
