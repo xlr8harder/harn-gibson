@@ -7,9 +7,11 @@ import os
 import subprocess
 import sys
 import threading
+import time
 import webbrowser
 from collections.abc import Sequence
 
+from harn_gibson.auth import import_codex_auth
 from harn_gibson.extension import extension_path
 
 
@@ -26,7 +28,13 @@ def build_parser() -> argparse.ArgumentParser:
     dogfood.add_argument("--port", type=int, default=0)
     dogfood.add_argument("--harn-bin", default="harn", help="harn executable to launch")
     dogfood.add_argument("--browser", action=argparse.BooleanOptionalAction, default=True)
+    dogfood.add_argument("--codex-auth-import", action=argparse.BooleanOptionalAction, default=True)
+    dogfood.add_argument("--hold-on-error", action=argparse.BooleanOptionalAction, default=True)
     dogfood.add_argument("harn_args", nargs=argparse.REMAINDER, help="arguments forwarded to harn after --")
+
+    auth = subcommands.add_parser("import-codex-auth", help="copy Codex OAuth tokens into harn auth storage")
+    auth.add_argument("--codex-auth", default=None, help="path to Codex auth.json")
+    auth.add_argument("--harn-auth", default=None, help="path to harn auth.json")
 
     subcommands.add_parser("extension-path", help="print the harn extension file path")
     return parser
@@ -39,8 +47,10 @@ def run_dogfood(
     harn_bin: str = "harn",
     harn_args: Sequence[str] = (),
     launch_browser: bool = True,
+    codex_auth_import: bool = True,
+    hold_on_error: bool = True,
 ) -> int:
-    from harn_gibson.server import build_state_from_env, create_server
+    from harn_gibson.server import build_state_from_env, create_server, publish_diagnostic_event
 
     state = build_state_from_env()
     server = create_server(host, port, state)
@@ -58,19 +68,68 @@ def run_dogfood(
     env["HARN_GIBSON_ENDPOINT"] = endpoint
     env["HARN_GIBSON_INPUT_ENDPOINT"] = input_endpoint
     command = [harn_bin, *forwarded_args]
+    diagnostic_sequence = 0
+
+    def publish_launcher_diagnostic(
+        *,
+        message: str,
+        event_type: str = "launcher_diagnostic",
+        severity: str = "info",
+        title: str | None = None,
+        details: str | None = None,
+    ) -> None:
+        nonlocal diagnostic_sequence
+        diagnostic_sequence += 1
+        publish_diagnostic_event(
+            state,
+            diagnostic_sequence,
+            message=message,
+            event_type=event_type,
+            severity=severity,
+            title=title,
+            details=details,
+        )
 
     print(f"harn-gibson display: {display_url}", file=sys.stderr)
     if launch_browser:
         webbrowser.open(display_url)
     try:
-        return subprocess.call(command, env=env)
+        if codex_auth_import:
+            auth_result = import_codex_auth(environ=env)
+            print(auth_result.message, file=sys.stderr)
+            publish_launcher_diagnostic(
+                message=auth_result.message,
+                event_type="auth_import",
+                severity="info" if auth_result.available else "error",
+                title="Codex auth ready" if auth_result.available else "Codex auth unavailable",
+            )
+        exit_code = subprocess.call(command, env=env)
+        if exit_code != 0:
+            message = f"harn exited with code {exit_code}"
+            publish_launcher_diagnostic(message=message, event_type="harn_exit", severity="error", title="Harn exit")
+            if hold_on_error and launch_browser:
+                _hold_display_on_error(display_url)
+        return exit_code
     except FileNotFoundError:
-        print(f"harn executable not found: {harn_bin}", file=sys.stderr)
+        message = f"harn executable not found: {harn_bin}"
+        print(message, file=sys.stderr)
+        publish_launcher_diagnostic(message=message, event_type="harn_exit", severity="error", title="Harn missing")
+        if hold_on_error and launch_browser:
+            _hold_display_on_error(display_url)
         return 127
     finally:
         state.pipeline.stop()
         server.shutdown()
         server.server_close()
+
+
+def _hold_display_on_error(display_url: str) -> None:  # pragma: no cover - manual recovery loop
+    print(f"harn-gibson display remains available at {display_url}; press Ctrl-C to stop.", file=sys.stderr)
+    try:
+        while True:
+            time.sleep(3600)
+    except KeyboardInterrupt:
+        return
 
 
 def run(argv: Sequence[str] | None = None) -> int:
@@ -79,6 +138,10 @@ def run(argv: Sequence[str] | None = None) -> int:
     if args.command == "extension-path":
         print(extension_path())
         return 0
+    if args.command == "import-codex-auth":
+        result = import_codex_auth(args.codex_auth, args.harn_auth)
+        print(result.message)
+        return 0 if result.available else 1
     if args.command == "dogfood":
         return run_dogfood(
             host=args.host,
@@ -86,6 +149,8 @@ def run(argv: Sequence[str] | None = None) -> int:
             harn_bin=args.harn_bin,
             harn_args=args.harn_args,
             launch_browser=args.browser,
+            codex_auth_import=args.codex_auth_import,
+            hold_on_error=args.hold_on_error,
         )
     if args.command in {None, "serve"}:
         from harn_gibson.server import run_server

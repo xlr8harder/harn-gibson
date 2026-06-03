@@ -2,6 +2,8 @@
 
 The renderer agent is the model-driven version of the current deterministic renderer. It receives harn events, current scene state, and recent visualization context, then returns a `RenderPlan`.
 
+There is no model-backed renderer agent in the current implementation. The server uses the deterministic renderer while we harden the event, scene, and browser fixtures.
+
 ## Render Plan Contract
 
 ```json
@@ -45,6 +47,8 @@ After enough events or token growth, do a renderer compaction:
 4. Reset the short rolling context and continue with new event batches.
 
 This mirrors harn session compaction, but it is separate from the primary agent conversation. The renderer agent owns visual continuity; harn owns task state.
+
+Streaming deltas need special handling before a remote renderer agent is added. `message_update` and similar stream events should update local stream buffers or named text primitives with throttled display refreshes. The renderer agent should receive coarse stream milestones or compact summaries, not every streaming delta as a separate model turn.
 
 ## Hook Reuse
 

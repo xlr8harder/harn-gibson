@@ -12,7 +12,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from os import environ
 from typing import Any
 
-from harn_gibson.events import GibsonEvent
+from harn_gibson.events import GibsonEvent, diagnostic_event
 from harn_gibson.rendering import (
     DeterministicSceneRenderer,
     RenderMode,
@@ -325,6 +325,56 @@ def browser_input_event_payload(item: BrowserInput) -> dict[str, Any]:
     }
 
 
+def diagnostic_event_payload(
+    sequence: int,
+    *,
+    message: str,
+    event_type: str = "launcher_diagnostic",
+    source: str = "harn-gibson",
+    severity: str = "info",
+    title: str | None = None,
+    details: str | None = None,
+    traceback_text: str | None = None,
+) -> dict[str, Any]:
+    return diagnostic_event(
+        sequence,
+        message=message,
+        event_type=event_type,
+        source=source,
+        severity=severity,
+        title=title,
+        details=details,
+        traceback_text=traceback_text,
+    ).to_dict()
+
+
+def publish_diagnostic_event(
+    state: GibsonServerState,
+    sequence: int,
+    *,
+    message: str,
+    event_type: str = "launcher_diagnostic",
+    source: str = "harn-gibson",
+    severity: str = "info",
+    title: str | None = None,
+    details: str | None = None,
+    traceback_text: str | None = None,
+) -> RenderSubmitResult:
+    return submit_event_to_renderer(
+        diagnostic_event_payload(
+            sequence,
+            message=message,
+            event_type=event_type,
+            source=source,
+            severity=severity,
+            title=title,
+            details=details,
+            traceback_text=traceback_text,
+        ),
+        state,
+    )
+
+
 def _clip(text: str, limit: int) -> str:
     compact = " ".join(text.split())
     if len(compact) <= limit:
@@ -440,6 +490,10 @@ HTML = """<!doctype html>
         <div class="panel">
           <h2>Event Feed</h2>
           <ol id="feed"></ol>
+        </div>
+        <div class="panel">
+          <h2>Tracebacks</h2>
+          <pre id="traceLog">[]</pre>
         </div>
         <div class="panel">
           <h2>Hook Decisions</h2>
@@ -650,7 +704,7 @@ h1 {
   bottom: 18px;
   z-index: 5;
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr) 240px;
+  grid-template-rows: auto auto minmax(0, 1fr) minmax(120px, 0.45fr) minmax(120px, 0.45fr);
   gap: 12px;
   width: min(420px, calc(100vw - 36px));
   transform: translateX(calc(100% + 24px));
@@ -731,6 +785,13 @@ body.debug-open .debug-panel {
   color: var(--amber);
   white-space: pre-wrap;
 }
+#traceLog {
+  height: calc(100% - 32px);
+  margin: 0;
+  overflow: auto;
+  color: var(--magenta);
+  white-space: pre-wrap;
+}
 @media (max-width: 900px) {
   .shell { padding: 10px; }
   .stage { min-height: calc(100vh - 20px); }
@@ -774,6 +835,7 @@ const sequenceEl = document.getElementById("sequence");
 const signalTitle = document.getElementById("signalTitle");
 const signalSummary = document.getElementById("signalSummary");
 const decisionLog = document.getElementById("decisionLog");
+const traceLog = document.getElementById("traceLog");
 const debugToggle = document.getElementById("debugToggle");
 const debugClose = document.getElementById("debugClose");
 const inputForm = document.getElementById("inputForm");
@@ -916,6 +978,7 @@ function renderScene(scene) {
   const status = scene.primitives?.status?.props || {};
   if (status.text) statusEl.textContent = status.text;
   decisionLog.textContent = JSON.stringify(scene.primitives?.["decision-log"]?.props?.text || [], null, 2);
+  traceLog.textContent = JSON.stringify(scene.primitives?.["trace-log"]?.props?.text || [], null, 2);
   feed.replaceChildren();
   for (const entry of scene.log || []) {
     appendFeedItem({
@@ -991,11 +1054,13 @@ __all__ = [
     "build_state_from_env",
     "browser_input_event_payload",
     "create_server",
+    "diagnostic_event_payload",
     "enqueue_browser_input",
     "event_from_payload",
     "format_sse",
     "health_payload",
     "make_handler",
+    "publish_diagnostic_event",
     "run_server",
     "submit_event_to_renderer",
 ]

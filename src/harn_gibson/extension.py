@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import traceback
 import urllib.error
 import urllib.request
 from collections.abc import Mapping
@@ -12,7 +13,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from harn_gibson.events import GibsonEvent
+from harn_gibson.events import GibsonEvent, diagnostic_event
 from harn_gibson.hooks import HookDispatcher, load_hook_module, result_for_harn
 from harn_gibson.sinks import DEFAULT_ENDPOINT, EventSink, build_sink_from_env
 
@@ -58,16 +59,39 @@ class GibsonRelay:
     async def handle(self, raw_event: Any, ctx: Any = None) -> Any:
         self.sequence += 1
         event = GibsonEvent.from_raw(raw_event, self.sequence)
-        decisions = await self.dispatcher.dispatch(event)
+        try:
+            decisions = await self.dispatcher.dispatch(event)
+        except Exception as error:  # noqa: BLE001
+            await self.publish_exception(
+                error,
+                "Gibson hook dispatch failed",
+                details=f"event={event.event_type} phase={event.phase}",
+            )
+            decisions = []
         _update_harn_ui(ctx, event)
         await self.sink.publish(event, decisions)
         return result_for_harn(event.event_type, decisions)
+
+    async def publish_exception(self, error: BaseException, message: str, *, details: str | None = None) -> None:
+        self.sequence += 1
+        event = diagnostic_event(
+            self.sequence,
+            event_type="runtime_error",
+            source="harn-gibson",
+            severity="error",
+            title="Runtime error",
+            message=f"{message}: {error}",
+            details=details,
+            traceback_text="".join(traceback.format_exception(error)),
+        )
+        await self.sink.publish(event, ())
 
 
 @dataclass(slots=True)
 class BrowserInputPoller:
     harn: Any
     endpoint: str | None
+    diagnostic_relay: GibsonRelay | None = None
     poll_interval: float = 0.25
     timeout: float = 0.2
     task: asyncio.Task[None] | None = None
@@ -98,7 +122,16 @@ class BrowserInputPoller:
         send_user_message = getattr(self.harn, "sendUserMessage", None)
         if not callable(send_user_message):
             return False
-        send_user_message(message, options)
+        try:
+            send_user_message(message, options)
+        except Exception as error:  # noqa: BLE001
+            if self.diagnostic_relay is not None:
+                await self.diagnostic_relay.publish_exception(
+                    error,
+                    "Browser input delivery failed",
+                    details=f"input={item.get('id', 'unknown')} deliverAs={options['deliverAs']}",
+                )
+            return False
         return True
 
     async def _run(self) -> None:
@@ -112,6 +145,7 @@ def extension_factory(harn: Any) -> None:
     poller = BrowserInputPoller(
         harn=harn,
         endpoint=build_input_endpoint_from_env(),
+        diagnostic_relay=relay,
         poll_interval=_poll_interval_from_env(),
     )
     for event_type in HARN_EVENTS:

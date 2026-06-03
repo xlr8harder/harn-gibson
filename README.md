@@ -31,9 +31,17 @@ For normal dogfooding, run one command from the repo root:
 uv run harn-gibson dogfood
 ```
 
-This starts the graphical display server, opens the browser, and launches `harn` with the display endpoint wired into the extension environment. Project-local `.harn/settings.json` selects the Codex provider/model and points harn at `.harn/extensions/gibson.py`; that shim adds `src/` to `sys.path` and loads the real `harn_gibson.extension` module.
+This starts the graphical display server, opens the browser, imports existing Codex CLI OAuth credentials into harn's user auth store, and launches `harn` with the display endpoint wired into the extension environment. Project-local `.harn/settings.json` selects the Codex provider/model and points harn at `.harn/extensions/gibson.py`; that shim adds `src/` to `sys.path` and loads the real `harn_gibson.extension` module.
 
 `dogfood` chooses a free local port by default, so it can run even if a manual display server is already using `8765`. Pass `--port 8765` if you want a fixed port.
+
+If you want to import Codex auth without launching harn:
+
+```bash
+uv run harn-gibson import-codex-auth
+```
+
+This copies the OAuth token shape from `~/.codex/auth.json` to `~/.harn/agent/auth.json` under the `openai-codex` provider key. The target file is outside the repo and is written with user-only permissions. Pass `--no-codex-auth-import` to `dogfood` if you want to manage harn auth yourself.
 
 Forward arguments to harn after `--`:
 
@@ -62,9 +70,9 @@ Delivery modes:
 - `queue`: default. Runs immediately if harn is idle, or queues as a follow-up if harn is streaming.
 - `steer`: queues steering input for the active agent run.
 
-The raw event details, event feed, and hook decisions are in the debug drawer. Use `DEBUG` to open it and `CLOSE` inside the drawer to collapse it.
+The raw event details, event feed, tracebacks, and hook decisions are in the debug drawer. Use `DEBUG` to open it and `CLOSE` inside the drawer to collapse it. Dogfood launcher failures and extension delivery exceptions are published into the same feed. If harn exits with an error while the browser is open, the display stays up until Ctrl-C so the failure remains visible.
 
-Project-local harn settings in `.harn/settings.json` select the `openai-codex` provider, `gpt-5.5`, and this extension. Run `/login` in harn and choose ChatGPT Plus/Pro (Codex) if credentials are not already stored.
+Project-local harn settings in `.harn/settings.json` select the `openai-codex` provider, `gpt-5.5`, and this extension. The Codex auth import is a temporary workaround for harn's current Codex `/login` callback issue.
 
 Render mode is configurable:
 

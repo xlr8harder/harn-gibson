@@ -166,10 +166,11 @@ def initial_scene() -> SceneState:
             kind="viewport",
             region="root",
             props={"theme": "gibson", "title": "GIBSON LINK"},
-            children=("status", "event-feed", "decision-log", "scan-grid"),
+            children=("status", "event-feed", "trace-log", "decision-log", "scan-grid"),
         ),
         ScenePrimitive(id="status", kind="status", region="mast", props={"text": "awaiting signal", "phase": "idle"}),
         ScenePrimitive(id="event-feed", kind="feed", region="side", props={"maxItems": 80}),
+        ScenePrimitive(id="trace-log", kind="code", region="side", props={"language": "text", "text": []}),
         ScenePrimitive(id="decision-log", kind="code", region="side", props={"language": "json", "text": "[]"}),
         ScenePrimitive(id="scan-grid", kind="grid", region="stage", props={"intensity": 0.2}),
     ):
@@ -202,7 +203,7 @@ def mutation_from_mapping(value: Mapping[str, Any]) -> SceneMutation:
 def default_mutations_for_event(event: GibsonEvent, decisions: Iterable[Mapping[str, Any]] = ()) -> list[SceneMutation]:
     rendered_decisions = list(decisions)
     tone = _tone_for_phase(event.phase)
-    return [
+    mutations = [
         SceneMutation(
             op="patch",
             target_id="status",
@@ -235,6 +236,16 @@ def default_mutations_for_event(event: GibsonEvent, decisions: Iterable[Mapping[
             ),
         ),
     ]
+    trace_entry = _trace_entry_for_event(event)
+    if trace_entry is not None:
+        mutations.append(
+            SceneMutation(
+                op="patch",
+                target_id="trace-log",
+                props={"text": [trace_entry]},
+            )
+        )
+    return mutations
 
 
 def scene_update_payload(
@@ -279,6 +290,21 @@ def _tone_for_phase(phase: str) -> str:
         "after": "magenta",
         "lifecycle": "amber",
     }.get(phase, "green")
+
+
+def _trace_entry_for_event(event: GibsonEvent) -> dict[str, Any] | None:
+    traceback_text = event.payload.get("traceback")
+    details = event.payload.get("details")
+    if not traceback_text and not details:
+        return None
+    return {
+        "sequence": event.sequence,
+        "eventType": event.event_type,
+        "title": event.title,
+        "message": event.payload.get("message") or event.summary,
+        "details": details,
+        "traceback": traceback_text,
+    }
 
 
 def _optional_str(value: Any) -> str | None:

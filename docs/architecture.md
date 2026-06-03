@@ -42,6 +42,10 @@ The current display agent is deterministic and maps each harn event to status, l
 
 The raw event details, event feed, and hook decisions are treated as debug surfaces. They remain in scene state for inspection, but the default browser layout hides them behind a debug drawer.
 
+## Replay Testing
+
+The scene layer should grow a replay harness that accepts recorded harn events, browser input events, renderer decisions, and explicit scene mutations. A replay run should produce a final scene JSON snapshot and optional Playwright screenshots. That gives us a deterministic way to compare display effects against baselines and a manual way to inspect whether staged effects leave the scene in the intended state.
+
 ## Render Pipeline
 
 The display server accepts events into a render pipeline.

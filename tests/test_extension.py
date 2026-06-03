@@ -43,6 +43,11 @@ class FakeHarn:
         self.sent.append((message, options))
 
 
+class FailingHarn(FakeHarn):
+    def sendUserMessage(self, _message: str, _options: dict[str, str]) -> None:
+        raise RuntimeError("delivery failed")
+
+
 class CamelUi:
     def __init__(self) -> None:
         self.calls: list[tuple[str, tuple[object, ...]]] = []
@@ -84,6 +89,23 @@ def test_relay_publishes_and_returns_hook_result() -> None:
     assert result == {"block": True, "reason": "no"}
     assert sink.published[0][0].event_type == "tool_call"  # type: ignore[attr-defined]
     assert sink.published[0][1] == [HookDecision(block=True, reason="no")]
+
+
+def test_relay_publishes_hook_exceptions_as_runtime_errors() -> None:
+    sink = FakeSink()
+    relay = GibsonRelay(sink)
+
+    def broken(_event: object) -> None:
+        raise RuntimeError("hook failed")
+
+    relay.dispatcher.on("tool_call", "before", broken)
+
+    result = asyncio.run(relay.handle({"type": "tool_call", "toolName": "bash"}, None))
+
+    assert result is None
+    assert sink.published[0][0].event_type == "runtime_error"  # type: ignore[attr-defined]
+    assert "hook failed" in sink.published[0][0].payload["traceback"]  # type: ignore[attr-defined]
+    assert sink.published[1][0].event_type == "tool_call"  # type: ignore[attr-defined]
 
 
 def test_relay_updates_camel_and_snake_ui() -> None:
@@ -167,6 +189,33 @@ def test_browser_input_poller_poll_once(monkeypatch: Any) -> None:
     assert asyncio.run(BrowserInputPoller(harn, None).poll_once()) is False
     responses.append({"message": "lost"})
     assert asyncio.run(BrowserInputPoller(object(), "http://x").poll_once()) is False
+
+
+def test_browser_input_poller_reports_delivery_exceptions(monkeypatch: Any) -> None:
+    sink = FakeSink()
+    relay = GibsonRelay(sink)
+    poller = BrowserInputPoller(FailingHarn(), "http://x/input/next", diagnostic_relay=relay)
+
+    async def fake_fetch(_endpoint: str, _timeout: float) -> dict[str, object]:
+        return {"id": "input-1", "message": "first", "deliverAs": "steer"}
+
+    monkeypatch.setattr("harn_gibson.extension.fetch_browser_input", fake_fetch)
+
+    assert asyncio.run(poller.poll_once()) is False
+    assert sink.published[0][0].event_type == "runtime_error"  # type: ignore[attr-defined]
+    assert "delivery failed" in sink.published[0][0].payload["message"]  # type: ignore[attr-defined]
+    assert "input=input-1" in sink.published[0][0].payload["details"]  # type: ignore[attr-defined]
+
+
+def test_browser_input_poller_ignores_delivery_exception_without_relay(monkeypatch: Any) -> None:
+    poller = BrowserInputPoller(FailingHarn(), "http://x/input/next")
+
+    async def fake_fetch(_endpoint: str, _timeout: float) -> dict[str, object]:
+        return {"id": "input-1", "message": "first", "deliverAs": "steer"}
+
+    monkeypatch.setattr("harn_gibson.extension.fetch_browser_input", fake_fetch)
+
+    assert asyncio.run(poller.poll_once()) is False
 
 
 def test_browser_input_poller_start_stop_and_run(monkeypatch: Any) -> None:

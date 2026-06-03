@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from harn_gibson.events import GibsonEvent
+from harn_gibson.events import GibsonEvent, diagnostic_event
 from harn_gibson.scene import (
     SceneAnimation,
     SceneEngine,
@@ -75,7 +75,7 @@ def test_scene_engine_applies_all_mutations_and_trims_log() -> None:
 
     engine.apply([SceneMutation("reset_scene")])
     assert engine.state.revision == 1
-    assert set(engine.state.primitives) >= {"stage", "status", "event-feed"}
+    assert set(engine.state.primitives) >= {"stage", "status", "event-feed", "trace-log"}
 
 
 def test_scene_engine_validation_errors() -> None:
@@ -142,6 +142,34 @@ def test_default_mutations_and_scene_update_payload() -> None:
     assert [mutation.op for mutation in mutations] == ["patch", "append_log", "patch", "start_animation"]
     assert scene.primitives["status"].props["text"] == "after:tool_result"
     assert scene.primitives["decision-log"].props["text"] == decisions
+    assert scene.primitives["trace-log"].props["text"] == []
     assert scene.animations["pulse-4"].props["tone"] == "magenta"
     assert payload["event"]["eventType"] == "tool_result"
     assert payload["mutations"][3]["animation"]["targetId"] == "scan-grid"
+
+
+def test_default_mutations_capture_tracebacks() -> None:
+    event = diagnostic_event(
+        5,
+        event_type="runtime_error",
+        severity="error",
+        message="failed",
+        details="during delivery",
+        traceback_text="Traceback...",
+        timestamp_ms=500,
+    )
+    mutations = default_mutations_for_event(event)
+    scene = SceneEngine().apply(mutations)
+
+    assert [mutation.op for mutation in mutations] == ["patch", "append_log", "patch", "start_animation", "patch"]
+    trace = scene.primitives["trace-log"].props["text"]
+    assert trace == [
+        {
+            "sequence": 5,
+            "eventType": "runtime_error",
+            "title": "Runtime error",
+            "message": "failed",
+            "details": "during delivery",
+            "traceback": "Traceback...",
+        }
+    ]

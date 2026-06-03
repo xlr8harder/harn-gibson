@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 from harn_gibson.events import (
     GibsonEvent,
+    diagnostic_event,
     phase_for_event,
     summarize_event,
     title_for_event,
@@ -108,6 +109,7 @@ def test_summarize_event_variants() -> None:
     )
     assert summarize_event("session_start", {"reason": "reload"}) == "session start: reload"
     assert summarize_event("session_shutdown", {"reason": "quit"}) == "session shutdown: quit"
+    assert summarize_event("runtime_error", {"severity": "error", "message": "boom"}) == "error: boom"
     assert summarize_event("unknown", {"items": [1, 2, 3]}) == "{items}"
     assert summarize_event("unknown", ["a", "b"]) == "[2 items]"
     assert summarize_event("unknown", "scalar") == "scalar"
@@ -149,3 +151,27 @@ def test_long_scalar_summary_is_clipped() -> None:
     assert summarize_event("unknown", {"value": "x" * 200}) == "{value}"
     event = GibsonEvent.from_raw({"type": "unknown", "payload": "x" * 200}, 2)
     assert event.summary == "{type, payload}"
+
+
+def test_diagnostic_event_payload() -> None:
+    event = diagnostic_event(
+        9,
+        message="boom",
+        event_type="runtime_error",
+        severity="error",
+        details="details",
+        traceback_text="trace",
+        timestamp_ms=99,
+    )
+
+    assert event.sequence == 9
+    assert event.phase == "after"
+    assert event.title == "Runtime error"
+    assert event.summary == "error: boom"
+    assert event.payload == {
+        "type": "runtime_error",
+        "severity": "error",
+        "message": "boom",
+        "details": "details",
+        "traceback": "trace",
+    }

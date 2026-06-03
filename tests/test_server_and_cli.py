@@ -16,10 +16,12 @@ from harn_gibson.server import (
     browser_input_event_payload,
     build_state_from_env,
     create_server,
+    diagnostic_event_payload,
     enqueue_browser_input,
     event_from_payload,
     format_sse,
     health_payload,
+    publish_diagnostic_event,
     submit_event_to_renderer,
 )
 
@@ -49,6 +51,7 @@ def test_http_server_routes() -> None:
     try:
         assert request_text(f"{base}/")[0:2] == (200, "text/html; charset=utf-8")
         assert "GIBSON LINK" in request_text(f"{base}/index.html")[2]
+        assert "Tracebacks" in request_text(f"{base}/index.html")[2]
         assert request_text(f"{base}/assets/app.css")[1] == "text/css; charset=utf-8"
         assert request_text(f"{base}/assets/app.js")[1] == "application/javascript; charset=utf-8"
         health = json.loads(request_text(f"{base}/healthz")[2])
@@ -161,6 +164,32 @@ def test_apply_event_to_scene_and_event_from_payload() -> None:
     assert update["decisions"] == [{"block": True, "reason": "no"}]
     assert update["scene"]["revision"] == 1
     assert submit_result.scene_revision == 2
+
+
+def test_diagnostic_event_payload_and_publish() -> None:
+    state = GibsonServerState()
+    payload = diagnostic_event_payload(
+        10,
+        event_type="runtime_error",
+        severity="error",
+        message="delivery failed",
+        details="input=input-1",
+        traceback_text="Traceback...",
+    )
+    result = publish_diagnostic_event(
+        state,
+        10,
+        event_type="runtime_error",
+        severity="error",
+        message="delivery failed",
+        details="input=input-1",
+        traceback_text="Traceback...",
+    )
+
+    assert payload["eventType"] == "runtime_error"
+    assert payload["payload"]["traceback"] == "Traceback..."
+    assert result.scene_revision == 1
+    assert state.scene.state.primitives["trace-log"].props["text"][0]["details"] == "input=input-1"
 
 
 def test_event_from_payload_validation() -> None:
@@ -277,6 +306,8 @@ def test_cli_parser_and_run(monkeypatch: Any, capsys: Any) -> None:
     assert parsed_dogfood.command == "dogfood"
     assert parsed_dogfood.browser is False
     assert parsed_dogfood.harn_args == ["--", "-p", "hello"]
+    parsed_auth = parser.parse_args(["import-codex-auth", "--codex-auth", "codex.json", "--harn-auth", "harn.json"])
+    assert parsed_auth.command == "import-codex-auth"
     assert cli.run(["extension-path"]) == 0
     assert capsys.readouterr().out.strip().endswith("extension.py")
 
@@ -295,13 +326,8 @@ def test_cli_dogfood_launches_display_browser_and_harn(monkeypatch: Any, capsys:
     server_calls: list[str] = []
     browser_urls: list[str] = []
     harn_calls: list[tuple[list[str], dict[str, str]]] = []
-
-    class FakePipeline:
-        def stop(self) -> None:
-            server_calls.append("pipeline.stop")
-
-    class FakeState:
-        pipeline = FakePipeline()
+    state = GibsonServerState()
+    state.pipeline.stop = lambda: server_calls.append("pipeline.stop")  # type: ignore[method-assign]
 
     class FakeServer:
         server_address = ("127.0.0.1", 9876)
@@ -319,12 +345,28 @@ def test_cli_dogfood_launches_display_browser_and_harn(monkeypatch: Any, capsys:
         harn_calls.append((command, env))
         return 23
 
-    monkeypatch.setattr("harn_gibson.server.build_state_from_env", lambda: FakeState())
+    monkeypatch.setattr("harn_gibson.server.build_state_from_env", lambda: state)
     monkeypatch.setattr("harn_gibson.server.create_server", lambda _host, _port, _state: FakeServer())
     monkeypatch.setattr(cli.webbrowser, "open", lambda url: browser_urls.append(url))
     monkeypatch.setattr(cli.subprocess, "call", fake_call)
 
-    assert cli.run(["dogfood", "--port", "0", "--harn-bin", "harn-dev", "--", "-p", "hello"]) == 23
+    assert (
+        cli.run(
+            [
+                "dogfood",
+                "--port",
+                "0",
+                "--harn-bin",
+                "harn-dev",
+                "--no-codex-auth-import",
+                "--no-hold-on-error",
+                "--",
+                "-p",
+                "hello",
+            ]
+        )
+        == 23
+    )
     assert browser_urls == ["http://127.0.0.1:9876"]
     assert harn_calls[0][0] == ["harn-dev", "-p", "hello"]
     assert harn_calls[0][1]["HARN_GIBSON_ENDPOINT"] == "http://127.0.0.1:9876/events"
@@ -336,12 +378,7 @@ def test_cli_dogfood_launches_display_browser_and_harn(monkeypatch: Any, capsys:
 
 
 def test_cli_dogfood_reports_missing_harn(monkeypatch: Any, capsys: Any) -> None:
-    class FakePipeline:
-        def stop(self) -> None:
-            return None
-
-    class FakeState:
-        pipeline = FakePipeline()
+    state = GibsonServerState()
 
     class FakeServer:
         server_address = ("127.0.0.1", 9877)
@@ -360,11 +397,123 @@ def test_cli_dogfood_reports_missing_harn(monkeypatch: Any, capsys: Any) -> None
         raise FileNotFoundError
 
     opened: list[str] = []
-    monkeypatch.setattr("harn_gibson.server.build_state_from_env", lambda: FakeState())
+    monkeypatch.setattr("harn_gibson.server.build_state_from_env", lambda: state)
     monkeypatch.setattr("harn_gibson.server.create_server", lambda _host, _port, _state: FakeServer())
     monkeypatch.setattr(cli.webbrowser, "open", lambda url: opened.append(url))
     monkeypatch.setattr(cli.subprocess, "call", fake_call)
 
-    assert cli.run_dogfood(harn_bin="missing-harn", launch_browser=False) == 127
+    assert cli.run_dogfood(harn_bin="missing-harn", launch_browser=False, codex_auth_import=False) == 127
     assert opened == []
     assert "harn executable not found: missing-harn" in capsys.readouterr().err
+
+
+def test_cli_import_codex_auth_command(monkeypatch: Any, capsys: Any) -> None:
+    class Result:
+        available = True
+        message = "imported"
+
+    calls: list[tuple[str, str]] = []
+
+    def fake_import(source: str, target: str) -> Result:
+        calls.append((source, target))
+        return Result()
+
+    monkeypatch.setattr(cli, "import_codex_auth", fake_import)
+
+    assert cli.run(["import-codex-auth", "--codex-auth", "codex.json", "--harn-auth", "harn.json"]) == 0
+    assert calls == [("codex.json", "harn.json")]
+    assert capsys.readouterr().out.strip() == "imported"
+
+
+def test_cli_dogfood_imports_auth_and_publishes_diagnostics(monkeypatch: Any, capsys: Any) -> None:
+    harn_calls: list[list[str]] = []
+    state = GibsonServerState()
+
+    class FakeServer:
+        server_address = ("127.0.0.1", 9888)
+
+        def serve_forever(self) -> None:
+            return None
+
+        def shutdown(self) -> None:
+            return None
+
+        def server_close(self) -> None:
+            return None
+
+    class Result:
+        available = True
+        message = "auth ready"
+
+    def fake_call(command: list[str], env: dict[str, str]) -> int:
+        harn_calls.append(command)
+        assert env["HARN_GIBSON_ENDPOINT"] == "http://127.0.0.1:9888/events"
+        return 0
+
+    monkeypatch.setattr("harn_gibson.server.build_state_from_env", lambda: state)
+    monkeypatch.setattr("harn_gibson.server.create_server", lambda _host, _port, _state: FakeServer())
+    monkeypatch.setattr(cli.webbrowser, "open", lambda _url: None)
+    monkeypatch.setattr(cli.subprocess, "call", fake_call)
+    monkeypatch.setattr(cli, "import_codex_auth", lambda environ=None: Result())
+
+    assert cli.run_dogfood(harn_args=["--", "-p", "hello"], hold_on_error=False) == 0
+    assert harn_calls == [["harn", "-p", "hello"]]
+    assert state.scene.state.log[-1]["eventType"] == "auth_import"
+    assert "auth ready" in capsys.readouterr().err
+
+
+def test_cli_dogfood_holds_display_on_harn_error(monkeypatch: Any) -> None:
+    state = GibsonServerState()
+    held: list[str] = []
+
+    class FakeServer:
+        server_address = ("127.0.0.1", 9890)
+
+        def serve_forever(self) -> None:
+            return None
+
+        def shutdown(self) -> None:
+            return None
+
+        def server_close(self) -> None:
+            return None
+
+    monkeypatch.setattr("harn_gibson.server.build_state_from_env", lambda: state)
+    monkeypatch.setattr("harn_gibson.server.create_server", lambda _host, _port, _state: FakeServer())
+    monkeypatch.setattr(cli.webbrowser, "open", lambda _url: None)
+    monkeypatch.setattr(cli.subprocess, "call", lambda _command, env: 2)
+    monkeypatch.setattr(cli, "_hold_display_on_error", lambda url: held.append(url))
+
+    assert cli.run_dogfood(codex_auth_import=False) == 2
+    assert held == ["http://127.0.0.1:9890"]
+    assert state.scene.state.log[-1]["summary"] == "error: harn exited with code 2"
+
+
+def test_cli_dogfood_holds_display_on_missing_harn(monkeypatch: Any) -> None:
+    state = GibsonServerState()
+    held: list[str] = []
+
+    class FakeServer:
+        server_address = ("127.0.0.1", 9891)
+
+        def serve_forever(self) -> None:
+            return None
+
+        def shutdown(self) -> None:
+            return None
+
+        def server_close(self) -> None:
+            return None
+
+    def missing(_command: list[str], env: dict[str, str]) -> int:
+        raise FileNotFoundError
+
+    monkeypatch.setattr("harn_gibson.server.build_state_from_env", lambda: state)
+    monkeypatch.setattr("harn_gibson.server.create_server", lambda _host, _port, _state: FakeServer())
+    monkeypatch.setattr(cli.webbrowser, "open", lambda _url: None)
+    monkeypatch.setattr(cli.subprocess, "call", missing)
+    monkeypatch.setattr(cli, "_hold_display_on_error", lambda url: held.append(url))
+
+    assert cli.run_dogfood(harn_bin="missing", codex_auth_import=False) == 127
+    assert held == ["http://127.0.0.1:9891"]
+    assert state.scene.state.log[-1]["eventType"] == "harn_exit"
