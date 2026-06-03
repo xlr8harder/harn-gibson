@@ -14,6 +14,8 @@ The current display agent is deterministic. The later LLM-driven visualization l
 
 There is no model-backed renderer agent yet. Events pass through a routing layer before rendering: normal events become renderer requests, streaming assistant deltas update a local `text_stream` primitive, and debug-only events can bypass renderer execution. The display server also exposes `/catalog`, a generic primitive/effect catalog for future renderer prompts.
 
+Renderer implementations can stay simple with `render(requests, scene)`, or opt into `render_with_context(requests, scene, context)` to receive compact project metadata, scene state, catalog entries, recent agent context, and recent visualization history. See [docs/renderer-agent.md](docs/renderer-agent.md) for the context and compaction contract.
+
 ## Development
 
 ```bash

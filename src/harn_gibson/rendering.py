@@ -9,6 +9,7 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Literal, Protocol
 
+from harn_gibson.catalog import VisualCatalog, default_visual_catalog
 from harn_gibson.events import GibsonEvent
 from harn_gibson.scene import SceneEngine, SceneMutation, SceneState, default_mutations_for_event, scene_update_payload
 from harn_gibson.sinks import EventBuffer
@@ -116,6 +117,110 @@ class RenderInputBatch:
 
 
 @dataclass(frozen=True, slots=True)
+class RendererContextConfig:
+    project_name: str = "harn-gibson"
+    display_style: str = "gibson"
+    compaction_interval_events: int = 40
+    max_recent_plans: int = 6
+    max_recent_log_entries: int = 12
+    max_prop_preview_chars: int = 240
+
+
+@dataclass(frozen=True, slots=True)
+class RendererContext:
+    mode: Literal["rolling", "compaction"]
+    project: dict[str, Any]
+    catalog: dict[str, Any]
+    scene: dict[str, Any]
+    render_input: dict[str, Any]
+    recent_agent_context: tuple[str, ...] = ()
+    visualization_context: tuple[dict[str, Any], ...] = ()
+    compaction: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "schema": "harn-gibson.renderer-context.v1",
+            "mode": self.mode,
+            "project": self.project,
+            "catalog": self.catalog,
+            "scene": self.scene,
+            "renderInput": self.render_input,
+            "recentAgentContext": list(self.recent_agent_context),
+            "visualizationContext": list(self.visualization_context),
+            "compaction": self.compaction,
+        }
+
+
+class RendererContextBuilder:
+    """Builds compact renderer-agent context without replaying the whole session."""
+
+    def __init__(self, config: RendererContextConfig | None = None) -> None:
+        self.config = config or RendererContextConfig()
+        self.events_since_compaction = 0
+        self._history: list[dict[str, Any]] = []
+        self._last_context_mode: Literal["rolling", "compaction"] | None = None
+
+    def build(
+        self,
+        batch: RenderInputBatch,
+        scene: SceneState,
+        catalog: VisualCatalog,
+        *,
+        force_compaction: bool = False,
+    ) -> RendererContext:
+        mode: Literal["rolling", "compaction"] = (
+            "compaction" if force_compaction or self._should_compact() else "rolling"
+        )
+        self._last_context_mode = mode
+        return RendererContext(
+            mode=mode,
+            project=self._project_metadata(),
+            catalog=_catalog_context(catalog, full=mode == "compaction"),
+            scene=_scene_context(scene, full=mode == "compaction", config=self.config),
+            render_input=batch.to_dict(),
+            recent_agent_context=_recent_agent_context(batch),
+            visualization_context=tuple(self._history[-self.config.max_recent_plans :]),
+            compaction={
+                "eventsSinceCompaction": self.events_since_compaction,
+                "intervalEvents": max(1, self.config.compaction_interval_events),
+                "reason": "initial or interval compaction" if mode == "compaction" else "rolling update",
+            },
+        )
+
+    def record_plan(self, plan: RenderPlan) -> None:
+        self._history.append(_render_plan_summary(plan))
+        if len(self._history) > self.config.max_recent_plans:
+            del self._history[: len(self._history) - self.config.max_recent_plans]
+        event_count = len(plan.requests)
+        if self._last_context_mode == "compaction":
+            self.events_since_compaction = event_count
+        else:
+            self.events_since_compaction += event_count
+        self._last_context_mode = None
+
+    def snapshot_history(self) -> tuple[dict[str, Any], ...]:
+        return tuple(self._history)
+
+    def _should_compact(self) -> bool:
+        return self.events_since_compaction == 0 or self.events_since_compaction >= max(
+            1, self.config.compaction_interval_events
+        )
+
+    def _project_metadata(self) -> dict[str, Any]:
+        return {
+            "name": self.config.project_name,
+            "displayStyle": self.config.display_style,
+            "schemas": {
+                "catalog": "harn-gibson.visual-catalog.v1",
+                "rendererContext": "harn-gibson.renderer-context.v1",
+                "renderInput": "harn-gibson.render-input.v1",
+                "renderPlan": "harn-gibson.render-plan.v1",
+                "scene": "harn-gibson.scene.v1",
+            },
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class RenderStep:
     mutations: tuple[SceneMutation, ...]
     delay_ms: int = 0
@@ -158,6 +263,15 @@ class SceneRenderer(Protocol):
     def render(self, requests: Sequence[RenderRequest], scene: SceneState) -> RenderPlan: ...
 
 
+class ContextualSceneRenderer(Protocol):
+    def render_with_context(
+        self,
+        requests: Sequence[RenderRequest],
+        scene: SceneState,
+        context: RendererContext,
+    ) -> RenderPlan: ...
+
+
 @dataclass(slots=True)
 class DeterministicSceneRenderer:
     """Default renderer-agent: convert each event to deterministic scene mutations."""
@@ -198,6 +312,8 @@ class RenderPipeline:
         scene: SceneEngine,
         buffer: EventBuffer,
         renderer: SceneRenderer | None = None,
+        catalog: VisualCatalog | None = None,
+        context_builder: RendererContextBuilder | None = None,
         mode: RenderMode = "blocking",
         batch_window_ms: int = 40,
         sleep_fn: Callable[[float], None] = time.sleep,
@@ -207,6 +323,8 @@ class RenderPipeline:
         self.scene = scene
         self.buffer = buffer
         self.renderer = renderer or DeterministicSceneRenderer()
+        self.catalog = catalog or default_visual_catalog()
+        self.context_builder = context_builder or RendererContextBuilder()
         self.mode = mode
         self.batch_window_ms = max(0, batch_window_ms)
         self._sleep = sleep_fn
@@ -291,7 +409,12 @@ class RenderPipeline:
             return []
         with self._lock:
             batch = RenderInputBatch.from_requests(requests, route=requests[-1].route)
-            plan = self.renderer.render(batch.requests, self.scene.state)
+            context = self.context_builder.build(batch, self.scene.state, self.catalog)
+            render_with_context = getattr(self.renderer, "render_with_context", None)
+            if callable(render_with_context):
+                plan = render_with_context(batch.requests, self.scene.state, context)
+            else:
+                plan = self.renderer.render(batch.requests, self.scene.state)
             return self._apply_plan(plan)
 
     def _apply_plan(self, plan: RenderPlan) -> list[dict[str, Any]]:
@@ -304,7 +427,107 @@ class RenderPipeline:
             update = render_update_payload(plan, step, index, request, scene)
             self.buffer.publish(update)
             updates.append(update)
+        self.context_builder.record_plan(plan)
         return updates
+
+
+def _catalog_context(catalog: VisualCatalog, *, full: bool) -> dict[str, Any]:
+    if full:
+        return catalog.to_dict()
+    return {
+        "schema": "harn-gibson.visual-catalog.v1",
+        "mode": "summary",
+        "primitives": [_catalog_entry_summary(entry) for entry in catalog.primitives],
+        "effects": [_catalog_entry_summary(entry) for entry in catalog.effects],
+    }
+
+
+def _catalog_entry_summary(entry: Any) -> dict[str, Any]:
+    return {
+        "id": entry.id,
+        "kind": entry.kind,
+        "tags": list(entry.tags),
+    }
+
+
+def _scene_context(scene: SceneState, *, full: bool, config: RendererContextConfig) -> dict[str, Any]:
+    if full:
+        return scene.to_dict()
+    return {
+        "schema": "harn-gibson.scene-summary.v1",
+        "revision": scene.revision,
+        "primitiveCount": len(scene.primitives),
+        "animationCount": len(scene.animations),
+        "primitives": [
+            _primitive_summary(primitive, config.max_prop_preview_chars)
+            for primitive in sorted(scene.primitives.values(), key=lambda item: item.id)
+        ],
+        "activeAnimations": [
+            _animation_summary(animation) for animation in sorted(scene.animations.values(), key=lambda item: item.id)
+        ],
+        "recentLog": list(scene.log[-config.max_recent_log_entries :]),
+    }
+
+
+def _primitive_summary(primitive: Any, max_chars: int) -> dict[str, Any]:
+    props_preview = {
+        key: _clip_preview(value, max_chars)
+        for key, value in sorted(primitive.props.items())
+        if key in {"text", "title", "phase", "tone", "streamId", "isStreaming"}
+    }
+    return {
+        "id": primitive.id,
+        "kind": primitive.kind,
+        "region": primitive.region,
+        "propKeys": sorted(primitive.props),
+        "propsPreview": props_preview,
+        "children": list(primitive.children),
+    }
+
+
+def _animation_summary(animation: Any) -> dict[str, Any]:
+    return {
+        "id": animation.id,
+        "targetId": animation.target_id,
+        "kind": animation.kind,
+        "startedAtMs": animation.started_at_ms,
+        "durationMs": animation.duration_ms,
+        "loop": animation.loop,
+    }
+
+
+def _clip_preview(value: Any, max_chars: int) -> Any:
+    if isinstance(value, str):
+        return value if len(value) <= max_chars else f"{value[: max(0, max_chars - 3)]}..."
+    if isinstance(value, list):
+        return [_clip_preview(item, max_chars) for item in value[:3]]
+    if isinstance(value, dict):
+        return {str(key): _clip_preview(child, max_chars) for key, child in list(value.items())[:5]}
+    return value
+
+
+def _recent_agent_context(batch: RenderInputBatch) -> tuple[str, ...]:
+    seen: set[str] = set()
+    recent = []
+    for request in batch.requests:
+        for item in (*request.event.recent_context, *request.event.visualization_context):
+            if item not in seen:
+                seen.add(item)
+                recent.append(item)
+    return tuple(recent)
+
+
+def _render_plan_summary(plan: RenderPlan) -> dict[str, Any]:
+    mutation_count = sum(len(step.mutations) for step in plan.steps)
+    return {
+        "renderer": plan.metadata.get("renderer", "unknown"),
+        "requestCount": len(plan.requests),
+        "stepCount": len(plan.steps),
+        "mutationCount": mutation_count,
+        "eventTypes": [request.event.event_type for request in plan.requests],
+        "routes": sorted({request.route for request in plan.requests}),
+        "metadata": plan.metadata,
+    }
 
 
 def render_update_payload(

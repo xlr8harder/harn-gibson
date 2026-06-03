@@ -59,6 +59,7 @@ class GibsonServerState:
             scene=self.scene,
             buffer=self.buffer,
             renderer=self.renderer,
+            catalog=self.catalog,
             mode=self.render_mode,
             batch_window_ms=self.render_batch_window_ms,
         )

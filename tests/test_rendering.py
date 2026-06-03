@@ -8,6 +8,10 @@ import pytest
 from harn_gibson.events import GibsonEvent
 from harn_gibson.rendering import (
     DeterministicSceneRenderer,
+    RendererContext,
+    RendererContextBuilder,
+    RendererContextConfig,
+    RenderInputBatch,
     RenderPipeline,
     RenderPlan,
     RenderRequest,
@@ -19,7 +23,7 @@ from harn_gibson.rendering import (
     render_accept_payload,
     render_update_payload,
 )
-from harn_gibson.scene import SceneEngine, SceneMutation
+from harn_gibson.scene import SceneAnimation, SceneEngine, SceneMutation, ScenePrimitive
 from harn_gibson.sinks import EventBuffer
 
 
@@ -74,6 +78,96 @@ def test_deterministic_renderer_creates_one_step_per_request() -> None:
     assert plan.steps[0].event_index == 0
     assert plan.steps[1].event_index == 1
     assert plan.steps[0].mutations[0].target_id == "status"
+
+
+def test_renderer_context_builder_compaction_rolling_and_history() -> None:
+    builder = RendererContextBuilder(
+        RendererContextConfig(
+            compaction_interval_events=2,
+            max_recent_plans=1,
+            max_recent_log_entries=1,
+            max_prop_preview_chars=8,
+        )
+    )
+    scene = SceneEngine()
+    scene.apply(
+        (
+            SceneMutation("patch", target_id="status", props={"text": "connecting-to-gibson"}),
+            SceneMutation("append_log", entry={"eventType": "old"}),
+            SceneMutation("append_log", entry={"eventType": "new"}),
+            SceneMutation(
+                "upsert",
+                primitive=ScenePrimitive(
+                    "assistant-stream",
+                    "text_stream",
+                    "stage",
+                    {
+                        "text": ["abcdefghijklmnopqrstuvwxyz", {"nested": "zyxwvutsrqponmlk"}],
+                        "isStreaming": True,
+                    },
+                ),
+            ),
+            SceneMutation(
+                "start_animation",
+                animation=SceneAnimation("fly-1", "scan-grid", "flythrough", 100, 900),
+            ),
+        )
+    )
+    context_event = GibsonEvent.from_raw(
+        {"type": "tool_call", "toolName": "bash"},
+        9,
+        timestamp_ms=900,
+        recent_context=("agent saw tool call",),
+        visualization_context=("grid was pulsing", "agent saw tool call"),
+    )
+    batch = RenderInputBatch.from_requests((RenderRequest(context_event),))
+
+    compaction = builder.build(batch, scene.state, pipeline_catalog())
+    assert isinstance(compaction, RendererContext)
+    assert compaction.mode == "compaction"
+    assert compaction.to_dict()["schema"] == "harn-gibson.renderer-context.v1"
+    assert compaction.project["schemas"]["rendererContext"] == "harn-gibson.renderer-context.v1"
+    assert compaction.catalog["schema"] == "harn-gibson.visual-catalog.v1"
+    assert compaction.scene["schema"] == "harn-gibson.scene.v1"
+    assert compaction.recent_agent_context == ("agent saw tool call", "grid was pulsing")
+
+    builder.record_plan(
+        RenderPlan(
+            batch.requests,
+            (RenderStep((SceneMutation("append_log", entry={"plan": 1}),),),),
+            {"renderer": "first"},
+        )
+    )
+    rolling = builder.build(batch, scene.state, pipeline_catalog())
+    assert rolling.mode == "rolling"
+    assert rolling.catalog["mode"] == "summary"
+    assert rolling.scene["schema"] == "harn-gibson.scene-summary.v1"
+    assert rolling.scene["animationCount"] == 1
+    assert rolling.scene["recentLog"] == [{"eventType": "new"}]
+    stream_summary = next(item for item in rolling.scene["primitives"] if item["id"] == "assistant-stream")
+    assert stream_summary["propsPreview"]["text"] == ["abcde...", {"nested": "zyxwv..."}]
+    assert stream_summary["propsPreview"]["isStreaming"] is True
+    assert rolling.visualization_context[0]["renderer"] == "first"
+    assert rolling.visualization_context[0]["mutationCount"] == 1
+
+    builder.record_plan(RenderPlan(batch.requests, (), {"renderer": "second"}))
+    interval_compaction = builder.build(batch, scene.state, pipeline_catalog())
+    assert interval_compaction.mode == "compaction"
+    assert builder.snapshot_history() == (
+        {
+            "renderer": "second",
+            "requestCount": 1,
+            "stepCount": 0,
+            "mutationCount": 0,
+            "eventTypes": ["tool_call"],
+            "routes": ["renderer_agent"],
+            "metadata": {"renderer": "second"},
+        },
+    )
+
+
+def pipeline_catalog():
+    return RenderPipeline(scene=SceneEngine(), buffer=EventBuffer()).catalog
 
 
 def test_blocking_pipeline_applies_and_publishes_updates() -> None:
@@ -165,6 +259,38 @@ def test_pipeline_passes_timed_batch_to_renderer() -> None:
     }
     assert updates[0]["renderInput"]["timeline"] == {"startMs": 10, "endMs": 40, "durationMs": 30}
     assert updates[0]["event"]["sequence"] == 4
+
+
+def test_pipeline_calls_contextual_renderer_with_renderer_context() -> None:
+    contexts: list[RendererContext] = []
+
+    class ContextRenderer:
+        def render_with_context(
+            self,
+            requests: tuple[RenderRequest, ...],
+            _scene: object,
+            context: RendererContext,
+        ) -> RenderPlan:
+            contexts.append(context)
+            return RenderPlan(
+                tuple(requests),
+                (RenderStep((SceneMutation("append_log", entry={"context": context.mode}),), event_index=0),),
+                {"renderer": "contextual", "contextMode": context.mode},
+            )
+
+    pipeline = RenderPipeline(
+        scene=SceneEngine(),
+        buffer=EventBuffer(),
+        renderer=ContextRenderer(),  # type: ignore[arg-type]
+        mode="blocking",
+    )
+
+    result = pipeline.submit(RenderRequest(event(1, "tool_call")))
+
+    assert contexts[0].mode == "compaction"
+    assert contexts[0].render_input["requests"][0]["event"]["eventType"] == "tool_call"
+    assert result.updates[0]["renderPlan"]["metadata"] == {"renderer": "contextual", "contextMode": "compaction"}
+    assert pipeline.context_builder.snapshot_history()[0]["renderer"] == "contextual"
 
 
 def test_pipeline_async_worker_continues_until_stop_sentinel() -> None:

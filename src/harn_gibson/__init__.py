@@ -5,7 +5,11 @@ from harn_gibson.catalog import CatalogEntry, VisualCatalog, default_visual_cata
 from harn_gibson.events import EventPhase, GibsonEvent, phase_for_event, summarize_event, to_jsonable
 from harn_gibson.hooks import HookDecision, HookDispatcher, load_hook_module, result_for_harn
 from harn_gibson.rendering import (
+    ContextualSceneRenderer,
     DeterministicSceneRenderer,
+    RendererContext,
+    RendererContextBuilder,
+    RendererContextConfig,
     RenderInputBatch,
     RenderPipeline,
     RenderPlan,
@@ -39,6 +43,7 @@ from harn_gibson.scene import (
 __all__ = [
     "CatalogEntry",
     "BrowserScreenshotResult",
+    "ContextualSceneRenderer",
     "EventPhase",
     "EventRouteRule",
     "GibsonEvent",
@@ -52,6 +57,9 @@ __all__ = [
     "RenderRequest",
     "RenderStep",
     "RenderSubmitResult",
+    "RendererContext",
+    "RendererContextBuilder",
+    "RendererContextConfig",
     "RendererEventInterest",
     "ReplayResult",
     "ReplayStepResult",

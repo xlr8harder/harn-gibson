@@ -105,12 +105,16 @@ The renderer agent should not receive a full new transcript on every event. Use 
 - Recent harn events: the newest event batch plus short summaries of recent prior events.
 - Recent visualization context: recent render plans and active animations/effects.
 
+The executable fixture for this is `RendererContext`. A renderer that only implements `render(requests, scene)` receives the existing deterministic-compatible call shape. A renderer that implements `render_with_context(requests, scene, context)` receives a `harn-gibson.renderer-context.v1` object with project metadata, catalog data, scene context, render input, recent agent context, visualization history, and compaction metadata.
+
 After enough events or token growth, do a renderer compaction:
 
 1. Send the full current `SceneState`.
 2. Send stable project metadata.
 3. Send a compact summary of prior render intent and visual motifs.
 4. Reset the short rolling context and continue with new event batches.
+
+The first renderer context is a compaction context. Later contexts are rolling summaries until the configured event interval is reached, at which point the next context includes the full scene again. This gives a future model renderer a predictable place to refresh state without forcing every event batch to resend the whole display state.
 
 This mirrors harn session compaction, but it is separate from the primary agent conversation. The renderer agent owns visual continuity; harn owns task state.
 
