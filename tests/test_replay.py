@@ -13,6 +13,8 @@ from harn_gibson import (
     ReplayRendererContext,
     ReplayResult,
     ReplayStepResult,
+    renderer_prompt_from_context,
+    renderer_prompt_messages_payload,
     replay_frame_review_html,
     replay_render_intents_from_result,
     replay_render_intents_review_html,
@@ -42,6 +44,8 @@ from harn_gibson.replay import (
     replay_data_from_event_log,
     replay_frame_screenshot_manifest,
     replay_renderer_contexts_from_result,
+    replay_renderer_prompts_from_result,
+    replay_renderer_prompts_review_html,
     run_replay_suite,
     write_replay_baseline,
     write_replay_frame_review_html,
@@ -49,6 +53,8 @@ from harn_gibson.replay import (
     write_replay_render_intents,
     write_replay_render_intents_review_html,
     write_replay_renderer_contexts,
+    write_replay_renderer_prompts,
+    write_replay_renderer_prompts_review_html,
     write_replay_result,
     write_replay_review_bundle,
     write_replay_timeline,
@@ -68,6 +74,29 @@ def event_payload(
 ) -> dict[str, object]:
     raw = {"type": event_type, **dict(payload or {})}
     return GibsonEvent.from_raw(raw, sequence, source="unit", timestamp_ms=1000 + sequence).to_dict()
+
+
+def test_renderer_prompt_metadata_handles_sparse_context() -> None:
+    prompt = renderer_prompt_from_context(
+        {
+            "project": "bad",
+            "renderInput": {
+                "timeline": {"startMs": None, "endMs": "bad", "durationMs": "12"},
+                "requests": [
+                    {"event": {"eventType": "tool_call"}},
+                    {"event": {"eventType": "tool_call"}},
+                    {"route": "direct_scene", "event": {"eventType": "browser_input"}},
+                ],
+            },
+        },
+        context_index=3,
+    )
+
+    assert prompt["contextIndex"] == 3
+    assert prompt["metadata"]["eventTypes"] == ["tool_call", "browser_input"]
+    assert prompt["metadata"]["routes"] == ["renderer_agent", "direct_scene"]
+    assert prompt["metadata"]["timeline"] == {"startMs": 0, "endMs": 0, "durationMs": 12}
+    assert prompt["metadata"]["displayStyle"] == "gibson"
 
 
 def test_replay_event_steps_file_io_and_writers(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -143,6 +172,48 @@ def test_replay_event_steps_file_io_and_writers(tmp_path: Path, monkeypatch: pyt
     assert context_payload["schema"] == "harn-gibson.replay-renderer-contexts.v1"
     assert context_payload["contexts"][0]["context"]["catalog"]["schema"] == "harn-gibson.visual-catalog.v1"
     assert context_result.to_dict()["rendererContexts"][0]["index"] == 0
+    prompts_path = tmp_path / "out" / "renderer-prompts.json"
+    prompts_review_path = tmp_path / "out" / "renderer-prompts.html"
+    prompts = replay_renderer_prompts_from_result(context_result)
+    write_replay_renderer_prompts(prompts_path, context_result)
+    write_replay_renderer_prompts_review_html(prompts_review_path, prompts)
+    prompts_payload = json.loads(prompts_path.read_text(encoding="utf-8"))
+    prompts_review = prompts_review_path.read_text(encoding="utf-8")
+    prompt = prompts["prompts"][0]
+    prompt_messages = renderer_prompt_messages_payload(context_result.renderer_contexts[0].context)
+
+    assert prompts["schema"] == "harn-gibson.replay-renderer-prompts.v1"
+    assert prompts["promptCount"] == 1
+    assert prompts_payload["prompts"][0]["schema"] == "harn-gibson.renderer-prompt.v1"
+    assert prompt["metadata"]["eventTypes"] == ["tool_call"]
+    assert prompt["metadata"]["routes"] == ["renderer_agent"]
+    assert prompt["metadata"]["displayStyle"] == "gibson"
+    assert prompt["messages"][0]["role"] == "system"
+    assert "harn-gibson.render-plan.v1" in prompt["messages"][0]["content"]
+    assert "harn-gibson.renderer-context.v1" in prompt["messages"][1]["content"]
+    assert "tool_call" in prompt["messages"][1]["content"]
+    assert prompt_messages["schema"] == "harn-gibson.renderer-prompt-messages.v1"
+    assert prompt_messages["messageCount"] == 2
+    assert "event replay renderer prompt review" in prompts_review
+    assert "window.__gibsonRendererPrompts" in prompts_review
+    assert "tool_call" in prompts_review
+    assert "<\\/script>" in replay_renderer_prompts_review_html(
+        {
+            "replayName": "</script>",
+            "schema": "test",
+            "prompts": [
+                {
+                    "contextIndex": 0,
+                    "mode": "rolling",
+                    "metadata": {"eventTypes": ["</script>"], "routes": ["renderer_agent"]},
+                    "messages": [{"role": "user", "content": "</script>"}],
+                }
+            ],
+        }
+    )
+    assert "No renderer prompts" in replay_renderer_prompts_review_html(
+        {"replayName": "empty", "schema": "test", "prompts": []}
+    )
 
     forwarded_contexts = []
 
@@ -261,14 +332,19 @@ def test_replay_event_steps_file_io_and_writers(tmp_path: Path, monkeypatch: pyt
     assert bundle_manifest["schema"] == "harn-gibson.replay-review-bundle.v1"
     assert bundle_manifest["contextCount"] == 1
     assert bundle_manifest["intentCount"] == 2
+    assert bundle_manifest["promptCount"] == 1
     assert bundle_manifest["screenshotCount"] == 2
     assert bundle_manifest["artifacts"]["frameReview"] == "frames/index.html"
+    assert bundle_manifest["artifacts"]["rendererPromptReview"] == "renderer-prompts.html"
     assert bundle_manifest_file == bundle_manifest
     assert json.loads((bundle_path / "renderer-contexts.json").read_text(encoding="utf-8"))["contextCount"] == 1
+    assert json.loads((bundle_path / "renderer-prompts.json").read_text(encoding="utf-8"))["promptCount"] == 1
     assert json.loads((bundle_path / "render-intents.json").read_text(encoding="utf-8"))["intentCount"] == 2
     assert json.loads((bundle_path / "frames" / "manifest.json").read_text(encoding="utf-8"))["screenshotCount"] == 2
+    assert "renderer prompt review" in (bundle_path / "renderer-prompts.html").read_text(encoding="utf-8")
     assert "event replay replay review" in bundle_index
     assert 'href="frames/index.html"' in bundle_index
+    assert "Renderer Prompt Review" in bundle_index
     assert "window.__gibsonReplayReview" in bundle_index
     assert "<\\/script>" in replay_review_bundle_index_html(
         replay_review_bundle_manifest(

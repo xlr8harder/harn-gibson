@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 from harn_gibson.events import GibsonEvent, diagnostic_event
+from harn_gibson.renderer_prompt import renderer_prompt_from_context
 from harn_gibson.rendering import RendererContext, RenderPlan, RenderRequest, RenderStep, RenderSubmitResult
 from harn_gibson.scene import SceneMutation, SceneState, mutation_from_mapping, scene_state_from_mapping
 from harn_gibson.server import GibsonServerState, event_from_payload, submit_event_to_renderer
@@ -796,6 +797,31 @@ def write_replay_renderer_contexts(path: str | Path, result: ReplayResult) -> No
     )
 
 
+def replay_renderer_prompts_from_result(result: ReplayResult) -> dict[str, Any]:
+    prompts = [
+        renderer_prompt_from_context(context.context, context_index=context.index)
+        for context in result.renderer_contexts
+    ]
+    return {
+        "schema": "harn-gibson.replay-renderer-prompts.v1",
+        "replayName": result.name,
+        "replaySchema": result.schema,
+        "stepCount": len(result.steps),
+        "promptCount": len(prompts),
+        "prompts": prompts,
+        "metadata": result.metadata,
+    }
+
+
+def write_replay_renderer_prompts(path: str | Path, result: ReplayResult) -> None:
+    prompts_path = Path(path)
+    prompts_path.parent.mkdir(parents=True, exist_ok=True)
+    prompts_path.write_text(
+        json.dumps(replay_renderer_prompts_from_result(result), indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+
 def replay_render_intents_from_result(result: ReplayResult) -> dict[str, Any]:
     intents = _render_intents_from_scene_metadata(result.scene.metadata)
     return {
@@ -1204,6 +1230,99 @@ def write_replay_render_intents_review_html(path: str | Path, payload: Mapping[s
     review_path.write_text(replay_render_intents_review_html(payload), encoding="utf-8")
 
 
+def replay_renderer_prompts_review_html(payload: Mapping[str, Any]) -> str:
+    entries = payload.get("prompts")
+    rendered_entries = [entry for entry in entries if isinstance(entry, Mapping)] if isinstance(entries, list) else []
+    title = str(payload.get("replayName") or "replay renderer prompts")
+    schema = escape(str(payload.get("schema", "")))
+    prompt_count = escape(str(payload.get("promptCount", len(rendered_entries))))
+    cards = "\n".join(_renderer_prompt_review_card(entry) for entry in rendered_entries)
+    if not cards:
+        cards = '    <section class="empty">No renderer prompts were captured for this replay.</section>'
+    embedded_entries = _html_script_json(rendered_entries)
+    return f"""<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{escape(title)} renderer prompt review</title>
+  <style>
+    :root {{ color-scheme: dark; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }}
+    body {{ margin: 0; background: #020608; color: #d9fff7; }}
+    header {{
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      padding: 18px 22px;
+      background: rgba(2, 6, 8, 0.94);
+      border-bottom: 1px solid rgba(35, 255, 214, 0.30);
+    }}
+    h1 {{ margin: 0 0 6px; font-size: 22px; letter-spacing: 0; }}
+    .meta {{ color: #7ee8d0; font-size: 13px; }}
+    main {{ display: grid; gap: 18px; padding: 20px; }}
+    article {{
+      display: grid;
+      gap: 13px;
+      border: 1px solid rgba(35, 255, 214, 0.28);
+      background: rgba(5, 16, 19, 0.88);
+      padding: 16px;
+    }}
+    h2 {{ margin: 0; color: #ffcf63; font-size: 15px; letter-spacing: 0; overflow-wrap: anywhere; }}
+    .summary {{
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+      gap: 8px;
+      color: #b8fff3;
+      font-size: 12px;
+    }}
+    code {{ color: #ffcf63; }}
+    .message {{
+      display: grid;
+      gap: 8px;
+      border-top: 1px solid rgba(35, 255, 214, 0.16);
+      padding-top: 12px;
+    }}
+    .role {{ color: #7ee8d0; font-size: 11px; text-transform: uppercase; }}
+    pre {{
+      margin: 0;
+      max-height: 420px;
+      overflow: auto;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      color: #d9fff7;
+      font-size: 11px;
+      line-height: 1.42;
+    }}
+    .empty {{
+      border: 1px solid rgba(255, 207, 99, 0.30);
+      padding: 18px;
+      color: #ffcf63;
+      background: rgba(6, 12, 14, 0.86);
+    }}
+  </style>
+</head>
+<body>
+  <header>
+    <h1>{escape(title)} renderer prompt review</h1>
+    <div class="meta">{prompt_count} prompts &middot; schema {schema}</div>
+  </header>
+  <main>
+{cards}
+  </main>
+  <script>
+    window.__gibsonRendererPrompts = {embedded_entries};
+  </script>
+</body>
+</html>
+"""
+
+
+def write_replay_renderer_prompts_review_html(path: str | Path, payload: Mapping[str, Any]) -> None:
+    review_path = Path(path)
+    review_path.parent.mkdir(parents=True, exist_ok=True)
+    review_path.write_text(replay_renderer_prompts_review_html(payload), encoding="utf-8")
+
+
 def replay_review_bundle_manifest(
     result: ReplayResult,
     screenshots: Iterable[ReplayFrameScreenshot],
@@ -1211,6 +1330,7 @@ def replay_review_bundle_manifest(
 ) -> dict[str, Any]:
     rendered_screenshots = tuple(screenshots)
     render_intents = replay_render_intents_from_result(result)
+    renderer_prompts = replay_renderer_prompts_from_result(result)
     return {
         "schema": "harn-gibson.replay-review-bundle.v1",
         "replayName": result.name,
@@ -1221,6 +1341,7 @@ def replay_review_bundle_manifest(
         "screenshotCount": len(rendered_screenshots),
         "contextCount": len(result.renderer_contexts),
         "intentCount": int(render_intents["intentCount"]),
+        "promptCount": int(renderer_prompts["promptCount"]),
         "artifacts": dict(artifacts),
         "metadata": result.metadata,
     }
@@ -1238,6 +1359,7 @@ def replay_review_bundle_index_html(manifest: Mapping[str, Any]) -> str:
             ("screenshots", "screenshotCount"),
             ("renderer contexts", "contextCount"),
             ("render intents", "intentCount"),
+            ("renderer prompts", "promptCount"),
         )
     )
     artifact_links = "\n".join(
@@ -1330,6 +1452,8 @@ def write_replay_review_bundle(
         "result": "result.json",
         "timeline": "timeline.json",
         "rendererContexts": "renderer-contexts.json",
+        "rendererPrompts": "renderer-prompts.json",
+        "rendererPromptReview": "renderer-prompts.html",
         "renderIntents": "render-intents.json",
         "renderIntentReview": "render-intents.html",
         "frameManifest": "frames/manifest.json",
@@ -1339,6 +1463,11 @@ def write_replay_review_bundle(
     write_replay_result(bundle_path / artifacts["result"], result)
     write_replay_timeline(bundle_path / artifacts["timeline"], result)
     write_replay_renderer_contexts(bundle_path / artifacts["rendererContexts"], result)
+    write_replay_renderer_prompts(bundle_path / artifacts["rendererPrompts"], result)
+    write_replay_renderer_prompts_review_html(
+        bundle_path / artifacts["rendererPromptReview"],
+        replay_renderer_prompts_from_result(result),
+    )
     write_replay_render_intents(bundle_path / artifacts["renderIntents"], result)
     write_replay_render_intents_review_html(
         bundle_path / artifacts["renderIntentReview"],
@@ -1375,10 +1504,12 @@ def _replay_review_artifacts(value: Any) -> tuple[tuple[str, str], ...]:
     labels = {
         "frameReview": "Timeline Frame Review",
         "renderIntentReview": "Render Intent Review",
+        "rendererPromptReview": "Renderer Prompt Review",
         "scene": "Final Scene JSON",
         "result": "Replay Result JSON",
         "timeline": "Timeline JSON",
         "rendererContexts": "Renderer Contexts JSON",
+        "rendererPrompts": "Renderer Prompts JSON",
         "renderIntents": "Render Intents JSON",
         "frameManifest": "Frame Screenshot Manifest",
         "manifest": "Bundle Manifest",
@@ -1458,6 +1589,38 @@ def _render_intent_review_card(entry: Mapping[str, Any]) -> str:
       <div class="badge-set"><span class="badge-label">targets</span><div class="badge-row">{targets}</div></div>
       <pre>{metadata}</pre>
     </article>"""
+
+
+def _renderer_prompt_review_card(entry: Mapping[str, Any]) -> str:
+    context_index = escape(str(entry.get("contextIndex", "")))
+    mode = escape(str(entry.get("mode", "rolling")))
+    metadata = entry.get("metadata") if isinstance(entry.get("metadata"), Mapping) else {}
+    event_types = ", ".join(_string_list(metadata.get("eventTypes"))) or "none"
+    routes = ", ".join(_string_list(metadata.get("routes"))) or "none"
+    messages = entry.get("messages")
+    rendered_messages = (
+        [message for message in messages if isinstance(message, Mapping)] if isinstance(messages, list) else []
+    )
+    message_cards = "\n".join(_renderer_prompt_message_card(message) for message in rendered_messages)
+    return f"""    <article>
+      <h2>context #{context_index} / {mode}</h2>
+      <div class="summary">
+        <span>events <code>{escape(event_types)}</code></span>
+        <span>routes <code>{escape(routes)}</code></span>
+        <span>requests <code>{escape(str(metadata.get("requestCount", 0)))}</code></span>
+        <span>chars <code>{escape(str(metadata.get("messageChars", 0)))}</code></span>
+      </div>
+{message_cards}
+    </article>"""
+
+
+def _renderer_prompt_message_card(message: Mapping[str, Any]) -> str:
+    role = escape(str(message.get("role") or "user"))
+    content = escape(str(message.get("content") or ""))
+    return f"""      <section class="message">
+        <div class="role">{role}</div>
+        <pre>{content}</pre>
+      </section>"""
 
 
 def _badge_row(value: Any, badge_class: str) -> str:
@@ -1625,6 +1788,8 @@ __all__ = [
     "replay_frame_screenshot_manifest",
     "replay_frame_review_html",
     "replay_renderer_contexts_from_result",
+    "replay_renderer_prompts_from_result",
+    "replay_renderer_prompts_review_html",
     "replay_render_intents_from_result",
     "replay_render_intents_review_html",
     "replay_review_bundle_index_html",
@@ -1637,6 +1802,8 @@ __all__ = [
     "write_replay_frame_screenshot_manifest",
     "write_replay_frame_review_html",
     "write_replay_renderer_contexts",
+    "write_replay_renderer_prompts",
+    "write_replay_renderer_prompts_review_html",
     "write_replay_render_intents",
     "write_replay_render_intents_review_html",
     "write_replay_review_bundle",

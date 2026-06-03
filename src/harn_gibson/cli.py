@@ -47,6 +47,8 @@ def build_parser() -> argparse.ArgumentParser:
     replay.add_argument("--output-result", default=None, help="write full replay result JSON to this path")
     replay.add_argument("--output-timeline", default=None, help="write per-step replay frame timeline JSON")
     replay.add_argument("--output-render-contexts", default=None, help="write captured renderer context JSON")
+    replay.add_argument("--output-render-prompts", default=None, help="write renderer prompt message JSON")
+    replay.add_argument("--render-prompt-review", default=None, help="write a renderer prompt review HTML page")
     replay.add_argument("--output-render-intents", default=None, help="write recorded renderer intent JSON")
     replay.add_argument("--render-intent-review", default=None, help="write a renderer intent review HTML page")
     replay.add_argument("--review-dir", default=None, help="write a complete replay review bundle directory")
@@ -197,12 +199,15 @@ def run(argv: Sequence[str] | None = None) -> int:
             capture_replay_frame_screenshots,
             replay_frame_screenshot_manifest,
             replay_render_intents_from_result,
+            replay_renderer_prompts_from_result,
             run_replay_file,
             write_replay_frame_review_html,
             write_replay_frame_screenshot_manifest,
             write_replay_render_intents,
             write_replay_render_intents_review_html,
             write_replay_renderer_contexts,
+            write_replay_renderer_prompts,
+            write_replay_renderer_prompts_review_html,
             write_replay_result,
             write_replay_review_bundle,
             write_replay_timeline,
@@ -216,7 +221,12 @@ def run(argv: Sequence[str] | None = None) -> int:
                 args.path,
                 replay_state,
                 capture_frames=bool(args.output_timeline or args.timeline_screenshot_dir or args.review_dir),
-                capture_renderer_contexts=bool(args.output_render_contexts or args.review_dir),
+                capture_renderer_contexts=bool(
+                    args.output_render_contexts
+                    or args.output_render_prompts
+                    or args.render_prompt_review
+                    or args.review_dir
+                ),
             )
         except ReplayExpectationError as error:
             for failure in error.failures:
@@ -230,6 +240,13 @@ def run(argv: Sequence[str] | None = None) -> int:
             write_replay_timeline(args.output_timeline, result)
         if args.output_render_contexts:
             write_replay_renderer_contexts(args.output_render_contexts, result)
+        if args.output_render_prompts:
+            write_replay_renderer_prompts(args.output_render_prompts, result)
+        if args.render_prompt_review:
+            write_replay_renderer_prompts_review_html(
+                args.render_prompt_review,
+                replay_renderer_prompts_from_result(result),
+            )
         if args.output_render_intents:
             write_replay_render_intents(args.output_render_intents, result)
         if args.render_intent_review:

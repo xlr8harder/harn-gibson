@@ -618,6 +618,10 @@ def test_cli_parser_and_run(monkeypatch: Any, capsys: Any) -> None:
             "result.json",
             "--output-render-contexts",
             "contexts.json",
+            "--output-render-prompts",
+            "prompts.json",
+            "--render-prompt-review",
+            "prompts.html",
             "--output-render-intents",
             "intents.json",
             "--render-intent-review",
@@ -643,6 +647,8 @@ def test_cli_parser_and_run(monkeypatch: Any, capsys: Any) -> None:
     assert parsed_replay.output_scene == "scene.json"
     assert parsed_replay.output_result == "result.json"
     assert parsed_replay.output_render_contexts == "contexts.json"
+    assert parsed_replay.output_render_prompts == "prompts.json"
+    assert parsed_replay.render_prompt_review == "prompts.html"
     assert parsed_replay.output_render_intents == "intents.json"
     assert parsed_replay.render_intent_review == "intents.html"
     assert parsed_replay.review_dir == "review"
@@ -706,6 +712,8 @@ def test_cli_replay_writes_outputs(tmp_path: Any, capsys: Any) -> None:
     scene_path = tmp_path / "scene.json"
     result_path = tmp_path / "result.json"
     contexts_path = tmp_path / "contexts.json"
+    prompts_path = tmp_path / "prompts.json"
+    prompts_review_path = tmp_path / "prompts.html"
     intents_path = tmp_path / "intents.json"
     intents_review_path = tmp_path / "intents.html"
     timeline_path = tmp_path / "timeline.json"
@@ -732,6 +740,10 @@ def test_cli_replay_writes_outputs(tmp_path: Any, capsys: Any) -> None:
                 str(result_path),
                 "--output-render-contexts",
                 str(contexts_path),
+                "--output-render-prompts",
+                str(prompts_path),
+                "--render-prompt-review",
+                str(prompts_review_path),
                 "--output-render-intents",
                 str(intents_path),
                 "--render-intent-review",
@@ -750,6 +762,8 @@ def test_cli_replay_writes_outputs(tmp_path: Any, capsys: Any) -> None:
     assert scene["metadata"]["displayStyle"] == "mainframe"
     result = json.loads(result_path.read_text(encoding="utf-8"))
     contexts = json.loads(contexts_path.read_text(encoding="utf-8"))
+    prompts = json.loads(prompts_path.read_text(encoding="utf-8"))
+    prompts_review = prompts_review_path.read_text(encoding="utf-8")
     intents = json.loads(intents_path.read_text(encoding="utf-8"))
     intents_review = intents_review_path.read_text(encoding="utf-8")
     timeline = json.loads(timeline_path.read_text(encoding="utf-8"))
@@ -757,6 +771,11 @@ def test_cli_replay_writes_outputs(tmp_path: Any, capsys: Any) -> None:
     assert result["rendererContexts"][0]["context"]["mode"] == "compaction"
     assert contexts["contextCount"] == 1
     assert contexts["contexts"][0]["context"]["project"]["displayStyle"] == "mainframe"
+    assert prompts["schema"] == "harn-gibson.replay-renderer-prompts.v1"
+    assert prompts["promptCount"] == 1
+    assert prompts["prompts"][0]["metadata"]["displayStyle"] == "mainframe"
+    assert "renderer prompt review" in prompts_review
+    assert "window.__gibsonRendererPrompts" in prompts_review
     assert intents["schema"] == "harn-gibson.replay-render-intents.v1"
     assert intents["intentCount"] == 1
     assert intents["intents"][0]["intent"]["renderer"] == "deterministic"
@@ -929,6 +948,7 @@ def test_cli_replay_writes_review_bundle(tmp_path: Any, monkeypatch: Any, capsys
     manifest = json.loads((review_dir / "manifest.json").read_text(encoding="utf-8"))
     result = json.loads((review_dir / "result.json").read_text(encoding="utf-8"))
     contexts = json.loads((review_dir / "renderer-contexts.json").read_text(encoding="utf-8"))
+    prompts = json.loads((review_dir / "renderer-prompts.json").read_text(encoding="utf-8"))
     intents = json.loads((review_dir / "render-intents.json").read_text(encoding="utf-8"))
     frame_manifest = json.loads((review_dir / "frames" / "manifest.json").read_text(encoding="utf-8"))
     overview = (review_dir / "index.html").read_text(encoding="utf-8")
@@ -938,18 +958,23 @@ def test_cli_replay_writes_review_bundle(tmp_path: Any, monkeypatch: Any, capsys
     assert calls == [(1, 1, review_dir / "frames", 640, 480)]
     assert manifest["schema"] == "harn-gibson.replay-review-bundle.v1"
     assert manifest["artifacts"]["rendererContexts"] == "renderer-contexts.json"
+    assert manifest["artifacts"]["rendererPrompts"] == "renderer-prompts.json"
+    assert manifest["artifacts"]["rendererPromptReview"] == "renderer-prompts.html"
     assert manifest["artifacts"]["frameReview"] == "frames/index.html"
     assert manifest["contextCount"] == 1
+    assert manifest["promptCount"] == 1
     assert manifest["intentCount"] == 1
     assert manifest["screenshotCount"] == 1
     assert result["rendererContexts"][0]["context"]["mode"] == "compaction"
     assert contexts["contextCount"] == 1
+    assert prompts["promptCount"] == 1
     assert intents["intentCount"] == 1
     assert frame_manifest["screenshotCount"] == 1
     assert "unnamed replay replay review" in overview
     assert 'href="frames/index.html"' in overview
     assert "window.__gibsonReplayReview" in overview
     assert "window.__gibsonReplayFrames" in frame_review
+    assert "renderer prompt review" in (review_dir / "renderer-prompts.html").read_text(encoding="utf-8")
     assert "render intent review" in intent_review
     assert capsys.readouterr().out.splitlines() == [
         f"wrote replay review bundle: {review_dir} (1 frames)",

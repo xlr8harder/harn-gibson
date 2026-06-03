@@ -30,7 +30,7 @@ uv run harn-gibson replay examples/replays/renderer-plan.json \
   --screenshot test-artifacts/replays/renderer-scene.png
 ```
 
-For historical-session review, `harn-gibson replay --review-dir ...` writes a complete review bundle with scene/result/timeline JSON, renderer contexts, render intents, frame screenshots, a frame player, a render-intent review page, and a top-level overview. The lower-level `--timeline-screenshot-dir` flag renders each captured replay keyframe through the same browser path and writes a manifest with canvas metrics per frame plus an interactive `index.html` frame player.
+For historical-session review, `harn-gibson replay --review-dir ...` writes a complete review bundle with scene/result/timeline JSON, renderer contexts, renderer prompts, render intents, frame screenshots, a frame player, prompt/intent review pages, and a top-level overview. The lower-level `--timeline-screenshot-dir` flag renders each captured replay keyframe through the same browser path and writes a manifest with canvas metrics per frame plus an interactive `index.html` frame player.
 
 The integration test verifies:
 
