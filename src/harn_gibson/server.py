@@ -1091,7 +1091,7 @@ function drawPolygon(points, fill, stroke) {
 function drawScenePrimitives(scene, w, h, now) {
   if (!scene?.primitives) return;
   const primitives = Object.values(scene.primitives).filter((primitive) => primitive.region === "stage");
-  const orderedKinds = ["particle_field", "city_block", "ribbon", "node_graph", "glyph_layer"];
+  const orderedKinds = ["particle_field", "mesh", "city_block", "ribbon", "node_graph", "glyph_layer"];
   for (const kind of orderedKinds) {
     for (const primitive of primitives) {
       if (primitive.kind === kind) drawPrimitive(primitive, w, h, now);
@@ -1100,6 +1100,7 @@ function drawScenePrimitives(scene, w, h, now) {
 }
 
 function drawPrimitive(primitive, w, h, now) {
+  if (primitive.kind === "mesh") drawMesh(primitive, w, h, now);
   if (primitive.kind === "city_block") drawCityBlock(primitive, w, h);
   if (primitive.kind === "node_graph") drawNodeGraph(primitive, w, h);
   if (primitive.kind === "ribbon") drawRibbon(primitive, w, h, now);
@@ -1151,6 +1152,94 @@ function drawCityBlock(primitive, w, h) {
       ctx.fillStyle = toneColor(focus ? tone : "white", focus ? 0.95 : 0.58);
       ctx.fillText(String(block.label).slice(0, 14), x + bw * 0.5, y - bh - bd * 0.16);
     }
+  }
+  ctx.restore();
+}
+
+function meshVertex(value) {
+  if (Array.isArray(value)) {
+    return {x: Number(value[0] || 0), y: Number(value[1] || 0), z: Number(value[2] || 0)};
+  }
+  return {
+    x: Number(value?.x || 0),
+    y: Number(value?.y || 0),
+    z: Number(value?.z || 0),
+  };
+}
+
+function meshPoint(vertex, props, w, h, now) {
+  const position = normalizedPoint(props.position || {x: 0.5, y: 0.46}, w, h);
+  const scale = Number(props.scale || 0.18) * Math.min(w, h);
+  const rotation = props.rotation || {};
+  const spin = Number(props.spin || 0);
+  const ax = Number(rotation.x || 0.62) + spin * now * 0.00012;
+  const ay = Number(rotation.y || 0.72) + spin * now * 0.00022;
+  const sinX = Math.sin(ax);
+  const cosX = Math.cos(ax);
+  const sinY = Math.sin(ay);
+  const cosY = Math.cos(ay);
+  const vx = vertex.x * cosY - vertex.z * sinY;
+  const vz = vertex.x * sinY + vertex.z * cosY;
+  const vy = vertex.y * cosX - vz * sinX;
+  const rz = vertex.y * sinX + vz * cosX;
+  const depth = Math.max(0.8, 2.4 + rz);
+  return {
+    x: position.x + (vx * scale * 1.7) / depth,
+    y: position.y + (vy * scale * 1.7) / depth,
+    z: rz,
+  };
+}
+
+function meshEdgeIndexes(edge) {
+  if (Array.isArray(edge)) return [Number(edge[0]), Number(edge[1])];
+  return [Number(edge?.source ?? edge?.a), Number(edge?.target ?? edge?.b)];
+}
+
+function drawMesh(primitive, w, h, now) {
+  const props = primitive.props || {};
+  const vertices = Array.isArray(props.vertices) ? props.vertices.map((vertex) => meshVertex(vertex)) : [];
+  if (!vertices.length) return;
+  const points = vertices.map((vertex) => meshPoint(vertex, props, w, h, now));
+  const tone = props.material || props.tone || "cyan";
+  const faces = Array.isArray(props.faces) ? props.faces : [];
+  const edges = Array.isArray(props.edges) ? props.edges : [];
+  ctx.save();
+  ctx.lineJoin = "round";
+  ctx.lineCap = "round";
+  ctx.shadowColor = toneColor(tone, 0.68);
+  ctx.shadowBlur = 16 * devicePixelRatio;
+  ctx.lineWidth = 1.4 * devicePixelRatio;
+  for (const face of faces) {
+    const indexes = Array.isArray(face) ? face : face?.vertices;
+    if (!Array.isArray(indexes) || indexes.length < 3) continue;
+    const facePoints = indexes.map((index) => points[Number(index)]).filter(Boolean);
+    drawPolygon(facePoints, toneColor(tone, 0.13), toneColor(tone, 0.30));
+  }
+  for (const edge of edges) {
+    const [aIndex, bIndex] = meshEdgeIndexes(edge);
+    const a = points[aIndex];
+    const b = points[bIndex];
+    if (!a || !b) continue;
+    const alpha = 0.42 + Math.max(-0.18, Math.min(0.24, (a.z + b.z) * 0.08));
+    ctx.strokeStyle = toneColor(tone, alpha);
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+    ctx.stroke();
+  }
+  ctx.fillStyle = toneColor("white", 0.76);
+  for (const point of points) {
+    ctx.beginPath();
+    ctx.arc(point.x, point.y, 2.4 * devicePixelRatio, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  if (props.label) {
+    const labelPoint = points.reduce((highest, point) => (point.y < highest.y ? point : highest), points[0]);
+    ctx.font = `${12 * devicePixelRatio}px ui-monospace, monospace`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "bottom";
+    ctx.fillStyle = toneColor("white", 0.82);
+    ctx.fillText(String(props.label).slice(0, 18), labelPoint.x, labelPoint.y - 12 * devicePixelRatio);
   }
   ctx.restore();
 }

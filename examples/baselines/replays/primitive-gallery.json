@@ -1,0 +1,515 @@
+{
+  "metadata": {
+    "purpose": "exercise browser-rendered generic display primitives without semantic renderer assumptions"
+  },
+  "replayName": "primitive gallery",
+  "replaySchema": "harn-gibson.replay.v1",
+  "scene": {
+    "animations": {
+      "gallery-pulse": {
+        "durationMs": 2400,
+        "id": "gallery-pulse",
+        "kind": "packet_burst",
+        "loop": false,
+        "props": {
+          "phase": "lifecycle",
+          "sequence": 900,
+          "tone": "magenta"
+        },
+        "startedAtMs": 9000,
+        "targetId": "gallery-mesh"
+      }
+    },
+    "log": [
+      {
+        "eventType": "primitive_gallery",
+        "phase": "lifecycle",
+        "sequence": 900,
+        "summary": "mesh, city blocks, graphs, ribbons, glyphs, particles, stream panel",
+        "title": "Primitive gallery"
+      }
+    ],
+    "metadata": {
+      "lastRenderIntent": {
+        "effects": [
+          "patch",
+          "append_log",
+          "primitive:mesh",
+          "primitive:city_block",
+          "primitive:node_graph",
+          "primitive:ribbon",
+          "primitive:glyph_layer",
+          "primitive:particle_field",
+          "primitive:text_stream",
+          "animation:packet_burst"
+        ],
+        "eventTypes": [
+          "replay_mutations"
+        ],
+        "intent": "visualize replay_mutations",
+        "metadata": {
+          "renderer": "replay",
+          "stepType": "mutations"
+        },
+        "mutationCount": 10,
+        "renderer": "replay",
+        "requestCount": 1,
+        "routes": [
+          "direct_scene"
+        ],
+        "schema": "harn-gibson.render-intent.v1",
+        "stepCount": 1,
+        "targets": [
+          "status",
+          "gallery-mesh",
+          "gallery-city",
+          "gallery-graph",
+          "gallery-ribbon",
+          "gallery-glyphs",
+          "gallery-packets",
+          "assistant-stream"
+        ],
+        "timeline": {
+          "durationMs": 0
+        }
+      },
+      "renderIntents": [
+        {
+          "effects": [
+            "patch",
+            "append_log",
+            "primitive:mesh",
+            "primitive:city_block",
+            "primitive:node_graph",
+            "primitive:ribbon",
+            "primitive:glyph_layer",
+            "primitive:particle_field",
+            "primitive:text_stream",
+            "animation:packet_burst"
+          ],
+          "eventTypes": [
+            "replay_mutations"
+          ],
+          "intent": "visualize replay_mutations",
+          "metadata": {
+            "renderer": "replay",
+            "stepType": "mutations"
+          },
+          "mutationCount": 10,
+          "renderer": "replay",
+          "requestCount": 1,
+          "routes": [
+            "direct_scene"
+          ],
+          "schema": "harn-gibson.render-intent.v1",
+          "stepCount": 1,
+          "targets": [
+            "status",
+            "gallery-mesh",
+            "gallery-city",
+            "gallery-graph",
+            "gallery-ribbon",
+            "gallery-glyphs",
+            "gallery-packets",
+            "assistant-stream"
+          ],
+          "timeline": {
+            "durationMs": 0
+          }
+        }
+      ]
+    },
+    "primitives": {
+      "assistant-stream": {
+        "children": [],
+        "id": "assistant-stream",
+        "kind": "text_stream",
+        "props": {
+          "isStreaming": true,
+          "streamId": "gallery",
+          "text": "mesh/glyph/packet/city/ribbon/text primitives are available to renderer plans",
+          "title": "CATALOG STREAM"
+        },
+        "region": "stage"
+      },
+      "decision-log": {
+        "children": [],
+        "id": "decision-log",
+        "kind": "code",
+        "props": {
+          "language": "json",
+          "text": "[]"
+        },
+        "region": "side"
+      },
+      "event-feed": {
+        "children": [],
+        "id": "event-feed",
+        "kind": "feed",
+        "props": {
+          "maxItems": 80
+        },
+        "region": "side"
+      },
+      "gallery-city": {
+        "children": [],
+        "id": "gallery-city",
+        "kind": "city_block",
+        "props": {
+          "blocks": [
+            {
+              "d": 0.08,
+              "h": 0.22,
+              "id": "core-0",
+              "label": "fs",
+              "tone": "cyan",
+              "w": 0.07,
+              "x": 0.08,
+              "y": 0.5
+            },
+            {
+              "d": 0.08,
+              "h": 0.34,
+              "id": "core-1",
+              "label": "ctx",
+              "tone": "green",
+              "w": 0.08,
+              "x": 0.18,
+              "y": 0.4
+            },
+            {
+              "d": 0.09,
+              "h": 0.46,
+              "id": "core-2",
+              "label": "render",
+              "tone": "magenta",
+              "w": 0.09,
+              "x": 0.29,
+              "y": 0.56
+            },
+            {
+              "d": 0.08,
+              "h": 0.28,
+              "id": "core-3",
+              "label": "hooks",
+              "tone": "amber",
+              "w": 0.07,
+              "x": 0.41,
+              "y": 0.45
+            }
+          ],
+          "focusBlockId": "core-2",
+          "heightScale": 1.1
+        },
+        "region": "stage"
+      },
+      "gallery-glyphs": {
+        "children": [],
+        "id": "gallery-glyphs",
+        "kind": "glyph_layer",
+        "props": {
+          "density": 0.88,
+          "motion": "lifecycle",
+          "palette": "green",
+          "seed": 900,
+          "text": "GIBSON::PRIMITIVE::CATALOG::MESH::CITY::GRAPH::RIBBON::GLYPH::PACKET"
+        },
+        "region": "stage"
+      },
+      "gallery-graph": {
+        "children": [],
+        "id": "gallery-graph",
+        "kind": "node_graph",
+        "props": {
+          "edges": [
+            {
+              "label": "events",
+              "source": "harn",
+              "target": "renderer"
+            },
+            {
+              "label": "mutate",
+              "source": "renderer",
+              "target": "scene"
+            },
+            {
+              "label": "SSE",
+              "source": "scene",
+              "target": "browser"
+            },
+            {
+              "label": "input",
+              "source": "browser",
+              "target": "harn"
+            }
+          ],
+          "focusNodeId": "renderer",
+          "layout": "gallery",
+          "nodes": [
+            {
+              "id": "harn",
+              "label": "harn",
+              "tone": "green",
+              "x": 0.56,
+              "y": 0.3
+            },
+            {
+              "id": "renderer",
+              "label": "renderer",
+              "tone": "magenta",
+              "x": 0.7,
+              "y": 0.42
+            },
+            {
+              "id": "scene",
+              "label": "scene",
+              "tone": "cyan",
+              "x": 0.84,
+              "y": 0.3
+            },
+            {
+              "id": "browser",
+              "label": "browser",
+              "tone": "amber",
+              "x": 0.72,
+              "y": 0.64
+            }
+          ]
+        },
+        "region": "stage"
+      },
+      "gallery-mesh": {
+        "children": [],
+        "id": "gallery-mesh",
+        "kind": "mesh",
+        "props": {
+          "edges": [
+            [
+              0,
+              1
+            ],
+            [
+              1,
+              2
+            ],
+            [
+              2,
+              3
+            ],
+            [
+              3,
+              0
+            ],
+            [
+              4,
+              5
+            ],
+            [
+              5,
+              6
+            ],
+            [
+              6,
+              7
+            ],
+            [
+              7,
+              4
+            ],
+            [
+              0,
+              4
+            ],
+            [
+              1,
+              5
+            ],
+            [
+              2,
+              6
+            ],
+            [
+              3,
+              7
+            ]
+          ],
+          "faces": [
+            [
+              0,
+              1,
+              2,
+              3
+            ],
+            [
+              4,
+              5,
+              6,
+              7
+            ],
+            [
+              1,
+              5,
+              6,
+              2
+            ]
+          ],
+          "label": "mesh",
+          "material": "cyan",
+          "position": {
+            "x": 0.66,
+            "y": 0.34
+          },
+          "rotation": {
+            "x": 0.54,
+            "y": 0.82
+          },
+          "scale": 0.2,
+          "spin": 0.2,
+          "vertices": [
+            [
+              -1,
+              -1,
+              -1
+            ],
+            [
+              1,
+              -1,
+              -1
+            ],
+            [
+              1,
+              1,
+              -1
+            ],
+            [
+              -1,
+              1,
+              -1
+            ],
+            [
+              -1,
+              -1,
+              1
+            ],
+            [
+              1,
+              -1,
+              1
+            ],
+            [
+              1,
+              1,
+              1
+            ],
+            [
+              -1,
+              1,
+              1
+            ]
+          ]
+        },
+        "region": "stage"
+      },
+      "gallery-packets": {
+        "children": [],
+        "id": "gallery-packets",
+        "kind": "particle_field",
+        "props": {
+          "blend": "screen",
+          "color": "magenta",
+          "count": 48,
+          "emitter": {
+            "x": 0.16,
+            "y": 0.82
+          },
+          "seed": 900,
+          "velocity": 0.42
+        },
+        "region": "stage"
+      },
+      "gallery-ribbon": {
+        "children": [],
+        "id": "gallery-ribbon",
+        "kind": "ribbon",
+        "props": {
+          "direction": "forward",
+          "material": "green",
+          "points": [
+            {
+              "x": 0.08,
+              "y": 0.78
+            },
+            {
+              "x": 0.28,
+              "y": 0.67
+            },
+            {
+              "x": 0.48,
+              "y": 0.6
+            },
+            {
+              "x": 0.68,
+              "y": 0.5
+            },
+            {
+              "x": 0.9,
+              "y": 0.22
+            }
+          ],
+          "width": 4
+        },
+        "region": "stage"
+      },
+      "scan-grid": {
+        "children": [],
+        "id": "scan-grid",
+        "kind": "grid",
+        "props": {
+          "intensity": 0.2
+        },
+        "region": "stage"
+      },
+      "stage": {
+        "children": [
+          "status",
+          "event-feed",
+          "trace-log",
+          "decision-log",
+          "scan-grid"
+        ],
+        "id": "stage",
+        "kind": "viewport",
+        "props": {
+          "theme": "gibson",
+          "title": "GIBSON LINK"
+        },
+        "region": "root"
+      },
+      "status": {
+        "children": [],
+        "id": "status",
+        "kind": "status",
+        "props": {
+          "phase": "lifecycle",
+          "text": "gallery:primitive_catalog",
+          "tone": "amber"
+        },
+        "region": "mast"
+      },
+      "trace-log": {
+        "children": [],
+        "id": "trace-log",
+        "kind": "code",
+        "props": {
+          "language": "text",
+          "text": []
+        },
+        "region": "side"
+      }
+    },
+    "revision": 1,
+    "schema": "harn-gibson.scene.v1"
+  },
+  "schema": "harn-gibson.replay-baseline.v1",
+  "stepCount": 1
+}

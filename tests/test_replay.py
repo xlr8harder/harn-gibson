@@ -207,6 +207,7 @@ def test_replay_baseline_write_compare_and_validation(tmp_path: Path) -> None:
 def test_checked_in_replay_fixtures_cover_agent_and_renderer_sides() -> None:
     agent_result = run_replay_file(EXAMPLE_REPLAYS / "stream-and-diagnostic.json")
     renderer_result = run_replay_file(EXAMPLE_REPLAYS / "renderer-plan.json")
+    gallery_result = run_replay_file(EXAMPLE_REPLAYS / "primitive-gallery.json")
 
     assert [step.kind for step in agent_result.steps] == ["event", "event", "mutations"]
     assert len(agent_result.expectations) == 5
@@ -220,6 +221,12 @@ def test_checked_in_replay_fixtures_cover_agent_and_renderer_sides() -> None:
     assert renderer_result.steps[0].updates == 2
     assert renderer_result.scene.primitives["status"].props["text"] == "renderer:coverage locked"
     assert renderer_result.scene.primitives["decision-log"].props["text"][0]["renderer"] == "fixture"
+
+    assert [step.kind for step in gallery_result.steps] == ["mutations"]
+    assert len(gallery_result.expectations) == 9
+    assert gallery_result.scene.primitives["gallery-mesh"].kind == "mesh"
+    assert gallery_result.scene.primitives["gallery-city"].kind == "city_block"
+    assert gallery_result.scene.primitives["assistant-stream"].props["title"] == "CATALOG STREAM"
 
 
 def test_replay_raw_events_render_plans_and_mutations() -> None:

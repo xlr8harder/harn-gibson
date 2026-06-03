@@ -176,6 +176,7 @@ def test_browser_display_renders_events_debug_and_input_queue() -> None:
     [
         ("stream-and-diagnostic.json", "replay-stream-and-diagnostic.png"),
         ("renderer-plan.json", "replay-renderer-plan.png"),
+        ("primitive-gallery.json", "replay-primitive-gallery.png"),
     ],
 )
 def test_checked_in_replay_fixtures_render_browser_screenshots(fixture_name: str, screenshot_name: str) -> None:

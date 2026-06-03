@@ -1,0 +1,210 @@
+{
+  "schema": "harn-gibson.replay.v1",
+  "name": "primitive gallery",
+  "metadata": {
+    "purpose": "exercise browser-rendered generic display primitives without semantic renderer assumptions"
+  },
+  "expect": {
+    "sceneRevision": 1,
+    "checks": [
+      {"path": "primitives.gallery-mesh.kind", "equals": "mesh"},
+      {"path": "primitives.gallery-city.kind", "equals": "city_block"},
+      {"path": "primitives.gallery-graph.kind", "equals": "node_graph"},
+      {"path": "primitives.gallery-ribbon.kind", "equals": "ribbon"},
+      {"path": "primitives.gallery-glyphs.kind", "equals": "glyph_layer"},
+      {"path": "primitives.gallery-packets.kind", "equals": "particle_field"},
+      {"path": "primitives.assistant-stream.kind", "equals": "text_stream"},
+      {"path": "animations.gallery-pulse.kind", "equals": "packet_burst"}
+    ]
+  },
+  "steps": [
+    {
+      "type": "mutations",
+      "summary": "gallery of current Gibson primitives",
+      "mutations": [
+        {
+          "op": "patch",
+          "targetId": "status",
+          "props": {
+            "text": "gallery:primitive_catalog",
+            "phase": "lifecycle",
+            "tone": "amber"
+          }
+        },
+        {
+          "op": "append_log",
+          "entry": {
+            "sequence": 900,
+            "phase": "lifecycle",
+            "eventType": "primitive_gallery",
+            "title": "Primitive gallery",
+            "summary": "mesh, city blocks, graphs, ribbons, glyphs, particles, stream panel"
+          }
+        },
+        {
+          "op": "upsert",
+          "primitive": {
+            "id": "gallery-mesh",
+            "kind": "mesh",
+            "region": "stage",
+            "props": {
+              "label": "mesh",
+              "material": "cyan",
+              "position": {"x": 0.66, "y": 0.34},
+              "rotation": {"x": 0.54, "y": 0.82},
+              "scale": 0.20,
+              "spin": 0.2,
+              "vertices": [
+                [-1, -1, -1],
+                [1, -1, -1],
+                [1, 1, -1],
+                [-1, 1, -1],
+                [-1, -1, 1],
+                [1, -1, 1],
+                [1, 1, 1],
+                [-1, 1, 1]
+              ],
+              "edges": [
+                [0, 1],
+                [1, 2],
+                [2, 3],
+                [3, 0],
+                [4, 5],
+                [5, 6],
+                [6, 7],
+                [7, 4],
+                [0, 4],
+                [1, 5],
+                [2, 6],
+                [3, 7]
+              ],
+              "faces": [
+                [0, 1, 2, 3],
+                [4, 5, 6, 7],
+                [1, 5, 6, 2]
+              ]
+            }
+          }
+        },
+        {
+          "op": "upsert",
+          "primitive": {
+            "id": "gallery-city",
+            "kind": "city_block",
+            "region": "stage",
+            "props": {
+              "focusBlockId": "core-2",
+              "heightScale": 1.1,
+              "blocks": [
+                {"id": "core-0", "x": 0.08, "y": 0.50, "w": 0.07, "d": 0.08, "h": 0.22, "tone": "cyan", "label": "fs"},
+                {"id": "core-1", "x": 0.18, "y": 0.40, "w": 0.08, "d": 0.08, "h": 0.34, "tone": "green", "label": "ctx"},
+                {"id": "core-2", "x": 0.29, "y": 0.56, "w": 0.09, "d": 0.09, "h": 0.46, "tone": "magenta", "label": "render"},
+                {"id": "core-3", "x": 0.41, "y": 0.45, "w": 0.07, "d": 0.08, "h": 0.28, "tone": "amber", "label": "hooks"}
+              ]
+            }
+          }
+        },
+        {
+          "op": "upsert",
+          "primitive": {
+            "id": "gallery-graph",
+            "kind": "node_graph",
+            "region": "stage",
+            "props": {
+              "focusNodeId": "renderer",
+              "layout": "gallery",
+              "nodes": [
+                {"id": "harn", "label": "harn", "x": 0.56, "y": 0.30, "tone": "green"},
+                {"id": "renderer", "label": "renderer", "x": 0.70, "y": 0.42, "tone": "magenta"},
+                {"id": "scene", "label": "scene", "x": 0.84, "y": 0.30, "tone": "cyan"},
+                {"id": "browser", "label": "browser", "x": 0.72, "y": 0.64, "tone": "amber"}
+              ],
+              "edges": [
+                {"source": "harn", "target": "renderer", "label": "events"},
+                {"source": "renderer", "target": "scene", "label": "mutate"},
+                {"source": "scene", "target": "browser", "label": "SSE"},
+                {"source": "browser", "target": "harn", "label": "input"}
+              ]
+            }
+          }
+        },
+        {
+          "op": "upsert",
+          "primitive": {
+            "id": "gallery-ribbon",
+            "kind": "ribbon",
+            "region": "stage",
+            "props": {
+              "material": "green",
+              "direction": "forward",
+              "width": 4,
+              "points": [
+                {"x": 0.08, "y": 0.78},
+                {"x": 0.28, "y": 0.67},
+                {"x": 0.48, "y": 0.60},
+                {"x": 0.68, "y": 0.50},
+                {"x": 0.90, "y": 0.22}
+              ]
+            }
+          }
+        },
+        {
+          "op": "upsert",
+          "primitive": {
+            "id": "gallery-glyphs",
+            "kind": "glyph_layer",
+            "region": "stage",
+            "props": {
+              "text": "GIBSON::PRIMITIVE::CATALOG::MESH::CITY::GRAPH::RIBBON::GLYPH::PACKET",
+              "density": 0.88,
+              "motion": "lifecycle",
+              "palette": "green",
+              "seed": 900
+            }
+          }
+        },
+        {
+          "op": "upsert",
+          "primitive": {
+            "id": "gallery-packets",
+            "kind": "particle_field",
+            "region": "stage",
+            "props": {
+              "count": 48,
+              "velocity": 0.42,
+              "emitter": {"x": 0.16, "y": 0.82},
+              "color": "magenta",
+              "blend": "screen",
+              "seed": 900
+            }
+          }
+        },
+        {
+          "op": "upsert",
+          "primitive": {
+            "id": "assistant-stream",
+            "kind": "text_stream",
+            "region": "stage",
+            "props": {
+              "streamId": "gallery",
+              "title": "CATALOG STREAM",
+              "text": "mesh/glyph/packet/city/ribbon/text primitives are available to renderer plans",
+              "isStreaming": true
+            }
+          }
+        },
+        {
+          "op": "start_animation",
+          "animation": {
+            "id": "gallery-pulse",
+            "targetId": "gallery-mesh",
+            "kind": "packet_burst",
+            "startedAtMs": 9000,
+            "durationMs": 2400,
+            "props": {"phase": "lifecycle", "tone": "magenta", "sequence": 900}
+          }
+        }
+      ]
+    }
+  ]
+}
