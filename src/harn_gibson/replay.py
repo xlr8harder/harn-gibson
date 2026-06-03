@@ -185,6 +185,9 @@ class ReplayFileResult:
     screenshot_expectation_failures: tuple[ReplayExpectationResult, ...] = ()
     screenshot: dict[str, Any] | None = None
     baseline: ReplayBaselineResult | None = None
+    event_summary: dict[str, Any] = field(default_factory=dict)
+    route_counts: dict[str, int] = field(default_factory=dict)
+    renderer_counts: dict[str, int] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         payload: dict[str, Any] = {
@@ -209,6 +212,14 @@ class ReplayFileResult:
             payload["screenshot"] = self.screenshot
         if self.baseline is not None:
             payload["baseline"] = self.baseline.to_dict()
+        if self.event_summary:
+            payload["eventSummary"] = self.event_summary
+        if self.route_counts:
+            payload["routes"] = sorted(self.route_counts)
+            payload["routeCounts"] = dict(sorted(self.route_counts.items()))
+        if self.renderer_counts:
+            payload["renderers"] = sorted(self.renderer_counts)
+            payload["rendererCounts"] = dict(sorted(self.renderer_counts.items()))
         return payload
 
 
@@ -229,6 +240,10 @@ class ReplaySuiteResult:
     def ok(self) -> bool:
         return self.failed == 0
 
+    @property
+    def summary(self) -> dict[str, Any]:
+        return _replay_suite_result_summary(self.files)
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "schema": "harn-gibson.replay-suite-result.v1",
@@ -236,6 +251,7 @@ class ReplaySuiteResult:
             "ok": self.ok,
             "total": self.total,
             "failed": self.failed,
+            "summary": self.summary,
             "files": [result.to_dict() for result in self.files],
         }
 
@@ -307,11 +323,18 @@ def run_replay_suite(
         result: ReplayResult | None = None
         baseline = None
         screenshot = None
+        event_summary: dict[str, Any] = {}
+        route_counts: dict[str, int] = {}
+        renderer_counts: dict[str, int] = {}
         screenshot_expectations: tuple[ReplayExpectationResult, ...] = ()
         screenshot_failures: tuple[ReplayExpectationResult, ...] = ()
         try:
             replay_data = load_replay_file(replay_file)
+            event_summary = _replay_data_event_summary(replay_data)
             result = run_replay_data(replay_data, state)
+            render_summary = _replay_result_render_summary(result)
+            route_counts = render_summary["routeCounts"]
+            renderer_counts = render_summary["rendererCounts"]
             if screenshot_root is not None:
                 screenshot = _capture_suite_screenshot(
                     root,
@@ -343,6 +366,7 @@ def run_replay_suite(
                     scene_revision=state.scene.state.revision,
                     error=str(error),
                     expectation_failures=error.failures,
+                    event_summary=event_summary,
                 )
             )
         except Exception as error:
@@ -355,6 +379,9 @@ def run_replay_suite(
                     expectations=len(result.expectations) if result is not None else 0,
                     error=str(error),
                     baseline=baseline,
+                    event_summary=event_summary,
+                    route_counts=route_counts,
+                    renderer_counts=renderer_counts,
                 )
             )
         else:
@@ -376,6 +403,9 @@ def run_replay_suite(
                     screenshot_expectation_failures=screenshot_failures,
                     screenshot=screenshot,
                     baseline=baseline,
+                    event_summary=event_summary,
+                    route_counts=route_counts,
+                    renderer_counts=renderer_counts,
                 )
             )
         finally:
@@ -393,6 +423,174 @@ def discover_replay_files(path: str | Path) -> tuple[Path, ...]:
     if not files:
         raise ValueError(f"no replay JSON files found under {root}")
     return files
+
+
+def _replay_suite_result_summary(files: Sequence[ReplayFileResult]) -> dict[str, Any]:
+    file_results = tuple(files)
+    summary: dict[str, Any] = {
+        "fileCount": len(file_results),
+        "okCount": sum(1 for result in file_results if result.ok),
+        "failedCount": sum(1 for result in file_results if not result.ok),
+        "stepCount": sum(result.steps for result in file_results),
+        "expectationCount": sum(result.expectations for result in file_results),
+        "screenshotCount": sum(1 for result in file_results if result.screenshot is not None),
+        "screenshotExpectationCount": sum(result.screenshot_expectations for result in file_results),
+    }
+    baseline_count = sum(1 for result in file_results if result.baseline is not None)
+    if baseline_count:
+        summary["baselineCount"] = baseline_count
+        summary["baselineUpdatedCount"] = sum(
+            1 for result in file_results if result.baseline is not None and result.baseline.updated
+        )
+        summary["baselineFailedCount"] = sum(
+            1 for result in file_results if result.baseline is not None and not result.baseline.ok
+        )
+    event_summary = _merge_replay_event_summaries(result.event_summary for result in file_results)
+    if event_summary:
+        summary["eventSummary"] = event_summary
+    route_counts = _merge_count_mappings(result.route_counts for result in file_results)
+    if route_counts:
+        summary["routes"] = sorted(route_counts)
+        summary["routeCounts"] = route_counts
+    renderer_counts = _merge_count_mappings(result.renderer_counts for result in file_results)
+    if renderer_counts:
+        summary["renderers"] = sorted(renderer_counts)
+        summary["rendererCounts"] = renderer_counts
+    return summary
+
+
+def _replay_data_event_summary(data: Mapping[str, Any]) -> dict[str, Any]:
+    steps = data.get("steps")
+    if not isinstance(steps, list):
+        return {}
+    events: list[Mapping[str, Any]] = []
+    for step in steps:
+        if isinstance(step, Mapping):
+            events.extend(_replay_step_events(step))
+    if not events:
+        return {}
+    return {
+        "eventCount": len(events),
+        **_event_log_capture_summary(events),
+    }
+
+
+def _replay_step_events(step: Mapping[str, Any]) -> tuple[Mapping[str, Any], ...]:
+    kind = step.get("type", step.get("kind"))
+    if kind == "event":
+        event = step.get("event")
+        return (event,) if isinstance(event, Mapping) else ()
+    if kind == "raw_event":
+        raw = step.get("raw")
+        return (raw,) if isinstance(raw, Mapping) else ()
+    if kind == "mutations":
+        event = step.get("event")
+        return (event,) if isinstance(event, Mapping) else ()
+    if kind != "render_plan":
+        return ()
+    plan = step.get("plan")
+    if not isinstance(plan, Mapping):
+        plan = step
+    requests = plan.get("requests")
+    if not isinstance(requests, list):
+        return ()
+    events = []
+    for request in requests:
+        if not isinstance(request, Mapping):
+            continue
+        event = request.get("event")
+        if isinstance(event, Mapping):
+            events.append(event)
+    return tuple(events)
+
+
+def _replay_result_render_summary(result: ReplayResult) -> dict[str, dict[str, int]]:
+    route_counts: dict[str, int] = {}
+    renderer_counts: dict[str, int] = {}
+    intents = result.scene.metadata.get("renderIntents")
+    if isinstance(intents, list):
+        for intent in intents:
+            if not isinstance(intent, Mapping):
+                continue
+            renderer = intent.get("renderer")
+            if isinstance(renderer, str) and renderer:
+                renderer_counts[renderer] = renderer_counts.get(renderer, 0) + 1
+            routes = intent.get("routes")
+            if isinstance(routes, str):
+                route_counts[routes] = route_counts.get(routes, 0) + 1
+            elif isinstance(routes, list):
+                for route in routes:
+                    if isinstance(route, str) and route:
+                        route_counts[route] = route_counts.get(route, 0) + 1
+    if not route_counts:
+        route_counts = _event_log_counts(step.route for step in result.steps)
+    return {
+        "routeCounts": dict(sorted(route_counts.items())),
+        "rendererCounts": dict(sorted(renderer_counts.items())),
+    }
+
+
+def _merge_replay_event_summaries(summaries: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
+    event_count = 0
+    event_type_counts: dict[str, int] = {}
+    phase_counts: dict[str, int] = {}
+    source_counts: dict[str, int] = {}
+    first_sequences: list[int] = []
+    last_sequences: list[int] = []
+    first_timestamps: list[int] = []
+    last_timestamps: list[int] = []
+    for summary in summaries:
+        event_count += _coerce_int(summary.get("eventCount"), 0)
+        _merge_count_mapping(event_type_counts, summary.get("eventTypeCounts"))
+        _merge_count_mapping(phase_counts, summary.get("phaseCounts"))
+        _merge_count_mapping(source_counts, summary.get("sourceCounts"))
+        _append_int(first_sequences, summary.get("firstSequence"))
+        _append_int(last_sequences, summary.get("lastSequence"))
+        _append_int(first_timestamps, summary.get("firstTimestampMs"))
+        _append_int(last_timestamps, summary.get("lastTimestampMs"))
+    if not event_count and not event_type_counts and not phase_counts and not source_counts:
+        return {}
+    merged: dict[str, Any] = {
+        "eventCount": event_count,
+        "eventTypes": sorted(event_type_counts),
+        "eventTypeCounts": dict(sorted(event_type_counts.items())),
+        "phases": sorted(phase_counts),
+        "phaseCounts": dict(sorted(phase_counts.items())),
+        "sources": sorted(source_counts),
+        "sourceCounts": dict(sorted(source_counts.items())),
+    }
+    if first_sequences:
+        merged["firstSequence"] = min(first_sequences)
+    if last_sequences:
+        merged["lastSequence"] = max(last_sequences)
+    if first_timestamps and last_timestamps:
+        first_timestamp = min(first_timestamps)
+        last_timestamp = max(last_timestamps)
+        merged["firstTimestampMs"] = first_timestamp
+        merged["lastTimestampMs"] = last_timestamp
+        merged["durationMs"] = max(0, last_timestamp - first_timestamp)
+    return merged
+
+
+def _merge_count_mappings(summaries: Iterable[Mapping[str, int]]) -> dict[str, int]:
+    merged: dict[str, int] = {}
+    for summary in summaries:
+        _merge_count_mapping(merged, summary)
+    return dict(sorted(merged.items()))
+
+
+def _merge_count_mapping(target: dict[str, int], value: Any) -> None:
+    if not isinstance(value, Mapping):
+        return
+    for key, count in value.items():
+        if not isinstance(key, str) or not key:
+            continue
+        target[key] = target.get(key, 0) + _coerce_int(count, 0)
+
+
+def _append_int(items: list[int], value: Any) -> None:
+    if isinstance(value, int) and not isinstance(value, bool):
+        items.append(value)
 
 
 def load_replay_file(path: str | Path) -> dict[str, Any]:

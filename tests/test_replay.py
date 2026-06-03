@@ -32,6 +32,8 @@ from harn_gibson.replay import (
     ReplayExpectationResult,
     ReplayFileResult,
     ReplaySuiteResult,
+    _replay_data_event_summary,
+    _replay_result_render_summary,
     capture_replay_frame_screenshots,
     compare_replay_baseline,
     discover_replay_files,
@@ -77,6 +79,19 @@ ROOT = Path(__file__).resolve().parents[1]
 EXAMPLE_REPLAYS = ROOT / "examples" / "replays"
 EXAMPLE_DOGFOOD_REPLAYS = ROOT / "examples" / "dogfood-replays"
 EXAMPLE_DOGFOOD_WORKSPACE = ROOT / "examples" / "dogfood-workspaces" / "tiny-project"
+
+
+def dogfood_renderer_state() -> GibsonServerState:
+    return build_state_from_env(
+        {
+            "HARN_GIBSON_RENDERER_COMMAND": json.dumps(
+                ["uv", "run", "python", str(ROOT / "examples" / "renderers" / "gibson_dogfood_renderer.py")]
+            ),
+            "HARN_GIBSON_RENDERER_TIMEOUT_MS": "10000",
+            "HARN_GIBSON_PROJECT_ROOT": str(EXAMPLE_DOGFOOD_WORKSPACE),
+            "HARN_GIBSON_PROJECT_NAME": "tiny-project",
+        }
+    )
 
 
 def event_payload(
@@ -1134,16 +1149,7 @@ def test_checked_in_replay_fixtures_cover_agent_and_renderer_sides() -> None:
 
 
 def test_checked_in_dogfood_replay_exercises_showcase_renderer() -> None:
-    state = build_state_from_env(
-        {
-            "HARN_GIBSON_RENDERER_COMMAND": json.dumps(
-                ["uv", "run", "python", str(ROOT / "examples" / "renderers" / "gibson_dogfood_renderer.py")]
-            ),
-            "HARN_GIBSON_RENDERER_TIMEOUT_MS": "10000",
-            "HARN_GIBSON_PROJECT_ROOT": str(EXAMPLE_DOGFOOD_WORKSPACE),
-            "HARN_GIBSON_PROJECT_NAME": "tiny-project",
-        }
-    )
+    state = dogfood_renderer_state()
     try:
         result = run_replay_file(EXAMPLE_DOGFOOD_REPLAYS / "tiny-project-trajectory.json", state)
     finally:
@@ -1168,16 +1174,7 @@ def test_checked_in_dogfood_replay_exercises_showcase_renderer() -> None:
 
 
 def test_checked_in_dogfood_runtime_replay_exercises_failure_scene() -> None:
-    state = build_state_from_env(
-        {
-            "HARN_GIBSON_RENDERER_COMMAND": json.dumps(
-                ["uv", "run", "python", str(ROOT / "examples" / "renderers" / "gibson_dogfood_renderer.py")]
-            ),
-            "HARN_GIBSON_RENDERER_TIMEOUT_MS": "10000",
-            "HARN_GIBSON_PROJECT_ROOT": str(EXAMPLE_DOGFOOD_WORKSPACE),
-            "HARN_GIBSON_PROJECT_NAME": "tiny-project",
-        }
-    )
+    state = dogfood_renderer_state()
     try:
         result = run_replay_file(EXAMPLE_DOGFOOD_REPLAYS / "runtime-diagnostic-trajectory.json", state)
     finally:
@@ -1193,6 +1190,54 @@ def test_checked_in_dogfood_runtime_replay_exercises_failure_scene() -> None:
     assert result.scene.primitives["dogfood-route"].props["focusHopId"] == "target-0"
     assert result.scene.animations["dogfood-breach"].kind == "breach_wave"
     assert result.scene.metadata["lastRenderIntent"]["eventTypes"] == ["runtime_error"]
+
+
+def test_checked_in_dogfood_replay_suite_summarizes_trajectory_coverage() -> None:
+    suite = run_replay_suite(EXAMPLE_DOGFOOD_REPLAYS, state_factory=dogfood_renderer_state)
+    payload = suite.to_dict()
+
+    assert suite.ok is True
+    assert payload["summary"] == {
+        "eventSummary": {
+            "durationMs": 24600,
+            "eventCount": 12,
+            "eventTypeCounts": {
+                "browser_input": 1,
+                "input": 2,
+                "runtime_error": 1,
+                "tool_call": 4,
+                "tool_result": 4,
+            },
+            "eventTypes": ["browser_input", "input", "runtime_error", "tool_call", "tool_result"],
+            "firstSequence": 1,
+            "firstTimestampMs": 1000,
+            "lastSequence": 7,
+            "lastTimestampMs": 25600,
+            "phaseCounts": {"after": 5, "before": 6, "lifecycle": 1},
+            "phases": ["after", "before", "lifecycle"],
+            "sourceCounts": {"browser": 1, "harn": 10, "harn-gibson": 1},
+            "sources": ["browser", "harn", "harn-gibson"],
+        },
+        "expectationCount": 28,
+        "failedCount": 0,
+        "fileCount": 2,
+        "okCount": 2,
+        "rendererCounts": {"gibson-dogfood-showcase": 12},
+        "renderers": ["gibson-dogfood-showcase"],
+        "routeCounts": {"renderer_agent": 12},
+        "routes": ["renderer_agent"],
+        "screenshotCount": 0,
+        "screenshotExpectationCount": 0,
+        "stepCount": 12,
+    }
+    assert payload["files"][0]["eventSummary"]["eventTypeCounts"] == {
+        "browser_input": 1,
+        "input": 1,
+        "runtime_error": 1,
+        "tool_call": 1,
+        "tool_result": 1,
+    }
+    assert payload["files"][1]["rendererCounts"] == {"gibson-dogfood-showcase": 7}
 
 
 def test_replay_raw_events_render_plans_and_mutations() -> None:
@@ -1364,7 +1409,11 @@ def test_replay_suite_discovers_runs_and_serializes(tmp_path: Path) -> None:
     assert suite.total == 2
     assert suite.failed == 1
     assert suite.ok is False
-    assert suite.files[0] == ReplayFileResult("first.json", True, steps=1, scene_revision=1, expectations=1)
+    assert suite.files[0].path == "first.json"
+    assert suite.files[0].ok is True
+    assert suite.files[0].steps == 1
+    assert suite.files[0].scene_revision == 1
+    assert suite.files[0].expectations == 1
     assert ReplayFileResult("unrun.json", True).to_dict() == {
         "path": "unrun.json",
         "ok": True,
@@ -1373,7 +1422,14 @@ def test_replay_suite_discovers_runs_and_serializes(tmp_path: Path) -> None:
     }
     assert suite.files[1].path == "nested/second.json"
     assert suite.files[1].expectation_failures[0].path == "primitives.status.props.text"
-    assert suite.to_dict()["files"][1]["expectationFailures"][0]["passed"] is False
+    payload = suite.to_dict()
+    assert payload["summary"]["eventSummary"]["eventCount"] == 2
+    assert payload["summary"]["eventSummary"]["eventTypeCounts"] == {"message_update": 2}
+    assert payload["summary"]["routeCounts"] == {"stream_buffer": 1}
+    assert payload["summary"]["rendererCounts"] == {"direct": 1}
+    assert payload["files"][0]["eventSummary"]["eventTypes"] == ["message_update"]
+    assert payload["files"][1]["eventSummary"]["eventCount"] == 1
+    assert payload["files"][1]["expectationFailures"][0]["passed"] is False
     assert run_replay_suite(first).to_dict()["files"][0]["path"] == first.as_posix()
 
 
@@ -1642,6 +1698,106 @@ def test_replay_suite_validation(tmp_path: Path) -> None:
     assert suite.failed == 1
     assert suite.files[0].ok is False
     assert "Expecting value" in suite.files[0].error
+
+
+def test_replay_suite_summary_helpers_handle_sparse_shapes() -> None:
+    empty_suite = ReplaySuiteResult("empty", ()).to_dict()
+    assert empty_suite["summary"] == {
+        "expectationCount": 0,
+        "failedCount": 0,
+        "fileCount": 0,
+        "okCount": 0,
+        "screenshotCount": 0,
+        "screenshotExpectationCount": 0,
+        "stepCount": 0,
+    }
+
+    sparse_summary = ReplaySuiteResult(
+        "sparse",
+        (
+            ReplayFileResult(
+                "sparse.json",
+                True,
+                event_summary={"eventCount": 1, "eventTypeCounts": {"": 1}, "phaseCounts": {}, "sourceCounts": {}},
+                route_counts={"": 1},
+                renderer_counts={"": 1},
+            ),
+        ),
+    ).summary
+    assert sparse_summary["eventSummary"] == {
+        "eventCount": 1,
+        "eventTypes": [],
+        "eventTypeCounts": {},
+        "phases": [],
+        "phaseCounts": {},
+        "sources": [],
+        "sourceCounts": {},
+    }
+    assert "routeCounts" not in sparse_summary
+    assert "rendererCounts" not in sparse_summary
+
+    raw_event = {
+        "eventType": "raw_custom",
+        "phase": "before",
+        "source": "raw",
+        "sequence": 8,
+        "timestampMs": 2000,
+    }
+    mutation_event = event_payload(9, "browser_input", {"message": "steer"})
+    plan_event = event_payload(10, "tool_result", {"toolName": "bash"})
+    assert _replay_data_event_summary({"steps": "bad"}) == {}
+    assert _replay_data_event_summary({"steps": ["bad", {"type": "unknown"}]}) == {}
+    assert _replay_data_event_summary(
+        {
+            "steps": [
+                {"type": "raw_event", "raw": raw_event},
+                {"type": "mutations", "event": mutation_event, "mutations": []},
+                {
+                    "type": "render_plan",
+                    "requests": [{"event": plan_event}, "bad", {"event": "bad"}],
+                    "steps": [],
+                },
+                {"type": "render_plan", "plan": {"requests": "bad", "steps": []}},
+            ]
+        }
+    )["eventTypeCounts"] == {
+        "browser_input": 1,
+        "raw_custom": 1,
+        "tool_result": 1,
+    }
+
+    fallback_scene = SceneState(metadata={"renderIntents": "bad"})
+    fallback_result = ReplayResult(
+        schema="harn-gibson.replay.v1",
+        name="fallback routes",
+        steps=(ReplayStepResult(0, "event", 0, 0, route="manual_route"),),
+        scene=fallback_scene,
+    )
+    assert _replay_result_render_summary(fallback_result) == {
+        "rendererCounts": {},
+        "routeCounts": {"manual_route": 1},
+    }
+
+    intent_scene = SceneState(
+        metadata={
+            "renderIntents": [
+                "bad",
+                {"renderer": "", "routes": "string_route"},
+                {"renderer": "model", "routes": ["list_route", "", 7]},
+                {"renderer": "no-route", "routes": 7},
+            ]
+        }
+    )
+    intent_result = ReplayResult(
+        schema="harn-gibson.replay.v1",
+        name="intent routes",
+        steps=(ReplayStepResult(0, "event", 0, 0, route="ignored_fallback"),),
+        scene=intent_scene,
+    )
+    assert _replay_result_render_summary(intent_result) == {
+        "rendererCounts": {"model": 1, "no-route": 1},
+        "routeCounts": {"list_route": 1, "string_route": 1},
+    }
 
 
 def test_replay_raw_event_without_decisions_and_empty_plan() -> None:

@@ -109,7 +109,7 @@ uv run harn-gibson replay-dir examples/replays \
   --screenshot-dir test-artifacts/replays/screenshots
 ```
 
-The command exits with status `1` if any fixture fails to load, replay, satisfy expectations, match its requested baseline, render its requested browser screenshot, or satisfy screenshot expectations. Browser screenshots also sample the `#grid` canvas and fail if it is blank. The suite result JSON uses `harn-gibson.replay-suite-result.v1` and records per-file step counts, scene revisions, expectation counts, screenshot expectation counts, baseline metadata, screenshot metadata, canvas metrics, and failures.
+The command exits with status `1` if any fixture fails to load, replay, satisfy expectations, match its requested baseline, render its requested browser screenshot, or satisfy screenshot expectations. Browser screenshots also sample the `#grid` canvas and fail if it is blank. The suite result JSON uses `harn-gibson.replay-suite-result.v1` and records per-file step counts, scene revisions, expectation counts, screenshot expectation counts, baseline metadata, screenshot metadata, canvas metrics, event summaries, renderer/route counts, and failures. Its top-level `summary` aggregates those counts across the suite, so long dogfood captures can be compared for event mix, timing, routes, renderers, screenshots, and baseline coverage before opening the review bundle.
 
 Use `--style gibson`, `--style neon-noir`, or `--style mainframe` to render replay scenes through a specific style pack. Styled runs put the style pack in scene metadata and browser screenshots, so use a matching baseline directory if the style affects expected final scene state.
 
