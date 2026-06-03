@@ -2,6 +2,14 @@
 
 from harn_gibson.events import EventPhase, GibsonEvent, phase_for_event, summarize_event, to_jsonable
 from harn_gibson.hooks import HookDecision, HookDispatcher, load_hook_module, result_for_harn
+from harn_gibson.rendering import (
+    DeterministicSceneRenderer,
+    RenderPipeline,
+    RenderPlan,
+    RenderRequest,
+    RenderStep,
+    RenderSubmitResult,
+)
 from harn_gibson.scene import (
     SceneAnimation,
     SceneEngine,
@@ -18,6 +26,12 @@ __all__ = [
     "GibsonEvent",
     "HookDecision",
     "HookDispatcher",
+    "DeterministicSceneRenderer",
+    "RenderPipeline",
+    "RenderPlan",
+    "RenderRequest",
+    "RenderStep",
+    "RenderSubmitResult",
     "SceneAnimation",
     "SceneEngine",
     "SceneMutation",

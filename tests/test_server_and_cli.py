@@ -13,10 +13,12 @@ from harn_gibson.server import (
     GibsonServerState,
     apply_event_to_scene,
     browser_input_event_payload,
+    build_state_from_env,
     create_server,
     enqueue_browser_input,
     event_from_payload,
     format_sse,
+    submit_event_to_renderer,
 )
 
 
@@ -47,7 +49,13 @@ def test_http_server_routes() -> None:
         assert "GIBSON LINK" in request_text(f"{base}/index.html")[2]
         assert request_text(f"{base}/assets/app.css")[1] == "text/css; charset=utf-8"
         assert request_text(f"{base}/assets/app.js")[1] == "application/javascript; charset=utf-8"
-        assert json.loads(request_text(f"{base}/healthz")[2]) == {"ok": True, "events": 0, "sceneRevision": 0}
+        assert json.loads(request_text(f"{base}/healthz")[2]) == {
+            "ok": True,
+            "events": 0,
+            "sceneRevision": 0,
+            "renderMode": "blocking",
+            "pendingRenderJobs": 0,
+        }
         assert json.loads(request_text(f"{base}/scene")[2])["schema"] == "harn-gibson.scene.v1"
         assert json.loads(request_text(f"{base}/missing")[2]) == {"error": "not found"}
         assert json.loads(request_text(f"{base}/bad", b"{}")[2]) == {"error": "not found"}
@@ -76,8 +84,14 @@ def test_http_server_routes() -> None:
         }
         status, _content_type, body = request_text(f"{base}/events", json.dumps(payload).encode("utf-8"))
         assert status == 202
-        assert json.loads(body) == {"ok": True, "sceneRevision": 1}
-        assert json.loads(request_text(f"{base}/healthz")[2]) == {"ok": True, "events": 1, "sceneRevision": 1}
+        assert json.loads(body) == {"ok": True, "renderMode": "blocking", "sceneRevision": 1}
+        assert json.loads(request_text(f"{base}/healthz")[2]) == {
+            "ok": True,
+            "events": 1,
+            "sceneRevision": 1,
+            "renderMode": "blocking",
+            "pendingRenderJobs": 0,
+        }
 
         status, _content_type, body = request_text(
             f"{base}/input",
@@ -85,6 +99,8 @@ def test_http_server_routes() -> None:
         )
         accepted = json.loads(body)
         assert status == 202
+        assert accepted["ok"] is True
+        assert accepted["renderMode"] == "blocking"
         assert accepted["input"] == {
             "id": "input-1",
             "sequence": 1,
@@ -117,12 +133,14 @@ def test_apply_event_to_scene_and_event_from_payload() -> None:
 
     event = event_from_payload(payload)
     update = apply_event_to_scene(payload, state)
+    submit_result = submit_event_to_renderer(payload, state)
 
     assert event.event_type == "tool_call"
     assert event.recent_context == ("ctx",)
     assert update["schema"] == "harn-gibson.scene-update.v1"
     assert update["decisions"] == [{"block": True, "reason": "no"}]
     assert update["scene"]["revision"] == 1
+    assert submit_result.scene_revision == 2
 
 
 def test_event_from_payload_validation() -> None:
@@ -169,6 +187,36 @@ def test_browser_input_queue_and_payload_validation(monkeypatch: Any) -> None:
     assert payload["eventType"] == "browser_input"
     assert payload["summary"] == "gibson input queued: abc"
     assert "..." in browser_input_event_payload(queue.enqueue("x" * 120))["summary"]
+
+
+def test_async_state_accepts_without_immediate_scene_update() -> None:
+    state = GibsonServerState(render_mode="async", render_batch_window_ms=0)
+    state.pipeline.start = lambda: None  # type: ignore[method-assign]
+    payload = {
+        "sequence": 1,
+        "timestampMs": 10,
+        "source": "test",
+        "eventType": "input",
+        "phase": "before",
+        "title": "Input intercept",
+        "summary": "input",
+        "payload": {"type": "input", "text": "hi", "source": "test"},
+    }
+
+    accepted = apply_event_to_scene(payload, state)
+    assert "schema" not in accepted
+    assert accepted["ok"] is True
+    assert accepted["renderMode"] == "async"
+    assert accepted["sceneRevision"] == 0
+    state.pipeline.stop()
+
+
+def test_build_state_from_env() -> None:
+    state = build_state_from_env({"HARN_GIBSON_RENDER_MODE": "async", "HARN_GIBSON_RENDER_BATCH_MS": "5"})
+
+    assert state.pipeline.mode == "async"
+    assert state.pipeline.batch_window_ms == 5
+    state.pipeline.stop()
 
 
 def test_format_sse() -> None:

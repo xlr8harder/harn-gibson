@@ -1,0 +1,24 @@
+# Browser Integration Tests
+
+Browser tests use Playwright to render the local display in headless Chromium and capture screenshots.
+
+Install browser binaries once per environment:
+
+```bash
+uv run playwright install chromium
+```
+
+Run all tests:
+
+```bash
+uv run pytest
+```
+
+Screenshots from the browser integration test are written under `test-artifacts/screenshots/`.
+
+The integration test verifies:
+
+- the display shell renders in desktop and mobile viewports;
+- posting a harn-style event mutates the scene;
+- the debug drawer toggles;
+- the browser input composer enqueues a message and `/input/next` drains it.

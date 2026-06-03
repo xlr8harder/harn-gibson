@@ -38,7 +38,17 @@ The display is a persistent scene, not a sequence of independent event rendering
 
 The current display agent is deterministic and maps each harn event to status, log, decision, and pulse mutations. Later, the LLM display agent should receive recent harn context plus recent scene context and return the same mutation format.
 
-The event feed and hook decisions are treated as debug surfaces. They remain in scene state for inspection, but the default browser layout hides them behind a debug drawer.
+The raw event details, event feed, and hook decisions are treated as debug surfaces. They remain in scene state for inspection, but the default browser layout hides them behind a debug drawer.
+
+## Render Pipeline
+
+The display server accepts events into a render pipeline.
+
+In blocking mode, the server builds and applies a render plan before responding to harn. This guarantees the scene saw the event before harn proceeds.
+
+In async mode, the server accepts the event immediately and a background worker batches queued events before rendering. This avoids slowing harn, but updates may arrive later and the renderer agent must handle multiple input events per plan.
+
+The deterministic renderer returns one render step per event today. A model-backed renderer should return the same `RenderPlan` shape and may include multiple delayed steps for sequential effects.
 
 ## Hook Phases
 

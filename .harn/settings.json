@@ -1,0 +1,10 @@
+{
+  "defaultProvider": "openai-codex",
+  "defaultModel": "gpt-5.5",
+  "defaultThinkingLevel": "high",
+  "extensions": [
+    "src/harn_gibson/extension.py"
+  ],
+  "steeringMode": "one-at-a-time",
+  "followUpMode": "one-at-a-time"
+}

@@ -9,10 +9,23 @@ import time
 from dataclasses import dataclass, field
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from os import environ
 from typing import Any
 
 from harn_gibson.events import GibsonEvent
-from harn_gibson.scene import SceneEngine, default_mutations_for_event, scene_update_payload
+from harn_gibson.rendering import (
+    DeterministicSceneRenderer,
+    RenderMode,
+    RenderPipeline,
+    RenderRequest,
+    RenderSubmitResult,
+    SceneRenderer,
+    coerce_batch_window_ms,
+    coerce_render_mode,
+    decisions_from_payload,
+    render_accept_payload,
+)
+from harn_gibson.scene import SceneEngine
 from harn_gibson.sinks import EventBuffer
 
 
@@ -21,6 +34,19 @@ class GibsonServerState:
     buffer: EventBuffer = field(default_factory=EventBuffer)
     scene: SceneEngine = field(default_factory=SceneEngine)
     inputs: BrowserInputQueue = field(default_factory=lambda: BrowserInputQueue())
+    render_mode: RenderMode = "blocking"
+    render_batch_window_ms: int = 40
+    renderer: SceneRenderer = field(default_factory=DeterministicSceneRenderer)
+    pipeline: RenderPipeline = field(init=False)
+
+    def __post_init__(self) -> None:
+        self.pipeline = RenderPipeline(
+            scene=self.scene,
+            buffer=self.buffer,
+            renderer=self.renderer,
+            mode=self.render_mode,
+            batch_window_ms=self.render_batch_window_ms,
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -77,17 +103,27 @@ def create_server(
     port: int = 8765,
     state: GibsonServerState | None = None,
 ) -> ThreadingHTTPServer:
-    return ThreadingHTTPServer((host, port), make_handler(state or GibsonServerState()))
+    return ThreadingHTTPServer((host, port), make_handler(state or build_state_from_env()))
 
 
 def run_server(host: str = "127.0.0.1", port: int = 8765) -> None:  # pragma: no cover
-    server = create_server(host, port)
+    state = build_state_from_env()
+    server = create_server(host, port, state)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
         server.shutdown()
     finally:
+        state.pipeline.stop()
         server.server_close()
+
+
+def build_state_from_env(env: dict[str, str] | None = None) -> GibsonServerState:
+    source = environ if env is None else env
+    return GibsonServerState(
+        render_mode=coerce_render_mode(source.get("HARN_GIBSON_RENDER_MODE")),
+        render_batch_window_ms=coerce_batch_window_ms(source.get("HARN_GIBSON_RENDER_BATCH_MS")),
+    )
 
 
 def make_handler(state: GibsonServerState) -> type[BaseHTTPRequestHandler]:
@@ -111,6 +147,8 @@ def make_handler(state: GibsonServerState) -> type[BaseHTTPRequestHandler]:
                         "ok": True,
                         "events": len(state.buffer.snapshot()),
                         "sceneRevision": state.scene.state.revision,
+                        "renderMode": state.pipeline.mode,
+                        "pendingRenderJobs": state.pipeline.pending_count(),
                     },
                 )
                 return
@@ -143,12 +181,11 @@ def make_handler(state: GibsonServerState) -> type[BaseHTTPRequestHandler]:
             if payload is None:
                 return
             try:
-                update = apply_event_to_scene(payload, state)
+                result = submit_event_to_renderer(payload, state)
             except (KeyError, TypeError, ValueError) as error:
                 self._json(HTTPStatus.BAD_REQUEST, {"error": str(error)})
                 return
-            state.buffer.publish(update)
-            self._json(HTTPStatus.ACCEPTED, {"ok": True, "sceneRevision": state.scene.state.revision})
+            self._json(HTTPStatus.ACCEPTED, render_accept_payload(result, state.scene.state.revision))
 
         def _handle_input_post(self) -> None:
             payload = self._read_json_payload("input payload must be an object")
@@ -159,16 +196,17 @@ def make_handler(state: GibsonServerState) -> type[BaseHTTPRequestHandler]:
             except (TypeError, ValueError) as error:
                 self._json(HTTPStatus.BAD_REQUEST, {"error": str(error)})
                 return
-            update = apply_event_to_scene(browser_input_event_payload(item), state)
-            state.buffer.publish(update)
-            self._json(
-                HTTPStatus.ACCEPTED,
+            result = submit_event_to_renderer(browser_input_event_payload(item), state)
+            response = render_accept_payload(result, state.scene.state.revision)
+            response.update(
                 {
-                    "ok": True,
                     "input": item.to_dict(),
                     "pendingInputs": state.inputs.pending_count(),
-                    "sceneRevision": state.scene.state.revision,
-                },
+                }
+            )
+            self._json(
+                HTTPStatus.ACCEPTED,
+                response,
             )
 
         def _read_json_payload(self, object_error: str) -> dict[str, Any] | None:
@@ -255,15 +293,16 @@ def format_sse(payload: dict[str, Any]) -> str:
     return f"data: {json.dumps(payload, separators=(',', ':'))}\n\n"
 
 
-def apply_event_to_scene(payload: dict[str, Any], state: GibsonServerState) -> dict[str, Any]:
+def submit_event_to_renderer(payload: dict[str, Any], state: GibsonServerState) -> RenderSubmitResult:
     event = event_from_payload(payload)
-    decisions = [decision for decision in payload.get("decisions", []) if isinstance(decision, dict)]
-    mutations = default_mutations_for_event(event, decisions)
-    scene = state.scene.apply(mutations)
-    update = scene_update_payload(event, mutations, scene)
-    if decisions:
-        update["decisions"] = decisions
-    return update
+    return state.pipeline.submit(RenderRequest(event=event, decisions=decisions_from_payload(payload)))
+
+
+def apply_event_to_scene(payload: dict[str, Any], state: GibsonServerState) -> dict[str, Any]:
+    result = submit_event_to_renderer(payload, state)
+    if result.updates:
+        return result.updates[-1]
+    return render_accept_payload(result, state.scene.state.revision)
 
 
 def event_from_payload(payload: dict[str, Any]) -> GibsonEvent:
@@ -312,19 +351,9 @@ HTML = """<!doctype html>
             <div id="status" class="status">awaiting signal</div>
           </div>
         </div>
-        <div class="readout">
-          <div>
-            <span>phase</span>
-            <strong id="phase">idle</strong>
-          </div>
-          <div>
-            <span>event</span>
-            <strong id="eventType">none</strong>
-          </div>
-          <div>
-            <span>sequence</span>
-            <strong id="sequence">0</strong>
-          </div>
+        <div class="signal-copy">
+          <span id="signalTitle">CHANNEL IDLE</span>
+          <strong id="signalSummary">awaiting harn stream</strong>
         </div>
         <form id="inputForm" class="composer" autocomplete="off">
           <textarea id="promptInput" rows="2" placeholder="route input to harn"></textarea>
@@ -339,6 +368,27 @@ HTML = """<!doctype html>
         </form>
       </section>
       <aside id="debugPanel" class="debug-panel" aria-label="Debug stream">
+        <div class="debug-drawer-header">
+          <span>DEBUG STREAM</span>
+          <button id="debugClose" class="debug-toggle" type="button">CLOSE</button>
+        </div>
+        <div class="panel debug-details">
+          <h2>Event Details</h2>
+          <dl>
+            <div>
+              <dt>Phase</dt>
+              <dd id="phase">idle</dd>
+            </div>
+            <div>
+              <dt>Event</dt>
+              <dd id="eventType">none</dd>
+            </div>
+            <div>
+              <dt>Sequence</dt>
+              <dd id="sequence">0</dd>
+            </div>
+          </dl>
+        </div>
         <div class="panel">
           <h2>Event Feed</h2>
           <ol id="feed"></ol>
@@ -386,6 +436,7 @@ body {
   min-height: calc(100vh - 36px);
   border: 1px solid var(--line);
   background: #070b0f;
+  transition: margin-right 160ms ease-out;
 }
 #grid {
   position: absolute;
@@ -436,6 +487,19 @@ h1 {
   border-color: rgba(255, 204, 102, 0.65);
   color: var(--amber);
 }
+.debug-drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  padding: 10px 12px;
+}
+.debug-drawer-header span {
+  color: var(--amber);
+  font-size: 12px;
+}
 .status {
   max-width: 220px;
   padding: 8px 10px;
@@ -443,26 +507,18 @@ h1 {
   color: var(--amber);
   text-align: right;
 }
-.readout {
+.signal-copy {
   position: absolute;
   left: 24px;
   right: 24px;
-  bottom: 132px;
   z-index: 1;
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
+  bottom: 176px;
+  max-width: 780px;
+  max-height: 94px;
+  overflow: hidden;
+  pointer-events: none;
 }
-.readout div,
-.panel {
-  border: 1px solid var(--line);
-  background: var(--panel);
-}
-.readout div {
-  min-height: 78px;
-  padding: 12px;
-}
-.readout span,
+.signal-copy span,
 .panel h2 {
   display: block;
   color: var(--muted);
@@ -470,12 +526,21 @@ h1 {
   font-weight: 500;
   text-transform: uppercase;
 }
-.readout strong {
+.signal-copy strong {
   display: block;
-  margin-top: 10px;
+  margin-top: 8px;
   color: var(--cyan);
-  font-size: 17px;
+  font-size: 22px;
+  line-height: 1.25;
+  display: -webkit-box;
   overflow-wrap: anywhere;
+  overflow: hidden;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.panel {
+  border: 1px solid var(--line);
+  background: var(--panel);
 }
 .composer {
   position: absolute;
@@ -529,7 +594,7 @@ h1 {
   bottom: 18px;
   z-index: 5;
   display: grid;
-  grid-template-rows: minmax(0, 1fr) 260px;
+  grid-template-rows: auto auto minmax(0, 1fr) 240px;
   gap: 12px;
   width: min(420px, calc(100vw - 36px));
   transform: translateX(calc(100% + 24px));
@@ -540,6 +605,11 @@ body.debug-open .debug-panel {
   transform: translateX(0);
   pointer-events: auto;
 }
+@media (min-width: 901px) {
+  body.debug-open .stage {
+    margin-right: 438px;
+  }
+}
 .panel {
   min-width: 0;
   overflow: hidden;
@@ -547,6 +617,26 @@ body.debug-open .debug-panel {
 }
 .panel h2 {
   margin: 0 0 12px;
+}
+.debug-details dl {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+.debug-details div {
+  min-width: 0;
+}
+.debug-details dt {
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
+}
+.debug-details dd {
+  margin: 5px 0 0;
+  color: var(--cyan);
+  font-size: 13px;
+  overflow-wrap: anywhere;
 }
 #feed {
   display: flex;
@@ -590,12 +680,13 @@ body.debug-open .debug-panel {
   .stage { min-height: calc(100vh - 20px); }
   .mast { flex-direction: column; padding: 16px; }
   .topbar { width: 100%; justify-content: space-between; }
-  .readout {
+  .signal-copy {
     left: 16px;
     right: 16px;
-    bottom: 166px;
+    bottom: 214px;
+    max-height: 84px;
   }
-  .readout { grid-template-columns: 1fr; }
+  .signal-copy strong { font-size: 18px; }
   .composer {
     left: 16px;
     right: 16px;
@@ -613,8 +704,11 @@ const statusEl = document.getElementById("status");
 const phaseEl = document.getElementById("phase");
 const eventEl = document.getElementById("eventType");
 const sequenceEl = document.getElementById("sequence");
+const signalTitle = document.getElementById("signalTitle");
+const signalSummary = document.getElementById("signalSummary");
 const decisionLog = document.getElementById("decisionLog");
 const debugToggle = document.getElementById("debugToggle");
+const debugClose = document.getElementById("debugClose");
 const inputForm = document.getElementById("inputForm");
 const promptInput = document.getElementById("promptInput");
 const deliverAs = document.getElementById("deliverAs");
@@ -624,6 +718,11 @@ const pulses = [];
 debugToggle.addEventListener("click", () => {
   const expanded = document.body.classList.toggle("debug-open");
   debugToggle.setAttribute("aria-expanded", String(expanded));
+});
+
+debugClose.addEventListener("click", () => {
+  document.body.classList.remove("debug-open");
+  debugToggle.setAttribute("aria-expanded", "false");
 });
 
 promptInput.addEventListener("keydown", (event) => {
@@ -715,6 +814,8 @@ function pushEvent(event) {
   phaseEl.textContent = current.phase || "unknown";
   eventEl.textContent = current.eventType || "unknown";
   sequenceEl.textContent = String(current.sequence || 0);
+  signalTitle.textContent = current.title || current.eventType || "SIGNAL";
+  signalSummary.textContent = current.summary || `${current.phase || "event"}:${current.eventType || "unknown"}`;
   if (scene) {
     renderScene(scene);
   } else {
@@ -755,6 +856,11 @@ function renderScene(scene) {
       summary: entry.summary,
     });
   }
+  const latest = scene.log?.[scene.log.length - 1];
+  if (latest) {
+    signalTitle.textContent = latest.title || latest.eventType || "SIGNAL";
+    signalSummary.textContent = latest.summary || `${latest.phase || "event"}:${latest.eventType || "unknown"}`;
+  }
 }
 
 const source = new EventSource("/events");
@@ -779,6 +885,7 @@ __all__ = [
     "BrowserInputQueue",
     "GibsonServerState",
     "apply_event_to_scene",
+    "build_state_from_env",
     "browser_input_event_payload",
     "create_server",
     "enqueue_browser_input",
@@ -786,4 +893,5 @@ __all__ = [
     "format_sse",
     "make_handler",
     "run_server",
+    "submit_event_to_renderer",
 ]

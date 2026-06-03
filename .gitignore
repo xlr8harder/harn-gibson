@@ -7,5 +7,14 @@ __pycache__/
 dist/
 build/
 htmlcov/
+test-artifacts/
 *.pyc
 *.jsonl
+.env
+.env.*
+.harn/*
+!.harn/settings.json
+.harn/**/sessions/
+.harn/**/cache/
+.harn/**/*.log
+.harn/**/*.jsonl

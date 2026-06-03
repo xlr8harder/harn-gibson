@@ -43,7 +43,16 @@ Delivery modes:
 - `queue`: default. Runs immediately if harn is idle, or queues as a follow-up if harn is streaming.
 - `steer`: queues steering input for the active agent run.
 
-The raw event feed and hook decisions are in the debug drawer. Use the `DEBUG` button in the display to toggle it.
+The raw event details, event feed, and hook decisions are in the debug drawer. Use `DEBUG` to open it and `CLOSE` inside the drawer to collapse it.
+
+Project-local harn settings in `.harn/settings.json` select the `openai-codex` provider, `gpt-5.5`, and this extension. Run `/login` in harn and choose ChatGPT Plus/Pro (Codex) if credentials are not already stored.
+
+Render mode is configurable:
+
+```bash
+HARN_GIBSON_RENDER_MODE=blocking  # default
+HARN_GIBSON_RENDER_MODE=async HARN_GIBSON_RENDER_BATCH_MS=40
+```
 
 For offline inspection, write normalized events to JSONL:
 
@@ -51,6 +60,15 @@ For offline inspection, write normalized events to JSONL:
 HARN_GIBSON_EVENT_LOG=.harn-gibson.jsonl \
 harn -e "$(uv run harn-gibson extension-path)"
 ```
+
+## Browser Tests
+
+```bash
+uv run playwright install chromium
+uv run pytest
+```
+
+Browser screenshots are written to `test-artifacts/screenshots/`.
 
 ## Hook Modules
 
