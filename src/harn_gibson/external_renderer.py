@@ -9,6 +9,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
+from harn_gibson.catalog import VisualCatalog, default_visual_catalog
 from harn_gibson.rendering import (
     DeterministicSceneRenderer,
     RendererContext,
@@ -16,6 +17,9 @@ from harn_gibson.rendering import (
     RenderPlan,
     RenderRequest,
     RenderStep,
+    render_plan_diagnostics_payload,
+    render_plan_has_validation_errors,
+    validate_render_plan,
 )
 from harn_gibson.scene import SceneMutation, SceneState, mutation_from_mapping
 
@@ -30,6 +34,7 @@ class ExternalRenderer:
     timeout_seconds: float = DEFAULT_RENDERER_TIMEOUT_SECONDS
     renderer_id: str = "external"
     fallback: DeterministicSceneRenderer = field(default_factory=DeterministicSceneRenderer)
+    catalog: VisualCatalog = field(default_factory=default_visual_catalog)
 
     def __post_init__(self) -> None:
         if not self.command:
@@ -72,11 +77,33 @@ class ExternalRenderer:
                     message=f"external renderer exited with code {completed.returncode}",
                     details=_renderer_process_details(completed.stdout, completed.stderr),
                 )
-            return render_plan_from_external_response(
+            plan = render_plan_from_external_response(
                 _json_from_stdout(completed.stdout),
                 bound_requests,
                 renderer_id=self.renderer_id,
             )
+            issues = validate_render_plan(plan, scene, self.catalog)
+            if render_plan_has_validation_errors(issues):
+                return self._error_plan(
+                    bound_requests,
+                    scene,
+                    context,
+                    message="external renderer returned unsafe render plan",
+                    details=_validation_details(issues),
+                    metadata={
+                        "renderPlanDiagnostics": render_plan_diagnostics_payload(issues, status="rejected"),
+                    },
+                )
+            if issues:
+                return RenderPlan(
+                    plan.requests,
+                    plan.steps,
+                    {
+                        **plan.metadata,
+                        "renderPlanDiagnostics": render_plan_diagnostics_payload(issues),
+                    },
+                )
+            return plan
         except Exception as error:
             return self._error_plan(
                 bound_requests,
@@ -94,8 +121,9 @@ class ExternalRenderer:
         *,
         message: str,
         details: str,
+        metadata: dict[str, Any] | None = None,
     ) -> RenderPlan:
-        metadata = {
+        plan_metadata = {
             "renderer": self.renderer_id,
             "fallbackRenderer": "deterministic",
             "rendererError": {
@@ -103,15 +131,17 @@ class ExternalRenderer:
                 "details": _clip_text(details, 4000),
             },
         }
+        if metadata:
+            plan_metadata.update(metadata)
         if not requests:
-            return RenderPlan((), (), metadata)
+            return RenderPlan((), (), plan_metadata)
         base_plan = self.fallback.render_with_context(requests, scene, context)
         error_mutations = _renderer_error_mutations(requests[-1], message, details)
         if not base_plan.steps:
             return RenderPlan(
                 requests,
                 (RenderStep(error_mutations, event_index=len(requests) - 1),),
-                metadata,
+                plan_metadata,
             )
         steps = list(base_plan.steps)
         final_step = steps[-1]
@@ -121,7 +151,7 @@ class ExternalRenderer:
             start_offset_ms=final_step.start_offset_ms,
             event_index=final_step.event_index,
         )
-        return RenderPlan(requests, tuple(steps), metadata)
+        return RenderPlan(requests, tuple(steps), plan_metadata)
 
 
 def external_renderer_payload(
@@ -264,6 +294,10 @@ def _renderer_process_details(stdout: str, stderr: str) -> str:
     if stdout.strip():
         parts.append(f"stdout:\n{stdout.strip()}")
     return "\n\n".join(parts)
+
+
+def _validation_details(issues: Sequence[Any]) -> str:
+    return json.dumps(render_plan_diagnostics_payload(issues, status="rejected"), indent=2, sort_keys=True)
 
 
 def _optional_int(value: Any) -> int | None:

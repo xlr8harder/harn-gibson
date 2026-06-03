@@ -21,6 +21,7 @@ from harn_gibson.rendering import (
     RenderInputBatch,
     RenderPipeline,
     RenderPlan,
+    RenderPlanValidationIssue,
     RenderRequest,
     RenderStep,
     RenderSubmitResult,
@@ -28,8 +29,11 @@ from harn_gibson.rendering import (
     TimelineWindow,
     coerce_render_timing_mode,
     render_intent_from_plan,
+    render_plan_diagnostics_payload,
+    render_plan_has_validation_errors,
     step_schedule,
     step_schedule_payload,
+    validate_render_plan,
 )
 from harn_gibson.replay import (
     ReplayBaselineResult,
@@ -108,6 +112,7 @@ __all__ = [
     "RenderPipeline",
     "RenderInputBatch",
     "RenderPlan",
+    "RenderPlanValidationIssue",
     "RenderRequest",
     "RenderStep",
     "RenderSubmitResult",
@@ -168,6 +173,8 @@ __all__ = [
     "replay_review_bundle_manifest",
     "replay_timeline_from_result",
     "render_plan_from_external_response",
+    "render_plan_diagnostics_payload",
+    "render_plan_has_validation_errors",
     "render_intent_from_plan",
     "replay_data_from_event_log",
     "run_replay_data",
@@ -182,4 +189,5 @@ __all__ = [
     "style_pack_ids",
     "summarize_event",
     "to_jsonable",
+    "validate_render_plan",
 ]

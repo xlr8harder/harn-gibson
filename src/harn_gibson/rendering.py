@@ -27,6 +27,81 @@ from harn_gibson.styles import style_pack_from_name
 
 RenderMode = Literal["blocking", "async"]
 RenderTimingMode = Literal["immediate", "scheduled"]
+RenderPlanValidationSeverity = Literal["warning", "error"]
+
+DEFAULT_RENDER_PLAN_MAX_STEPS = 64
+DEFAULT_RENDER_PLAN_MAX_MUTATIONS = 256
+RENDER_PLAN_DIAGNOSTICS_SCHEMA = "harn-gibson.render-plan-diagnostics.v1"
+_INITIAL_PRIMITIVE_KINDS = {
+    "stage": "viewport",
+    "status": "status",
+    "event-feed": "feed",
+    "trace-log": "code",
+    "decision-log": "code",
+    "scan-grid": "grid",
+}
+_BROWSER_PRIMITIVE_KINDS = frozenset(
+    {
+        "viewport",
+        "status",
+        "feed",
+        "code",
+        "grid",
+        "text_stream",
+        "mesh",
+        "city_block",
+        "svg_layer",
+        "node_graph",
+        "ribbon",
+        "glyph_layer",
+        "particle_field",
+    }
+)
+_BROWSER_ANIMATION_KINDS = frozenset(
+    {
+        "pulse",
+        "phase-pulse",
+        "stream-pulse",
+        "packet_burst",
+        "scan",
+        "glitch",
+        "flythrough",
+        "extrude",
+        "hold",
+    }
+)
+_REGION_IDS = frozenset({"root", "mast", "stage", "side"})
+_SVG_RAW_MARKUP_KEYS = frozenset(
+    {
+        "externalHref",
+        "foreignObject",
+        "foreign_object",
+        "href",
+        "html",
+        "innerHTML",
+        "markup",
+        "rawSvg",
+        "raw_svg",
+        "src",
+        "svg",
+    }
+)
+_SVG_SYMBOL_KINDS = frozenset(
+    {
+        "core",
+        "data_tunnel",
+        "filesystem_gate",
+        "gate",
+        "globe",
+        "ice",
+        "ice_wall",
+        "mainframe_core",
+        "reticle",
+        "spinning_globe",
+        "target",
+        "tunnel",
+    }
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -281,6 +356,426 @@ class RenderPlan:
         if step.event_index < 0 or step.event_index >= len(self.requests):
             return self.primary_request
         return self.requests[step.event_index]
+
+
+@dataclass(frozen=True, slots=True)
+class RenderPlanValidationIssue:
+    severity: RenderPlanValidationSeverity
+    code: str
+    message: str
+    step_index: int | None = None
+    mutation_index: int | None = None
+    target_id: str | None = None
+    value: str | int | float | bool | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "severity": self.severity,
+            "code": self.code,
+            "message": self.message,
+        }
+        if self.step_index is not None:
+            payload["stepIndex"] = self.step_index
+        if self.mutation_index is not None:
+            payload["mutationIndex"] = self.mutation_index
+        if self.target_id is not None:
+            payload["targetId"] = self.target_id
+        if self.value is not None:
+            payload["value"] = self.value
+        return payload
+
+
+def validate_render_plan(
+    plan: RenderPlan,
+    scene: SceneState,
+    catalog: VisualCatalog | None = None,
+    *,
+    max_steps: int = DEFAULT_RENDER_PLAN_MAX_STEPS,
+    max_mutations: int = DEFAULT_RENDER_PLAN_MAX_MUTATIONS,
+) -> tuple[RenderPlanValidationIssue, ...]:
+    """Check whether a renderer plan can be safely applied to the current scene."""
+
+    visual_catalog = catalog or default_visual_catalog()
+    known_primitives = {entry.id for entry in visual_catalog.primitives} | _BROWSER_PRIMITIVE_KINDS
+    issues: list[RenderPlanValidationIssue] = []
+    working_primitives = {primitive_id: primitive.kind for primitive_id, primitive in scene.primitives.items()}
+    working_animations = set(scene.animations)
+    max_steps = max(0, max_steps)
+    max_mutations = max(0, max_mutations)
+
+    if len(plan.steps) > max_steps:
+        issues.append(
+            RenderPlanValidationIssue(
+                "error",
+                "plan_too_many_steps",
+                f"render plan has {len(plan.steps)} steps, limit is {max_steps}",
+                value=len(plan.steps),
+            )
+        )
+    mutation_count = sum(len(step.mutations) for step in plan.steps)
+    if mutation_count > max_mutations:
+        issues.append(
+            RenderPlanValidationIssue(
+                "error",
+                "plan_too_many_mutations",
+                f"render plan has {mutation_count} mutations, limit is {max_mutations}",
+                value=mutation_count,
+            )
+        )
+
+    for step_index, step in enumerate(plan.steps):
+        if step.event_index is not None and (step.event_index < 0 or step.event_index >= len(plan.requests)):
+            issues.append(
+                RenderPlanValidationIssue(
+                    "warning",
+                    "event_index_out_of_range",
+                    "step eventIndex is outside the current request batch and will use the primary request",
+                    step_index=step_index,
+                    value=step.event_index,
+                )
+            )
+        if step.delay_ms < 0 or step.start_offset_ms < 0:
+            issues.append(
+                RenderPlanValidationIssue(
+                    "warning",
+                    "negative_timing",
+                    "negative step timing will be clamped during playback",
+                    step_index=step_index,
+                    value=min(step.delay_ms, step.start_offset_ms),
+                )
+            )
+        for mutation_index, mutation in enumerate(step.mutations):
+            _validate_mutation(
+                mutation,
+                known_primitives,
+                working_primitives,
+                working_animations,
+                issues,
+                step_index,
+                mutation_index,
+            )
+    return tuple(issues)
+
+
+def render_plan_diagnostics_payload(
+    issues: Sequence[RenderPlanValidationIssue],
+    *,
+    status: str | None = None,
+) -> dict[str, Any]:
+    errors = sum(1 for issue in issues if issue.severity == "error")
+    warnings = sum(1 for issue in issues if issue.severity == "warning")
+    if status is None:
+        if errors:
+            status = "rejected"
+        elif warnings:
+            status = "accepted_with_warnings"
+        else:
+            status = "accepted"
+    return {
+        "schema": RENDER_PLAN_DIAGNOSTICS_SCHEMA,
+        "status": status,
+        "errorCount": errors,
+        "warningCount": warnings,
+        "issues": [issue.to_dict() for issue in issues],
+    }
+
+
+def render_plan_has_validation_errors(issues: Sequence[RenderPlanValidationIssue]) -> bool:
+    return any(issue.severity == "error" for issue in issues)
+
+
+def _validate_mutation(
+    mutation: SceneMutation,
+    known_primitives: set[str],
+    working_primitives: dict[str, str],
+    working_animations: set[str],
+    issues: list[RenderPlanValidationIssue],
+    step_index: int,
+    mutation_index: int,
+) -> None:
+    if mutation.op == "reset_scene":
+        working_primitives.clear()
+        working_primitives.update(_INITIAL_PRIMITIVE_KINDS)
+        working_animations.clear()
+        return
+    if mutation.op == "upsert":
+        _validate_upsert(mutation, known_primitives, working_primitives, issues, step_index, mutation_index)
+        return
+    if mutation.op == "patch":
+        _validate_patch(mutation, working_primitives, issues, step_index, mutation_index)
+        return
+    if mutation.op == "remove":
+        _validate_remove(mutation, working_primitives, issues, step_index, mutation_index)
+        return
+    if mutation.op == "append_log":
+        return
+    if mutation.op == "start_animation":
+        _validate_start_animation(mutation, working_primitives, working_animations, issues, step_index, mutation_index)
+        return
+    _validate_stop_animation(mutation, working_animations, issues, step_index, mutation_index)
+
+
+def _validate_upsert(
+    mutation: SceneMutation,
+    known_primitives: set[str],
+    working_primitives: dict[str, str],
+    issues: list[RenderPlanValidationIssue],
+    step_index: int,
+    mutation_index: int,
+) -> None:
+    primitive = mutation.primitive
+    if primitive is None:
+        issues.append(
+            RenderPlanValidationIssue(
+                "error",
+                "missing_upsert_primitive",
+                "upsert mutation requires a primitive",
+                step_index=step_index,
+                mutation_index=mutation_index,
+            )
+        )
+        return
+    if not primitive.id:
+        issues.append(
+            RenderPlanValidationIssue(
+                "error",
+                "missing_primitive_id",
+                "upsert primitive requires an id",
+                step_index=step_index,
+                mutation_index=mutation_index,
+            )
+        )
+    if primitive.kind not in known_primitives:
+        issues.append(
+            RenderPlanValidationIssue(
+                "warning",
+                "unsupported_primitive_kind",
+                "primitive kind is not in the browser/catalog render set",
+                step_index=step_index,
+                mutation_index=mutation_index,
+                target_id=primitive.id,
+                value=primitive.kind,
+            )
+        )
+    if primitive.region not in _REGION_IDS:
+        issues.append(
+            RenderPlanValidationIssue(
+                "warning",
+                "unknown_region",
+                "primitive region is outside the current browser layout regions",
+                step_index=step_index,
+                mutation_index=mutation_index,
+                target_id=primitive.id,
+                value=primitive.region,
+            )
+        )
+    if primitive.kind == "svg_layer":
+        _validate_svg_layer(primitive, issues, step_index, mutation_index)
+    working_primitives[primitive.id] = primitive.kind
+
+
+def _validate_patch(
+    mutation: SceneMutation,
+    working_primitives: Mapping[str, str],
+    issues: list[RenderPlanValidationIssue],
+    step_index: int,
+    mutation_index: int,
+) -> None:
+    if mutation.target_id is None:
+        issues.append(
+            RenderPlanValidationIssue(
+                "error",
+                "missing_patch_target",
+                "patch mutation requires targetId",
+                step_index=step_index,
+                mutation_index=mutation_index,
+            )
+        )
+        return
+    if mutation.target_id not in working_primitives:
+        issues.append(
+            RenderPlanValidationIssue(
+                "error",
+                "patch_target_missing",
+                "patch target does not exist in current or planned scene state",
+                step_index=step_index,
+                mutation_index=mutation_index,
+                target_id=mutation.target_id,
+            )
+        )
+
+
+def _validate_remove(
+    mutation: SceneMutation,
+    working_primitives: dict[str, str],
+    issues: list[RenderPlanValidationIssue],
+    step_index: int,
+    mutation_index: int,
+) -> None:
+    if mutation.target_id is None:
+        issues.append(
+            RenderPlanValidationIssue(
+                "error",
+                "missing_remove_target",
+                "remove mutation requires targetId",
+                step_index=step_index,
+                mutation_index=mutation_index,
+            )
+        )
+        return
+    working_primitives.pop(mutation.target_id, None)
+
+
+def _validate_start_animation(
+    mutation: SceneMutation,
+    working_primitives: Mapping[str, str],
+    working_animations: set[str],
+    issues: list[RenderPlanValidationIssue],
+    step_index: int,
+    mutation_index: int,
+) -> None:
+    animation = mutation.animation
+    if animation is None:
+        issues.append(
+            RenderPlanValidationIssue(
+                "error",
+                "missing_animation",
+                "start_animation mutation requires an animation object",
+                step_index=step_index,
+                mutation_index=mutation_index,
+            )
+        )
+        return
+    if not animation.id or animation.id == "None":
+        issues.append(
+            RenderPlanValidationIssue(
+                "error",
+                "missing_animation_id",
+                "animation requires an id",
+                step_index=step_index,
+                mutation_index=mutation_index,
+                target_id=animation.target_id,
+            )
+        )
+    if not animation.target_id or animation.target_id == "None":
+        issues.append(
+            RenderPlanValidationIssue(
+                "error",
+                "missing_animation_target",
+                "animation requires targetId",
+                step_index=step_index,
+                mutation_index=mutation_index,
+                value=animation.kind,
+            )
+        )
+    elif animation.target_id not in working_primitives and animation.target_id != "scan-grid":
+        issues.append(
+            RenderPlanValidationIssue(
+                "warning",
+                "animation_target_missing",
+                "animation target does not exist in current or planned scene state",
+                step_index=step_index,
+                mutation_index=mutation_index,
+                target_id=animation.target_id,
+                value=animation.kind,
+            )
+        )
+    if animation.kind not in _BROWSER_ANIMATION_KINDS:
+        issues.append(
+            RenderPlanValidationIssue(
+                "warning",
+                "unsupported_animation_kind",
+                "animation kind is not in the persistent browser effect set and will render as a pulse fallback",
+                step_index=step_index,
+                mutation_index=mutation_index,
+                target_id=animation.target_id,
+                value=animation.kind,
+            )
+        )
+    if animation.duration_ms <= 0:
+        issues.append(
+            RenderPlanValidationIssue(
+                "warning",
+                "nonpositive_animation_duration",
+                "animation duration should be positive; browser playback will clamp it",
+                step_index=step_index,
+                mutation_index=mutation_index,
+                target_id=animation.target_id,
+                value=animation.duration_ms,
+            )
+        )
+    working_animations.add(animation.id)
+
+
+def _validate_stop_animation(
+    mutation: SceneMutation,
+    working_animations: set[str],
+    issues: list[RenderPlanValidationIssue],
+    step_index: int,
+    mutation_index: int,
+) -> None:
+    if mutation.target_id is None:
+        issues.append(
+            RenderPlanValidationIssue(
+                "error",
+                "missing_stop_animation_target",
+                "stop_animation mutation requires targetId containing the animation id",
+                step_index=step_index,
+                mutation_index=mutation_index,
+            )
+        )
+        return
+    working_animations.discard(mutation.target_id)
+
+
+def _validate_svg_layer(
+    primitive: ScenePrimitive,
+    issues: list[RenderPlanValidationIssue],
+    step_index: int,
+    mutation_index: int,
+) -> None:
+    for key in sorted(_SVG_RAW_MARKUP_KEYS & set(primitive.props)):
+        issues.append(
+            RenderPlanValidationIssue(
+                "error",
+                "raw_svg_markup",
+                "svg_layer accepts structured vector data only, not raw markup or external references",
+                step_index=step_index,
+                mutation_index=mutation_index,
+                target_id=primitive.id,
+                value=key,
+            )
+        )
+    symbols = primitive.props.get("symbols")
+    if not isinstance(symbols, list):
+        return
+    for index, symbol in enumerate(symbols):
+        if not isinstance(symbol, Mapping):
+            issues.append(
+                RenderPlanValidationIssue(
+                    "warning",
+                    "invalid_svg_symbol",
+                    "svg_layer symbols should be objects",
+                    step_index=step_index,
+                    mutation_index=mutation_index,
+                    target_id=primitive.id,
+                    value=index,
+                )
+            )
+            continue
+        kind = str(symbol.get("kind") or symbol.get("type") or "reticle")
+        if kind not in _SVG_SYMBOL_KINDS:
+            issues.append(
+                RenderPlanValidationIssue(
+                    "warning",
+                    "unsupported_svg_symbol",
+                    "svg_layer symbol kind is not in the curated browser symbol set",
+                    step_index=step_index,
+                    mutation_index=mutation_index,
+                    target_id=primitive.id,
+                    value=kind,
+                )
+            )
 
 
 class SceneRenderer(Protocol):

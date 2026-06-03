@@ -33,9 +33,12 @@ from harn_gibson.rendering import (
     decisions_from_payload,
     render_accept_payload,
     render_intent_from_plan,
+    render_plan_diagnostics_payload,
+    render_plan_has_validation_errors,
     render_update_payload,
     step_schedule,
     step_schedule_payload,
+    validate_render_plan,
 )
 from harn_gibson.scene import SceneAnimation, SceneEngine, SceneMutation, ScenePrimitive
 from harn_gibson.sinks import EventBuffer
@@ -213,6 +216,233 @@ json.dump(
     assert direct_plan.steps[0].mutations[0].props["text"] == "external:browser_input"
     assert payload["schema"] == "harn-gibson.external-renderer-request.v1"
     assert payload["requests"][0]["event"]["eventType"] == "input"
+
+
+def test_render_plan_validation_reports_scene_and_catalog_issues() -> None:
+    request = RenderRequest(event(1, "tool_call"))
+    plan = RenderPlan(
+        (request,),
+        (
+            RenderStep(
+                (
+                    SceneMutation("patch", target_id="missing-panel", props={"text": "bad"}),
+                    SceneMutation(
+                        "upsert",
+                        primitive=ScenePrimitive(
+                            "unknown-primitive",
+                            "hologram",
+                            "void",
+                            {"density": 2},
+                        ),
+                    ),
+                    SceneMutation(
+                        "upsert",
+                        primitive=ScenePrimitive(
+                            "unsafe-vector",
+                            "svg_layer",
+                            "stage",
+                            {
+                                "rawSvg": "<svg><script></script></svg>",
+                                "symbols": [{"kind": "dragon"}, []],
+                            },
+                        ),
+                    ),
+                    SceneMutation(
+                        "start_animation",
+                        animation=SceneAnimation("wormhole-1", "missing-vector", "wormhole", 10, 0),
+                    ),
+                ),
+                delay_ms=-2,
+                start_offset_ms=-5,
+                event_index=4,
+            ),
+        ),
+        {"renderer": "fixture"},
+    )
+
+    issues = validate_render_plan(plan, SceneEngine().state, pipeline_catalog())
+    limited = validate_render_plan(plan, SceneEngine().state, pipeline_catalog(), max_steps=0, max_mutations=1)
+    codes = {issue.code for issue in issues}
+    payload = render_plan_diagnostics_payload(issues)
+
+    assert {
+        "animation_target_missing",
+        "event_index_out_of_range",
+        "invalid_svg_symbol",
+        "negative_timing",
+        "nonpositive_animation_duration",
+        "patch_target_missing",
+        "raw_svg_markup",
+        "unknown_region",
+        "unsupported_animation_kind",
+        "unsupported_primitive_kind",
+        "unsupported_svg_symbol",
+    } <= codes
+    assert {issue.code for issue in limited} >= {"plan_too_many_steps", "plan_too_many_mutations"}
+    assert render_plan_has_validation_errors(issues) is True
+    assert payload["schema"] == "harn-gibson.render-plan-diagnostics.v1"
+    assert payload["status"] == "rejected"
+    assert payload["errorCount"] == 2
+    assert payload["warningCount"] == len(issues) - 2
+    assert payload["issues"][0]["stepIndex"] == 0
+
+
+def test_render_plan_validation_covers_safe_and_missing_payload_branches() -> None:
+    request = RenderRequest(event(1, "tool_call"))
+    plan = RenderPlan(
+        (request,),
+        (
+            RenderStep(
+                (
+                    SceneMutation("reset_scene"),
+                    SceneMutation("append_log", entry={"summary": "ok"}),
+                    SceneMutation("remove", target_id="event-feed"),
+                    SceneMutation("stop_animation", target_id="done-animation"),
+                    SceneMutation("upsert"),
+                    SceneMutation("upsert", primitive=ScenePrimitive("", "mesh", "stage")),
+                    SceneMutation("patch"),
+                    SceneMutation("remove"),
+                    SceneMutation("start_animation"),
+                    SceneMutation("start_animation", animation=SceneAnimation("", "None", "pulse", 10, 100)),
+                    SceneMutation(
+                        "upsert",
+                        primitive=ScenePrimitive(
+                            "safe-vector",
+                            "svg_layer",
+                            "stage",
+                            {"symbols": [{"kind": "globe"}]},
+                        ),
+                    ),
+                    SceneMutation(
+                        "upsert",
+                        primitive=ScenePrimitive(
+                            "symbol-less-vector",
+                            "svg_layer",
+                            "stage",
+                            {"paths": []},
+                        ),
+                    ),
+                    SceneMutation("start_animation", animation=SceneAnimation("pulse-1", "status", "pulse", 10, 100)),
+                    SceneMutation("stop_animation"),
+                ),
+                event_index=0,
+            ),
+        ),
+        {"renderer": "fixture"},
+    )
+
+    issues = validate_render_plan(plan, SceneEngine().state, None)
+    limited = validate_render_plan(plan, SceneEngine().state, pipeline_catalog(), max_steps=0, max_mutations=1)
+    codes = {issue.code for issue in issues}
+    limited_payload = render_plan_diagnostics_payload(limited)
+
+    assert {
+        "missing_animation",
+        "missing_animation_id",
+        "missing_animation_target",
+        "missing_patch_target",
+        "missing_primitive_id",
+        "missing_remove_target",
+        "missing_stop_animation_target",
+        "missing_upsert_primitive",
+    } <= codes
+    assert "stepIndex" not in limited_payload["issues"][0]
+    assert render_plan_diagnostics_payload(()) == {
+        "schema": "harn-gibson.render-plan-diagnostics.v1",
+        "status": "accepted",
+        "errorCount": 0,
+        "warningCount": 0,
+        "issues": [],
+    }
+
+
+def test_external_renderer_validation_rejects_unsafe_plan_without_crashing(tmp_path: Path) -> None:
+    script = tmp_path / "unsafe_renderer.py"
+    script.write_text(
+        """
+import json
+import sys
+
+json.dump(
+    {
+        "metadata": {"intent": "break scene"},
+        "steps": [
+            {
+                "mutations": [
+                    {"op": "patch", "targetId": "missing-panel", "props": {"text": "boom"}}
+                ]
+            }
+        ],
+    },
+    sys.stdout,
+)
+""".lstrip(),
+        encoding="utf-8",
+    )
+    renderer = ExternalRenderer((sys.executable, str(script)), timeout_seconds=2, renderer_id="fixture-external")
+    pipeline = RenderPipeline(scene=SceneEngine(), buffer=EventBuffer(), renderer=renderer)
+
+    result = pipeline.submit(RenderRequest(event(6, "tool_result")))
+
+    metadata = result.updates[0]["renderIntent"]["metadata"]
+    diagnostics = metadata["renderPlanDiagnostics"]
+    trace = pipeline.scene.state.primitives["trace-log"].props["text"][0]
+    assert result.scene_revision == 1
+    assert metadata["fallbackRenderer"] == "deterministic"
+    assert metadata["rendererError"]["message"] == "external renderer returned unsafe render plan"
+    assert diagnostics["status"] == "rejected"
+    assert diagnostics["errorCount"] == 1
+    assert diagnostics["issues"][0]["code"] == "patch_target_missing"
+    assert pipeline.scene.state.primitives["status"].props["text"] == "renderer:error"
+    assert "patch_target_missing" in trace["details"]
+
+
+def test_external_renderer_validation_preserves_safe_warning_plans(tmp_path: Path) -> None:
+    script = tmp_path / "warning_renderer.py"
+    script.write_text(
+        """
+import json
+import sys
+
+json.dump(
+    {
+        "metadata": {"intent": "invent visual toy"},
+        "steps": [
+            {
+                "mutations": [
+                    {
+                        "op": "upsert",
+                        "primitive": {
+                            "id": "unknown-toy",
+                            "kind": "hologram",
+                            "region": "stage",
+                            "props": {"tone": "cyan"},
+                        },
+                    }
+                ]
+            }
+        ],
+    },
+    sys.stdout,
+)
+""".lstrip(),
+        encoding="utf-8",
+    )
+    scene = SceneEngine()
+    context = RendererContext("compaction", {}, {}, scene.state.to_dict(), {})
+    request = RenderRequest(event(7, "tool_call"))
+    renderer = ExternalRenderer((sys.executable, str(script)), timeout_seconds=2, renderer_id="fixture-external")
+
+    plan = renderer.render_with_context((request,), scene.state, context)
+
+    diagnostics = plan.metadata["renderPlanDiagnostics"]
+    assert plan.metadata["renderer"] == "fixture-external"
+    assert diagnostics["status"] == "accepted_with_warnings"
+    assert diagnostics["errorCount"] == 0
+    assert diagnostics["warningCount"] == 1
+    assert diagnostics["issues"][0]["code"] == "unsupported_primitive_kind"
+    assert plan.steps[0].mutations[0].primitive is not None
+    assert plan.steps[0].mutations[0].primitive.kind == "hologram"
 
 
 def test_external_renderer_failures_become_trace_state(tmp_path: Path) -> None:
