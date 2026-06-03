@@ -109,7 +109,7 @@ The renderer agent should not receive a full new transcript on every event. Use 
 - Recent harn events: the newest event batch plus short summaries of recent prior events.
 - Recent visualization context: recent render intents, render plans, and active animations/effects.
 
-The executable fixture for this is `RendererContext`. A renderer that only implements `render(requests, scene)` receives the existing deterministic-compatible call shape. A renderer that implements `render_with_context(requests, scene, context)` receives a `harn-gibson.renderer-context.v1` object with project metadata, catalog data, scene context, render input, recent agent context, visualization history, and compaction metadata.
+The executable fixture for this is `RendererContext`. A renderer that only implements `render(requests, scene)` receives the existing deterministic-compatible call shape. A renderer that implements `render_with_context(requests, scene, context)` receives a `harn-gibson.renderer-context.v1` object with project metadata, bounded repo topology, touched-file summaries, catalog data, scene context, render input, recent agent context, visualization history, and compaction metadata.
 
 After enough events or token growth, do a renderer compaction:
 
@@ -124,7 +124,7 @@ This mirrors harn session compaction, but it is separate from the primary agent 
 
 Streaming deltas need special handling before a remote renderer agent is added. `message_update` and similar stream events should update local stream buffers or named text primitives with throttled display refreshes. The renderer agent should receive coarse stream milestones or compact summaries, not every streaming delta as a separate model turn.
 
-Repo topology should follow the same rule. A future renderer may use top-level directories, selected file nodes, and touched-file event batches to create directory graphs, edited-file pulses, or flythrough paths. That context should be compacted and diffed over time instead of resending a full repository listing for every renderer request.
+Repo topology follows the same rule. The current context includes a bounded top-level directory/file sample and a coalesced `touchedFiles` list extracted from path-like event payload fields and command strings. Runtime/auth-looking paths such as `.harn`, `.venv`, `.env`, `auth.json`, caches, and test artifacts are omitted. A future renderer can use this to create directory graphs, edited-file pulses, or flythrough paths without receiving file contents or a full repository listing every turn.
 
 ## Visual Catalog
 

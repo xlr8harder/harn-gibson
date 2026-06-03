@@ -62,7 +62,7 @@ Immediately before renderer execution, the pipeline normalizes the queued reques
 
 Each applied render plan also records a bounded render-intent history in scene metadata. A render intent summarizes the renderer, requested intent, event types, routes, timeline, effects, targets, and original plan metadata. The browser debug drawer and replay final-scene snapshots expose this history so a future model-backed renderer can preserve visual continuity across turns.
 
-The pipeline also builds a `RendererContext` for renderers that opt into `render_with_context`. The context alternates between full compaction payloads and rolling summaries, combining project metadata, catalog entries, current scene state, recent agent context, render intents, and recent visualization history without requiring a full transcript on each renderer turn.
+The pipeline also builds a `RendererContext` for renderers that opt into `render_with_context`. The context alternates between full compaction payloads and rolling summaries, combining project metadata, bounded repo topology, touched-file summaries, catalog entries, current scene state, recent agent context, render intents, and recent visualization history without requiring a full transcript on each renderer turn.
 
 The deterministic renderer returns one render step per event today. A model-backed renderer should return the same `RenderPlan` shape and may include multiple delayed steps for sequential effects.
 

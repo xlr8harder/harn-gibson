@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import queue
+import re
 import threading
 import time
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
+from pathlib import Path, PurePosixPath
 from typing import Any, Literal, Protocol
 
 from harn_gibson.catalog import VisualCatalog, default_visual_catalog
@@ -119,11 +121,16 @@ class RenderInputBatch:
 @dataclass(frozen=True, slots=True)
 class RendererContextConfig:
     project_name: str = "harn-gibson"
+    project_root: str | None = None
     display_style: str = "gibson"
     compaction_interval_events: int = 40
     max_recent_plans: int = 6
     max_recent_log_entries: int = 12
     max_prop_preview_chars: int = 240
+    max_repo_entries: int = 64
+    max_repo_children_per_dir: int = 8
+    max_touched_files: int = 24
+    max_touched_path_chars: int = 160
 
 
 @dataclass(frozen=True, slots=True)
@@ -174,7 +181,7 @@ class RendererContextBuilder:
         self._last_context_mode = mode
         return RendererContext(
             mode=mode,
-            project=self._project_metadata(),
+            project=self._project_metadata(batch),
             catalog=_catalog_context(catalog, full=mode == "compaction"),
             scene=_scene_context(scene, full=mode == "compaction", config=self.config),
             render_input=batch.to_dict(),
@@ -206,7 +213,7 @@ class RendererContextBuilder:
             1, self.config.compaction_interval_events
         )
 
-    def _project_metadata(self) -> dict[str, Any]:
+    def _project_metadata(self, batch: RenderInputBatch) -> dict[str, Any]:
         return {
             "name": self.config.project_name,
             "displayStyle": self.config.display_style,
@@ -215,8 +222,12 @@ class RendererContextBuilder:
                 "rendererContext": "harn-gibson.renderer-context.v1",
                 "renderInput": "harn-gibson.render-input.v1",
                 "renderPlan": "harn-gibson.render-plan.v1",
+                "repoTopology": "harn-gibson.repo-topology.v1",
                 "scene": "harn-gibson.scene.v1",
+                "touchedFiles": "harn-gibson.touched-files.v1",
             },
+            "repoTopology": _repo_topology_context(self.config),
+            "touchedFiles": _touched_files_context(batch, self.config),
         }
 
 
@@ -521,6 +532,253 @@ def _recent_agent_context(batch: RenderInputBatch) -> tuple[str, ...]:
                 seen.add(item)
                 recent.append(item)
     return tuple(recent)
+
+
+_REPO_EXCLUDED_NAMES = {
+    ".coverage",
+    ".git",
+    ".harn",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".ruff_cache",
+    ".tox",
+    ".venv",
+    "__pycache__",
+    "node_modules",
+    "test-artifacts",
+}
+_SENSITIVE_PATH_NAMES = {
+    ".env",
+    ".env.local",
+    ".envrc",
+    "auth.json",
+    "credentials",
+    "credential",
+    "secrets",
+    "secret",
+    "tokens",
+    "token",
+}
+_SENSITIVE_SUFFIXES = (".key", ".pem", ".p12", ".pfx")
+_PATH_KEYS = {
+    "destinationPath",
+    "file",
+    "fileName",
+    "filePath",
+    "filename",
+    "filepath",
+    "output",
+    "outputPath",
+    "path",
+    "sourcePath",
+    "targetPath",
+}
+_COMMAND_KEYS = {"cmd", "command", "shellCommand"}
+_COMMAND_PATH_PATTERN = re.compile(r"(?<![A-Za-z0-9_./-])(?:\.{0,2}/)?[A-Za-z0-9_.@+-]+(?:/[A-Za-z0-9_.@+-]+)+")
+
+
+def _repo_topology_context(config: RendererContextConfig) -> dict[str, Any]:
+    root = _project_root(config)
+    payload: dict[str, Any] = {
+        "schema": "harn-gibson.repo-topology.v1",
+        "rootName": root.name or root.as_posix(),
+        "maxEntries": max(0, config.max_repo_entries),
+        "maxChildrenPerDir": max(0, config.max_repo_children_per_dir),
+    }
+    if not root.is_dir():
+        return {**payload, "available": False, "reason": "project root is not a directory", "entries": []}
+    entries, truncated = _repo_entries(root, config)
+    return {
+        **payload,
+        "available": True,
+        "entries": entries,
+        "entryCount": len(entries),
+        "truncated": truncated,
+    }
+
+
+def _project_root(config: RendererContextConfig) -> Path:
+    if config.project_root:
+        return Path(config.project_root).expanduser().resolve()
+    return Path.cwd().resolve()
+
+
+def _repo_entries(root: Path, config: RendererContextConfig) -> tuple[list[dict[str, Any]], bool]:
+    max_entries = max(0, config.max_repo_entries)
+    entries: list[dict[str, Any]] = []
+    truncated = False
+    for child in sorted(root.iterdir(), key=_repo_sort_key):
+        if _skip_repo_path(child.name):
+            continue
+        if len(entries) >= max_entries:
+            truncated = True
+            break
+        entries.append(_repo_entry(child, root, config))
+    return entries, truncated
+
+
+def _repo_entry(path: Path, root: Path, config: RendererContextConfig) -> dict[str, Any]:
+    kind = _repo_path_kind(path)
+    entry: dict[str, Any] = {"path": _relative_repo_path(path, root), "name": path.name, "kind": kind}
+    if kind == "file" and path.suffix:
+        entry["extension"] = path.suffix
+    if kind == "dir":
+        children, truncated = _repo_child_entries(path, root, config)
+        if children:
+            entry["children"] = children
+        if truncated:
+            entry["childrenTruncated"] = True
+    return entry
+
+
+def _repo_child_entries(path: Path, root: Path, config: RendererContextConfig) -> tuple[list[dict[str, Any]], bool]:
+    max_children = max(0, config.max_repo_children_per_dir)
+    children: list[dict[str, Any]] = []
+    truncated = False
+    for child in sorted(path.iterdir(), key=_repo_sort_key):
+        if _skip_repo_path(child.name):
+            continue
+        if len(children) >= max_children:
+            truncated = True
+            break
+        child_entry = {"path": _relative_repo_path(child, root), "name": child.name, "kind": _repo_path_kind(child)}
+        if child_entry["kind"] == "file" and child.suffix:
+            child_entry["extension"] = child.suffix
+        children.append(child_entry)
+    return children, truncated
+
+
+def _relative_repo_path(path: Path, root: Path) -> str:
+    return path.relative_to(root).as_posix()
+
+
+def _repo_path_kind(path: Path) -> str:
+    if path.is_symlink():
+        return "symlink"
+    return "dir" if path.is_dir() else "file"
+
+
+def _repo_sort_key(path: Path) -> tuple[int, str]:
+    return (0 if path.is_dir() and not path.is_symlink() else 1, path.name.lower())
+
+
+def _skip_repo_path(name: str) -> bool:
+    lowered = name.lower()
+    return (
+        lowered in _REPO_EXCLUDED_NAMES
+        or lowered in _SENSITIVE_PATH_NAMES
+        or lowered.startswith(".env.")
+        or lowered.endswith(_SENSITIVE_SUFFIXES)
+    )
+
+
+def _touched_files_context(batch: RenderInputBatch, config: RendererContextConfig) -> dict[str, Any]:
+    touched: list[dict[str, Any]] = []
+    by_path: dict[str, dict[str, Any]] = {}
+    max_files = max(0, config.max_touched_files)
+    for request in batch.requests:
+        for path, source in _event_touched_paths(request.event, config):
+            current = by_path.get(path)
+            if current is None:
+                current = {
+                    "path": path,
+                    "operation": _operation_for_event(request.event),
+                    "firstSequence": request.event.sequence,
+                    "lastSequence": request.event.sequence,
+                    "phases": [],
+                    "sources": [],
+                }
+                by_path[path] = current
+                touched.append(current)
+            current["lastSequence"] = request.event.sequence
+            _append_unique(current["phases"], request.event.phase)
+            _append_unique(current["sources"], source)
+    files = touched[:max_files]
+    return {
+        "schema": "harn-gibson.touched-files.v1",
+        "files": files,
+        "count": len(touched),
+        "truncated": len(touched) > max_files,
+    }
+
+
+def _event_touched_paths(event: GibsonEvent, config: RendererContextConfig) -> tuple[tuple[str, str], ...]:
+    paths: list[tuple[str, str]] = []
+    _collect_touched_paths(event.payload, config, paths, ())
+    return tuple(paths)
+
+
+def _collect_touched_paths(
+    value: Any,
+    config: RendererContextConfig,
+    paths: list[tuple[str, str]],
+    key_path: tuple[str, ...],
+) -> None:
+    if isinstance(value, Mapping):
+        for key, child in value.items():
+            rendered_key = str(key)
+            child_path = (*key_path, rendered_key)
+            if rendered_key in _PATH_KEYS:
+                _collect_path_values(child, config, paths, ".".join(child_path))
+            elif rendered_key in _COMMAND_KEYS and isinstance(child, str):
+                _collect_command_paths(child, config, paths, ".".join(child_path))
+            else:
+                _collect_touched_paths(child, config, paths, child_path)
+        return
+    if isinstance(value, list | tuple):
+        for index, child in enumerate(value):
+            _collect_touched_paths(child, config, paths, (*key_path, str(index)))
+
+
+def _collect_path_values(value: Any, config: RendererContextConfig, paths: list[tuple[str, str]], source: str) -> None:
+    if isinstance(value, str):
+        normalized = _normalize_repo_path(value, config)
+        if normalized is not None:
+            paths.append((normalized, source))
+        return
+    if isinstance(value, Mapping):
+        _collect_touched_paths(value, config, paths, (source,))
+        return
+    if isinstance(value, list | tuple):
+        for index, child in enumerate(value):
+            _collect_path_values(child, config, paths, f"{source}.{index}")
+
+
+def _collect_command_paths(
+    command: str,
+    config: RendererContextConfig,
+    paths: list[tuple[str, str]],
+    source: str,
+) -> None:
+    for match in _COMMAND_PATH_PATTERN.finditer(command):
+        normalized = _normalize_repo_path(match.group(0), config)
+        if normalized is not None:
+            paths.append((normalized, source))
+
+
+def _normalize_repo_path(value: str, config: RendererContextConfig) -> str | None:
+    text = value.strip().strip("'\"`")
+    if not text or "\n" in text or "://" in text:
+        return None
+    root = _project_root(config)
+    if Path(text).is_absolute():
+        try:
+            path = Path(text).expanduser().resolve().relative_to(root)
+        except ValueError:
+            return None
+    else:
+        path = PurePosixPath(text)
+    if any(part in {"", ".", ".."} or _skip_repo_path(part) for part in path.parts):
+        return None
+    rendered = path.as_posix()
+    return rendered[: config.max_touched_path_chars]
+
+
+def _operation_for_event(event: GibsonEvent) -> str:
+    tool_name = event.payload.get("toolName")
+    if isinstance(tool_name, str) and tool_name:
+        return f"{tool_name}:{event.phase}"
+    return f"{event.event_type}:{event.phase}"
 
 
 def _render_plan_summary(plan: RenderPlan) -> dict[str, Any]:

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import threading
 import time
+from pathlib import Path
 
 import pytest
 
@@ -81,13 +82,36 @@ def test_deterministic_renderer_creates_one_step_per_request() -> None:
     assert plan.steps[0].mutations[0].target_id == "status"
 
 
-def test_renderer_context_builder_compaction_rolling_and_history() -> None:
+def test_renderer_context_builder_compaction_rolling_and_history(tmp_path: Path) -> None:
+    repo_root = tmp_path / "repo"
+    for directory in (
+        repo_root / "docs",
+        repo_root / "empty",
+        repo_root / "src" / "harn_gibson",
+        repo_root / "tests",
+        repo_root / ".harn",
+    ):
+        directory.mkdir(parents=True)
+    for path in (
+        repo_root / "README.md",
+        repo_root / "pyproject.toml",
+        repo_root / "docs" / "renderer-agent.md",
+        repo_root / "src" / "harn_gibson" / "rendering.py",
+        repo_root / "tests" / "test_rendering.py",
+        repo_root / ".harn" / "settings.json",
+        repo_root / "auth.json",
+    ):
+        path.write_text("x", encoding="utf-8")
+    (repo_root / "README-link.md").symlink_to("README.md")
     builder = RendererContextBuilder(
         RendererContextConfig(
+            project_root=str(repo_root),
             compaction_interval_events=2,
             max_recent_plans=1,
             max_recent_log_entries=1,
             max_prop_preview_chars=8,
+            max_repo_children_per_dir=1,
+            max_touched_files=2,
         )
     )
     scene = SceneEngine()
@@ -115,7 +139,15 @@ def test_renderer_context_builder_compaction_rolling_and_history() -> None:
         )
     )
     context_event = GibsonEvent.from_raw(
-        {"type": "tool_call", "toolName": "bash"},
+        {
+            "type": "tool_call",
+            "toolName": "bash",
+            "input": {
+                "path": "src/harn_gibson/rendering.py",
+                "command": "uv run pytest tests/test_rendering.py docs/renderer-agent.md",
+                "ignoredUrl": "https://example.com/src/nope.py",
+            },
+        },
         9,
         timestamp_ms=900,
         recent_context=("agent saw tool call",),
@@ -128,9 +160,60 @@ def test_renderer_context_builder_compaction_rolling_and_history() -> None:
     assert compaction.mode == "compaction"
     assert compaction.to_dict()["schema"] == "harn-gibson.renderer-context.v1"
     assert compaction.project["schemas"]["rendererContext"] == "harn-gibson.renderer-context.v1"
+    assert compaction.project["schemas"]["repoTopology"] == "harn-gibson.repo-topology.v1"
+    assert compaction.project["repoTopology"]["rootName"] == "repo"
+    assert compaction.project["repoTopology"]["available"] is True
+    assert compaction.project["repoTopology"]["truncated"] is False
+    assert {entry["path"] for entry in compaction.project["repoTopology"]["entries"]} == {
+        "docs",
+        "empty",
+        "src",
+        "tests",
+        "README.md",
+        "README-link.md",
+        "pyproject.toml",
+    }
+    empty_entry = next(entry for entry in compaction.project["repoTopology"]["entries"] if entry["path"] == "empty")
+    assert "children" not in empty_entry
+    src_entry = next(entry for entry in compaction.project["repoTopology"]["entries"] if entry["path"] == "src")
+    assert src_entry["children"] == [{"path": "src/harn_gibson", "name": "harn_gibson", "kind": "dir"}]
+    link_entry = next(
+        entry for entry in compaction.project["repoTopology"]["entries"] if entry["path"] == "README-link.md"
+    )
+    assert link_entry["kind"] == "symlink"
+    assert "auth.json" not in {entry["path"] for entry in compaction.project["repoTopology"]["entries"]}
+    assert compaction.project["touchedFiles"] == {
+        "schema": "harn-gibson.touched-files.v1",
+        "files": [
+            {
+                "path": "src/harn_gibson/rendering.py",
+                "operation": "bash:before",
+                "firstSequence": 9,
+                "lastSequence": 9,
+                "phases": ["before"],
+                "sources": ["input.path"],
+            },
+            {
+                "path": "tests/test_rendering.py",
+                "operation": "bash:before",
+                "firstSequence": 9,
+                "lastSequence": 9,
+                "phases": ["before"],
+                "sources": ["input.command"],
+            },
+        ],
+        "count": 3,
+        "truncated": True,
+    }
     assert compaction.catalog["schema"] == "harn-gibson.visual-catalog.v1"
     assert compaction.scene["schema"] == "harn-gibson.scene.v1"
     assert compaction.recent_agent_context == ("agent saw tool call", "grid was pulsing")
+
+    truncated_context = RendererContextBuilder(
+        RendererContextConfig(project_root=str(repo_root), max_repo_entries=2)
+    ).build(batch, scene.state, pipeline_catalog())
+    assert truncated_context.project["repoTopology"]["truncated"] is True
+    assert truncated_context.project["repoTopology"]["entryCount"] == 2
 
     builder.record_plan(
         RenderPlan(
@@ -141,6 +224,7 @@ def test_renderer_context_builder_compaction_rolling_and_history() -> None:
     )
     rolling = builder.build(batch, scene.state, pipeline_catalog())
     assert rolling.mode == "rolling"
+    assert rolling.project["touchedFiles"]["truncated"] is True
     assert rolling.catalog["mode"] == "summary"
     assert rolling.scene["schema"] == "harn-gibson.scene-summary.v1"
     assert rolling.scene["animationCount"] == 1
@@ -182,6 +266,108 @@ def test_renderer_context_builder_compaction_rolling_and_history() -> None:
             "metadata": {"renderer": "second"},
         },
     )
+
+
+def test_renderer_context_repo_topology_handles_unavailable_root_and_duplicate_touches(tmp_path: Path) -> None:
+    event_batch = RenderInputBatch.from_requests(
+        (
+            RenderRequest(
+                GibsonEvent.from_raw(
+                    {
+                        "type": "tool_result",
+                        "toolName": "write",
+                        "result": {"filePath": str(tmp_path / "outside.py")},
+                    },
+                    1,
+                    timestamp_ms=10,
+                )
+            ),
+            RenderRequest(
+                GibsonEvent.from_raw(
+                    {
+                        "type": "tool_result",
+                        "toolName": "write",
+                        "result": {
+                            "destinationPath": 123,
+                            "filePath": "src/new_scene.py",
+                            "outputPath": ["tests/test_rendering.py", ".env"],
+                            "path": {"filePath": "docs/renderer-agent.md"},
+                            "sourcePath": "https://example.com/src/nope.py",
+                            "targetPath": "src/new_scene.py",
+                        },
+                    },
+                    2,
+                    timestamp_ms=20,
+                )
+            ),
+            RenderRequest(
+                GibsonEvent.from_raw(
+                    {
+                        "type": "runtime_error",
+                        "path": "README.md",
+                        "command": "cat ../outside.py src/new_scene.py",
+                        "events": [{"path": "docs/renderer-agent.md"}],
+                    },
+                    3,
+                    timestamp_ms=30,
+                )
+            ),
+        )
+    )
+    builder = RendererContextBuilder(
+        RendererContextConfig(project_root=str(tmp_path / "missing"), max_repo_entries=0, max_touched_files=4)
+    )
+
+    context = builder.build(event_batch, SceneEngine().state, pipeline_catalog())
+
+    assert context.project["repoTopology"] == {
+        "schema": "harn-gibson.repo-topology.v1",
+        "rootName": "missing",
+        "maxEntries": 0,
+        "maxChildrenPerDir": 8,
+        "available": False,
+        "reason": "project root is not a directory",
+        "entries": [],
+    }
+    assert context.project["touchedFiles"] == {
+        "schema": "harn-gibson.touched-files.v1",
+        "files": [
+            {
+                "path": "src/new_scene.py",
+                "operation": "write:after",
+                "firstSequence": 2,
+                "lastSequence": 3,
+                "phases": ["after"],
+                "sources": ["result.filePath", "result.targetPath", "command"],
+            },
+            {
+                "path": "tests/test_rendering.py",
+                "operation": "write:after",
+                "firstSequence": 2,
+                "lastSequence": 2,
+                "phases": ["after"],
+                "sources": ["result.outputPath.0"],
+            },
+            {
+                "path": "docs/renderer-agent.md",
+                "operation": "write:after",
+                "firstSequence": 2,
+                "lastSequence": 3,
+                "phases": ["after"],
+                "sources": ["result.path.filePath", "events.0.path"],
+            },
+            {
+                "path": "README.md",
+                "operation": "runtime_error:after",
+                "firstSequence": 3,
+                "lastSequence": 3,
+                "phases": ["after"],
+                "sources": ["path"],
+            },
+        ],
+        "count": 4,
+        "truncated": False,
+    }
 
 
 def test_render_intent_from_plan_summarizes_effects_targets_and_defaults() -> None:
