@@ -38,6 +38,7 @@ def test_default_visual_catalog_has_generic_and_cinematic_building_blocks() -> N
         "text_stream",
         "mesh",
         "hologram",
+        "signal_scope",
         "svg_layer",
         "data_rain",
         "particle_field",
@@ -98,6 +99,10 @@ def test_default_visual_catalog_has_generic_and_cinematic_building_blocks() -> N
     assert hologram is not None
     assert {"rings", "beams", "panels", "motes", "scan", "spin", "label"} <= set(hologram.props)
     assert {"gibson", "cinematic", "projection", "motion"} <= set(hologram.tags)
+    signal_scope = catalog.entry("signal_scope")
+    assert signal_scope is not None
+    assert {"mode", "rings", "spokes", "sweep", "blips", "waveforms", "label"} <= set(signal_scope.props)
+    assert {"gibson", "cinematic", "motion", "telemetry"} <= set(signal_scope.tags)
     trace_route = catalog.entry("trace_route")
     assert trace_route is not None
     assert {"hops", "links", "focusHopId", "packets", "speed", "label"} <= set(trace_route.props)

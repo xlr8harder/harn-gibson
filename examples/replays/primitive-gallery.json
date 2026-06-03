@@ -30,6 +30,9 @@
       {"path": "primitives.gallery-hologram.kind", "equals": "hologram"},
       {"path": "primitives.gallery-hologram.props.rings", "equals": 6},
       {"path": "primitives.gallery-hologram.props.panels", "equals": 4},
+      {"path": "primitives.gallery-scope.kind", "equals": "signal_scope"},
+      {"path": "primitives.gallery-scope.props.blips.1.label", "equals": "ICE"},
+      {"path": "primitives.gallery-scope.props.waveforms.0.label", "equals": "CPU"},
       {"path": "primitives.gallery-city.kind", "equals": "city_block"},
       {"path": "primitives.gallery-city.props.cameraPath.keyframes.1.scale", "equals": 1.04},
       {"path": "primitives.gallery-trace.kind", "equals": "trace_route"},
@@ -73,7 +76,7 @@
             "phase": "lifecycle",
             "eventType": "primitive_gallery",
             "title": "Primitive gallery",
-            "summary": "mesh, vector paths, vector symbols, city blocks, graphs, ribbons, glyphs, data rain, particles, stream panel"
+            "summary": "mesh, signal scope, vector paths, vector symbols, city blocks, graphs, ribbons, glyphs, data rain, particles, stream panel"
           }
         },
         {
@@ -96,6 +99,37 @@
               "scan": true,
               "spin": 0.74,
               "seed": 17
+            }
+          }
+        },
+        {
+          "op": "upsert",
+          "primitive": {
+            "id": "gallery-scope",
+            "kind": "signal_scope",
+            "region": "stage",
+            "props": {
+              "mode": "hybrid",
+              "label": "SIGNAL",
+              "position": {"x": 0.88, "y": 0.24},
+              "scale": 0.105,
+              "tone": "green",
+              "accentTone": "magenta",
+              "opacity": 0.88,
+              "rings": 5,
+              "spokes": 10,
+              "sweep": true,
+              "sweepSpeed": 0.74,
+              "seed": 177,
+              "blips": [
+                {"angle": -0.7, "radius": 0.32, "label": "SRC", "tone": "cyan", "intensity": 0.8},
+                {"angle": 0.35, "radius": 0.58, "label": "ICE", "tone": "amber", "intensity": 0.95},
+                {"x": -0.28, "y": 0.36, "label": "SYS", "tone": "magenta", "intensity": 0.7}
+              ],
+              "waveforms": [
+                {"label": "CPU", "tone": "cyan", "amplitude": 0.22, "frequency": 3.2, "phase": 0.18},
+                {"label": "IO", "tone": "white", "amplitude": 0.16, "frequency": 5.4, "phase": 0.48}
+              ]
             }
           }
         },
@@ -554,7 +588,7 @@
             "props": {
               "streamId": "gallery",
               "title": "CATALOG STREAM",
-              "text": "mesh/vector/glyph/rain/packet/city/ribbon/text primitives are available to renderer plans",
+              "text": "mesh/scope/vector/glyph/rain/packet/city/ribbon/text primitives are available to renderer plans",
               "isStreaming": true
             }
           }

@@ -243,6 +243,7 @@ def test_browser_display_renders_vector_symbols_and_data_rain() -> None:
                 page.wait_for_function("window.__gibsonVectorAnimationState?.['gallery-vector']?.keyframeCount === 6")
                 page.wait_for_function("window.__gibsonVectorEffectState?.['gallery-vector']?.filterCount === 2")
                 page.wait_for_function("window.__gibsonHologramState?.['gallery-hologram']?.ringCount === 6")
+                page.wait_for_function("window.__gibsonSignalScopeState?.['gallery-scope']?.blipCount === 3")
                 page.wait_for_function("window.__gibsonCityState?.['gallery-city']?.cameraKeyframeCount === 3")
                 page.wait_for_function("window.__gibsonDataRainState?.['gallery-rain']?.visibleColumns > 0")
                 page.wait_for_function("window.__gibsonTraceRouteState?.['gallery-trace']?.packetCount === 18")
@@ -257,6 +258,9 @@ def test_browser_display_renders_vector_symbols_and_data_rain() -> None:
                 )
                 hologram_state = page.evaluate(
                     """() => window.__gibsonHologramState["gallery-hologram"]"""
+                )
+                signal_scope_state = page.evaluate(
+                    """() => window.__gibsonSignalScopeState["gallery-scope"]"""
                 )
                 city_state = page.evaluate(
                     """() => window.__gibsonCityState["gallery-city"]"""
@@ -306,6 +310,17 @@ def test_browser_display_renders_vector_symbols_and_data_rain() -> None:
                     "tone": "cyan",
                     "accentTone": "magenta",
                     "hasScan": True,
+                }
+                assert signal_scope_state == {
+                    "mode": "hybrid",
+                    "ringCount": 5,
+                    "spokeCount": 10,
+                    "blipCount": 3,
+                    "waveformCount": 2,
+                    "hasSweep": True,
+                    "tone": "green",
+                    "accentTone": "magenta",
+                    "hasLabels": True,
                 }
                 assert city_state["blockCount"] == 4
                 assert city_state["focusBlockId"] == "core-2"

@@ -599,7 +599,7 @@ def test_checked_in_replay_fixtures_cover_agent_and_renderer_sides() -> None:
     assert renderer_result.scene.primitives["decision-log"].props["text"][0]["renderer"] == "fixture"
 
     assert [step.kind for step in gallery_result.steps] == ["mutations"]
-    assert len(gallery_result.expectations) == 37
+    assert len(gallery_result.expectations) == 40
     assert gallery_result.scene.primitives["gallery-mesh"].kind == "mesh"
     assert gallery_result.scene.primitives["gallery-vector"].kind == "svg_layer"
     assert gallery_result.scene.primitives["gallery-vector"].props["gradients"][0]["id"] == "ice-gradient"
@@ -623,6 +623,9 @@ def test_checked_in_replay_fixtures_cover_agent_and_renderer_sides() -> None:
     assert gallery_result.scene.primitives["gallery-hologram"].kind == "hologram"
     assert gallery_result.scene.primitives["gallery-hologram"].props["rings"] == 6
     assert gallery_result.scene.primitives["gallery-hologram"].props["panels"] == 4
+    assert gallery_result.scene.primitives["gallery-scope"].kind == "signal_scope"
+    assert gallery_result.scene.primitives["gallery-scope"].props["blips"][1]["label"] == "ICE"
+    assert gallery_result.scene.primitives["gallery-scope"].props["waveforms"][0]["label"] == "CPU"
     assert gallery_result.scene.primitives["gallery-city"].kind == "city_block"
     assert gallery_result.scene.primitives["gallery-city"].props["cameraPath"]["keyframes"][1]["scale"] == 1.04
     assert gallery_result.scene.primitives["gallery-trace"].kind == "trace_route"

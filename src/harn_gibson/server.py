@@ -1175,6 +1175,7 @@ function drawScenePrimitives(scene, w, h, now) {
     "mesh",
     "city_block",
     "hologram",
+    "signal_scope",
     "svg_layer",
     "ribbon",
     "trace_route",
@@ -1192,6 +1193,7 @@ function drawPrimitive(primitive, w, h, now) {
   if (primitive.kind === "mesh") drawMesh(primitive, w, h, now);
   if (primitive.kind === "city_block") drawCityBlock(primitive, w, h, now);
   if (primitive.kind === "hologram") drawHologram(primitive, w, h, now);
+  if (primitive.kind === "signal_scope") drawSignalScope(primitive, w, h, now);
   if (primitive.kind === "svg_layer") drawSvgLayer(primitive, w, h, now);
   if (primitive.kind === "node_graph") drawNodeGraph(primitive, w, h);
   if (primitive.kind === "trace_route") drawTraceRoute(primitive, w, h, now);
@@ -1670,6 +1672,219 @@ function drawHologram(primitive, w, h, now) {
     ctx.fillText(String(props.label).slice(0, 18), 0, -scale * 0.92);
   }
 
+  ctx.restore();
+}
+
+function signalScopeBlips(props) {
+  if (Array.isArray(props.blips)) {
+    return props.blips
+      .filter((blip) => blip && typeof blip === "object")
+      .slice(0, 48);
+  }
+  const count = Math.max(0, Math.min(48, Math.floor(finiteNumber(props.blips, 9))));
+  return Array.from({length: count}, (_, index) => ({
+    id: `auto-${index}`,
+    angle: seededUnit(finiteNumber(props.seed, 0) + index * 3.17) * Math.PI * 2,
+    radius: 0.12 + seededUnit(finiteNumber(props.seed, 0) + index * 5.73) * 0.78,
+    tone: index % 5 === 0 ? props.accentTone || "magenta" : props.tone || "green",
+    intensity: 0.42 + seededUnit(finiteNumber(props.seed, 0) + index * 7.91) * 0.52,
+  }));
+}
+
+function signalScopeBlipPoint(blip, radius, now, seed) {
+  const hasPoint = Number.isFinite(Number(blip.x)) || Number.isFinite(Number(blip.y));
+  if (hasPoint) {
+    return {
+      x: clamp(finiteNumber(blip.x, 0), -1, 1) * radius,
+      y: clamp(finiteNumber(blip.y, 0), -1, 1) * radius,
+    };
+  }
+  const angle = finiteNumber(blip.angle, seededUnit(seed) * Math.PI * 2)
+    + finiteNumber(blip.drift, 0) * now * 0.00008;
+  const distance = clamp(finiteNumber(blip.radius, 0.55), 0, 1) * radius;
+  return {x: Math.cos(angle) * distance, y: Math.sin(angle) * distance};
+}
+
+function signalScopeWaveforms(props) {
+  const raw = Array.isArray(props.waveforms) ? props.waveforms : [];
+  return raw.filter((waveform) => waveform && typeof waveform === "object").slice(0, 8);
+}
+
+function drawSignalScopeWaveforms(waveforms, props, radius, now) {
+  if (!waveforms.length) return;
+  const tone = props.tone || "green";
+  const accentTone = props.accentTone || props.accent || "cyan";
+  const top = radius * 0.42;
+  const height = radius * 0.42;
+  const left = -radius * 0.82;
+  const width = radius * 1.64;
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(0, 0, radius * 0.98, 0, Math.PI * 2);
+  ctx.clip();
+  ctx.beginPath();
+  ctx.rect(left, top, width, height);
+  ctx.clip();
+  ctx.strokeStyle = toneColor(tone, 0.16);
+  ctx.lineWidth = 0.65 * devicePixelRatio;
+  for (let row = 0; row <= 3; row++) {
+    const y = top + (row / 3) * height;
+    ctx.beginPath();
+    ctx.moveTo(left, y);
+    ctx.lineTo(left + width, y);
+    ctx.stroke();
+  }
+  for (const [index, waveform] of waveforms.entries()) {
+    const samples = Math.max(12, Math.min(128, Math.floor(finiteNumber(waveform.samples, 64))));
+    const amplitude = clamp(finiteNumber(waveform.amplitude, 0.28), 0, 1) * height * 0.44;
+    const frequency = Math.max(0.1, finiteNumber(waveform.frequency, 2.6));
+    const speed = finiteNumber(waveform.speed, 0.0015);
+    const phase = now * speed + finiteNumber(waveform.phase, 0) + index * 0.73;
+    const centerY = top + height * (0.22 + ((index + 0.5) / Math.max(1, waveforms.length)) * 0.54);
+    const waveTone = waveform.tone || (index % 2 ? accentTone : tone);
+    ctx.shadowColor = toneColor(waveTone, 0.72);
+    ctx.shadowBlur = 7 * devicePixelRatio;
+    ctx.lineWidth = Math.max(0.8, finiteNumber(waveform.width, 1.1) * devicePixelRatio);
+    ctx.strokeStyle = toneColor(waveTone, clamp(finiteNumber(waveform.alpha, 0.74), 0, 1));
+    ctx.beginPath();
+    for (let sample = 0; sample < samples; sample++) {
+      const progress = sample / Math.max(1, samples - 1);
+      const x = left + progress * width;
+      const carrier = Math.sin(progress * Math.PI * 2 * frequency + phase);
+      const harmonic = Math.sin(progress * Math.PI * 2 * (frequency * 0.5 + 0.7) - phase * 0.7) * 0.36;
+      const y = centerY + (carrier + harmonic) * amplitude;
+      if (sample === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    if (waveform.label) {
+      ctx.font = `${8.5 * devicePixelRatio}px ui-monospace, monospace`;
+      ctx.textAlign = "left";
+      ctx.textBaseline = "middle";
+      ctx.fillStyle = toneColor("white", 0.62);
+      ctx.fillText(String(waveform.label).slice(0, 10), left + 3 * devicePixelRatio, centerY);
+    }
+  }
+  ctx.restore();
+}
+
+function drawSignalScope(primitive, w, h, now) {
+  const props = primitive.props || {};
+  const center = normalizedPoint(props.position || {x: 0.78, y: 0.33}, w, h);
+  const radius = clamp(finiteNumber(props.scale ?? props.radius, 0.16), 0.04, 0.46) * Math.min(w, h);
+  if (radius <= 0) return;
+  const mode = String(props.mode || "hybrid");
+  const tone = props.tone || "green";
+  const accentTone = props.accentTone || props.accent || "cyan";
+  const opacity = clamp(finiteNumber(props.opacity, 0.82), 0, 1);
+  const rings = Math.max(1, Math.min(9, Math.floor(finiteNumber(props.rings, 4))));
+  const spokes = Math.max(0, Math.min(24, Math.floor(finiteNumber(props.spokes, 8))));
+  const sweepEnabled = props.sweep !== false;
+  const sweepSpeed = finiteNumber(props.sweepSpeed, 0.9);
+  const seed = finiteNumber(props.seed, 0);
+  const sweepAngle = now * 0.00105 * sweepSpeed + seed * 0.071;
+  const blips = signalScopeBlips(props);
+  const waveforms = signalScopeWaveforms(props);
+  const hasLabels = Boolean(props.label)
+    || blips.some((blip) => Boolean(blip.label))
+    || waveforms.some((waveform) => Boolean(waveform.label));
+
+  if (typeof window !== "undefined") {
+    window.__gibsonSignalScopeState = window.__gibsonSignalScopeState || {};
+    window.__gibsonSignalScopeState[primitive.id] = {
+      mode,
+      ringCount: rings,
+      spokeCount: spokes,
+      blipCount: blips.length,
+      waveformCount: waveforms.length,
+      hasSweep: sweepEnabled,
+      tone,
+      accentTone,
+      hasLabels,
+    };
+  }
+
+  ctx.save();
+  ctx.globalCompositeOperation = props.blend === "source-over" ? "source-over" : "screen";
+  ctx.globalAlpha *= opacity;
+  ctx.translate(center.x, center.y);
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.shadowColor = toneColor(tone, 0.66);
+  ctx.shadowBlur = 12 * devicePixelRatio;
+  ctx.strokeStyle = toneColor(tone, 0.34);
+  ctx.lineWidth = Math.max(0.55, 0.85 * devicePixelRatio);
+  for (let ring = 1; ring <= rings; ring++) {
+    const ringRadius = (ring / rings) * radius;
+    ctx.beginPath();
+    ctx.arc(0, 0, ringRadius, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  if (spokes > 0) {
+    ctx.strokeStyle = toneColor(tone, 0.22);
+    for (let spoke = 0; spoke < spokes; spoke++) {
+      const angle = (spoke / spokes) * Math.PI * 2;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(angle) * radius * 0.12, Math.sin(angle) * radius * 0.12);
+      ctx.lineTo(Math.cos(angle) * radius, Math.sin(angle) * radius);
+      ctx.stroke();
+    }
+  }
+  ctx.strokeStyle = toneColor(accentTone, 0.54);
+  ctx.lineWidth = Math.max(1, 1.25 * devicePixelRatio);
+  ctx.beginPath();
+  ctx.arc(0, 0, radius, 0, Math.PI * 2);
+  ctx.stroke();
+  if (sweepEnabled) {
+    const gradient = ctx.createRadialGradient(0, 0, radius * 0.08, 0, 0, radius);
+    gradient.addColorStop(0, toneColor(accentTone, 0.22));
+    gradient.addColorStop(1, toneColor(accentTone, 0));
+    ctx.save();
+    ctx.rotate(sweepAngle);
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.arc(0, 0, radius, -0.34, 0.04);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = toneColor(accentTone, 0.74);
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(radius, 0);
+    ctx.stroke();
+    ctx.restore();
+  }
+  for (const [index, blip] of blips.entries()) {
+    const point = signalScopeBlipPoint(blip, radius, now, seed + index * 13.1);
+    const distance = Math.hypot(point.x, point.y);
+    if (distance > radius) continue;
+    const blipTone = blip.tone || (index % 4 === 0 ? accentTone : tone);
+    const intensity = clamp(finiteNumber(blip.intensity, 0.72), 0, 1);
+    const pulse = 1 + Math.sin(now * 0.0045 + seed + index * 0.9) * 0.18;
+    const size = Math.max(1.4, finiteNumber(blip.size, 2.3) * devicePixelRatio * pulse);
+    ctx.shadowColor = toneColor(blipTone, 0.82 * intensity);
+    ctx.shadowBlur = 11 * devicePixelRatio * intensity;
+    ctx.fillStyle = toneColor(blipTone, 0.58 * intensity);
+    ctx.beginPath();
+    ctx.arc(point.x, point.y, size, 0, Math.PI * 2);
+    ctx.fill();
+    if (blip.label) {
+      ctx.font = `${8.5 * devicePixelRatio}px ui-monospace, monospace`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "bottom";
+      ctx.fillStyle = toneColor("white", 0.64);
+      ctx.fillText(String(blip.label).slice(0, 10), point.x, point.y - size - 3 * devicePixelRatio);
+    }
+  }
+  if (mode !== "radar") drawSignalScopeWaveforms(waveforms, props, radius, now);
+  if (props.label) {
+    ctx.font = `${11 * devicePixelRatio}px ui-monospace, monospace`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = toneColor("white", 0.82);
+    ctx.shadowBlur = 5 * devicePixelRatio;
+    ctx.fillText(String(props.label).slice(0, 22), 0, -radius - 13 * devicePixelRatio);
+  }
   ctx.restore();
 }
 

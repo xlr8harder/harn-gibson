@@ -25,7 +25,7 @@
         "eventType": "primitive_gallery",
         "phase": "lifecycle",
         "sequence": 900,
-        "summary": "mesh, vector paths, vector symbols, city blocks, graphs, ribbons, glyphs, data rain, particles, stream panel",
+        "summary": "mesh, signal scope, vector paths, vector symbols, city blocks, graphs, ribbons, glyphs, data rain, particles, stream panel",
         "title": "Primitive gallery"
       }
     ],
@@ -35,6 +35,7 @@
           "patch",
           "append_log",
           "primitive:hologram",
+          "primitive:signal_scope",
           "primitive:mesh",
           "primitive:svg_layer",
           "primitive:city_block",
@@ -55,7 +56,7 @@
           "renderer": "replay",
           "stepType": "mutations"
         },
-        "mutationCount": 14,
+        "mutationCount": 15,
         "renderer": "replay",
         "requestCount": 1,
         "routes": [
@@ -66,6 +67,7 @@
         "targets": [
           "status",
           "gallery-hologram",
+          "gallery-scope",
           "gallery-mesh",
           "gallery-vector",
           "gallery-city",
@@ -87,6 +89,7 @@
             "patch",
             "append_log",
             "primitive:hologram",
+            "primitive:signal_scope",
             "primitive:mesh",
             "primitive:svg_layer",
             "primitive:city_block",
@@ -107,7 +110,7 @@
             "renderer": "replay",
             "stepType": "mutations"
           },
-          "mutationCount": 14,
+          "mutationCount": 15,
           "renderer": "replay",
           "requestCount": 1,
           "routes": [
@@ -118,6 +121,7 @@
           "targets": [
             "status",
             "gallery-hologram",
+            "gallery-scope",
             "gallery-mesh",
             "gallery-vector",
             "gallery-city",
@@ -143,7 +147,7 @@
         "props": {
           "isStreaming": true,
           "streamId": "gallery",
-          "text": "mesh/vector/glyph/rain/packet/city/ribbon/text primitives are available to renderer plans",
+          "text": "mesh/scope/vector/glyph/rain/packet/city/ribbon/text primitives are available to renderer plans",
           "title": "CATALOG STREAM"
         },
         "region": "stage"
@@ -554,6 +558,68 @@
             }
           ],
           "width": 4
+        },
+        "region": "stage"
+      },
+      "gallery-scope": {
+        "children": [],
+        "id": "gallery-scope",
+        "kind": "signal_scope",
+        "props": {
+          "accentTone": "magenta",
+          "blips": [
+            {
+              "angle": -0.7,
+              "intensity": 0.8,
+              "label": "SRC",
+              "radius": 0.32,
+              "tone": "cyan"
+            },
+            {
+              "angle": 0.35,
+              "intensity": 0.95,
+              "label": "ICE",
+              "radius": 0.58,
+              "tone": "amber"
+            },
+            {
+              "intensity": 0.7,
+              "label": "SYS",
+              "tone": "magenta",
+              "x": -0.28,
+              "y": 0.36
+            }
+          ],
+          "label": "SIGNAL",
+          "mode": "hybrid",
+          "opacity": 0.88,
+          "position": {
+            "x": 0.88,
+            "y": 0.24
+          },
+          "rings": 5,
+          "scale": 0.105,
+          "seed": 177,
+          "spokes": 10,
+          "sweep": true,
+          "sweepSpeed": 0.74,
+          "tone": "green",
+          "waveforms": [
+            {
+              "amplitude": 0.22,
+              "frequency": 3.2,
+              "label": "CPU",
+              "phase": 0.18,
+              "tone": "cyan"
+            },
+            {
+              "amplitude": 0.16,
+              "frequency": 5.4,
+              "label": "IO",
+              "phase": 0.48,
+              "tone": "white"
+            }
+          ]
         },
         "region": "stage"
       },
