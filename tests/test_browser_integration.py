@@ -197,6 +197,8 @@ def test_checked_in_replay_fixtures_render_browser_screenshots(fixture_name: str
         except Error as exc:
             pytest.skip(f"Chromium is not installed for Playwright: {exc}")
         assert screenshot.scene_revision == result.scene.revision
+        assert screenshot.canvas_metrics["nonblank"] is True
+        assert screenshot.canvas_metrics["luminanceTotal"] > 0
         assert_screenshot(output)
     finally:
         state.pipeline.stop()

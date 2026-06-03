@@ -61,7 +61,7 @@ uv run harn-gibson replay-dir examples/replays \
   --screenshot-dir test-artifacts/replays/screenshots
 ```
 
-The command exits with status `1` if any fixture fails to load, replay, satisfy expectations, match its requested baseline, or render its requested browser screenshot. The suite result JSON uses `harn-gibson.replay-suite-result.v1` and records per-file step counts, scene revisions, expectation counts, baseline metadata, screenshot metadata, and failures.
+The command exits with status `1` if any fixture fails to load, replay, satisfy expectations, match its requested baseline, or render its requested browser screenshot. Browser screenshots also sample the `#grid` canvas and fail if it is blank. The suite result JSON uses `harn-gibson.replay-suite-result.v1` and records per-file step counts, scene revisions, expectation counts, baseline metadata, screenshot metadata, canvas metrics, and failures.
 
 ## Baseline Review
 
@@ -94,3 +94,5 @@ uv run harn-gibson replay examples/replays/stream-and-diagnostic.json \
   --output-result test-artifacts/replays/result.json \
   --screenshot test-artifacts/replays/scene.png
 ```
+
+Screenshot result metadata includes `canvasMetrics` with canvas dimensions, sampled pixel count, luminance total, lit-pixel count, lit ratio, maximum channel total, and a `nonblank` boolean. This makes replay screenshot artifacts reviewable in CI output even before a human opens the PNG.

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import threading
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -20,15 +20,49 @@ class BrowserScreenshotResult:
     scene_revision: int
     width: int
     height: int
+    canvas_metrics: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        payload = {
             "path": str(self.path),
             "url": self.url,
             "sceneRevision": self.scene_revision,
             "width": self.width,
             "height": self.height,
         }
+        if self.canvas_metrics:
+            payload["canvasMetrics"] = self.canvas_metrics
+        return payload
+
+
+CANVAS_METRICS_SCRIPT = """canvas => {
+  const context = canvas.getContext("2d");
+  const width = Math.min(canvas.width, 160);
+  const height = Math.min(canvas.height, 120);
+  const data = context.getImageData(0, 0, width, height).data;
+  let luminanceTotal = 0;
+  let litPixels = 0;
+  let maxChannelTotal = 0;
+  for (let index = 0; index < data.length; index += 4) {
+    const channelTotal = data[index] + data[index + 1] + data[index + 2];
+    luminanceTotal += channelTotal;
+    maxChannelTotal = Math.max(maxChannelTotal, channelTotal);
+    if (channelTotal > 24) litPixels += 1;
+  }
+  const sampledPixels = Math.max(1, width * height);
+  return {
+    canvasWidth: canvas.width,
+    canvasHeight: canvas.height,
+    sampleWidth: width,
+    sampleHeight: height,
+    sampledPixels,
+    luminanceTotal,
+    litPixels,
+    litRatio: Math.round((litPixels / sampledPixels) * 10000) / 10000,
+    maxChannelTotal,
+    nonblank: luminanceTotal > 0 && litPixels > 0,
+  };
+}"""
 
 
 def resolve_playwright_factory() -> PlaywrightFactory:
@@ -50,6 +84,7 @@ def capture_scene_screenshot(
     height: int = 900,
     full_page: bool = True,
     wait_ms: int = 160,
+    require_nonblank: bool = True,
     playwright_factory: PlaywrightFactory | None = None,
 ) -> BrowserScreenshotResult:
     output_path = Path(path)
@@ -68,6 +103,9 @@ def capture_scene_screenshot(
                 page.goto(url, wait_until="domcontentloaded")
                 if wait_ms > 0:
                     page.wait_for_timeout(wait_ms)
+                canvas_metrics = capture_canvas_metrics(page)
+                if require_nonblank and not canvas_metrics["nonblank"]:
+                    raise RuntimeError("browser canvas rendered blank")
                 page.screenshot(path=output_path, full_page=full_page)
             finally:
                 browser.close()
@@ -81,12 +119,22 @@ def capture_scene_screenshot(
         scene_revision=state.scene.state.revision,
         width=width,
         height=height,
+        canvas_metrics=canvas_metrics,
     )
+
+
+def capture_canvas_metrics(page: Any) -> dict[str, Any]:
+    metrics = page.locator("#grid").evaluate(CANVAS_METRICS_SCRIPT)
+    if not isinstance(metrics, dict):
+        raise RuntimeError("browser canvas metrics unavailable")
+    return metrics
 
 
 __all__ = [
     "BrowserScreenshotResult",
+    "CANVAS_METRICS_SCRIPT",
     "PlaywrightFactory",
+    "capture_canvas_metrics",
     "capture_scene_screenshot",
     "resolve_playwright_factory",
 ]

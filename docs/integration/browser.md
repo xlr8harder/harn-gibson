@@ -14,7 +14,7 @@ Run all tests:
 uv run pytest
 ```
 
-Screenshots from the browser integration test are written under `test-artifacts/screenshots/`.
+Screenshots from the browser integration test are written under `test-artifacts/screenshots/`. Replay screenshot capture also records canvas metrics and rejects blank canvas output by default.
 
 Replay fixtures can also render their final scene through the browser display:
 
@@ -36,4 +36,4 @@ The integration test verifies:
 - posting a harn-style event mutates the scene;
 - the debug drawer toggles;
 - the browser input composer enqueues a message and `/input/next` drains it.
-- the checked-in agent-side and renderer-side replay fixtures render through the browser screenshot path.
+- the checked-in agent-side and renderer-side replay fixtures render through the browser screenshot path with nonblank canvas metrics.
