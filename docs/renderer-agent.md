@@ -53,7 +53,7 @@ Set `HARN_GIBSON_RENDERER_COMMAND` to run a renderer as a subprocess. The comman
 ```bash
 HARN_GIBSON_RENDERER_COMMAND='uv run python examples/renderers/gibson_echo_renderer.py' \
 HARN_GIBSON_RENDERER_TIMEOUT_MS=10000 \
-uv run harn-gibson dogfood
+uv run harn-gibson dogfood --style neon-noir
 ```
 
 The command receives one JSON object on stdin:
@@ -144,14 +144,14 @@ The same list is accepted as JSON in `HARN_GIBSON_ROUTE_RULES`.
 
 The renderer agent should not receive a full new transcript on every event. Use a rolling context:
 
-- Stable project metadata: repo name, current renderer schema, primitive catalog, active display style.
+- Stable project metadata: repo name, current renderer schema, primitive catalog, active display style, and full style-pack palette/backdrop metadata.
 - Current renderer state: compact `SceneState` summary, not screenshots.
 - Bounded repo topology: project root name, top-level directories/files, and an optional clipped file-tree sample.
 - Touched files: recent file paths from harn/tool events or coalesced batches, with operation hints when available.
 - Recent harn events: the newest event batch plus short summaries of recent prior events.
 - Recent visualization context: recent render intents, render plans, and active animations/effects.
 
-The executable fixture for this is `RendererContext`. A renderer that only implements `render(requests, scene)` receives the existing deterministic-compatible call shape. A renderer that implements `render_with_context(requests, scene, context)` receives a `harn-gibson.renderer-context.v1` object with project metadata, bounded repo topology, touched-file summaries, catalog data, scene context, render input, recent agent context, visualization history, and compaction metadata.
+The executable fixture for this is `RendererContext`. A renderer that only implements `render(requests, scene)` receives the existing deterministic-compatible call shape. A renderer that implements `render_with_context(requests, scene, context)` receives a `harn-gibson.renderer-context.v1` object with project metadata, bounded repo topology, touched-file summaries, catalog data, scene context, render input, recent agent context, visualization history, and compaction metadata. `context.project.displayStyle` is the selected style id and `context.project.stylePack` is a `harn-gibson.style-pack.v1` payload with tones, canvas backdrop settings, CSS variables, and motifs.
 
 After enough events or token growth, do a renderer compaction:
 

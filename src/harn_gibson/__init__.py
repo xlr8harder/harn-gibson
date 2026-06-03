@@ -69,11 +69,21 @@ from harn_gibson.scene import (
     initial_scene,
     scene_update_payload,
 )
+from harn_gibson.styles import (
+    DEFAULT_STYLE_ID,
+    STYLE_PACKS,
+    StylePack,
+    default_style_pack,
+    style_pack_by_id,
+    style_pack_from_name,
+    style_pack_ids,
+)
 
 __all__ = [
     "CatalogEntry",
     "BrowserScreenshotResult",
     "ContextualSceneRenderer",
+    "DEFAULT_STYLE_ID",
     "EventPhase",
     "EventRouteRule",
     "ExternalRenderer",
@@ -106,6 +116,8 @@ __all__ = [
     "SceneMutation",
     "ScenePrimitive",
     "SceneState",
+    "STYLE_PACKS",
+    "StylePack",
     "StreamBinding",
     "TimelineWindow",
     "VisualCatalog",
@@ -113,6 +125,7 @@ __all__ = [
     "coerce_render_timing_mode",
     "compare_replay_baseline",
     "default_mutations_for_event",
+    "default_style_pack",
     "default_visual_catalog",
     "discover_replay_files",
     "evaluate_replay_expectations",
@@ -138,6 +151,9 @@ __all__ = [
     "scene_update_payload",
     "step_schedule",
     "step_schedule_payload",
+    "style_pack_by_id",
+    "style_pack_from_name",
+    "style_pack_ids",
     "summarize_event",
     "to_jsonable",
 ]

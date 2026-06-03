@@ -14,6 +14,7 @@ from collections.abc import Sequence
 
 from harn_gibson.auth import import_codex_auth
 from harn_gibson.extension import extension_path
+from harn_gibson.styles import style_pack_from_name, style_pack_ids
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -23,6 +24,7 @@ def build_parser() -> argparse.ArgumentParser:
     serve = subcommands.add_parser("serve", help="run the local graphical display server")
     serve.add_argument("--host", default="127.0.0.1")
     serve.add_argument("--port", type=int, default=8765)
+    serve.add_argument("--style", choices=style_pack_ids(), default=None, help="display style pack")
 
     dogfood = subcommands.add_parser("dogfood", help="run the display, open a browser, and launch harn")
     dogfood.add_argument("--host", default="127.0.0.1")
@@ -31,6 +33,7 @@ def build_parser() -> argparse.ArgumentParser:
     dogfood.add_argument("--browser", action=argparse.BooleanOptionalAction, default=True)
     dogfood.add_argument("--codex-auth-import", action=argparse.BooleanOptionalAction, default=True)
     dogfood.add_argument("--hold-on-error", action=argparse.BooleanOptionalAction, default=True)
+    dogfood.add_argument("--style", choices=style_pack_ids(), default=None, help="display style pack")
     dogfood.add_argument("harn_args", nargs=argparse.REMAINDER, help="arguments forwarded to harn after --")
 
     auth = subcommands.add_parser("import-codex-auth", help="copy Codex OAuth tokens into harn auth storage")
@@ -44,6 +47,7 @@ def build_parser() -> argparse.ArgumentParser:
     replay.add_argument("--screenshot", default=None, help="write a browser screenshot of the final replay scene")
     replay.add_argument("--screenshot-width", type=int, default=1280, help="screenshot viewport width")
     replay.add_argument("--screenshot-height", type=int, default=900, help="screenshot viewport height")
+    replay.add_argument("--style", choices=style_pack_ids(), default=None, help="display style pack")
 
     replay_dir = subcommands.add_parser("replay-dir", help="run every replay JSON fixture under a directory")
     replay_dir.add_argument("path", help="directory or replay JSON file")
@@ -52,6 +56,7 @@ def build_parser() -> argparse.ArgumentParser:
     replay_dir.add_argument("--screenshot-width", type=int, default=1280, help="screenshot viewport width")
     replay_dir.add_argument("--screenshot-height", type=int, default=900, help="screenshot viewport height")
     replay_dir.add_argument("--baseline-dir", default=None, help="compare final scenes against baselines in this path")
+    replay_dir.add_argument("--style", choices=style_pack_ids(), default=None, help="display style pack")
     replay_dir.add_argument(
         "--update-baselines",
         action="store_true",
@@ -79,10 +84,14 @@ def run_dogfood(
     launch_browser: bool = True,
     codex_auth_import: bool = True,
     hold_on_error: bool = True,
+    style: str | None = None,
 ) -> int:
     from harn_gibson.server import build_state_from_env, create_server, publish_diagnostic_event
 
-    state = build_state_from_env()
+    env = os.environ.copy()
+    if style is not None:
+        env["HARN_GIBSON_STYLE"] = style
+    state = build_state_from_env(env) if style is not None else build_state_from_env()
     server = create_server(host, port, state)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
@@ -94,7 +103,6 @@ def run_dogfood(
     if forwarded_args[:1] == ["--"]:
         forwarded_args = forwarded_args[1:]
 
-    env = os.environ.copy()
     env["HARN_GIBSON_ENDPOINT"] = endpoint
     env["HARN_GIBSON_INPUT_ENDPOINT"] = input_endpoint
     command = [harn_bin, *forwarded_args]
@@ -176,7 +184,7 @@ def run(argv: Sequence[str] | None = None) -> int:
         from harn_gibson.replay import ReplayExpectationError, run_replay_file, write_replay_result, write_scene
         from harn_gibson.server import GibsonServerState
 
-        replay_state = GibsonServerState()
+        replay_state = GibsonServerState(style_pack=style_pack_from_name(args.style))
         try:
             result = run_replay_file(args.path, replay_state)
         except ReplayExpectationError as error:
@@ -216,6 +224,7 @@ def run(argv: Sequence[str] | None = None) -> int:
             screenshot_height=args.screenshot_height,
             baseline_dir=args.baseline_dir,
             update_baselines=args.update_baselines,
+            style=args.style,
         )
         if args.output_result:
             Path(args.output_result).parent.mkdir(parents=True, exist_ok=True)
@@ -256,11 +265,12 @@ def run(argv: Sequence[str] | None = None) -> int:
             launch_browser=args.browser,
             codex_auth_import=args.codex_auth_import,
             hold_on_error=args.hold_on_error,
+            style=args.style,
         )
     if args.command in {None, "serve"}:
         from harn_gibson.server import run_server
 
-        run_server(getattr(args, "host", "127.0.0.1"), getattr(args, "port", 8765))
+        run_server(getattr(args, "host", "127.0.0.1"), getattr(args, "port", 8765), style=getattr(args, "style", None))
         return 0
     parser.error(f"unknown command: {args.command}")  # pragma: no cover
     return 2  # pragma: no cover

@@ -15,6 +15,7 @@ from harn_gibson.events import GibsonEvent, diagnostic_event
 from harn_gibson.rendering import RenderPlan, RenderRequest, RenderStep, RenderSubmitResult
 from harn_gibson.scene import SceneMutation, SceneState, mutation_from_mapping
 from harn_gibson.server import GibsonServerState, event_from_payload, submit_event_to_renderer
+from harn_gibson.styles import style_pack_from_name
 
 ReplayStepKind = Literal["event", "raw_event", "render_plan", "mutations"]
 ReplayExpectationOp = Literal["equals", "contains", "exists"]
@@ -185,6 +186,7 @@ def run_replay_suite(
     screenshot_height: int = 900,
     baseline_dir: str | Path | None = None,
     update_baselines: bool = False,
+    style: str | None = None,
 ) -> ReplaySuiteResult:
     if update_baselines and baseline_dir is None:
         raise ValueError("update_baselines requires baseline_dir")
@@ -192,9 +194,10 @@ def run_replay_suite(
     files = discover_replay_files(root)
     screenshot_root = Path(screenshot_dir) if screenshot_dir is not None else None
     baseline_root = Path(baseline_dir) if baseline_dir is not None else None
+    style_pack = style_pack_from_name(style)
     results = []
     for replay_file in files:
-        state = GibsonServerState()
+        state = GibsonServerState(style_pack=style_pack)
         result: ReplayResult | None = None
         baseline = None
         try:

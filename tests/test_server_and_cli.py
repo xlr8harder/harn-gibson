@@ -39,6 +39,7 @@ from harn_gibson.server import (
     route_rules_from_env,
     submit_event_to_renderer,
 )
+from harn_gibson.styles import style_pack_from_name
 
 
 def request_text(url: str, data: bytes | None = None) -> tuple[int, str, str]:
@@ -76,6 +77,8 @@ def test_http_server_routes() -> None:
         assert health["sceneRevision"] == 0
         assert health["renderMode"] == "blocking"
         assert health["renderTiming"] == "immediate"
+        assert health["displayStyle"] == "gibson"
+        assert health["stylePack"]["id"] == "gibson"
         assert health["pendingRenderJobs"] == 0
         assert health["streams"] == {}
         assert health["inputBridge"] == {
@@ -453,7 +456,16 @@ def test_harn_bridge_state_and_health_payload() -> None:
     assert delivered["lastInputDeliveryMs"] == 1250
 
     state = GibsonServerState(input_bridge=bridge)
-    assert health_payload(state)["inputBridge"]["deliveredInputs"] == 1
+    health = health_payload(state)
+    assert health["inputBridge"]["deliveredInputs"] == 1
+    assert health["displayStyle"] == "gibson"
+
+    styled = GibsonServerState(style_pack=style_pack_from_name("neon-noir"))
+    styled_health = health_payload(styled)
+    assert styled_health["displayStyle"] == "neon-noir"
+    assert styled_health["stylePack"]["canvas"]["gridTone"] == "magenta"
+    assert styled.scene.state.primitives["stage"].props["theme"] == "neon-noir"
+    styled.pipeline.stop()
 
 
 def test_async_state_accepts_without_immediate_scene_update() -> None:
@@ -484,6 +496,7 @@ def test_build_state_from_env() -> None:
             "HARN_GIBSON_RENDER_MODE": "async",
             "HARN_GIBSON_RENDER_BATCH_MS": "5",
             "HARN_GIBSON_RENDER_TIMING": "scheduled",
+            "HARN_GIBSON_STYLE": "mainframe",
         }
     )
     renderer_state = build_state_from_env(
@@ -496,6 +509,9 @@ def test_build_state_from_env() -> None:
     assert state.pipeline.mode == "async"
     assert state.pipeline.batch_window_ms == 5
     assert state.pipeline.timing_mode == "scheduled"
+    assert state.style_pack.id == "mainframe"
+    assert state.scene.state.metadata["displayStyle"] == "mainframe"
+    assert state.pipeline.context_builder.config.display_style == "mainframe"
     assert isinstance(renderer_state.renderer, ExternalRenderer)
     assert renderer_state.renderer.command == (sys.executable, "-c", "print('{}')")
     assert renderer_state.renderer.timeout_seconds == 0.25
@@ -579,9 +595,10 @@ def test_format_sse() -> None:
 def test_cli_parser_and_run(monkeypatch: Any, capsys: Any) -> None:
     parser = cli.build_parser()
     assert parser.parse_args(["extension-path"]).command == "extension-path"
-    parsed_dogfood = parser.parse_args(["dogfood", "--no-browser", "--", "-p", "hello"])
+    parsed_dogfood = parser.parse_args(["dogfood", "--no-browser", "--style", "neon-noir", "--", "-p", "hello"])
     assert parsed_dogfood.command == "dogfood"
     assert parsed_dogfood.browser is False
+    assert parsed_dogfood.style == "neon-noir"
     assert parsed_dogfood.harn_args == ["--", "-p", "hello"]
     parsed_auth = parser.parse_args(["import-codex-auth", "--codex-auth", "codex.json", "--harn-auth", "harn.json"])
     assert parsed_auth.command == "import-codex-auth"
@@ -599,6 +616,8 @@ def test_cli_parser_and_run(monkeypatch: Any, capsys: Any) -> None:
             "800",
             "--screenshot-height",
             "600",
+            "--style",
+            "mainframe",
         ]
     )
     assert parsed_replay.command == "replay"
@@ -608,6 +627,7 @@ def test_cli_parser_and_run(monkeypatch: Any, capsys: Any) -> None:
     assert parsed_replay.screenshot == "scene.png"
     assert parsed_replay.screenshot_width == 800
     assert parsed_replay.screenshot_height == 600
+    assert parsed_replay.style == "mainframe"
     parsed_replay_dir = parser.parse_args(
         [
             "replay-dir",
@@ -622,6 +642,8 @@ def test_cli_parser_and_run(monkeypatch: Any, capsys: Any) -> None:
             "768",
             "--baseline-dir",
             "baselines",
+            "--style",
+            "neon-noir",
             "--update-baselines",
         ]
     )
@@ -632,6 +654,7 @@ def test_cli_parser_and_run(monkeypatch: Any, capsys: Any) -> None:
     assert parsed_replay_dir.screenshot_width == 1024
     assert parsed_replay_dir.screenshot_height == 768
     assert parsed_replay_dir.baseline_dir == "baselines"
+    assert parsed_replay_dir.style == "neon-noir"
     assert parsed_replay_dir.update_baselines is True
     parsed_event_log = parser.parse_args(
         ["event-log-to-replay", "events.jsonl", "--output", "fixture.json", "--name", "captured"]
@@ -645,13 +668,13 @@ def test_cli_parser_and_run(monkeypatch: Any, capsys: Any) -> None:
 
     calls: list[tuple[str, int]] = []
 
-    def fake_run_server(host: str, port: int) -> None:
-        calls.append((host, port))
+    def fake_run_server(host: str, port: int, *, style: str | None = None) -> None:
+        calls.append((host, port, style))
 
     monkeypatch.setattr("harn_gibson.server.run_server", fake_run_server)
-    assert cli.run(["serve", "--host", "0.0.0.0", "--port", "9999"]) == 0
+    assert cli.run(["serve", "--host", "0.0.0.0", "--port", "9999", "--style", "mainframe"]) == 0
     assert cli.run([]) == 0
-    assert calls == [("0.0.0.0", 9999), ("127.0.0.1", 8765)]
+    assert calls == [("0.0.0.0", 9999, "mainframe"), ("127.0.0.1", 8765, None)]
 
 
 def test_cli_replay_writes_outputs(tmp_path: Any, capsys: Any) -> None:
@@ -679,12 +702,16 @@ def test_cli_replay_writes_outputs(tmp_path: Any, capsys: Any) -> None:
                 str(scene_path),
                 "--output-result",
                 str(result_path),
+                "--style",
+                "mainframe",
             ]
         )
         == 0
     )
 
-    assert json.loads(scene_path.read_text(encoding="utf-8"))["revision"] == 1
+    scene = json.loads(scene_path.read_text(encoding="utf-8"))
+    assert scene["revision"] == 1
+    assert scene["metadata"]["displayStyle"] == "mainframe"
     assert json.loads(result_path.read_text(encoding="utf-8"))["steps"][0]["updates"] == 1
     assert capsys.readouterr().out.strip() == "replayed 1 steps; scene revision 1"
 
@@ -820,6 +847,7 @@ def test_cli_replay_dir_writes_suite_result(tmp_path: Any, monkeypatch: Any, cap
     )
 
     def fake_capture(state: Any, path: str | Path, *, width: int, height: int) -> BrowserScreenshotResult:
+        assert state.scene.state.metadata["displayStyle"] == "neon-noir"
         captures.append((state.scene.state.revision, width, height))
         return BrowserScreenshotResult(Path(path), "http://127.0.0.1:1", state.scene.state.revision, width, height)
 
@@ -838,6 +866,8 @@ def test_cli_replay_dir_writes_suite_result(tmp_path: Any, monkeypatch: Any, cap
                 "1024",
                 "--screenshot-height",
                 "768",
+                "--style",
+                "neon-noir",
             ]
         )
         == 0
@@ -994,7 +1024,12 @@ def test_cli_dogfood_launches_display_browser_and_harn(monkeypatch: Any, capsys:
         harn_calls.append((command, env))
         return 23
 
-    monkeypatch.setattr("harn_gibson.server.build_state_from_env", lambda: state)
+    def fake_build_state(env: dict[str, str] | None = None) -> GibsonServerState:
+        if env is not None:
+            assert env["HARN_GIBSON_STYLE"] == "neon-noir"
+        return state
+
+    monkeypatch.setattr("harn_gibson.server.build_state_from_env", fake_build_state)
     monkeypatch.setattr("harn_gibson.server.create_server", lambda _host, _port, _state: FakeServer())
     monkeypatch.setattr(cli.webbrowser, "open", lambda url: browser_urls.append(url))
     monkeypatch.setattr(cli.subprocess, "call", fake_call)
@@ -1007,6 +1042,8 @@ def test_cli_dogfood_launches_display_browser_and_harn(monkeypatch: Any, capsys:
                 "0",
                 "--harn-bin",
                 "harn-dev",
+                "--style",
+                "neon-noir",
                 "--no-codex-auth-import",
                 "--no-hold-on-error",
                 "--",
@@ -1020,6 +1057,7 @@ def test_cli_dogfood_launches_display_browser_and_harn(monkeypatch: Any, capsys:
     assert harn_calls[0][0] == ["harn-dev", "-p", "hello"]
     assert harn_calls[0][1]["HARN_GIBSON_ENDPOINT"] == "http://127.0.0.1:9876/events"
     assert harn_calls[0][1]["HARN_GIBSON_INPUT_ENDPOINT"] == "http://127.0.0.1:9876/input/next"
+    assert harn_calls[0][1]["HARN_GIBSON_STYLE"] == "neon-noir"
     assert "pipeline.stop" in server_calls
     assert "shutdown" in server_calls
     assert "server_close" in server_calls

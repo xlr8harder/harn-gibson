@@ -23,6 +23,7 @@ from harn_gibson.scene import (
     scene_update_payload,
 )
 from harn_gibson.sinks import EventBuffer
+from harn_gibson.styles import style_pack_from_name
 
 RenderMode = Literal["blocking", "async"]
 RenderTimingMode = Literal["immediate", "scheduled"]
@@ -132,6 +133,7 @@ class RendererContextConfig:
     project_name: str = "harn-gibson"
     project_root: str | None = None
     display_style: str = "gibson"
+    style_pack: dict[str, Any] = field(default_factory=dict)
     compaction_interval_events: int = 40
     max_recent_plans: int = 6
     max_recent_log_entries: int = 12
@@ -223,9 +225,11 @@ class RendererContextBuilder:
         )
 
     def _project_metadata(self, batch: RenderInputBatch) -> dict[str, Any]:
+        style_pack = self.config.style_pack or style_pack_from_name(self.config.display_style).to_dict()
         return {
             "name": self.config.project_name,
             "displayStyle": self.config.display_style,
+            "stylePack": style_pack,
             "schemas": {
                 "catalog": "harn-gibson.visual-catalog.v1",
                 "rendererContext": "harn-gibson.renderer-context.v1",

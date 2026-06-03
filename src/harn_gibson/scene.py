@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
@@ -109,12 +109,19 @@ class SceneEngine:
         self,
         state: SceneState | None = None,
         *,
+        initial_scene_factory: Callable[[], SceneState] | None = None,
         max_log_entries: int = 120,
         max_render_intents: int = 24,
     ) -> None:
-        self.state = state or initial_scene()
+        self._initial_scene_factory = initial_scene if initial_scene_factory is None else initial_scene_factory
+        self.state = state or self._initial_scene_factory()
         self.max_log_entries = max_log_entries
         self.max_render_intents = max(1, max_render_intents)
+
+    def configure_initial_scene(self, factory: Callable[[], SceneState], *, reset: bool = False) -> None:
+        self._initial_scene_factory = factory
+        if reset:
+            self.state = self._initial_scene_factory()
 
     def apply(self, mutations: Iterable[SceneMutation | Mapping[str, Any]]) -> SceneState:
         applied = False
@@ -127,7 +134,7 @@ class SceneEngine:
 
     def _apply(self, mutation: SceneMutation) -> None:
         if mutation.op == "reset_scene":
-            self.state = initial_scene()
+            self.state = self._initial_scene_factory()
             return
         if mutation.op == "upsert":
             primitive = _require(mutation.primitive, "upsert requires primitive")
@@ -183,14 +190,15 @@ class SceneEngine:
         }
 
 
-def initial_scene() -> SceneState:
+def initial_scene(style_pack: Mapping[str, Any] | None = None) -> SceneState:
     state = SceneState()
+    style_id = str(style_pack.get("id")) if isinstance(style_pack, Mapping) and style_pack.get("id") else "gibson"
     for primitive in (
         ScenePrimitive(
             id="stage",
             kind="viewport",
             region="root",
-            props={"theme": "gibson", "title": "GIBSON LINK"},
+            props={"theme": style_id, "title": "GIBSON LINK"},
             children=("status", "event-feed", "trace-log", "decision-log", "scan-grid"),
         ),
         ScenePrimitive(id="status", kind="status", region="mast", props={"text": "awaiting signal", "phase": "idle"}),
@@ -200,7 +208,27 @@ def initial_scene() -> SceneState:
         ScenePrimitive(id="scan-grid", kind="grid", region="stage", props={"intensity": 0.2}),
     ):
         state.primitives[primitive.id] = primitive
+    if isinstance(style_pack, Mapping):
+        apply_style_to_scene(state, style_pack)
     return state
+
+
+def apply_style_to_scene(state: SceneState, style_pack: Mapping[str, Any]) -> None:
+    style_id = str(style_pack.get("id") or "gibson")
+    stage = state.primitives.get("stage")
+    if stage is not None:
+        state.primitives["stage"] = ScenePrimitive(
+            id=stage.id,
+            kind=stage.kind,
+            region=stage.region,
+            props={**stage.props, "theme": style_id, "stylePack": dict(style_pack)},
+            children=stage.children,
+        )
+    state.metadata = {
+        **state.metadata,
+        "displayStyle": style_id,
+        "stylePack": dict(style_pack),
+    }
 
 
 def mutation_from_mapping(value: Mapping[str, Any]) -> SceneMutation:

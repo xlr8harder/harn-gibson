@@ -429,6 +429,32 @@ def test_replay_suite_discovers_runs_and_serializes(tmp_path: Path) -> None:
     assert run_replay_suite(first).to_dict()["files"][0]["path"] == first.as_posix()
 
 
+def test_replay_suite_can_run_with_style_pack(tmp_path: Path) -> None:
+    fixture_dir = tmp_path / "fixtures"
+    fixture_dir.mkdir()
+    (fixture_dir / "styled.json").write_text(
+        json.dumps(
+            {
+                "steps": [{"type": "mutations", "mutations": []}],
+                "expect": {
+                    "sceneRevision": 0,
+                    "checks": [
+                        {"path": "metadata.displayStyle", "equals": "mainframe"},
+                        {"path": "primitives.stage.props.theme", "equals": "mainframe"},
+                    ],
+                },
+            }
+        ),
+        "utf-8",
+    )
+
+    suite = run_replay_suite(fixture_dir, style="mainframe")
+
+    assert suite.ok is True
+    assert suite.files[0].scene_revision == 0
+    assert suite.files[0].expectations == 3
+
+
 def test_replay_suite_captures_screenshots(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     fixture_dir = tmp_path / "fixtures"
     nested = fixture_dir / "nested"

@@ -44,6 +44,8 @@ The browser treats `SceneAnimation` records as persistent renderable state, not 
 
 The raw event details, event feed, render intents, tracebacks, and hook decisions are treated as debug surfaces. They remain in scene state for inspection, but the default browser layout hides them behind a debug drawer.
 
+Display style is scene metadata, not a separate browser-only setting. `HARN_GIBSON_STYLE` or `--style` selects a style pack such as `gibson`, `neon-noir`, or `mainframe`. Non-default style packs are stored in `scene.metadata.stylePack`, applied to the browser palette and canvas backdrop, and included in renderer context so a future renderer agent can choose effects that match the active visual language.
+
 ## Replay Testing
 
 The scene layer includes a replay harness that accepts recorded harn events, browser input events, renderer decisions, saved render plans, and explicit scene mutations. A replay run can produce a final scene JSON snapshot, a full replay result JSON file, expectation checks against the final scene, a canonical scene baseline comparison, and a browser screenshot of the final scene. That gives us a deterministic way to compare display effects against baselines and a manual way to inspect whether staged effects leave the scene in the intended state.

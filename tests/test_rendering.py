@@ -412,6 +412,8 @@ def test_renderer_context_builder_compaction_rolling_and_history(tmp_path: Path)
     builder = RendererContextBuilder(
         RendererContextConfig(
             project_root=str(repo_root),
+            display_style="mainframe",
+            style_pack={"id": "mainframe", "motifs": ["phosphor-grid"]},
             compaction_interval_events=2,
             max_recent_plans=1,
             max_recent_log_entries=1,
@@ -467,6 +469,8 @@ def test_renderer_context_builder_compaction_rolling_and_history(tmp_path: Path)
     assert compaction.to_dict()["schema"] == "harn-gibson.renderer-context.v1"
     assert compaction.project["schemas"]["rendererContext"] == "harn-gibson.renderer-context.v1"
     assert compaction.project["schemas"]["repoTopology"] == "harn-gibson.repo-topology.v1"
+    assert compaction.project["displayStyle"] == "mainframe"
+    assert compaction.project["stylePack"] == {"id": "mainframe", "motifs": ["phosphor-grid"]}
     assert compaction.project["repoTopology"]["rootName"] == "repo"
     assert compaction.project["repoTopology"]["available"] is True
     assert compaction.project["repoTopology"]["truncated"] is False

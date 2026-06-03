@@ -8,6 +8,8 @@ from harn_gibson.scene import (
     SceneEngine,
     SceneMutation,
     ScenePrimitive,
+    SceneState,
+    apply_style_to_scene,
     default_mutations_for_event,
     initial_scene,
     mutation_from_mapping,
@@ -63,6 +65,32 @@ def test_scene_engine_records_bounded_render_intents() -> None:
 
     engine.apply([SceneMutation("reset_scene")])
     assert engine.state.metadata == {}
+
+
+def test_initial_scene_can_carry_style_pack_and_reset_factory() -> None:
+    style_pack = {
+        "schema": "harn-gibson.style-pack.v1",
+        "id": "mainframe",
+        "tones": {"green": [117, 255, 127]},
+    }
+    scene = initial_scene(style_pack)
+    engine = SceneEngine()
+
+    assert scene.primitives["stage"].props["theme"] == "mainframe"
+    assert scene.primitives["stage"].props["stylePack"] == style_pack
+    assert scene.metadata["displayStyle"] == "mainframe"
+
+    apply_style_to_scene(engine.state, style_pack)
+    assert engine.state.metadata["stylePack"] == style_pack
+    empty_scene = SceneState()
+    apply_style_to_scene(empty_scene, {"id": ""})
+    assert empty_scene.metadata["displayStyle"] == "gibson"
+    engine.configure_initial_scene(lambda: initial_scene(style_pack), reset=True)
+    assert engine.state.primitives["stage"].props["theme"] == "mainframe"
+    engine.apply([SceneMutation("patch", target_id="status", props={"text": "changed"})])
+    engine.apply([SceneMutation("reset_scene")])
+    assert engine.state.primitives["stage"].props["theme"] == "mainframe"
+    assert engine.state.primitives["status"].props["text"] == "awaiting signal"
 
 
 def test_scene_engine_applies_all_mutations_and_trims_log() -> None:

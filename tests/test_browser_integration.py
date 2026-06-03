@@ -12,6 +12,7 @@ import pytest
 from harn_gibson.browser_capture import capture_scene_screenshot
 from harn_gibson.replay import run_replay_file
 from harn_gibson.server import GibsonServerState, create_server
+from harn_gibson.styles import style_pack_from_name
 
 playwright = pytest.importorskip("playwright.sync_api")
 Error = playwright.Error
@@ -23,8 +24,8 @@ EXAMPLE_REPLAYS = ROOT / "examples" / "replays"
 SCREENSHOT_DIR = Path("test-artifacts/screenshots")
 
 
-def start_display_server() -> tuple[ThreadingHTTPServer, GibsonServerState, str]:
-    state = GibsonServerState()
+def start_display_server(state: GibsonServerState | None = None) -> tuple[ThreadingHTTPServer, GibsonServerState, str]:
+    state = state or GibsonServerState()
     server = create_server("127.0.0.1", 0, state)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
@@ -169,6 +170,43 @@ def test_browser_display_renders_events_debug_and_input_queue() -> None:
                 expect(page.get_by_role("heading", name="GIBSON LINK")).to_be_visible()
                 page.screenshot(path=mobile)
                 assert_screenshot(mobile)
+            finally:
+                browser.close()
+    finally:
+        state.pipeline.stop()
+        server.shutdown()
+        server.server_close()
+
+
+def test_browser_display_applies_scene_style_pack() -> None:
+    server, state, base = start_display_server(GibsonServerState(style_pack=style_pack_from_name("neon-noir")))
+    try:
+        with sync_playwright() as driver:
+            try:
+                browser = driver.chromium.launch()
+            except Error as exc:
+                pytest.skip(f"Chromium is not installed for Playwright: {exc}")
+            try:
+                page = browser.new_page(viewport={"width": 900, "height": 640})
+                page.goto(base, wait_until="domcontentloaded")
+                page.wait_for_function("window.__gibsonStylePack?.id === 'neon-noir'")
+                style_state = page.evaluate(
+                    """() => ({
+                      id: window.__gibsonStylePack.id,
+                      bodyStyle: document.body.dataset.style,
+                      gridTone: window.__gibsonStylePack.canvas.gridTone,
+                      cssMagenta: getComputedStyle(document.documentElement).getPropertyValue("--magenta").trim(),
+                      sceneStyle: window.__gibsonScene.metadata.displayStyle,
+                    })"""
+                )
+                assert style_state == {
+                    "id": "neon-noir",
+                    "bodyStyle": "neon-noir",
+                    "gridTone": "magenta",
+                    "cssMagenta": "#ff46d6",
+                    "sceneStyle": "neon-noir",
+                }
+                assert_canvas_nonblank(page)
             finally:
                 browser.close()
     finally:

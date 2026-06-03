@@ -36,4 +36,5 @@ The integration test verifies:
 - posting a harn-style event mutates the scene;
 - the debug drawer toggles;
 - the browser input composer enqueues a message and `/input/next` drains it.
+- a non-default style pack reaches scene metadata, CSS variables, and browser runtime state.
 - the checked-in agent-side and renderer-side replay fixtures render through the browser screenshot path with nonblank canvas metrics.

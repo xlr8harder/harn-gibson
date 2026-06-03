@@ -17,6 +17,8 @@ from harn_gibson.events import GibsonEvent, diagnostic_event
 from harn_gibson.external_renderer import external_renderer_from_env
 from harn_gibson.rendering import (
     DeterministicSceneRenderer,
+    RendererContextBuilder,
+    RendererContextConfig,
     RenderMode,
     RenderPipeline,
     RenderSubmitResult,
@@ -36,8 +38,9 @@ from harn_gibson.routing import (
     renderer_event_interest_from_renderer,
     renderer_event_interest_from_value,
 )
-from harn_gibson.scene import SceneEngine
+from harn_gibson.scene import SceneEngine, apply_style_to_scene, initial_scene
 from harn_gibson.sinks import EventBuffer
+from harn_gibson.styles import DEFAULT_STYLE_ID, StylePack, default_style_pack, style_pack_from_name
 
 
 @dataclass(slots=True)
@@ -45,6 +48,7 @@ class GibsonServerState:
     buffer: EventBuffer = field(default_factory=EventBuffer)
     scene: SceneEngine = field(default_factory=SceneEngine)
     catalog: VisualCatalog = field(default_factory=default_visual_catalog)
+    style_pack: StylePack = field(default_factory=default_style_pack)
     inputs: BrowserInputQueue = field(default_factory=lambda: BrowserInputQueue())
     input_bridge: HarnBridgeState = field(default_factory=lambda: HarnBridgeState())
     router: EventRouter = field(default_factory=EventRouter)
@@ -56,6 +60,10 @@ class GibsonServerState:
     pipeline: RenderPipeline = field(init=False)
 
     def __post_init__(self) -> None:
+        style_payload = self.style_pack.to_dict()
+        if self.style_pack.id != DEFAULT_STYLE_ID:
+            self.scene.configure_initial_scene(lambda: initial_scene(style_payload))
+            apply_style_to_scene(self.scene.state, style_payload)
         renderer_interest = self.renderer_interest or renderer_event_interest_from_renderer(self.renderer)
         if renderer_interest is not None and self.router.renderer_interest is None:
             self.router.renderer_interest = renderer_interest
@@ -64,6 +72,12 @@ class GibsonServerState:
             buffer=self.buffer,
             renderer=self.renderer,
             catalog=self.catalog,
+            context_builder=RendererContextBuilder(
+                RendererContextConfig(
+                    display_style=self.style_pack.id,
+                    style_pack=style_payload,
+                )
+            ),
             mode=self.render_mode,
             batch_window_ms=self.render_batch_window_ms,
             timing_mode=self.render_timing_mode,
@@ -165,8 +179,11 @@ def create_server(
     return ThreadingHTTPServer((host, port), make_handler(state or build_state_from_env()))
 
 
-def run_server(host: str = "127.0.0.1", port: int = 8765) -> None:  # pragma: no cover
-    state = build_state_from_env()
+def run_server(host: str = "127.0.0.1", port: int = 8765, *, style: str | None = None) -> None:  # pragma: no cover
+    if style is None:
+        state = build_state_from_env()
+    else:
+        state = build_state_from_env({**dict(environ), "HARN_GIBSON_STYLE": style})
     server = create_server(host, port, state)
     try:
         server.serve_forever()
@@ -191,6 +208,7 @@ def build_state_from_env(env: dict[str, str] | None = None) -> GibsonServerState
         render_batch_window_ms=coerce_batch_window_ms(source.get("HARN_GIBSON_RENDER_BATCH_MS")),
         render_timing_mode=coerce_render_timing_mode(source.get("HARN_GIBSON_RENDER_TIMING")),
         renderer=renderer or DeterministicSceneRenderer(),
+        style_pack=style_pack_from_name(source.get("HARN_GIBSON_STYLE")),
     )
 
 
@@ -365,6 +383,8 @@ def health_payload(state: GibsonServerState) -> dict[str, Any]:
         "sceneRevision": state.scene.state.revision,
         "renderMode": state.pipeline.mode,
         "renderTiming": state.pipeline.timing_mode,
+        "displayStyle": state.style_pack.id,
+        "stylePack": state.style_pack.to_dict(),
         "pendingRenderJobs": state.pipeline.pending_count(),
         "inputBridge": state.input_bridge.snapshot(pending_inputs=state.inputs.pending_count()),
         "streams": state.router.stream_snapshot(),
@@ -587,6 +607,7 @@ CSS = """
 :root {
   color-scheme: dark;
   --bg: #05060a;
+  --stage-bg: #070b0f;
   --panel: rgba(13, 18, 25, 0.86);
   --line: rgba(110, 255, 207, 0.22);
   --green: #69ffb8;
@@ -614,7 +635,7 @@ body {
   overflow: hidden;
   min-height: calc(100vh - 36px);
   border: 1px solid var(--line);
-  background: #070b0f;
+  background: var(--stage-bg);
   transition: margin-right 160ms ease-out;
 }
 #grid {
@@ -974,8 +995,30 @@ const deliverAs = document.getElementById("deliverAs");
 const inputStatus = document.getElementById("inputStatus");
 const pulses = [];
 const animationClocks = new Map();
+const DEFAULT_STYLE_PACK = {
+  id: "gibson",
+  tones: {
+    amber: [255, 204, 102],
+    cyan: [88, 215, 255],
+    green: [105, 255, 184],
+    magenta: [255, 91, 200],
+    red: [255, 89, 89],
+    white: [230, 255, 248],
+  },
+  canvas: {
+    background: "#05070b",
+    gridTone: "cyan",
+    gridAlpha: 0.12,
+    gridPerspective: 0.32,
+    horizonTone: "cyan",
+    horizonAlpha: 0,
+  },
+  cssVars: {},
+  motifs: ["city-grid"],
+};
 let lastQueuedInputId = null;
 let currentScene = null;
+let currentStylePack = DEFAULT_STYLE_PACK;
 
 debugToggle.addEventListener("click", () => {
   const expanded = document.body.classList.toggle("debug-open");
@@ -1030,15 +1073,34 @@ function draw() {
   const w = canvas.width;
   const h = canvas.height;
   const now = performance.now();
-  ctx.fillStyle = "#05070b";
+  drawBackdrop(w, h, now);
+  drawScenePrimitives(currentScene, w, h, now);
+  drawSceneAnimations(currentScene, w, h, now);
+  drawPulses(w, h);
+  requestAnimationFrame(draw);
+}
+draw();
+
+function drawBackdrop(w, h, now) {
+  const canvasStyle = currentStylePack.canvas || DEFAULT_STYLE_PACK.canvas;
+  ctx.fillStyle = canvasStyle.background || DEFAULT_STYLE_PACK.canvas.background;
   ctx.fillRect(0, 0, w, h);
+  const horizonAlpha = Number(canvasStyle.horizonAlpha || 0);
+  if (horizonAlpha > 0) {
+    const gradient = ctx.createRadialGradient(w * 0.5, h * 0.62, h * 0.05, w * 0.5, h * 0.72, h * 0.62);
+    gradient.addColorStop(0, toneColor(canvasStyle.horizonTone || "amber", horizonAlpha));
+    gradient.addColorStop(1, toneColor(canvasStyle.horizonTone || "amber", 0));
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, w, h);
+  }
   ctx.lineWidth = 1;
-  ctx.strokeStyle = "rgba(88, 215, 255, 0.12)";
+  ctx.strokeStyle = toneColor(canvasStyle.gridTone || "cyan", Number(canvasStyle.gridAlpha ?? 0.12));
   const step = 42 * devicePixelRatio;
+  const perspective = Number(canvasStyle.gridPerspective ?? 0.32);
   for (let x = -step; x < w + step; x += step) {
     ctx.beginPath();
     ctx.moveTo(x, 0);
-    ctx.lineTo(x + w * 0.32, h);
+    ctx.lineTo(x + w * perspective, h);
     ctx.stroke();
   }
   for (let y = 0; y < h; y += step) {
@@ -1047,8 +1109,13 @@ function draw() {
     ctx.lineTo(w, y + h * 0.08);
     ctx.stroke();
   }
-  drawScenePrimitives(currentScene, w, h, now);
-  drawSceneAnimations(currentScene, w, h, now);
+  if ((currentStylePack.motifs || []).includes("phosphor-grid")) {
+    ctx.fillStyle = toneColor("green", 0.035 + Math.sin(now * 0.004) * 0.01);
+    for (let y = 0; y < h; y += 6 * devicePixelRatio) ctx.fillRect(0, y, w, devicePixelRatio);
+  }
+}
+
+function drawPulses(w, h) {
   for (let i = pulses.length - 1; i >= 0; i--) {
     const pulse = pulses[i];
     pulse.age += 0.018;
@@ -1060,26 +1127,17 @@ function draw() {
     ctx.stroke();
     if (pulse.age >= 1) pulses.splice(i, 1);
   }
-  requestAnimationFrame(draw);
 }
-draw();
 
 function colorFor(phase) {
-  if (phase === "after") return "rgba(255, 91, 200, 1)";
-  if (phase === "during") return "rgba(88, 215, 255, 1)";
-  if (phase === "lifecycle") return "rgba(255, 204, 102, 1)";
-  return "rgba(105, 255, 184, 1)";
+  if (phase === "after") return toneColor("magenta", 1);
+  if (phase === "during") return toneColor("cyan", 1);
+  if (phase === "lifecycle") return toneColor("amber", 1);
+  return toneColor("green", 1);
 }
 
 function toneColor(tone, alpha = 1) {
-  const colors = {
-    amber: [255, 204, 102],
-    cyan: [88, 215, 255],
-    green: [105, 255, 184],
-    magenta: [255, 91, 200],
-    red: [255, 89, 89],
-    white: [230, 255, 248],
-  };
+  const colors = {...DEFAULT_STYLE_PACK.tones, ...(currentStylePack.tones || {})};
   const [r, g, b] = colors[tone] || colors.cyan;
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
@@ -1924,6 +1982,7 @@ function appendFeedItem(event) {
 function renderScene(scene) {
   currentScene = scene;
   window.__gibsonScene = scene;
+  applyStylePack(stylePackFromScene(scene));
   syncAnimationClocks(scene, performance.now());
   const status = scene.primitives?.status?.props || {};
   const stream = scene.primitives?.["assistant-stream"]?.props || {};
@@ -1945,6 +2004,29 @@ function renderScene(scene) {
   if (latest) {
     signalTitle.textContent = latest.title || latest.eventType || "SIGNAL";
     signalSummary.textContent = latest.summary || `${latest.phase || "event"}:${latest.eventType || "unknown"}`;
+  }
+}
+
+function stylePackFromScene(scene) {
+  const stylePack = scene?.metadata?.stylePack || scene?.primitives?.stage?.props?.stylePack;
+  if (!stylePack || typeof stylePack !== "object") return DEFAULT_STYLE_PACK;
+  return {
+    ...DEFAULT_STYLE_PACK,
+    ...stylePack,
+    tones: {...DEFAULT_STYLE_PACK.tones, ...(stylePack.tones || {})},
+    canvas: {...DEFAULT_STYLE_PACK.canvas, ...(stylePack.canvas || {})},
+    cssVars: stylePack.cssVars || {},
+    motifs: Array.isArray(stylePack.motifs) ? stylePack.motifs : DEFAULT_STYLE_PACK.motifs,
+  };
+}
+
+function applyStylePack(stylePack) {
+  currentStylePack = stylePack;
+  window.__gibsonStylePack = stylePack;
+  document.body.dataset.style = stylePack.id || "gibson";
+  const cssVars = stylePack.cssVars || {};
+  for (const [name, value] of Object.entries(cssVars)) {
+    if (name.startsWith("--")) document.documentElement.style.setProperty(name, String(value));
   }
 }
 
