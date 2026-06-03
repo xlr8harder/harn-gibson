@@ -1165,6 +1165,32 @@ def test_checked_in_dogfood_replay_exercises_showcase_renderer() -> None:
     assert result.scene.metadata["lastRenderIntent"]["renderer"] == "gibson-dogfood-showcase"
 
 
+def test_checked_in_dogfood_runtime_replay_exercises_failure_scene() -> None:
+    state = build_state_from_env(
+        {
+            "HARN_GIBSON_RENDERER_COMMAND": json.dumps(
+                ["uv", "run", "python", str(ROOT / "examples" / "renderers" / "gibson_dogfood_renderer.py")]
+            ),
+            "HARN_GIBSON_RENDERER_TIMEOUT_MS": "10000",
+            "HARN_GIBSON_PROJECT_ROOT": str(EXAMPLE_DOGFOOD_WORKSPACE),
+            "HARN_GIBSON_PROJECT_NAME": "tiny-project",
+        }
+    )
+    try:
+        result = run_replay_file(EXAMPLE_DOGFOOD_REPLAYS / "runtime-diagnostic-trajectory.json", state)
+    finally:
+        state.pipeline.stop()
+
+    assert [step.kind for step in result.steps] == ["event"] * 5
+    assert len(result.expectations) == 11
+    assert result.scene.primitives["status"].props["text"] == "dogfood::runtime_error"
+    assert result.scene.primitives["dogfood-city"].props["labels"] == ["DOGFOOD CITY", "1 touched"]
+    assert result.scene.primitives["dogfood-file-sparks"].props["label"] == "1 TOUCHED FILES"
+    assert result.scene.primitives["dogfood-route"].props["focusHopId"] == "target-0"
+    assert result.scene.animations["dogfood-breach"].kind == "breach_wave"
+    assert result.scene.metadata["lastRenderIntent"]["eventTypes"] == ["runtime_error"]
+
+
 def test_replay_raw_events_render_plans_and_mutations() -> None:
     explicit_event = event_payload(12, "browser_input", {"id": "input-1", "message": "go"})
     state = GibsonServerState()

@@ -244,7 +244,7 @@ uv run harn-gibson replay-dir examples/replays \
   --screenshot-dir test-artifacts/replays/screenshots
 ```
 
-Run the hard-coded dogfood renderer against the tiny-project trajectory fixture:
+Run the hard-coded dogfood renderer against the checked-in dogfood trajectory fixtures:
 
 ```bash
 uv run harn-gibson replay-dir examples/dogfood-replays \

@@ -1,0 +1,202 @@
+{
+  "schema": "harn-gibson.replay.v1",
+  "name": "runtime diagnostic dogfood trajectory",
+  "metadata": {
+    "purpose": "exercise the hard-coded dogfood renderer against a runtime diagnostic and failed tool trajectory",
+    "renderer": "examples/renderers/gibson_dogfood_renderer.py",
+    "projectRoot": "examples/dogfood-workspaces/tiny-project"
+  },
+  "expect": {
+    "sceneRevision": 5,
+    "checks": [
+      {
+        "path": "primitives.status.props.text",
+        "equals": "dogfood::runtime_error"
+      },
+      {
+        "path": "primitives.dogfood-city.props.labels",
+        "contains": "1 touched"
+      },
+      {
+        "path": "primitives.dogfood-file-sparks.props.label",
+        "equals": "1 TOUCHED FILES"
+      },
+      {
+        "path": "primitives.dogfood-route.props.focusHopId",
+        "equals": "target-0"
+      },
+      {
+        "path": "primitives.dogfood-ice-mesh.kind",
+        "equals": "mesh"
+      },
+      {
+        "path": "primitives.dogfood-command-ribbon.kind",
+        "equals": "ribbon"
+      },
+      {
+        "path": "animations.dogfood-breach.kind",
+        "equals": "breach_wave"
+      },
+      {
+        "path": "animations.dogfood-cues.kind",
+        "equals": "timeline_cue"
+      },
+      {
+        "path": "metadata.lastRenderIntent.eventTypes",
+        "contains": "runtime_error"
+      },
+      {
+        "path": "metadata.lastRenderIntent.renderer",
+        "equals": "gibson-dogfood-showcase"
+      }
+    ]
+  },
+  "screenshotExpect": {
+    "nonblank": true,
+    "checks": [
+      {"path": "canvasMetrics.litRatio", "min": 0.02},
+      {"path": "canvasMetrics.maxChannelTotal", "min": 60}
+    ]
+  },
+  "steps": [
+    {
+      "type": "event",
+      "event": {
+        "schema": "harn-gibson.event.v1",
+        "sequence": 1,
+        "timestampMs": 1000,
+        "source": "harn",
+        "eventType": "input",
+        "phase": "before",
+        "title": "Input intercept",
+        "summary": "user input: repair a failing provider-backed dogfood run",
+        "payload": {
+          "type": "input",
+          "source": "user",
+          "text": "repair the dogfood run and keep the display visible when harn fails"
+        },
+        "recentContext": [
+          "user saw harn fail before the browser made the failure visible"
+        ],
+        "visualizationContext": [
+          "stage failures as visible breach events instead of silent terminal exits"
+        ]
+      }
+    },
+    {
+      "type": "event",
+      "event": {
+        "schema": "harn-gibson.event.v1",
+        "sequence": 2,
+        "timestampMs": 2600,
+        "source": "harn",
+        "eventType": "tool_call",
+        "phase": "before",
+        "title": "Tool preflight",
+        "summary": "bash starting with {command}",
+        "payload": {
+          "type": "tool_call",
+          "toolName": "bash",
+          "input": {
+            "command": "python -m pytest tests/test_cli.py"
+          }
+        },
+        "recentContext": [
+          "agent is checking the target workspace before retrying harn"
+        ],
+        "visualizationContext": [
+          "show test activity as a pre-breach scan"
+        ]
+      }
+    },
+    {
+      "type": "event",
+      "event": {
+        "schema": "harn-gibson.event.v1",
+        "sequence": 3,
+        "timestampMs": 6200,
+        "source": "harn",
+        "eventType": "tool_result",
+        "phase": "after",
+        "title": "Tool result",
+        "summary": "bash completed: error; formatter regression detected",
+        "payload": {
+          "type": "tool_result",
+          "toolName": "bash",
+          "isError": true,
+          "filePath": [
+            "src/tiny_tasks/cli.py",
+            "tests/test_cli.py"
+          ],
+          "input": {
+            "command": "python -m pytest tests/test_cli.py"
+          },
+          "content": [
+            {
+              "type": "text",
+              "text": "FAILED tests/test_cli.py::test_format_tasks_numbers_items - AssertionError: missing numbering"
+            }
+          ]
+        },
+        "recentContext": [
+          "agent observed a concrete test failure"
+        ],
+        "visualizationContext": [
+          "pulse the affected source and test districts"
+        ]
+      }
+    },
+    {
+      "type": "event",
+      "event": {
+        "schema": "harn-gibson.event.v1",
+        "sequence": 4,
+        "timestampMs": 9800,
+        "source": "browser",
+        "eventType": "browser_input",
+        "phase": "lifecycle",
+        "title": "Browser input",
+        "summary": "queued steering input from Gibson display",
+        "payload": {
+          "type": "browser_input",
+          "id": "input-runtime-1",
+          "message": "keep the renderer display alive and surface the traceback",
+          "deliverAs": "steer"
+        },
+        "recentContext": [
+          "browser input should still enter the harn queue while the display remains primary"
+        ],
+        "visualizationContext": [
+          "show the browser as a live control node"
+        ]
+      }
+    },
+    {
+      "type": "event",
+      "event": {
+        "schema": "harn-gibson.event.v1",
+        "sequence": 5,
+        "timestampMs": 13800,
+        "source": "harn-gibson",
+        "eventType": "runtime_error",
+        "phase": "after",
+        "title": "Runtime error",
+        "summary": "error: provider credential missing during dogfood retry",
+        "payload": {
+          "type": "runtime_error",
+          "severity": "error",
+          "message": "provider credential missing during dogfood retry",
+          "details": "Extension <runtime> could not create the provider session, so the display kept the browser open for review.",
+          "traceback": "Traceback (most recent call last):\\n  File \"harn_gibson/extension.py\", line 128, in poll\\nRuntimeError: provider credential missing during dogfood retry",
+          "filePath": "src/tiny_tasks/cli.py"
+        },
+        "recentContext": [
+          "the harn run failed before the agent could continue"
+        ],
+        "visualizationContext": [
+          "turn the failure into a large breach state with traceback context available in debug surfaces"
+        ]
+      }
+    }
+  ]
+}
