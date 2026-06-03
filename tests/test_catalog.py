@@ -34,7 +34,7 @@ def test_default_visual_catalog_has_generic_and_cinematic_building_blocks() -> N
     primitive_ids = {entry.id for entry in catalog.primitives}
     effect_ids = {entry.id for entry in catalog.effects}
 
-    assert {"text_stream", "mesh", "particle_field", "city_block"} <= primitive_ids
+    assert {"text_stream", "mesh", "svg_layer", "particle_field", "city_block"} <= primitive_ids
     assert {"glitch", "flythrough", "packet_burst", "hold"} <= effect_ids
     assert catalog.entry("city_block") is not None
     assert "gibson" in catalog.entry("city_block").tags  # type: ignore[union-attr]

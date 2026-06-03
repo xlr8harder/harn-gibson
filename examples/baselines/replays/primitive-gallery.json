@@ -25,7 +25,7 @@
         "eventType": "primitive_gallery",
         "phase": "lifecycle",
         "sequence": 900,
-        "summary": "mesh, city blocks, graphs, ribbons, glyphs, particles, stream panel",
+        "summary": "mesh, vector paths, city blocks, graphs, ribbons, glyphs, particles, stream panel",
         "title": "Primitive gallery"
       }
     ],
@@ -35,6 +35,7 @@
           "patch",
           "append_log",
           "primitive:mesh",
+          "primitive:svg_layer",
           "primitive:city_block",
           "primitive:node_graph",
           "primitive:ribbon",
@@ -51,7 +52,7 @@
           "renderer": "replay",
           "stepType": "mutations"
         },
-        "mutationCount": 10,
+        "mutationCount": 11,
         "renderer": "replay",
         "requestCount": 1,
         "routes": [
@@ -62,6 +63,7 @@
         "targets": [
           "status",
           "gallery-mesh",
+          "gallery-vector",
           "gallery-city",
           "gallery-graph",
           "gallery-ribbon",
@@ -79,6 +81,7 @@
             "patch",
             "append_log",
             "primitive:mesh",
+            "primitive:svg_layer",
             "primitive:city_block",
             "primitive:node_graph",
             "primitive:ribbon",
@@ -95,7 +98,7 @@
             "renderer": "replay",
             "stepType": "mutations"
           },
-          "mutationCount": 10,
+          "mutationCount": 11,
           "renderer": "replay",
           "requestCount": 1,
           "routes": [
@@ -106,6 +109,7 @@
           "targets": [
             "status",
             "gallery-mesh",
+            "gallery-vector",
             "gallery-city",
             "gallery-graph",
             "gallery-ribbon",
@@ -127,7 +131,7 @@
         "props": {
           "isStreaming": true,
           "streamId": "gallery",
-          "text": "mesh/glyph/packet/city/ribbon/text primitives are available to renderer plans",
+          "text": "mesh/vector/glyph/packet/city/ribbon/text primitives are available to renderer plans",
           "title": "CATALOG STREAM"
         },
         "region": "stage"
@@ -457,6 +461,89 @@
             }
           ],
           "width": 4
+        },
+        "region": "stage"
+      },
+      "gallery-vector": {
+        "children": [],
+        "id": "gallery-vector",
+        "kind": "svg_layer",
+        "props": {
+          "blend": "screen",
+          "circles": [
+            {
+              "pulse": true,
+              "r": 2.7,
+              "ring": true,
+              "tone": "white",
+              "x": 50,
+              "y": 4
+            },
+            {
+              "pulse": true,
+              "r": 2.4,
+              "tone": "cyan",
+              "x": 92,
+              "y": 72
+            },
+            {
+              "pulse": true,
+              "r": 2.4,
+              "tone": "magenta",
+              "x": 8,
+              "y": 72
+            }
+          ],
+          "glow": 6,
+          "label": "vector",
+          "labels": [
+            {
+              "size": 7.5,
+              "text": "ICE",
+              "tone": "white",
+              "x": 50,
+              "y": 54
+            }
+          ],
+          "paths": [
+            {
+              "d": "M50 4 L92 28 L92 72 L50 96 L8 72 L8 28 Z",
+              "fill": true,
+              "fillAlpha": 0.14,
+              "tone": "amber",
+              "width": 1.4
+            },
+            {
+              "d": "M18 54 C30 18 70 18 82 54 C68 82 32 82 18 54 Z",
+              "dash": [
+                9,
+                6
+              ],
+              "speed": 0.018,
+              "tone": "cyan",
+              "width": 1.7
+            },
+            {
+              "d": "M24 70 L45 34 L56 56 L70 28 L78 70 M32 50 L68 50",
+              "reveal": true,
+              "speed": 0.00034,
+              "tone": "magenta",
+              "width": 2.2
+            }
+          ],
+          "position": {
+            "x": 0.47,
+            "y": 0.24
+          },
+          "scale": 0.16,
+          "spin": 0.08,
+          "tone": "amber",
+          "viewBox": [
+            0,
+            0,
+            100,
+            100
+          ]
         },
         "region": "stage"
       },

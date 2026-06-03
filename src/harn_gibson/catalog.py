@@ -81,6 +81,17 @@ def default_visual_catalog() -> VisualCatalog:
                 ("generic", "3d"),
             ),
             CatalogEntry(
+                "svg_layer",
+                "primitive",
+                "Constrained SVG-style vector path layer for symbols, schematics, decals, and animated traces.",
+                ("viewBox", "paths", "circles", "labels", "position", "scale", "tone"),
+                ("generic", "vector", "cinematic"),
+                {
+                    "safety": "path-data-only; no raw markup, scripts, event handlers, foreignObject, or external refs",
+                    "animation": ("stroke_reveal", "dash_motion", "pulse", "spin"),
+                },
+            ),
+            CatalogEntry(
                 "node_graph",
                 "primitive",
                 "Nodes and edges for agents, tools, files, hosts, or arbitrary entities.",

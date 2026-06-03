@@ -1091,7 +1091,7 @@ function drawPolygon(points, fill, stroke) {
 function drawScenePrimitives(scene, w, h, now) {
   if (!scene?.primitives) return;
   const primitives = Object.values(scene.primitives).filter((primitive) => primitive.region === "stage");
-  const orderedKinds = ["particle_field", "mesh", "city_block", "ribbon", "node_graph", "glyph_layer"];
+  const orderedKinds = ["particle_field", "mesh", "city_block", "svg_layer", "ribbon", "node_graph", "glyph_layer"];
   for (const kind of orderedKinds) {
     for (const primitive of primitives) {
       if (primitive.kind === kind) drawPrimitive(primitive, w, h, now);
@@ -1102,6 +1102,7 @@ function drawScenePrimitives(scene, w, h, now) {
 function drawPrimitive(primitive, w, h, now) {
   if (primitive.kind === "mesh") drawMesh(primitive, w, h, now);
   if (primitive.kind === "city_block") drawCityBlock(primitive, w, h);
+  if (primitive.kind === "svg_layer") drawSvgLayer(primitive, w, h, now);
   if (primitive.kind === "node_graph") drawNodeGraph(primitive, w, h);
   if (primitive.kind === "ribbon") drawRibbon(primitive, w, h, now);
   if (primitive.kind === "glyph_layer") drawGlyphLayer(primitive, w, h, now);
@@ -1241,6 +1242,124 @@ function drawMesh(primitive, w, h, now) {
     ctx.fillStyle = toneColor("white", 0.82);
     ctx.fillText(String(props.label).slice(0, 18), labelPoint.x, labelPoint.y - 12 * devicePixelRatio);
   }
+  ctx.restore();
+}
+
+function vectorViewBox(value) {
+  if (!Array.isArray(value) || value.length < 4) {
+    return {x: 0, y: 0, width: 100, height: 100};
+  }
+  return {
+    x: Number(value[0] || 0),
+    y: Number(value[1] || 0),
+    width: Math.max(1, Number(value[2] || 100)),
+    height: Math.max(1, Number(value[3] || 100)),
+  };
+}
+
+function drawSvgPath(pathSpec, props, now) {
+  const pathData = String(pathSpec?.d || "");
+  if (!pathData) return;
+  let path;
+  try {
+    path = new Path2D(pathData);
+  } catch {
+    return;
+  }
+  const tone = pathSpec.tone || props.tone || "cyan";
+  const alpha = Math.max(0, Math.min(1, Number(pathSpec.alpha ?? props.alpha ?? 0.86)));
+  const width = Math.max(0.2, Number(pathSpec.width || 1.6));
+  ctx.save();
+  ctx.lineJoin = "round";
+  ctx.lineCap = "round";
+  ctx.lineWidth = width;
+  ctx.shadowColor = toneColor(tone, Math.min(0.8, alpha));
+  ctx.shadowBlur = Number(pathSpec.glow ?? props.glow ?? 5);
+  if (pathSpec.fill && pathSpec.fill !== "none") {
+    const fillTone = pathSpec.fill === true ? tone : pathSpec.fill;
+    ctx.fillStyle = toneColor(fillTone, Number(pathSpec.fillAlpha ?? 0.12));
+    ctx.fill(path);
+  }
+  const dash = Array.isArray(pathSpec.dash) ? pathSpec.dash.map(Number).filter((value) => value > 0) : [];
+  if (pathSpec.reveal) {
+    const length = Math.max(40, pathData.length * Number(pathSpec.revealScale || 1.8));
+    const speed = Number(pathSpec.speed || 0.00024);
+    const progress = (now * speed + Number(pathSpec.offset || 0)) % 1;
+    ctx.setLineDash([length, length]);
+    ctx.lineDashOffset = length * (1 - progress);
+  } else if (dash.length) {
+    const speed = Number(pathSpec.speed || 0);
+    ctx.setLineDash(dash);
+    ctx.lineDashOffset = Number(pathSpec.offset || 0) - now * speed;
+  }
+  if (pathSpec.stroke !== false) {
+    ctx.strokeStyle = toneColor(tone, alpha);
+    ctx.stroke(path);
+  }
+  ctx.restore();
+}
+
+function drawSvgCircles(circles, props, now) {
+  for (const circle of circles) {
+    const tone = circle.tone || props.tone || "cyan";
+    const pulse = circle.pulse ? 1 + Math.sin(now * Number(circle.speed || 0.005)) * 0.22 : 1;
+    const radius = Math.max(0.5, Number(circle.r || 2.5) * pulse);
+    const x = Number(circle.x || 0);
+    const y = Number(circle.y || 0);
+    const alpha = Math.max(0, Math.min(1, Number(circle.alpha ?? 0.84)));
+    ctx.save();
+    ctx.shadowColor = toneColor(tone, alpha);
+    ctx.shadowBlur = Number(circle.glow ?? props.glow ?? 5);
+    ctx.fillStyle = toneColor(tone, alpha * 0.82);
+    ctx.beginPath();
+    ctx.arc(x, y, radius, 0, Math.PI * 2);
+    ctx.fill();
+    if (circle.ring) {
+      ctx.lineWidth = Math.max(0.4, Number(circle.width || 0.8));
+      ctx.strokeStyle = toneColor("white", alpha * 0.5);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+}
+
+function drawSvgLabels(labels, props) {
+  ctx.save();
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  for (const label of labels) {
+    const tone = label.tone || props.tone || "white";
+    const size = Math.max(3, Number(label.size || 7));
+    ctx.font = `${size}px ui-monospace, monospace`;
+    ctx.fillStyle = toneColor(tone, Number(label.alpha ?? 0.86));
+    ctx.shadowColor = toneColor(tone, 0.54);
+    ctx.shadowBlur = Number(label.glow ?? props.glow ?? 3);
+    ctx.fillText(String(label.text || "").slice(0, 24), Number(label.x || 0), Number(label.y || 0));
+  }
+  ctx.restore();
+}
+
+function drawSvgLayer(primitive, w, h, now) {
+  if (typeof Path2D === "undefined") return;
+  const props = primitive.props || {};
+  const paths = Array.isArray(props.paths) ? props.paths : [];
+  const circles = Array.isArray(props.circles) ? props.circles : [];
+  const labels = Array.isArray(props.labels) ? props.labels : [];
+  if (!paths.length && !circles.length && !labels.length) return;
+  const box = vectorViewBox(props.viewBox);
+  const position = normalizedPoint(props.position || {x: 0.5, y: 0.45}, w, h);
+  const fit = Math.max(24 * devicePixelRatio, Number(props.scale || 0.22) * Math.min(w, h));
+  const unit = fit / Math.max(box.width, box.height);
+  const rotation = Number(props.rotation || 0) + Number(props.spin || 0) * now * 0.00025;
+  ctx.save();
+  ctx.translate(position.x, position.y);
+  ctx.rotate(rotation);
+  ctx.scale(unit, unit);
+  ctx.translate(-(box.x + box.width * 0.5), -(box.y + box.height * 0.5));
+  ctx.globalCompositeOperation = props.blend === "screen" ? "screen" : "source-over";
+  for (const pathSpec of paths) drawSvgPath(pathSpec, props, now);
+  drawSvgCircles(circles, props, now);
+  drawSvgLabels(labels, props);
   ctx.restore();
 }
 
