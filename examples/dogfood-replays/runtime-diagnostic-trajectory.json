@@ -22,6 +22,14 @@
         "equals": "1 TOUCHED FILES"
       },
       {
+        "path": "primitives.dogfood-opcodes.kind",
+        "equals": "glyph_layer"
+      },
+      {
+        "path": "primitives.dogfood-control-graph.kind",
+        "equals": "node_graph"
+      },
+      {
         "path": "primitives.dogfood-route.props.focusHopId",
         "equals": "target-0"
       },

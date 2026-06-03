@@ -43,9 +43,11 @@ def main() -> None:
             },
         },
         _upsert_data_rain(event_type, summary, tone, accent, sequence),
+        _upsert_opcode_glyphs(event_type, summary, tone, accent, sequence, touched),
         _upsert_tunnel(event_type, tone, accent, sequence, touched),
         _upsert_ice_mesh(event_type, phase, tone, accent, sequence, touched),
         _upsert_scope(event_type, phase, tone, accent, sequence, touched),
+        _upsert_control_graph(event_type, phase, tone, accent, sequence, touched),
         _upsert_route(event_type, phase, tone, accent, sequence, touched),
         _upsert_city(entries, touched, event_type, tone, accent, sequence),
         _upsert_file_particles(entries, touched, tone, accent, sequence),
@@ -118,6 +120,44 @@ def _upsert_data_rain(event_type: str, summary: str, tone: str, accent: str, seq
                 "bands": 3,
                 "glitch": 0.18,
                 "seed": sequence,
+            },
+        },
+    }
+
+
+def _upsert_opcode_glyphs(
+    event_type: str,
+    summary: str,
+    tone: str,
+    accent: str,
+    sequence: int,
+    touched: list[dict[str, Any]],
+) -> dict[str, Any]:
+    touched_labels = " ".join(_path_label(_text(item.get("path"), "")) for item in touched[:4])
+    text = " ".join(
+        [
+            "GIBSON",
+            event_type.upper().replace("_", "-"),
+            summary.upper(),
+            touched_labels.upper(),
+            "TRACE ROUTE ICE MESH NODE GRAPH",
+        ]
+    )
+    return {
+        "op": "upsert",
+        "primitive": {
+            "id": "dogfood-opcodes",
+            "kind": "glyph_layer",
+            "region": "stage",
+            "props": {
+                "text": _clip(text, 260),
+                "font": "terminal",
+                "density": round(0.22 + min(0.20, len(touched) * 0.025), 3),
+                "motion": "drift",
+                "palette": tone,
+                "tone": tone,
+                "accentTone": accent,
+                "seed": sequence + 7,
             },
         },
     }
@@ -266,6 +306,60 @@ def _upsert_ice_mesh(
                 "spin": 0.52 if phase == "after" else 0.32,
                 "label": _clip(f"ICE {event_type.upper().replace('_', ' ')}", 18),
                 "seed": sequence + 37,
+            },
+        },
+    }
+
+
+def _upsert_control_graph(
+    event_type: str,
+    phase: str,
+    tone: str,
+    accent: str,
+    sequence: int,
+    touched: list[dict[str, Any]],
+) -> dict[str, Any]:
+    focus = "file-0" if touched else "event"
+    nodes = [
+        {"id": "agent", "label": "AGENT", "x": 0.18, "y": 0.24, "tone": "green"},
+        {"id": "router", "label": "ROUTER", "x": 0.31, "y": 0.18, "tone": "cyan"},
+        {"id": "event", "label": event_type.upper()[:12], "x": 0.45, "y": 0.22, "tone": tone},
+        {"id": "scene", "label": "SCENE", "x": 0.58, "y": 0.18, "tone": accent},
+        {"id": "browser", "label": "BROWSER", "x": 0.72, "y": 0.24, "tone": "amber"},
+    ]
+    edges = [
+        {"source": "agent", "target": "router", "label": "hook"},
+        {"source": "router", "target": "event", "label": phase[:8]},
+        {"source": "event", "target": "scene", "label": "plan"},
+        {"source": "scene", "target": "browser", "label": "sse"},
+    ]
+    for index, item in enumerate(touched[:3]):
+        node_id = f"file-{index}"
+        nodes.append(
+            {
+                "id": node_id,
+                "label": _path_label(_text(item.get("path"), "file")),
+                "x": round(0.62 + index * 0.08, 3),
+                "y": round(0.34 + index * 0.055, 3),
+                "tone": "magenta",
+            }
+        )
+        edges.append({"source": "scene", "target": node_id, "label": "touch"})
+    return {
+        "op": "upsert",
+        "primitive": {
+            "id": "dogfood-control-graph",
+            "kind": "node_graph",
+            "region": "stage",
+            "props": {
+                "nodes": nodes,
+                "edges": edges,
+                "layout": "fixed",
+                "focusNodeId": focus,
+                "tone": tone,
+                "accentTone": accent,
+                "label": "CONTROL GRAPH",
+                "seed": sequence + 31,
             },
         },
     }

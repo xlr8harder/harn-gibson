@@ -666,9 +666,11 @@ def test_dogfood_showcase_renderer_returns_valid_event_reactive_plan(tmp_path: P
     assert plan.steps[0].event_index == 0
     assert primitive_kinds == {
         "dogfood-rain": "data_rain",
+        "dogfood-opcodes": "glyph_layer",
         "dogfood-tunnel": "tunnel_grid",
         "dogfood-ice-mesh": "mesh",
         "dogfood-scope": "signal_scope",
+        "dogfood-control-graph": "node_graph",
         "dogfood-route": "trace_route",
         "dogfood-city": "city_block",
         "dogfood-file-sparks": "particle_field",
@@ -687,6 +689,8 @@ def test_dogfood_showcase_renderer_returns_valid_event_reactive_plan(tmp_path: P
     assert scene.state.primitives["dogfood-file-sparks"].props["label"] == "3 TOUCHED FILES"
     assert len(scene.state.primitives["dogfood-file-sparks"].props["emitters"]) == 3
     assert scene.state.primitives["dogfood-ice-mesh"].props["label"] == "ICE TOOL RESULT"
+    assert scene.state.primitives["dogfood-opcodes"].props["density"] == 0.295
+    assert scene.state.primitives["dogfood-control-graph"].props["focusNodeId"] == "file-0"
     assert scene.state.primitives["dogfood-command-ribbon"].props["labels"] == ["AFTER", "TOOL_RESULT"]
     assert scene.state.primitives["dogfood-route"].props["focusHopId"] == "target-0"
     assert scene.state.primitives["dogfood-hologram"].props["rings"] == 6

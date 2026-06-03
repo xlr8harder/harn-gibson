@@ -222,9 +222,11 @@
           "patch",
           "append_log",
           "primitive:data_rain",
+          "primitive:glyph_layer",
           "primitive:tunnel_grid",
           "primitive:mesh",
           "primitive:signal_scope",
+          "primitive:node_graph",
           "primitive:trace_route",
           "primitive:city_block",
           "primitive:particle_field",
@@ -250,7 +252,7 @@
           "renderer": "gibson-dogfood-showcase",
           "touchedFileCount": 4
         },
-        "mutationCount": 19,
+        "mutationCount": 21,
         "renderer": "gibson-dogfood-showcase",
         "requestCount": 1,
         "routes": [
@@ -261,9 +263,11 @@
         "targets": [
           "status",
           "dogfood-rain",
+          "dogfood-opcodes",
           "dogfood-tunnel",
           "dogfood-ice-mesh",
           "dogfood-scope",
+          "dogfood-control-graph",
           "dogfood-route",
           "dogfood-city",
           "dogfood-file-sparks",
@@ -282,9 +286,11 @@
             "patch",
             "append_log",
             "primitive:data_rain",
+            "primitive:glyph_layer",
             "primitive:tunnel_grid",
             "primitive:mesh",
             "primitive:signal_scope",
+            "primitive:node_graph",
             "primitive:trace_route",
             "primitive:city_block",
             "primitive:particle_field",
@@ -309,7 +315,7 @@
             "renderer": "gibson-dogfood-showcase",
             "touchedFileCount": 0
           },
-          "mutationCount": 18,
+          "mutationCount": 20,
           "renderer": "gibson-dogfood-showcase",
           "requestCount": 1,
           "routes": [
@@ -320,9 +326,11 @@
           "targets": [
             "status",
             "dogfood-rain",
+            "dogfood-opcodes",
             "dogfood-tunnel",
             "dogfood-ice-mesh",
             "dogfood-scope",
+            "dogfood-control-graph",
             "dogfood-route",
             "dogfood-city",
             "dogfood-file-sparks",
@@ -340,9 +348,11 @@
             "patch",
             "append_log",
             "primitive:data_rain",
+            "primitive:glyph_layer",
             "primitive:tunnel_grid",
             "primitive:mesh",
             "primitive:signal_scope",
+            "primitive:node_graph",
             "primitive:trace_route",
             "primitive:city_block",
             "primitive:particle_field",
@@ -367,7 +377,7 @@
             "renderer": "gibson-dogfood-showcase",
             "touchedFileCount": 0
           },
-          "mutationCount": 18,
+          "mutationCount": 20,
           "renderer": "gibson-dogfood-showcase",
           "requestCount": 1,
           "routes": [
@@ -378,9 +388,11 @@
           "targets": [
             "status",
             "dogfood-rain",
+            "dogfood-opcodes",
             "dogfood-tunnel",
             "dogfood-ice-mesh",
             "dogfood-scope",
+            "dogfood-control-graph",
             "dogfood-route",
             "dogfood-city",
             "dogfood-file-sparks",
@@ -398,9 +410,11 @@
             "patch",
             "append_log",
             "primitive:data_rain",
+            "primitive:glyph_layer",
             "primitive:tunnel_grid",
             "primitive:mesh",
             "primitive:signal_scope",
+            "primitive:node_graph",
             "primitive:trace_route",
             "primitive:city_block",
             "primitive:particle_field",
@@ -426,7 +440,7 @@
             "renderer": "gibson-dogfood-showcase",
             "touchedFileCount": 0
           },
-          "mutationCount": 19,
+          "mutationCount": 21,
           "renderer": "gibson-dogfood-showcase",
           "requestCount": 1,
           "routes": [
@@ -437,9 +451,11 @@
           "targets": [
             "status",
             "dogfood-rain",
+            "dogfood-opcodes",
             "dogfood-tunnel",
             "dogfood-ice-mesh",
             "dogfood-scope",
+            "dogfood-control-graph",
             "dogfood-route",
             "dogfood-city",
             "dogfood-file-sparks",
@@ -457,9 +473,11 @@
             "patch",
             "append_log",
             "primitive:data_rain",
+            "primitive:glyph_layer",
             "primitive:tunnel_grid",
             "primitive:mesh",
             "primitive:signal_scope",
+            "primitive:node_graph",
             "primitive:trace_route",
             "primitive:city_block",
             "primitive:particle_field",
@@ -484,7 +502,7 @@
             "renderer": "gibson-dogfood-showcase",
             "touchedFileCount": 4
           },
-          "mutationCount": 18,
+          "mutationCount": 20,
           "renderer": "gibson-dogfood-showcase",
           "requestCount": 1,
           "routes": [
@@ -495,9 +513,11 @@
           "targets": [
             "status",
             "dogfood-rain",
+            "dogfood-opcodes",
             "dogfood-tunnel",
             "dogfood-ice-mesh",
             "dogfood-scope",
+            "dogfood-control-graph",
             "dogfood-route",
             "dogfood-city",
             "dogfood-file-sparks",
@@ -515,9 +535,11 @@
             "patch",
             "append_log",
             "primitive:data_rain",
+            "primitive:glyph_layer",
             "primitive:tunnel_grid",
             "primitive:mesh",
             "primitive:signal_scope",
+            "primitive:node_graph",
             "primitive:trace_route",
             "primitive:city_block",
             "primitive:particle_field",
@@ -543,7 +565,7 @@
             "renderer": "gibson-dogfood-showcase",
             "touchedFileCount": 1
           },
-          "mutationCount": 19,
+          "mutationCount": 21,
           "renderer": "gibson-dogfood-showcase",
           "requestCount": 1,
           "routes": [
@@ -554,9 +576,11 @@
           "targets": [
             "status",
             "dogfood-rain",
+            "dogfood-opcodes",
             "dogfood-tunnel",
             "dogfood-ice-mesh",
             "dogfood-scope",
+            "dogfood-control-graph",
             "dogfood-route",
             "dogfood-city",
             "dogfood-file-sparks",
@@ -574,9 +598,11 @@
             "patch",
             "append_log",
             "primitive:data_rain",
+            "primitive:glyph_layer",
             "primitive:tunnel_grid",
             "primitive:mesh",
             "primitive:signal_scope",
+            "primitive:node_graph",
             "primitive:trace_route",
             "primitive:city_block",
             "primitive:particle_field",
@@ -601,7 +627,7 @@
             "renderer": "gibson-dogfood-showcase",
             "touchedFileCount": 2
           },
-          "mutationCount": 18,
+          "mutationCount": 20,
           "renderer": "gibson-dogfood-showcase",
           "requestCount": 1,
           "routes": [
@@ -612,9 +638,11 @@
           "targets": [
             "status",
             "dogfood-rain",
+            "dogfood-opcodes",
             "dogfood-tunnel",
             "dogfood-ice-mesh",
             "dogfood-scope",
+            "dogfood-control-graph",
             "dogfood-route",
             "dogfood-city",
             "dogfood-file-sparks",
@@ -632,9 +660,11 @@
             "patch",
             "append_log",
             "primitive:data_rain",
+            "primitive:glyph_layer",
             "primitive:tunnel_grid",
             "primitive:mesh",
             "primitive:signal_scope",
+            "primitive:node_graph",
             "primitive:trace_route",
             "primitive:city_block",
             "primitive:particle_field",
@@ -660,7 +690,7 @@
             "renderer": "gibson-dogfood-showcase",
             "touchedFileCount": 4
           },
-          "mutationCount": 19,
+          "mutationCount": 21,
           "renderer": "gibson-dogfood-showcase",
           "requestCount": 1,
           "routes": [
@@ -671,9 +701,11 @@
           "targets": [
             "status",
             "dogfood-rain",
+            "dogfood-opcodes",
             "dogfood-tunnel",
             "dogfood-ice-mesh",
             "dogfood-scope",
+            "dogfood-control-graph",
             "dogfood-route",
             "dogfood-city",
             "dogfood-file-sparks",
@@ -840,6 +872,115 @@
           ],
           "seed": 60,
           "width": 3.2
+        },
+        "region": "stage"
+      },
+      "dogfood-control-graph": {
+        "children": [],
+        "id": "dogfood-control-graph",
+        "kind": "node_graph",
+        "props": {
+          "accentTone": "white",
+          "edges": [
+            {
+              "label": "hook",
+              "source": "agent",
+              "target": "router"
+            },
+            {
+              "label": "after",
+              "source": "router",
+              "target": "event"
+            },
+            {
+              "label": "plan",
+              "source": "event",
+              "target": "scene"
+            },
+            {
+              "label": "sse",
+              "source": "scene",
+              "target": "browser"
+            },
+            {
+              "label": "touch",
+              "source": "scene",
+              "target": "file-0"
+            },
+            {
+              "label": "touch",
+              "source": "scene",
+              "target": "file-1"
+            },
+            {
+              "label": "touch",
+              "source": "scene",
+              "target": "file-2"
+            }
+          ],
+          "focusNodeId": "file-0",
+          "label": "CONTROL GRAPH",
+          "layout": "fixed",
+          "nodes": [
+            {
+              "id": "agent",
+              "label": "AGENT",
+              "tone": "green",
+              "x": 0.18,
+              "y": 0.24
+            },
+            {
+              "id": "router",
+              "label": "ROUTER",
+              "tone": "cyan",
+              "x": 0.31,
+              "y": 0.18
+            },
+            {
+              "id": "event",
+              "label": "TOOL_RESULT",
+              "tone": "magenta",
+              "x": 0.45,
+              "y": 0.22
+            },
+            {
+              "id": "scene",
+              "label": "SCENE",
+              "tone": "white",
+              "x": 0.58,
+              "y": 0.18
+            },
+            {
+              "id": "browser",
+              "label": "BROWSER",
+              "tone": "amber",
+              "x": 0.72,
+              "y": 0.24
+            },
+            {
+              "id": "file-0",
+              "label": "README.md",
+              "tone": "magenta",
+              "x": 0.62,
+              "y": 0.34
+            },
+            {
+              "id": "file-1",
+              "label": "pyproject.to",
+              "tone": "magenta",
+              "x": 0.7,
+              "y": 0.395
+            },
+            {
+              "id": "file-2",
+              "label": "cli.py",
+              "tone": "magenta",
+              "x": 0.78,
+              "y": 0.45
+            }
+          ],
+          "seed": 38,
+          "tone": "magenta"
         },
         "region": "stage"
       },
@@ -1121,6 +1262,22 @@
               -0.06
             ]
           ]
+        },
+        "region": "stage"
+      },
+      "dogfood-opcodes": {
+        "children": [],
+        "id": "dogfood-opcodes",
+        "kind": "glyph_layer",
+        "props": {
+          "accentTone": "white",
+          "density": 0.32,
+          "font": "terminal",
+          "motion": "drift",
+          "palette": "magenta",
+          "seed": 14,
+          "text": "GIBSON TOOL-RESULT BASH COMPLETED: OK; TESTS PASSED AND COMMIT CREATED README.MD PYPROJECT.TO CLI.PY TEST_CLI.PY TRACE ROUTE ICE MESH NODE GRAPH",
+          "tone": "magenta"
         },
         "region": "stage"
       },

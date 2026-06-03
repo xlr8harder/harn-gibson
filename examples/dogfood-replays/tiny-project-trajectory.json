@@ -22,6 +22,14 @@
         "contains": "4 touched"
       },
       {
+        "path": "primitives.dogfood-opcodes.kind",
+        "equals": "glyph_layer"
+      },
+      {
+        "path": "primitives.dogfood-control-graph.kind",
+        "equals": "node_graph"
+      },
+      {
         "path": "primitives.dogfood-ice-mesh.kind",
         "equals": "mesh"
       },
