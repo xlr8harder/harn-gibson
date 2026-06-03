@@ -195,6 +195,7 @@ def default_visual_catalog() -> VisualCatalog:
                         "clip_reveal",
                         "group_transform",
                         "gradient_paint",
+                        "path_morph",
                         "path_trace_particles",
                         "symbol_orbit",
                         "symbol_scan",

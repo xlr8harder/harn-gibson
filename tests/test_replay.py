@@ -599,7 +599,7 @@ def test_checked_in_replay_fixtures_cover_agent_and_renderer_sides() -> None:
     assert renderer_result.scene.primitives["decision-log"].props["text"][0]["renderer"] == "fixture"
 
     assert [step.kind for step in gallery_result.steps] == ["mutations"]
-    assert len(gallery_result.expectations) == 40
+    assert len(gallery_result.expectations) == 41
     assert gallery_result.scene.primitives["gallery-mesh"].kind == "mesh"
     assert gallery_result.scene.primitives["gallery-vector"].kind == "svg_layer"
     assert gallery_result.scene.primitives["gallery-vector"].props["gradients"][0]["id"] == "ice-gradient"
@@ -610,6 +610,7 @@ def test_checked_in_replay_fixtures_cover_agent_and_renderer_sides() -> None:
     assert gallery_result.scene.primitives["gallery-vector"].props["groups"][0]["labels"][0]["text"] == "CORE"
     assert gallery_result.scene.primitives["gallery-vector"].props["keyframes"][1]["scale"] == 1.08
     assert gallery_result.scene.primitives["gallery-vector"].props["groups"][0]["keyframes"][2]["rotation"] == -0.12
+    assert gallery_result.scene.primitives["gallery-vector"].props["paths"][0]["morphs"][1]["d"].startswith("M50 7")
     assert gallery_result.scene.primitives["gallery-vector"].props["traces"][0]["count"] == 9
     assert gallery_result.scene.primitives["gallery-vector"].props["symbols"][0]["kind"] == "globe"
     assert gallery_result.scene.primitives["gallery-vector"].props["symbols"][1]["kind"] == "filesystem_gate"

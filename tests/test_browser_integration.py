@@ -240,6 +240,7 @@ def test_browser_display_renders_vector_symbols_and_data_rain() -> None:
                 page = browser.new_page(viewport={"width": 960, "height": 700})
                 page.goto(base, wait_until="domcontentloaded")
                 page.wait_for_function("window.__gibsonVectorState?.['gallery-vector']?.symbolCount === 6")
+                page.wait_for_function("window.__gibsonVectorState?.['gallery-vector']?.morphFrameCount === 3")
                 page.wait_for_function("window.__gibsonVectorAnimationState?.['gallery-vector']?.keyframeCount === 6")
                 page.wait_for_function("window.__gibsonVectorEffectState?.['gallery-vector']?.filterCount === 2")
                 page.wait_for_function("window.__gibsonHologramState?.['gallery-hologram']?.ringCount === 6")
@@ -273,6 +274,8 @@ def test_browser_display_renders_vector_symbols_and_data_rain() -> None:
                 )
                 assert vector_state == {
                     "pathCount": 3,
+                    "morphPathCount": 1,
+                    "morphFrameCount": 3,
                     "circleCount": 3,
                     "traceCount": 1,
                     "symbolCount": 6,

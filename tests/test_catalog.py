@@ -76,6 +76,7 @@ def test_default_visual_catalog_has_generic_and_cinematic_building_blocks() -> N
         "ice_wall",
         "mainframe_core",
     )
+    assert "path_morph" in svg_layer.metadata["animation"]
     assert "path_trace_particles" in svg_layer.metadata["animation"]
     assert "symbol_orbit" in svg_layer.metadata["animation"]
     assert "group_transform" in svg_layer.metadata["animation"]

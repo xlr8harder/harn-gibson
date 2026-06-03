@@ -143,6 +143,7 @@ _SVG_CLIP_NUMERIC_KEYS = frozenset(
     }
 )
 _SVG_MAX_KEYFRAMES_PER_SOURCE = 64
+_SVG_MAX_MORPHS_PER_PATH = 64
 _SVG_KEYFRAME_NUMERIC_KEYS = frozenset(
     {
         "at",
@@ -158,6 +159,8 @@ _SVG_KEYFRAME_NUMERIC_KEYS = frozenset(
     }
 )
 _SVG_KEYFRAME_ALLOWED_KEYS = _SVG_KEYFRAME_NUMERIC_KEYS | {"transform"}
+_SVG_PATH_MORPH_ALLOWED_KEYS = frozenset({"at", "offset", "progress", "timeMs", "ms", "d"})
+_SVG_PATH_MORPH_NUMERIC_KEYS = frozenset({"at", "offset", "progress", "timeMs", "ms"})
 _SVG_KEYFRAME_PLAYBACK_NUMERIC_KEYS = frozenset({"durationMs", "delayMs"})
 _SVG_KEYFRAME_PLAYBACK_BOOLEAN_KEYS = frozenset({"loop", "yoyo"})
 
@@ -877,6 +880,7 @@ def _validate_svg_keyframe_source(
             )
         )
     _validate_svg_keyframes(target_id, source, issues, step_index, mutation_index, path)
+    _validate_svg_paths(target_id, source, issues, step_index, mutation_index, path)
     groups = source.get("groups")
     if not isinstance(groups, list) or depth >= 3:
         return
@@ -891,6 +895,150 @@ def _validate_svg_keyframe_source(
                 f"{path}.groups[{index}]",
                 depth + 1,
             )
+
+
+def _validate_svg_paths(
+    target_id: str,
+    source: Mapping[str, Any],
+    issues: list[RenderPlanValidationIssue],
+    step_index: int,
+    mutation_index: int,
+    path: str,
+) -> None:
+    if "paths" not in source:
+        return
+    paths = source["paths"]
+    path_list_path = f"{path}.paths"
+    if not isinstance(paths, list):
+        issues.append(
+            RenderPlanValidationIssue(
+                "warning",
+                "invalid_svg_paths",
+                "svg_layer paths should be a bounded list of path objects",
+                step_index=step_index,
+                mutation_index=mutation_index,
+                target_id=target_id,
+                value=path_list_path,
+            )
+        )
+        return
+    for index, path_spec in enumerate(paths[:256]):
+        path_spec_path = f"{path_list_path}[{index}]"
+        if not isinstance(path_spec, Mapping):
+            issues.append(
+                RenderPlanValidationIssue(
+                    "warning",
+                    "invalid_svg_path",
+                    "svg_layer path entries should be objects",
+                    step_index=step_index,
+                    mutation_index=mutation_index,
+                    target_id=target_id,
+                    value=path_spec_path,
+                )
+            )
+            continue
+        _validate_svg_keyframe_playback(
+            target_id,
+            path_spec,
+            issues,
+            step_index,
+            mutation_index,
+            path_spec_path,
+        )
+        _validate_svg_path_morphs(target_id, path_spec, issues, step_index, mutation_index, path_spec_path)
+
+
+def _validate_svg_path_morphs(
+    target_id: str,
+    path_spec: Mapping[str, Any],
+    issues: list[RenderPlanValidationIssue],
+    step_index: int,
+    mutation_index: int,
+    path: str,
+) -> None:
+    if "morphs" not in path_spec:
+        return
+    morphs = path_spec["morphs"]
+    morphs_path = f"{path}.morphs"
+    if not isinstance(morphs, list):
+        issues.append(
+            RenderPlanValidationIssue(
+                "warning",
+                "invalid_svg_path_morphs",
+                "svg_layer path morphs should be a bounded list of path frames",
+                step_index=step_index,
+                mutation_index=mutation_index,
+                target_id=target_id,
+                value=morphs_path,
+            )
+        )
+        return
+    if len(morphs) > _SVG_MAX_MORPHS_PER_PATH:
+        issues.append(
+            RenderPlanValidationIssue(
+                "error",
+                "too_many_svg_path_morphs",
+                f"svg_layer path morphs should have at most {_SVG_MAX_MORPHS_PER_PATH} frames per path",
+                step_index=step_index,
+                mutation_index=mutation_index,
+                target_id=target_id,
+                value=len(morphs),
+            )
+        )
+    for index, morph in enumerate(morphs[:_SVG_MAX_MORPHS_PER_PATH]):
+        morph_path = f"{morphs_path}[{index}]"
+        if not isinstance(morph, Mapping):
+            issues.append(
+                RenderPlanValidationIssue(
+                    "warning",
+                    "invalid_svg_path_morph",
+                    "svg_layer path morph frames should be objects",
+                    step_index=step_index,
+                    mutation_index=mutation_index,
+                    target_id=target_id,
+                    value=morph_path,
+                )
+            )
+            continue
+        if not isinstance(morph.get("d"), str) or not morph.get("d"):
+            issues.append(
+                RenderPlanValidationIssue(
+                    "warning",
+                    "invalid_svg_path_morph_d",
+                    "svg_layer path morph frames should include a nonempty d string",
+                    step_index=step_index,
+                    mutation_index=mutation_index,
+                    target_id=target_id,
+                    value=f"{morph_path}.d",
+                )
+            )
+        for key, value in morph.items():
+            field_path = f"{morph_path}.{key}"
+            if key not in _SVG_PATH_MORPH_ALLOWED_KEYS:
+                issues.append(
+                    RenderPlanValidationIssue(
+                        "warning",
+                        "unsupported_svg_path_morph_field",
+                        "svg_layer path morph frames support timing fields and d only",
+                        step_index=step_index,
+                        mutation_index=mutation_index,
+                        target_id=target_id,
+                        value=field_path,
+                    )
+                )
+                continue
+            if key in _SVG_PATH_MORPH_NUMERIC_KEYS and not _is_finite_number(value):
+                issues.append(
+                    RenderPlanValidationIssue(
+                        "warning",
+                        "invalid_svg_keyframe_value",
+                        "svg_layer path morph timing values should be finite JSON numbers",
+                        step_index=step_index,
+                        mutation_index=mutation_index,
+                        target_id=target_id,
+                        value=field_path,
+                    )
+                )
 
 
 def _validate_svg_layer_effects(

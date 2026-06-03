@@ -320,6 +320,18 @@ def test_render_plan_validation_covers_safe_and_missing_payload_branches() -> No
                                 ],
                                 "clip": {"kind": "iris", "durationMs": 1200, "loop": True},
                                 "symbols": [{"kind": "globe"}],
+                                "paths": [
+                                    {
+                                        "d": "M0 0 L10 0 L10 10 Z",
+                                        "durationMs": 1200,
+                                        "loop": True,
+                                        "morphs": [
+                                            {"at": 0, "d": "M0 0 L10 0 L10 10 Z"},
+                                            {"at": 1, "d": "M1 0 L11 1 L9 11 Z"},
+                                        ],
+                                    },
+                                    {"d": "M0 0 L2 2"},
+                                ],
                                 "keyframes": [
                                     {"at": 0, "x": 0, "y": 0, "scale": 1, "rotation": 0, "opacity": 0.8},
                                     {"timeMs": 1200, "transform": {"x": 4, "y": -2, "scale": 1.1}},
@@ -406,6 +418,7 @@ def test_render_plan_validation_checks_svg_patch_keyframes() -> None:
         )
     )
     too_many_keyframes = [{"at": index / 70, "x": index} for index in range(70)]
+    too_many_morphs = [{"at": index / 70, "d": "M0 0 L1 1"} for index in range(70)]
     plan = RenderPlan(
         (request,),
         (
@@ -425,6 +438,18 @@ def test_render_plan_validation_checks_svg_patch_keyframes() -> None:
                             "filters": ["drop-shadow(url(https://example.invalid/x))", 42],
                             "clip": {"kind": "scripted", "progress": "done", "loop": "forever"},
                             "keyframes": too_many_keyframes,
+                            "paths": [
+                                [],
+                                {"durationMs": "fast", "loop": "yes", "morphs": "bad"},
+                                {
+                                    "morphs": [
+                                        [],
+                                        {"at": "start", "d": 5},
+                                        {"at": 0.5, "d": "M0 0 L1 1", "curve": "wild"},
+                                    ]
+                                },
+                                {"morphs": too_many_morphs},
+                            ],
                             "groups": [
                                 {
                                     "durationMs": "fast",
@@ -449,6 +474,7 @@ def test_render_plan_validation_checks_svg_patch_keyframes() -> None:
                                     "filters": "glow",
                                     "clip": {"progress": 0.4},
                                 },
+                                {"paths": "bad"},
                                 {
                                     "filters": [{"preset": "bloom", "blur": 0.4}],
                                     "clip": "wipe",
@@ -485,16 +511,23 @@ def test_render_plan_validation_checks_svg_patch_keyframes() -> None:
         "invalid_svg_filter",
         "invalid_svg_filter_value",
         "invalid_svg_filters",
+        "invalid_svg_paths",
+        "invalid_svg_path",
+        "invalid_svg_path_morph",
+        "invalid_svg_path_morph_d",
+        "invalid_svg_path_morphs",
         "nonpositive_svg_keyframe_duration",
         "raw_svg_markup",
         "too_many_svg_keyframes",
+        "too_many_svg_path_morphs",
         "unsupported_svg_clip",
         "unsupported_svg_filter",
         "unsupported_svg_keyframe_field",
+        "unsupported_svg_path_morph_field",
     } <= codes
     assert render_plan_has_validation_errors(issues) is True
     assert payload["status"] == "rejected"
-    assert payload["errorCount"] == 2
+    assert payload["errorCount"] == 3
     assert any(issue.target_id == "vector" and issue.value == "props.groups[0].keyframes[0].morph" for issue in issues)
 
 

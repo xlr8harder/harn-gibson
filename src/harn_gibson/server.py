@@ -2329,6 +2329,84 @@ function vectorKeyframeTransform(source, now) {
   };
 }
 
+function vectorPathNumberTokens(pathData) {
+  const text = String(pathData || "");
+  const numberPattern = /[+-]?(?:\\d*\\.\\d+|\\d+\\.?)(?:e[+-]?\\d+)?/gi;
+  const pieces = [];
+  const values = [];
+  let offset = 0;
+  let match = numberPattern.exec(text);
+  while (match) {
+    pieces.push(text.slice(offset, match.index));
+    values.push(Number(match[0]));
+    offset = match.index + match[0].length;
+    match = numberPattern.exec(text);
+  }
+  pieces.push(text.slice(offset));
+  return {pieces, values};
+}
+
+function vectorFormatPathNumber(value) {
+  const rounded = Math.round(Number(value || 0) * 1000) / 1000;
+  if (Object.is(rounded, -0)) return "0";
+  return String(Number(rounded.toFixed(3)));
+}
+
+function vectorInterpolatePathData(leftData, rightData, progress) {
+  const left = vectorPathNumberTokens(leftData);
+  const right = vectorPathNumberTokens(rightData);
+  if (
+    left.values.length !== right.values.length
+    || left.pieces.length !== right.pieces.length
+    || left.pieces.some((piece, index) => piece !== right.pieces[index])
+  ) {
+    return null;
+  }
+  let data = "";
+  for (let index = 0; index < left.values.length; index++) {
+    data += left.pieces[index];
+    data += vectorFormatPathNumber(left.values[index] + (right.values[index] - left.values[index]) * progress);
+  }
+  return data + left.pieces[left.pieces.length - 1];
+}
+
+function vectorPathMorph(pathSpec, now) {
+  const baseData = String(pathSpec?.d || "");
+  const rawMorphs = Array.isArray(pathSpec?.morphs) ? pathSpec.morphs : [];
+  const morphSource = {...pathSpec, keyframes: rawMorphs};
+  const morphFrames = vectorKeyframes(morphSource)
+    .filter((frame) => frame && typeof frame === "object" && typeof frame.d === "string" && frame.d)
+    .map((frame) => ({...frame, d: String(frame.d)}));
+  if (baseData && !morphFrames.some((frame) => frame.at <= 0.0001)) {
+    morphFrames.unshift({at: 0, d: baseData});
+  }
+  if (!morphFrames.length) {
+    return {pathData: baseData, morphCount: 0, mode: "static", progress: 0};
+  }
+  if (morphFrames.length === 1) {
+    return {pathData: morphFrames[0].d, morphCount: morphFrames.length, mode: "single", progress: 0};
+  }
+  const progress = vectorKeyframeProgress(morphSource, now);
+  let left = morphFrames[0];
+  let right = morphFrames[morphFrames.length - 1];
+  for (let index = 1; index < morphFrames.length; index++) {
+    if (progress <= morphFrames[index].at) {
+      left = morphFrames[index - 1];
+      right = morphFrames[index];
+      break;
+    }
+  }
+  const span = Math.max(0.0001, right.at - left.at);
+  const localProgress = clamp((progress - left.at) / span, 0, 1);
+  const interpolated = vectorInterpolatePathData(left.d, right.d, localProgress);
+  return {
+    pathData: interpolated || (localProgress < 0.5 ? left.d : right.d),
+    morphCount: morphFrames.length,
+    mode: interpolated ? "interpolated" : "discrete",
+    progress,
+  };
+}
+
 function polylineSegments(points) {
   const segments = [];
   let total = 0;
@@ -2360,7 +2438,8 @@ function polylinePoint(path, progress) {
 }
 
 function drawSvgPath(pathSpec, props, now) {
-  const pathData = String(pathSpec?.d || "");
+  const morph = vectorPathMorph(pathSpec, now);
+  const pathData = morph.pathData;
   if (!pathData) return;
   let path;
   try {
@@ -3001,8 +3080,17 @@ function drawSvgSymbols(symbols, props, now) {
 
 function vectorLayerStats(source, depth = 0) {
   const groups = Array.isArray(source.groups) && depth < 3 ? source.groups : [];
+  const paths = Array.isArray(source.paths) ? source.paths : [];
+  const morphPaths = paths.filter((path) => path && typeof path === "object" && Array.isArray(path.morphs));
   const base = {
-    pathCount: Array.isArray(source.paths) ? source.paths.length : 0,
+    pathCount: paths.length,
+    morphPathCount: morphPaths.length,
+    morphFrameCount: morphPaths.reduce(
+      (count, path) => count + path.morphs.filter(
+        (frame) => frame && typeof frame === "object" && typeof frame.d === "string",
+      ).length,
+      0,
+    ),
     circleCount: Array.isArray(source.circles) ? source.circles.length : 0,
     traceCount: Array.isArray(source.traces) ? source.traces.length : 0,
     symbolCount: Array.isArray(source.symbols) ? source.symbols.length : 0,
@@ -3024,6 +3112,8 @@ function vectorLayerStats(source, depth = 0) {
     if (!group || typeof group !== "object") continue;
     const child = vectorLayerStats(group, depth + 1);
     base.pathCount += child.pathCount;
+    base.morphPathCount += child.morphPathCount;
+    base.morphFrameCount += child.morphFrameCount;
     base.circleCount += child.circleCount;
     base.traceCount += child.traceCount;
     base.symbolCount += child.symbolCount;

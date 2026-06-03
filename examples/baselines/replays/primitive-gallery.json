@@ -899,11 +899,28 @@
           "paths": [
             {
               "d": "M50 4 L92 28 L92 72 L50 96 L8 72 L8 28 Z",
+              "durationMs": 4200,
               "fill": "gradient:ice-gradient",
               "fillAlpha": 0.14,
+              "loop": true,
+              "morphs": [
+                {
+                  "at": 0,
+                  "d": "M50 4 L92 28 L92 72 L50 96 L8 72 L8 28 Z"
+                },
+                {
+                  "at": 0.5,
+                  "d": "M50 7 L88 24 L95 70 L52 93 L10 75 L5 30 Z"
+                },
+                {
+                  "at": 1,
+                  "d": "M50 10 L84 31 L90 76 L50 90 L13 68 L11 25 Z"
+                }
+              ],
               "stroke": "gradient:ice-gradient",
               "tone": "amber",
-              "width": 1.4
+              "width": 1.4,
+              "yoyo": true
             },
             {
               "d": "M18 54 C30 18 70 18 82 54 C68 82 32 82 18 54 Z",

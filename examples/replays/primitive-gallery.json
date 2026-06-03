@@ -17,6 +17,7 @@
       {"path": "primitives.gallery-vector.props.groups.0.labels.0.text", "equals": "CORE"},
       {"path": "primitives.gallery-vector.props.keyframes.1.scale", "equals": 1.08},
       {"path": "primitives.gallery-vector.props.groups.0.keyframes.2.rotation", "equals": -0.12},
+      {"path": "primitives.gallery-vector.props.paths.0.morphs.1.d", "equals": "M50 7 L88 24 L95 70 L52 93 L10 75 L5 30 Z"},
       {"path": "primitives.gallery-vector.props.traces.0.count", "equals": 9},
       {"path": "primitives.gallery-vector.props.symbols.0.kind", "equals": "globe"},
       {"path": "primitives.gallery-vector.props.symbols.1.kind", "equals": "filesystem_gate"},
@@ -235,7 +236,15 @@
                   "width": 1.4,
                   "stroke": "gradient:ice-gradient",
                   "fill": "gradient:ice-gradient",
-                  "fillAlpha": 0.14
+                  "fillAlpha": 0.14,
+                  "durationMs": 4200,
+                  "loop": true,
+                  "yoyo": true,
+                  "morphs": [
+                    {"at": 0, "d": "M50 4 L92 28 L92 72 L50 96 L8 72 L8 28 Z"},
+                    {"at": 0.5, "d": "M50 7 L88 24 L95 70 L52 93 L10 75 L5 30 Z"},
+                    {"at": 1, "d": "M50 10 L84 31 L90 76 L50 90 L13 68 L11 25 Z"}
+                  ]
                 },
                 {
                   "d": "M18 54 C30 18 70 18 82 54 C68 82 32 82 18 54 Z",
