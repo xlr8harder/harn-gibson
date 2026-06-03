@@ -714,6 +714,30 @@ def test_cli_replay_captures_screenshot(tmp_path: Any, monkeypatch: Any, capsys:
     ]
 
 
+def test_cli_replay_reports_expectation_failures(tmp_path: Any, capsys: Any) -> None:
+    replay_path = tmp_path / "replay.json"
+    replay_path.write_text(
+        json.dumps(
+            {
+                "steps": [],
+                "expect": {
+                    "sceneRevision": 99,
+                    "checks": [{"path": "primitives.status.props.text", "equals": "wrong"}],
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    assert cli.run(["replay", str(replay_path)]) == 1
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert captured.err.splitlines() == [
+        "replay expectation failed: revision expected to equals 99, got 0",
+        "replay expectation failed: primitives.status.props.text expected to equals 'wrong', got 'awaiting signal'",
+    ]
+
+
 def test_cli_dogfood_launches_display_browser_and_harn(monkeypatch: Any, capsys: Any) -> None:
     server_calls: list[str] = []
     browser_urls: list[str] = []

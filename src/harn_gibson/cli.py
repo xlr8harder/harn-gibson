@@ -151,11 +151,16 @@ def run(argv: Sequence[str] | None = None) -> int:
         print(result.message)
         return 0 if result.available else 1
     if args.command == "replay":
-        from harn_gibson.replay import run_replay_file, write_replay_result, write_scene
+        from harn_gibson.replay import ReplayExpectationError, run_replay_file, write_replay_result, write_scene
         from harn_gibson.server import GibsonServerState
 
         replay_state = GibsonServerState()
-        result = run_replay_file(args.path, replay_state)
+        try:
+            result = run_replay_file(args.path, replay_state)
+        except ReplayExpectationError as error:
+            for failure in error.failures:
+                print(f"replay expectation failed: {failure.message}", file=sys.stderr)
+            return 1
         if args.output_scene:
             write_scene(args.output_scene, result.scene)
         if args.output_result:

@@ -120,6 +120,8 @@ uv run harn-gibson replay examples/replays/renderer-plan.json \
   --screenshot test-artifacts/replays/renderer-scene.png
 ```
 
+Replay files can include final-scene expectations so fixtures act as verifiers as well as demos. The fixture format is documented in [docs/replay.md](docs/replay.md).
+
 ## Browser Tests
 
 ```bash

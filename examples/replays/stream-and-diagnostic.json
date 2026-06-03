@@ -4,6 +4,29 @@
   "metadata": {
     "purpose": "exercise event routing, local stream buffering, and traceback display"
   },
+  "expect": {
+    "sceneRevision": 3,
+    "checks": [
+      {
+        "path": "primitives.assistant-stream.props.text",
+        "equals": "collecting event telemetry..."
+      },
+      {
+        "path": "primitives.trace-log.props.text.0.eventType",
+        "equals": "runtime_error"
+      },
+      {
+        "path": "animations.stream-pulse-2.kind",
+        "equals": "stream-pulse"
+      },
+      {
+        "path": "log",
+        "contains": {
+          "eventType": "runtime_error"
+        }
+      }
+    ]
+  },
   "steps": [
     {
       "type": "event",

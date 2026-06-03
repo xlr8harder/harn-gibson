@@ -5,9 +5,11 @@ from pathlib import Path
 
 import pytest
 
-from harn_gibson import ReplayResult, ReplayStepResult, run_replay_data, run_replay_file
+from harn_gibson import ReplayExpectationError, ReplayResult, ReplayStepResult, run_replay_data, run_replay_file
 from harn_gibson.events import GibsonEvent
 from harn_gibson.replay import (
+    ReplayExpectationResult,
+    evaluate_replay_expectations,
     load_replay_file,
     mutations_from_value,
     render_plan_from_mapping,
@@ -70,6 +72,7 @@ def test_replay_event_steps_file_io_and_writers(tmp_path: Path) -> None:
     assert result.schema == "harn-gibson.replay.v1"
     assert result.name == "event replay"
     assert result.metadata == {"fixture": True}
+    assert result.expectations == ()
     assert result.steps[0].to_dict() == {
         "index": 0,
         "kind": "event",
@@ -94,11 +97,13 @@ def test_checked_in_replay_fixtures_cover_agent_and_renderer_sides() -> None:
     renderer_result = run_replay_file(EXAMPLE_REPLAYS / "renderer-plan.json")
 
     assert [step.kind for step in agent_result.steps] == ["event", "event", "mutations"]
+    assert len(agent_result.expectations) == 5
     assert agent_result.steps[1].route == "stream_buffer"
     assert agent_result.scene.primitives["assistant-stream"].props["text"] == "collecting event telemetry..."
     assert agent_result.scene.primitives["trace-log"].props["text"][0]["eventType"] == "runtime_error"
 
     assert [step.kind for step in renderer_result.steps] == ["render_plan"]
+    assert len(renderer_result.expectations) == 5
     assert renderer_result.steps[0].route == "saved_renderer_plan"
     assert renderer_result.steps[0].updates == 2
     assert renderer_result.scene.primitives["status"].props["text"] == "renderer:coverage locked"
@@ -171,6 +176,74 @@ def test_replay_raw_events_render_plans_and_mutations() -> None:
     assert result.scene.revision == 4
     assert result.scene.primitives["status"].props["text"] == "manual event"
     assert result.scene.log[-1]["eventType"] == "manual"
+
+
+def test_replay_expectations_pass_fail_and_serialize() -> None:
+    result = run_replay_data(
+        {
+            "steps": [
+                {
+                    "type": "event",
+                    "event": event_payload(
+                        1,
+                        "message_update",
+                        {"assistantMessageEvent": {"delta": "signal"}},
+                    ),
+                }
+            ],
+            "expect": {
+                "sceneRevision": 1,
+                "checks": [
+                    {"path": "primitives.assistant-stream.props.text", "equals": "signal"},
+                    {"path": "primitives.assistant-stream.props.text", "contains": "ign"},
+                    {"path": "primitives.assistant-stream", "exists": True},
+                    {"path": "primitives.missing", "exists": False},
+                    {"path": "primitives.assistant-stream.props", "contains": {"isStreaming": True}},
+                    {"path": "animations.stream-pulse-1", "contains": {"targetId": "scan-grid"}},
+                ],
+            },
+        }
+    )
+
+    assert all(expectation.passed for expectation in result.expectations)
+    assert evaluate_replay_expectations(result.scene, None) == ()
+    assert result.to_dict()["expectations"][0] == {
+        "path": "revision",
+        "op": "equals",
+        "passed": True,
+        "expected": 1,
+        "actual": 1,
+    }
+    serialized = ReplayExpectationResult("x", "exists", False, False, message="missing").to_dict()
+    assert serialized == {
+        "path": "x",
+        "op": "exists",
+        "passed": False,
+        "expected": False,
+        "message": "missing",
+    }
+    assert ReplayExpectationResult("x", "exists", True).to_dict() == {"path": "x", "op": "exists", "passed": True}
+    branch_checks = evaluate_replay_expectations(
+        result.scene,
+        {
+            "checks": [
+                {"path": "log.9", "exists": False},
+                {"path": "primitives.assistant-stream.props.text.9", "exists": False},
+                {"path": "revision", "contains": 1},
+            ]
+        },
+    )
+    assert [check.passed for check in branch_checks] == [True, True, False]
+
+    with pytest.raises(ReplayExpectationError, match="replay expectations failed") as error:
+        run_replay_data(
+            {
+                "steps": [{"type": "event", "event": event_payload()}],
+                "expect": {"checks": [{"path": "primitives.status.props.text", "equals": "wrong"}]},
+            }
+        )
+    assert error.value.failures[0].path == "primitives.status.props.text"
+    assert "expected to equals" in error.value.failures[0].message
 
 
 def test_replay_raw_event_without_decisions_and_empty_plan() -> None:
@@ -274,6 +347,24 @@ def test_load_replay_file_validation(tmp_path: Path, payload: object, message: s
         (
             {"steps": [{"type": "mutations", "mutations": ["bad"]}]},
             "replay step 0 mutation must be an object",
+        ),
+        ({"steps": [], "expect": []}, "replay expect must be an object"),
+        ({"steps": [], "expect": {"checks": {}}}, "replay expect checks must be a list"),
+        (
+            {"steps": [], "expect": {"checks": ["bad"]}},
+            "replay expect check 0 must be an object",
+        ),
+        (
+            {"steps": [], "expect": {"checks": [{"equals": 1}]}},
+            "replay expect check 0 must include path",
+        ),
+        (
+            {"steps": [], "expect": {"checks": [{"path": "revision"}]}},
+            "replay expect check 0 must include exactly one operation",
+        ),
+        (
+            {"steps": [], "expect": {"checks": [{"path": "revision", "equals": 0, "exists": True}]}},
+            "replay expect check 0 must include exactly one operation",
         ),
     ],
 )

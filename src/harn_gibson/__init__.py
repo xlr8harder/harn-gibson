@@ -18,7 +18,15 @@ from harn_gibson.rendering import (
     RenderSubmitResult,
     TimelineWindow,
 )
-from harn_gibson.replay import ReplayResult, ReplayStepResult, run_replay_data, run_replay_file
+from harn_gibson.replay import (
+    ReplayExpectationError,
+    ReplayExpectationResult,
+    ReplayResult,
+    ReplayStepResult,
+    evaluate_replay_expectations,
+    run_replay_data,
+    run_replay_file,
+)
 from harn_gibson.routing import (
     EventRouter,
     EventRouteRule,
@@ -61,6 +69,8 @@ __all__ = [
     "RendererContextBuilder",
     "RendererContextConfig",
     "RendererEventInterest",
+    "ReplayExpectationError",
+    "ReplayExpectationResult",
     "ReplayResult",
     "ReplayStepResult",
     "RouteDecision",
@@ -75,6 +85,7 @@ __all__ = [
     "capture_scene_screenshot",
     "default_mutations_for_event",
     "default_visual_catalog",
+    "evaluate_replay_expectations",
     "event_route_rules_from_value",
     "initial_scene",
     "load_hook_module",
