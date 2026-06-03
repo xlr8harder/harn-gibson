@@ -23,6 +23,8 @@ uv run pytest
 
 Coverage is enforced at 100% for the Python package.
 
+The 1.0 release boundary is defined in [docs/1.0-feature-set.md](docs/1.0-feature-set.md).
+
 Install `harn` separately when you want to run against a live agent.
 
 ## Run The Display
@@ -88,6 +90,14 @@ For offline inspection, write normalized events to JSONL:
 ```bash
 HARN_GIBSON_EVENT_LOG=.harn-gibson.jsonl \
 harn --no-extensions -e .harn/extensions/gibson.py
+```
+
+Replay fixtures can drive the same scene pipeline without a live harn process:
+
+```bash
+uv run harn-gibson replay examples/replays/stream-and-diagnostic.json \
+  --output-scene test-artifacts/replays/scene.json \
+  --output-result test-artifacts/replays/result.json
 ```
 
 ## Browser Tests

@@ -162,6 +162,11 @@ class RenderPipeline:
             updates = tuple(self._apply_plan(plan))
         return RenderSubmitResult(mode=self.mode, queued=self.pending_count(), updates=updates)
 
+    def apply_plan(self, plan: RenderPlan) -> RenderSubmitResult:
+        with self._lock:
+            updates = tuple(self._apply_plan(plan))
+        return RenderSubmitResult(mode=self.mode, queued=self.pending_count(), updates=updates)
+
     def start(self) -> None:
         if self.mode != "async":
             return

@@ -218,6 +218,16 @@ def test_pipeline_direct_apply_bypasses_renderer_queue() -> None:
     }
     assert buffer.snapshot() == list(result.updates)
 
+    plan_result = pipeline.apply_plan(
+        RenderPlan(
+            requests=(request,),
+            steps=(RenderStep((SceneMutation("append_log", entry={"plan": True}),), event_index=0),),
+            metadata={"renderer": "saved"},
+        )
+    )
+    assert plan_result.updates[0]["renderPlan"]["metadata"] == {"renderer": "saved"}
+    assert buffer.snapshot()[-1] == plan_result.updates[0]
+
 
 def test_render_update_and_coercion_helpers() -> None:
     request = RenderRequest(event(1))

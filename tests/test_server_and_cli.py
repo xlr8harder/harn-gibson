@@ -360,6 +360,13 @@ def test_cli_parser_and_run(monkeypatch: Any, capsys: Any) -> None:
     assert parsed_dogfood.harn_args == ["--", "-p", "hello"]
     parsed_auth = parser.parse_args(["import-codex-auth", "--codex-auth", "codex.json", "--harn-auth", "harn.json"])
     assert parsed_auth.command == "import-codex-auth"
+    parsed_replay = parser.parse_args(
+        ["replay", "fixture.json", "--output-scene", "scene.json", "--output-result", "result.json"]
+    )
+    assert parsed_replay.command == "replay"
+    assert parsed_replay.path == "fixture.json"
+    assert parsed_replay.output_scene == "scene.json"
+    assert parsed_replay.output_result == "result.json"
     assert cli.run(["extension-path"]) == 0
     assert capsys.readouterr().out.strip().endswith("extension.py")
 
@@ -372,6 +379,70 @@ def test_cli_parser_and_run(monkeypatch: Any, capsys: Any) -> None:
     assert cli.run(["serve", "--host", "0.0.0.0", "--port", "9999"]) == 0
     assert cli.run([]) == 0
     assert calls == [("0.0.0.0", 9999), ("127.0.0.1", 8765)]
+
+
+def test_cli_replay_writes_outputs(tmp_path: Any, capsys: Any) -> None:
+    replay_path = tmp_path / "replay.json"
+    scene_path = tmp_path / "scene.json"
+    result_path = tmp_path / "result.json"
+    event = {
+        "sequence": 1,
+        "timestampMs": 10,
+        "source": "test",
+        "eventType": "tool_call",
+        "phase": "before",
+        "title": "Tool preflight",
+        "summary": "bash starting with {command}",
+        "payload": {"type": "tool_call", "toolName": "bash", "input": {"command": "pwd"}},
+    }
+    replay_path.write_text(json.dumps({"steps": [{"type": "event", "event": event}]}), encoding="utf-8")
+
+    assert (
+        cli.run(
+            [
+                "replay",
+                str(replay_path),
+                "--output-scene",
+                str(scene_path),
+                "--output-result",
+                str(result_path),
+            ]
+        )
+        == 0
+    )
+
+    assert json.loads(scene_path.read_text(encoding="utf-8"))["revision"] == 1
+    assert json.loads(result_path.read_text(encoding="utf-8"))["steps"][0]["updates"] == 1
+    assert capsys.readouterr().out.strip() == "replayed 1 steps; scene revision 1"
+
+
+def test_cli_replay_without_outputs(tmp_path: Any, capsys: Any) -> None:
+    replay_path = tmp_path / "replay.json"
+    replay_path.write_text(
+        json.dumps(
+            {
+                "steps": [
+                    {
+                        "type": "event",
+                        "event": {
+                            "sequence": 1,
+                            "timestampMs": 10,
+                            "source": "test",
+                            "eventType": "message_update",
+                            "phase": "during",
+                            "title": "Stream update",
+                            "summary": "assistant stream {delta}",
+                            "payload": {"type": "message_update", "assistantMessageEvent": {"delta": "ok"}},
+                        },
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    assert cli.run(["replay", str(replay_path)]) == 0
+    assert capsys.readouterr().out.strip() == "replayed 1 steps; scene revision 1"
 
 
 def test_cli_dogfood_launches_display_browser_and_harn(monkeypatch: Any, capsys: Any) -> None:

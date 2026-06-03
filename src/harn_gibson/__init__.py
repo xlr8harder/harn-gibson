@@ -11,6 +11,7 @@ from harn_gibson.rendering import (
     RenderStep,
     RenderSubmitResult,
 )
+from harn_gibson.replay import ReplayResult, ReplayStepResult, run_replay_data, run_replay_file
 from harn_gibson.routing import EventRouter, RenderInputBatch, RouteDecision, StreamBinding, TimelineWindow
 from harn_gibson.scene import (
     SceneAnimation,
@@ -37,6 +38,8 @@ __all__ = [
     "RenderRequest",
     "RenderStep",
     "RenderSubmitResult",
+    "ReplayResult",
+    "ReplayStepResult",
     "RouteDecision",
     "SceneAnimation",
     "SceneEngine",
@@ -52,6 +55,8 @@ __all__ = [
     "load_hook_module",
     "phase_for_event",
     "result_for_harn",
+    "run_replay_data",
+    "run_replay_file",
     "scene_update_payload",
     "summarize_event",
     "to_jsonable",

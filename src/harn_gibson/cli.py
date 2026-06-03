@@ -36,6 +36,11 @@ def build_parser() -> argparse.ArgumentParser:
     auth.add_argument("--codex-auth", default=None, help="path to Codex auth.json")
     auth.add_argument("--harn-auth", default=None, help="path to harn auth.json")
 
+    replay = subcommands.add_parser("replay", help="replay harn events, render plans, or scene mutations")
+    replay.add_argument("path", help="path to replay JSON")
+    replay.add_argument("--output-scene", default=None, help="write final scene JSON to this path")
+    replay.add_argument("--output-result", default=None, help="write full replay result JSON to this path")
+
     subcommands.add_parser("extension-path", help="print the harn extension file path")
     return parser
 
@@ -142,6 +147,18 @@ def run(argv: Sequence[str] | None = None) -> int:
         result = import_codex_auth(args.codex_auth, args.harn_auth)
         print(result.message)
         return 0 if result.available else 1
+    if args.command == "replay":
+        from harn_gibson.replay import run_replay_file, write_replay_result, write_scene
+
+        result = run_replay_file(args.path)
+        if args.output_scene:
+            write_scene(args.output_scene, result.scene)
+        if args.output_result:
+            write_replay_result(args.output_result, result)
+        print(
+            f"replayed {len(result.steps)} steps; scene revision {result.scene.revision}",
+        )
+        return 0
     if args.command == "dogfood":
         return run_dogfood(
             host=args.host,

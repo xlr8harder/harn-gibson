@@ -1,0 +1,89 @@
+{
+  "schema": "harn-gibson.replay.v1",
+  "name": "stream and diagnostic",
+  "metadata": {
+    "purpose": "exercise event routing, local stream buffering, and traceback display"
+  },
+  "steps": [
+    {
+      "type": "event",
+      "event": {
+        "schema": "harn-gibson.event.v1",
+        "sequence": 1,
+        "timestampMs": 1000,
+        "source": "harn",
+        "eventType": "tool_call",
+        "phase": "before",
+        "title": "Tool preflight",
+        "summary": "bash starting with {command}",
+        "payload": {
+          "type": "tool_call",
+          "toolName": "bash",
+          "input": {
+            "command": "uv run pytest"
+          }
+        },
+        "recentContext": [
+          "user asked for full 1.0 coverage"
+        ],
+        "visualizationContext": [
+          "status panel is awaiting signal"
+        ]
+      }
+    },
+    {
+      "type": "event",
+      "event": {
+        "schema": "harn-gibson.event.v1",
+        "sequence": 2,
+        "timestampMs": 1250,
+        "source": "harn",
+        "eventType": "message_update",
+        "phase": "during",
+        "title": "Stream update",
+        "summary": "assistant stream {type, delta}",
+        "payload": {
+          "type": "message_update",
+          "assistantMessageEvent": {
+            "type": "text_delta",
+            "delta": "collecting event telemetry..."
+          }
+        },
+        "recentContext": [],
+        "visualizationContext": []
+      }
+    },
+    {
+      "type": "mutations",
+      "summary": "runtime traceback fixture",
+      "mutations": [
+        {
+          "op": "append_log",
+          "entry": {
+            "sequence": 3,
+            "phase": "after",
+            "eventType": "runtime_error",
+            "title": "Runtime error",
+            "summary": "error: simulated renderer failure"
+          }
+        },
+        {
+          "op": "patch",
+          "targetId": "trace-log",
+          "props": {
+            "text": [
+              {
+                "sequence": 3,
+                "eventType": "runtime_error",
+                "title": "Runtime error",
+                "message": "simulated renderer failure",
+                "details": "fixture-only traceback for display review",
+                "traceback": "Traceback (most recent call last):\\n  File \"renderer.py\", line 42, in render\\nRuntimeError: simulated renderer failure"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
