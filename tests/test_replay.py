@@ -504,6 +504,13 @@ def test_replay_data_from_event_log(tmp_path: Path) -> None:
     )
 
     fixture = replay_data_from_event_log(path)
+    visual_fixture = replay_data_from_event_log(
+        path,
+        name="captured visual",
+        visual_fixture=True,
+        screenshot_lit_min=0.03,
+        screenshot_max_channel_min=80,
+    )
     result = run_replay_data(fixture)
 
     assert fixture["schema"] == "harn-gibson.replay.v1"
@@ -512,6 +519,39 @@ def test_replay_data_from_event_log(tmp_path: Path) -> None:
     assert fixture["steps"][0]["type"] == "event"
     assert result.name == "event log: events.jsonl"
     assert result.steps[0].kind == "event"
+    assert visual_fixture["name"] == "captured visual"
+    assert visual_fixture["metadata"]["visualFixture"] is True
+    assert visual_fixture["metadata"]["captureSummary"] == {
+        "durationMs": 1,
+        "eventTypeCounts": {"message_update": 1, "tool_call": 1},
+        "eventTypes": ["message_update", "tool_call"],
+        "firstSequence": 1,
+        "firstTimestampMs": 1001,
+        "lastSequence": 2,
+        "lastTimestampMs": 1002,
+        "phaseCounts": {"before": 1, "during": 1},
+        "phases": ["before", "during"],
+        "sourceCounts": {"unit": 2},
+        "sources": ["unit"],
+    }
+    assert visual_fixture["screenshotExpect"] == {
+        "nonblank": True,
+        "checks": [
+            {"path": "canvasMetrics.litRatio", "min": 0.03},
+            {"path": "canvasMetrics.maxChannelTotal", "min": 80},
+        ],
+    }
+    sparse = tmp_path / "sparse.jsonl"
+    sparse.write_text(json.dumps({"eventType": "", "phase": None, "source": 7, "payload": {}}) + "\n", encoding="utf-8")
+    sparse_fixture = replay_data_from_event_log(sparse, visual_fixture=True)
+    assert sparse_fixture["metadata"]["captureSummary"] == {
+        "eventTypeCounts": {},
+        "eventTypes": [],
+        "phaseCounts": {},
+        "phases": [],
+        "sourceCounts": {},
+        "sources": [],
+    }
 
     bad = tmp_path / "bad.jsonl"
     bad.write_text("[]\n", encoding="utf-8")

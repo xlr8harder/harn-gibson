@@ -721,12 +721,27 @@ def test_cli_parser_and_run(monkeypatch: Any, capsys: Any) -> None:
     assert parsed_replay_dir.renderer_timeout_ms == "1500"
     assert parsed_replay_dir.update_baselines is True
     parsed_event_log = parser.parse_args(
-        ["event-log-to-replay", "events.jsonl", "--output", "fixture.json", "--name", "captured"]
+        [
+            "event-log-to-replay",
+            "events.jsonl",
+            "--output",
+            "fixture.json",
+            "--name",
+            "captured",
+            "--visual-fixture",
+            "--screenshot-lit-min",
+            "0.03",
+            "--screenshot-max-channel-min",
+            "80",
+        ]
     )
     assert parsed_event_log.command == "event-log-to-replay"
     assert parsed_event_log.path == "events.jsonl"
     assert parsed_event_log.output == "fixture.json"
     assert parsed_event_log.name == "captured"
+    assert parsed_event_log.visual_fixture is True
+    assert parsed_event_log.screenshot_lit_min == 0.03
+    assert parsed_event_log.screenshot_max_channel_min == 80
     assert cli.run(["extension-path"]) == 0
     assert capsys.readouterr().out.strip().endswith("extension.py")
 
@@ -1505,13 +1520,33 @@ def test_cli_event_log_to_replay_writes_and_prints(tmp_path: Any, capsys: Any) -
     )
 
     assert (
-        cli.run(["event-log-to-replay", str(event_log), "--output", str(output), "--name", "captured dogfood"])
+        cli.run(
+            [
+                "event-log-to-replay",
+                str(event_log),
+                "--output",
+                str(output),
+                "--name",
+                "captured dogfood",
+                "--visual-fixture",
+                "--screenshot-lit-min",
+                "0.04",
+                "--screenshot-max-channel-min",
+                "90",
+            ]
+        )
         == 0
     )
     assert capsys.readouterr().out.strip() == f"wrote replay fixture: {output} (1 events)"
     written = json.loads(output.read_text(encoding="utf-8"))
     assert written["name"] == "captured dogfood"
     assert written["metadata"]["eventCount"] == 1
+    assert written["metadata"]["visualFixture"] is True
+    assert written["metadata"]["captureSummary"]["eventTypes"] == ["message_update"]
+    assert written["screenshotExpect"]["checks"] == [
+        {"path": "canvasMetrics.litRatio", "min": 0.04},
+        {"path": "canvasMetrics.maxChannelTotal", "min": 90},
+    ]
     assert written["steps"][0]["event"]["eventType"] == "message_update"
 
     assert cli.run(["event-log-to-replay", str(event_log)]) == 0

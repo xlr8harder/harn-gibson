@@ -88,6 +88,23 @@ def build_parser() -> argparse.ArgumentParser:
     event_log.add_argument("path", help="path to a normalized harn-gibson JSONL event log")
     event_log.add_argument("--output", "-o", default=None, help="write replay fixture JSON to this path")
     event_log.add_argument("--name", default=None, help="fixture name; defaults to the event log filename")
+    event_log.add_argument(
+        "--visual-fixture",
+        action="store_true",
+        help="include capture summary metadata and default screenshot expectations",
+    )
+    event_log.add_argument(
+        "--screenshot-lit-min",
+        type=float,
+        default=0.02,
+        help="minimum screenshot canvas litRatio for --visual-fixture",
+    )
+    event_log.add_argument(
+        "--screenshot-max-channel-min",
+        type=int,
+        default=60,
+        help="minimum screenshot canvas maxChannelTotal for --visual-fixture",
+    )
 
     subcommands.add_parser("extension-path", help="print the harn extension file path")
     return parser
@@ -413,7 +430,13 @@ def run(argv: Sequence[str] | None = None) -> int:
     if args.command == "event-log-to-replay":
         from harn_gibson.replay import replay_data_from_event_log
 
-        fixture = replay_data_from_event_log(args.path, name=args.name)
+        fixture = replay_data_from_event_log(
+            args.path,
+            name=args.name,
+            visual_fixture=args.visual_fixture,
+            screenshot_lit_min=args.screenshot_lit_min,
+            screenshot_max_channel_min=args.screenshot_max_channel_min,
+        )
         text = json.dumps(fixture, indent=2) + "\n"
         if args.output:
             Path(args.output).parent.mkdir(parents=True, exist_ok=True)

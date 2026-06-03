@@ -157,8 +157,11 @@ Convert a captured event log into a replay fixture:
 
 ```bash
 uv run harn-gibson event-log-to-replay .harn-gibson.jsonl \
-  --output examples/replays/captured-session.json
+  --output examples/replays/captured-session.json \
+  --visual-fixture
 ```
+
+`--visual-fixture` adds capture-summary metadata plus conservative screenshot expectations, so the converted trajectory can be run through `replay-dir --screenshot-dir` as a visual regression input.
 
 Replay fixtures can drive the same scene pipeline without a live harn process:
 

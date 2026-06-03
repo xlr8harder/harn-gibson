@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import os
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from copy import deepcopy
 from dataclasses import dataclass, field
 from difflib import unified_diff
@@ -367,9 +367,17 @@ def load_replay_file(path: str | Path) -> dict[str, Any]:
     return payload
 
 
-def replay_data_from_event_log(path: str | Path, *, name: str | None = None) -> dict[str, Any]:
+def replay_data_from_event_log(
+    path: str | Path,
+    *,
+    name: str | None = None,
+    visual_fixture: bool = False,
+    screenshot_lit_min: float = 0.02,
+    screenshot_max_channel_min: int = 60,
+) -> dict[str, Any]:
     event_log_path = Path(path)
     steps: list[dict[str, Any]] = []
+    events: list[dict[str, Any]] = []
     with event_log_path.open(encoding="utf-8") as handle:
         for line_number, line in enumerate(handle, start=1):
             stripped = line.strip()
@@ -378,16 +386,65 @@ def replay_data_from_event_log(path: str | Path, *, name: str | None = None) -> 
             event = json.loads(stripped)
             if not isinstance(event, dict):
                 raise ValueError(f"event log line {line_number} must contain a JSON object")
+            events.append(event)
             steps.append({"type": "event", "event": event})
-    return {
+    metadata: dict[str, Any] = {
+        "sourceEventLog": event_log_path.as_posix(),
+        "eventCount": len(steps),
+    }
+    if visual_fixture:
+        metadata["visualFixture"] = True
+        metadata["captureSummary"] = _event_log_capture_summary(events)
+    fixture: dict[str, Any] = {
         "schema": "harn-gibson.replay.v1",
         "name": name if name is not None else f"event log: {event_log_path.name}",
-        "metadata": {
-            "sourceEventLog": event_log_path.as_posix(),
-            "eventCount": len(steps),
-        },
+        "metadata": metadata,
         "steps": steps,
     }
+    if visual_fixture:
+        fixture["screenshotExpect"] = {
+            "nonblank": True,
+            "checks": [
+                {"path": "canvasMetrics.litRatio", "min": screenshot_lit_min},
+                {"path": "canvasMetrics.maxChannelTotal", "min": screenshot_max_channel_min},
+            ],
+        }
+    return fixture
+
+
+def _event_log_capture_summary(events: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+    sequences = [int(event["sequence"]) for event in events if isinstance(event.get("sequence"), int)]
+    timestamps = [int(event["timestampMs"]) for event in events if isinstance(event.get("timestampMs"), int)]
+    event_type_counts = _event_log_counts(event.get("eventType") for event in events)
+    phase_counts = _event_log_counts(event.get("phase") for event in events)
+    source_counts = _event_log_counts(event.get("source") for event in events)
+    summary: dict[str, Any] = {
+        "eventTypes": sorted(event_type_counts),
+        "eventTypeCounts": event_type_counts,
+        "phases": sorted(phase_counts),
+        "phaseCounts": phase_counts,
+        "sources": sorted(source_counts),
+        "sourceCounts": source_counts,
+    }
+    if sequences:
+        summary["firstSequence"] = min(sequences)
+        summary["lastSequence"] = max(sequences)
+    if timestamps:
+        first_timestamp = min(timestamps)
+        last_timestamp = max(timestamps)
+        summary["firstTimestampMs"] = first_timestamp
+        summary["lastTimestampMs"] = last_timestamp
+        summary["durationMs"] = max(0, last_timestamp - first_timestamp)
+    return summary
+
+
+def _event_log_counts(values: Iterable[Any]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for value in values:
+        if not isinstance(value, str) or not value:
+            continue
+        counts[value] = counts.get(value, 0) + 1
+    return dict(sorted(counts.items()))
 
 
 def replay_baseline_from_result(result: ReplayResult) -> dict[str, Any]:
