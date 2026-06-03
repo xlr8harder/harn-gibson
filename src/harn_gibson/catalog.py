@@ -314,6 +314,13 @@ def default_visual_catalog() -> VisualCatalog:
                 ("gibson", "cinematic", "camera", "timed"),
             ),
             CatalogEntry(
+                "camera_path",
+                "effect",
+                "Scene-level pan, zoom, and roll keyframes for staged motion across a coalesced render window.",
+                ("targetId", "durationMs", "keyframes", "position", "loop", "yoyo", "seed"),
+                ("gibson", "cinematic", "camera", "timed"),
+            ),
+            CatalogEntry(
                 "scan",
                 "effect",
                 "Sweep a beam, line, frustum, or grid over a target.",

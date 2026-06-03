@@ -1240,36 +1240,21 @@ function sceneCameraState(scene, w, h, now) {
   const animations = Object.values(scene?.animations || {});
   const active = [];
   for (const animation of animations) {
-    if (animation.kind !== "camera_jolt") continue;
-    const progress = animationProgress(animation, now);
-    if (!animation.loop && progress >= 1) continue;
-    const props = animation.props || {};
-    const intensity = clamp(finiteNumber(props.intensity, 0.72), 0.02, 2.5);
-    const seed = finiteNumber(props.seed, animation.id.length);
-    const envelope = Math.sin(progress * Math.PI);
-    const tremor = Math.sin(now * 0.049 + seed * 1.37) * Math.cos(now * 0.029 + seed * 0.73);
-    const anchor = props.position ? normalizedPoint(props.position, w, h) : animationAnchor(animation, scene, w, h);
-    active.push({
-      id: animation.id,
-      targetId: animation.targetId,
-      progress,
-      anchor,
-      intensity,
-      x: Math.sin(now * 0.041 + seed) * Math.min(w, h) * 0.012 * intensity * envelope,
-      y: Math.cos(now * 0.052 + seed * 0.43) * Math.min(w, h) * 0.009 * intensity * envelope,
-      scale: 1 + envelope * finiteNumber(props.zoom, 0.028) * intensity + tremor * 0.003 * intensity,
-      rotation:
-        Math.sin(now * 0.035 + seed * 0.31)
-        * finiteNumber(props.roll ?? props.rotation, 0.018)
-        * intensity
-        * envelope,
-    });
+    if (animation.kind === "camera_jolt") {
+      const item = cameraJoltState(animation, scene, w, h, now);
+      if (item) active.push(item);
+    } else if (animation.kind === "camera_path") {
+      const item = cameraPathState(animation, scene, w, h, now);
+      if (item) active.push(item);
+    }
   }
   const state = active.reduce(
     (camera, item) => ({
       activeCount: camera.activeCount + 1,
       animationIds: [...camera.animationIds, item.id],
       targetIds: [...camera.targetIds, item.targetId],
+      kinds: [...camera.kinds, item.kind],
+      pathKeyframeCount: camera.pathKeyframeCount + item.keyframeCount,
       anchorX: camera.anchorX + item.anchor.x,
       anchorY: camera.anchorY + item.anchor.y,
       x: camera.x + item.x,
@@ -1281,6 +1266,8 @@ function sceneCameraState(scene, w, h, now) {
       activeCount: 0,
       animationIds: [],
       targetIds: [],
+      kinds: [],
+      pathKeyframeCount: 0,
       anchorX: 0,
       anchorY: 0,
       x: 0,
@@ -1300,6 +1287,8 @@ function sceneCameraState(scene, w, h, now) {
     activeCount: state.activeCount,
     animationIds: state.animationIds,
     targetIds: state.targetIds,
+    kinds: state.kinds,
+    pathKeyframeCount: state.pathKeyframeCount,
     anchorX: vectorRounded(state.anchorX),
     anchorY: vectorRounded(state.anchorY),
     x: vectorRounded(state.x),
@@ -1309,6 +1298,129 @@ function sceneCameraState(scene, w, h, now) {
   };
   if (typeof window !== "undefined") window.__gibsonCameraState = rounded;
   return state;
+}
+
+function cameraJoltState(animation, scene, w, h, now) {
+  const progress = animationProgress(animation, now);
+  if (!animation.loop && progress >= 1) return null;
+  const props = animation.props || {};
+  const intensity = clamp(finiteNumber(props.intensity, 0.72), 0.02, 2.5);
+  const seed = finiteNumber(props.seed, animation.id.length);
+  const envelope = Math.sin(progress * Math.PI);
+  const tremor = Math.sin(now * 0.049 + seed * 1.37) * Math.cos(now * 0.029 + seed * 0.73);
+  const anchor = props.position ? normalizedPoint(props.position, w, h) : animationAnchor(animation, scene, w, h);
+  return {
+    id: animation.id,
+    targetId: animation.targetId,
+    kind: animation.kind,
+    progress,
+    anchor,
+    keyframeCount: 0,
+    x: Math.sin(now * 0.041 + seed) * Math.min(w, h) * 0.012 * intensity * envelope,
+    y: Math.cos(now * 0.052 + seed * 0.43) * Math.min(w, h) * 0.009 * intensity * envelope,
+    scale: 1 + envelope * finiteNumber(props.zoom, 0.028) * intensity + tremor * 0.003 * intensity,
+    rotation:
+      Math.sin(now * 0.035 + seed * 0.31)
+      * finiteNumber(props.roll ?? props.rotation, 0.018)
+      * intensity
+      * envelope,
+  };
+}
+
+function cameraPathState(animation, scene, w, h, now) {
+  const props = animation.props || {};
+  const frames = cameraPathKeyframes(animation);
+  if (!frames.length) return null;
+  const progress = cameraPathProgress(animation, now);
+  if (!animation.loop && progress >= 1) return null;
+  const transform = cameraPathTransform(frames, progress);
+  const anchor = props.position ? normalizedPoint(props.position, w, h) : animationAnchor(animation, scene, w, h);
+  return {
+    id: animation.id,
+    targetId: animation.targetId,
+    kind: animation.kind,
+    progress,
+    anchor,
+    keyframeCount: transform.keyframeCount,
+    x: cameraPathMeasure(transform.x, w),
+    y: cameraPathMeasure(transform.y, h),
+    scale: Math.max(0.05, transform.scale),
+    rotation: transform.rotation,
+  };
+}
+
+function cameraPathProgress(animation, now) {
+  const duration = Math.max(1, Number(animation.durationMs || 1000));
+  const start = animationClocks.get(animation.id) ?? now;
+  const elapsed = Math.max(0, now - start);
+  if (!animation.loop) return clamp(elapsed / duration, 0, 1);
+  const cycle = Math.floor(elapsed / duration);
+  let progress = (elapsed % duration) / duration;
+  if (animation.props?.yoyo === true && cycle % 2 === 1) progress = 1 - progress;
+  return clamp(progress, 0, 1);
+}
+
+function cameraPathKeyframes(animation) {
+  const rawFrames = Array.isArray(animation.props?.keyframes) ? animation.props.keyframes : [];
+  if (!rawFrames.length) return [];
+  const duration = Math.max(1, Number(animation.durationMs || 1000));
+  return rawFrames
+    .filter((frame) => frame && typeof frame === "object")
+    .slice(0, 64)
+    .map((frame, index) => ({
+      ...frame,
+      at: cameraPathKeyframeOffset(frame, index, rawFrames.length, duration),
+    }))
+    .sort((left, right) => left.at - right.at);
+}
+
+function cameraPathKeyframeOffset(frame, index, count, durationMs) {
+  const direct = Number(frame.at ?? frame.offset ?? frame.progress);
+  if (Number.isFinite(direct)) return clamp(direct, 0, 1);
+  const timeMs = Number(frame.timeMs ?? frame.ms);
+  if (Number.isFinite(timeMs)) return clamp(timeMs / durationMs, 0, 1);
+  return count <= 1 ? 0 : index / (count - 1);
+}
+
+function cameraPathFrameNumber(frame, key) {
+  const transform = frame?.transform && typeof frame.transform === "object" ? frame.transform : {};
+  const numeric = Number(frame?.[key] ?? transform[key]);
+  return Number.isFinite(numeric) ? numeric : null;
+}
+
+function cameraPathFrameLerp(left, right, key, fallback, progress) {
+  const start = cameraPathFrameNumber(left, key);
+  const end = cameraPathFrameNumber(right, key);
+  if (start === null && end === null) return fallback;
+  if (start === null) return end;
+  if (end === null) return start;
+  return start + (end - start) * progress;
+}
+
+function cameraPathTransform(frames, progress) {
+  let left = frames[0];
+  let right = frames[frames.length - 1];
+  for (let index = 1; index < frames.length; index++) {
+    if (progress <= frames[index].at) {
+      left = frames[index - 1];
+      right = frames[index];
+      break;
+    }
+  }
+  const span = Math.max(0.0001, right.at - left.at);
+  const localProgress = clamp((progress - left.at) / span, 0, 1);
+  return {
+    x: cameraPathFrameLerp(left, right, "x", 0, localProgress),
+    y: cameraPathFrameLerp(left, right, "y", 0, localProgress),
+    scale: cameraPathFrameLerp(left, right, "scale", 1, localProgress),
+    rotation: cameraPathFrameLerp(left, right, "rotation", 0, localProgress),
+    keyframeCount: frames.length,
+  };
+}
+
+function cameraPathMeasure(value, extent) {
+  const numeric = finiteNumber(value, 0);
+  return Math.abs(numeric) <= 1 ? numeric * extent : numeric * devicePixelRatio;
 }
 
 function applySceneCamera(camera, w, h) {

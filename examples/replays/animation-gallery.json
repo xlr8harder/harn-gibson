@@ -20,6 +20,8 @@
       {"path": "animations.gallery-breach.kind", "equals": "breach_wave"},
       {"path": "animations.gallery-breach.props.label", "equals": "ICE BREACH"},
       {"path": "animations.gallery-camera.kind", "equals": "camera_jolt"},
+      {"path": "animations.gallery-camera-path.kind", "equals": "camera_path"},
+      {"path": "animations.gallery-camera-path.props.keyframes.1.scale", "equals": 1.035},
       {"path": "animations.gallery-fly.kind", "equals": "flythrough"},
       {"path": "animations.gallery-extrude.kind", "equals": "extrude"},
       {"path": "animations.gallery-hold.kind", "equals": "hold"}
@@ -53,7 +55,7 @@
             "phase": "lifecycle",
             "eventType": "animation_gallery",
             "title": "Animation gallery",
-            "summary": "persistent pulses, packets, timeline cues, scans, glitch, breach waves, camera jolts, flythrough, extrusion, and hold brackets"
+            "summary": "persistent pulses, packets, timeline cues, scans, glitch, breach waves, camera jolts, camera paths, flythrough, extrusion, and hold brackets"
           }
         },
         {
@@ -282,6 +284,28 @@
               "zoom": 0.022,
               "roll": 0.014,
               "seed": 964
+            }
+          }
+        },
+        {
+          "op": "start_animation",
+          "animation": {
+            "id": "gallery-camera-path",
+            "targetId": "scan-grid",
+            "kind": "camera_path",
+            "startedAtMs": 9685,
+            "durationMs": 6800,
+            "loop": true,
+            "props": {
+              "phase": "lifecycle",
+              "yoyo": true,
+              "position": {"x": 0.50, "y": 0.52},
+              "keyframes": [
+                {"at": 0, "x": -0.018, "y": 0.012, "scale": 1.0, "rotation": -0.006},
+                {"at": 0.5, "x": 0.022, "y": -0.018, "scale": 1.035, "rotation": 0.012},
+                {"at": 1, "x": 0.004, "y": 0.008, "scale": 1.01, "rotation": -0.004}
+              ],
+              "seed": 965
             }
           }
         },

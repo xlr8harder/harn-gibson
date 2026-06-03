@@ -40,6 +40,46 @@
         "startedAtMs": 9675,
         "targetId": "animation-vector"
       },
+      "gallery-camera-path": {
+        "durationMs": 6800,
+        "id": "gallery-camera-path",
+        "kind": "camera_path",
+        "loop": true,
+        "props": {
+          "keyframes": [
+            {
+              "at": 0,
+              "rotation": -0.006,
+              "scale": 1.0,
+              "x": -0.018,
+              "y": 0.012
+            },
+            {
+              "at": 0.5,
+              "rotation": 0.012,
+              "scale": 1.035,
+              "x": 0.022,
+              "y": -0.018
+            },
+            {
+              "at": 1,
+              "rotation": -0.004,
+              "scale": 1.01,
+              "x": 0.004,
+              "y": 0.008
+            }
+          ],
+          "phase": "lifecycle",
+          "position": {
+            "x": 0.5,
+            "y": 0.52
+          },
+          "seed": 965,
+          "yoyo": true
+        },
+        "startedAtMs": 9685,
+        "targetId": "scan-grid"
+      },
       "gallery-cues": {
         "durationMs": 6200,
         "id": "gallery-cues",
@@ -180,7 +220,7 @@
         "eventType": "animation_gallery",
         "phase": "lifecycle",
         "sequence": 960,
-        "summary": "persistent pulses, packets, timeline cues, scans, glitch, breach waves, camera jolts, flythrough, extrusion, and hold brackets",
+        "summary": "persistent pulses, packets, timeline cues, scans, glitch, breach waves, camera jolts, camera paths, flythrough, extrusion, and hold brackets",
         "title": "Animation gallery"
       }
     ],
@@ -199,6 +239,7 @@
           "animation:glitch",
           "animation:breach_wave",
           "animation:camera_jolt",
+          "animation:camera_path",
           "animation:flythrough",
           "animation:extrude",
           "animation:hold"
@@ -211,7 +252,7 @@
           "renderer": "replay",
           "stepType": "mutations"
         },
-        "mutationCount": 15,
+        "mutationCount": 16,
         "renderer": "replay",
         "requestCount": 1,
         "routes": [
@@ -245,6 +286,7 @@
             "animation:glitch",
             "animation:breach_wave",
             "animation:camera_jolt",
+            "animation:camera_path",
             "animation:flythrough",
             "animation:extrude",
             "animation:hold"
@@ -257,7 +299,7 @@
             "renderer": "replay",
             "stepType": "mutations"
           },
-          "mutationCount": 15,
+          "mutationCount": 16,
           "renderer": "replay",
           "requestCount": 1,
           "routes": [
