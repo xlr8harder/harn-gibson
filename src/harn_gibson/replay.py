@@ -1204,11 +1204,190 @@ def write_replay_render_intents_review_html(path: str | Path, payload: Mapping[s
     review_path.write_text(replay_render_intents_review_html(payload), encoding="utf-8")
 
 
+def replay_review_bundle_manifest(
+    result: ReplayResult,
+    screenshots: Iterable[ReplayFrameScreenshot],
+    artifacts: Mapping[str, str],
+) -> dict[str, Any]:
+    rendered_screenshots = tuple(screenshots)
+    render_intents = replay_render_intents_from_result(result)
+    return {
+        "schema": "harn-gibson.replay-review-bundle.v1",
+        "replayName": result.name,
+        "replaySchema": result.schema,
+        "stepCount": len(result.steps),
+        "sceneRevision": result.scene.revision,
+        "frameCount": len(result.frames),
+        "screenshotCount": len(rendered_screenshots),
+        "contextCount": len(result.renderer_contexts),
+        "intentCount": int(render_intents["intentCount"]),
+        "artifacts": dict(artifacts),
+        "metadata": result.metadata,
+    }
+
+
+def replay_review_bundle_index_html(manifest: Mapping[str, Any]) -> str:
+    title = str(manifest.get("replayName") or "replay review")
+    schema = escape(str(manifest.get("schema", "")))
+    cards = "\n".join(
+        _replay_review_metric(label, manifest.get(key, 0))
+        for label, key in (
+            ("steps", "stepCount"),
+            ("scene revision", "sceneRevision"),
+            ("frames", "frameCount"),
+            ("screenshots", "screenshotCount"),
+            ("renderer contexts", "contextCount"),
+            ("render intents", "intentCount"),
+        )
+    )
+    artifact_links = "\n".join(
+        _replay_review_artifact_link(label, href)
+        for label, href in _replay_review_artifacts(manifest.get("artifacts"))
+    )
+    manifest_data = _html_script_json(manifest)
+    return f"""<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{escape(title)} replay review</title>
+  <style>
+    :root {{ color-scheme: dark; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }}
+    body {{ margin: 0; background: #020608; color: #d9fff7; }}
+    header {{
+      padding: 20px 22px;
+      border-bottom: 1px solid rgba(35, 255, 214, 0.32);
+      background: rgba(2, 6, 8, 0.94);
+    }}
+    h1 {{ margin: 0 0 7px; font-size: 23px; letter-spacing: 0; overflow-wrap: anywhere; }}
+    .meta {{ color: #7ee8d0; font-size: 13px; }}
+    main {{ display: grid; gap: 22px; padding: 20px; }}
+    .metrics {{
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 12px;
+    }}
+    .metric {{
+      border: 1px solid rgba(35, 255, 214, 0.28);
+      background: rgba(5, 16, 19, 0.88);
+      padding: 14px;
+    }}
+    .metric strong {{ display: block; color: #ffcf63; font-size: 24px; line-height: 1; }}
+    .metric span {{ display: block; margin-top: 7px; color: #b8fff3; font-size: 12px; text-transform: uppercase; }}
+    .links {{
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 12px;
+    }}
+    a {{
+      display: block;
+      border: 1px solid rgba(255, 207, 99, 0.28);
+      background: rgba(6, 12, 14, 0.86);
+      color: #d9fff7;
+      padding: 13px;
+      text-decoration: none;
+      overflow-wrap: anywhere;
+    }}
+    a:hover {{ border-color: rgba(255, 207, 99, 0.76); box-shadow: 0 0 20px rgba(255, 207, 99, 0.12); }}
+    code {{ color: #ffcf63; }}
+  </style>
+</head>
+<body>
+  <header>
+    <h1>{escape(title)} replay review</h1>
+    <div class="meta">schema {schema}</div>
+  </header>
+  <main>
+    <section class="metrics" aria-label="Replay review metrics">
+{cards}
+    </section>
+    <section class="links" aria-label="Replay review artifacts">
+{artifact_links}
+    </section>
+  </main>
+  <script>
+    window.__gibsonReplayReview = {manifest_data};
+  </script>
+</body>
+</html>
+"""
+
+
+def write_replay_review_bundle(
+    path: str | Path,
+    result: ReplayResult,
+    screenshots: Iterable[ReplayFrameScreenshot],
+) -> dict[str, Any]:
+    bundle_path = Path(path)
+    frames_path = bundle_path / "frames"
+    bundle_path.mkdir(parents=True, exist_ok=True)
+    frames_path.mkdir(parents=True, exist_ok=True)
+    rendered_screenshots = tuple(screenshots)
+    artifacts = {
+        "overview": "index.html",
+        "manifest": "manifest.json",
+        "scene": "scene.json",
+        "result": "result.json",
+        "timeline": "timeline.json",
+        "rendererContexts": "renderer-contexts.json",
+        "renderIntents": "render-intents.json",
+        "renderIntentReview": "render-intents.html",
+        "frameManifest": "frames/manifest.json",
+        "frameReview": "frames/index.html",
+    }
+    write_scene(bundle_path / artifacts["scene"], result.scene)
+    write_replay_result(bundle_path / artifacts["result"], result)
+    write_replay_timeline(bundle_path / artifacts["timeline"], result)
+    write_replay_renderer_contexts(bundle_path / artifacts["rendererContexts"], result)
+    write_replay_render_intents(bundle_path / artifacts["renderIntents"], result)
+    write_replay_render_intents_review_html(
+        bundle_path / artifacts["renderIntentReview"],
+        replay_render_intents_from_result(result),
+    )
+    write_replay_frame_screenshot_manifest(frames_path / "manifest.json", result, rendered_screenshots)
+    write_replay_frame_review_html(
+        frames_path / "index.html",
+        replay_frame_screenshot_manifest(result, rendered_screenshots),
+    )
+    manifest = replay_review_bundle_manifest(result, rendered_screenshots, artifacts)
+    (bundle_path / artifacts["manifest"]).write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+    (bundle_path / artifacts["overview"]).write_text(replay_review_bundle_index_html(manifest), encoding="utf-8")
+    return manifest
+
+
 def _baseline_mismatch_error(expected_scene: Mapping[str, Any], actual_scene: Mapping[str, Any]) -> str:
     expected = json.dumps(expected_scene, indent=2, sort_keys=True).splitlines()
     actual = json.dumps(actual_scene, indent=2, sort_keys=True).splitlines()
     diff = "\n".join(islice(unified_diff(expected, actual, fromfile="baseline", tofile="actual", lineterm=""), 80))
     return f"baseline scene mismatch\n{diff}"
+
+
+def _replay_review_metric(label: str, value: Any) -> str:
+    return f"""      <div class="metric">
+        <strong>{escape(str(value))}</strong>
+        <span>{escape(label)}</span>
+      </div>"""
+
+
+def _replay_review_artifacts(value: Any) -> tuple[tuple[str, str], ...]:
+    if not isinstance(value, Mapping):
+        return ()
+    labels = {
+        "frameReview": "Timeline Frame Review",
+        "renderIntentReview": "Render Intent Review",
+        "scene": "Final Scene JSON",
+        "result": "Replay Result JSON",
+        "timeline": "Timeline JSON",
+        "rendererContexts": "Renderer Contexts JSON",
+        "renderIntents": "Render Intents JSON",
+        "frameManifest": "Frame Screenshot Manifest",
+        "manifest": "Bundle Manifest",
+    }
+    return tuple((label, str(value[key])) for key, label in labels.items() if isinstance(value.get(key), str))
+
+
+def _replay_review_artifact_link(label: str, href: str) -> str:
+    return f'      <a href="{escape(href)}">{escape(label)}<br><code>{escape(href)}</code></a>'
 
 
 def _render_intents_from_scene_metadata(metadata: Mapping[str, Any]) -> tuple[dict[str, Any], ...]:
@@ -1448,6 +1627,8 @@ __all__ = [
     "replay_renderer_contexts_from_result",
     "replay_render_intents_from_result",
     "replay_render_intents_review_html",
+    "replay_review_bundle_index_html",
+    "replay_review_bundle_manifest",
     "replay_timeline_from_result",
     "run_replay_data",
     "run_replay_file",
@@ -1458,6 +1639,7 @@ __all__ = [
     "write_replay_renderer_contexts",
     "write_replay_render_intents",
     "write_replay_render_intents_review_html",
+    "write_replay_review_bundle",
     "write_replay_timeline",
     "write_replay_baseline",
     "write_scene",

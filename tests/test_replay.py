@@ -16,6 +16,8 @@ from harn_gibson import (
     replay_frame_review_html,
     replay_render_intents_from_result,
     replay_render_intents_review_html,
+    replay_review_bundle_index_html,
+    replay_review_bundle_manifest,
     replay_timeline_from_result,
     run_replay_data,
     run_replay_file,
@@ -48,6 +50,7 @@ from harn_gibson.replay import (
     write_replay_render_intents_review_html,
     write_replay_renderer_contexts,
     write_replay_result,
+    write_replay_review_bundle,
     write_replay_timeline,
     write_scene,
 )
@@ -250,6 +253,32 @@ def test_replay_event_steps_file_io_and_writers(tmp_path: Path, monkeypatch: pyt
         (2, tmp_path / "frames" / "frame-0001.png", 640, 480),
     ]
     assert replay_frame_screenshot_manifest(framed, frame_screenshots)["screenshotCount"] == 2
+    bundle_result = run_replay_file(path, capture_frames=True, capture_renderer_contexts=True)
+    bundle_path = tmp_path / "bundle"
+    bundle_manifest = write_replay_review_bundle(bundle_path, bundle_result, frame_screenshots)
+    bundle_index = (bundle_path / "index.html").read_text(encoding="utf-8")
+    bundle_manifest_file = json.loads((bundle_path / "manifest.json").read_text(encoding="utf-8"))
+    assert bundle_manifest["schema"] == "harn-gibson.replay-review-bundle.v1"
+    assert bundle_manifest["contextCount"] == 1
+    assert bundle_manifest["intentCount"] == 2
+    assert bundle_manifest["screenshotCount"] == 2
+    assert bundle_manifest["artifacts"]["frameReview"] == "frames/index.html"
+    assert bundle_manifest_file == bundle_manifest
+    assert json.loads((bundle_path / "renderer-contexts.json").read_text(encoding="utf-8"))["contextCount"] == 1
+    assert json.loads((bundle_path / "render-intents.json").read_text(encoding="utf-8"))["intentCount"] == 2
+    assert json.loads((bundle_path / "frames" / "manifest.json").read_text(encoding="utf-8"))["screenshotCount"] == 2
+    assert "event replay replay review" in bundle_index
+    assert 'href="frames/index.html"' in bundle_index
+    assert "window.__gibsonReplayReview" in bundle_index
+    assert "<\\/script>" in replay_review_bundle_index_html(
+        replay_review_bundle_manifest(
+            bundle_result,
+            (),
+            {"scene": "scene.json", "result": "</script>"},
+        )
+    )
+    assert "Replay Result JSON" not in replay_review_bundle_index_html({"artifacts": "bad"})
+    assert replay_review_bundle_manifest(bundle_result, (), {})["screenshotCount"] == 0
     assert 'src="frame-0000.png"' in review_html
     assert 'id="timelineScrubber"' in review_html
     assert 'data-frame-select="1"' in review_html

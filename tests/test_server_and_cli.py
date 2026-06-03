@@ -618,6 +618,8 @@ def test_cli_parser_and_run(monkeypatch: Any, capsys: Any) -> None:
             "intents.json",
             "--render-intent-review",
             "intents.html",
+            "--review-dir",
+            "review",
             "--output-timeline",
             "timeline.json",
             "--timeline-screenshot-dir",
@@ -639,6 +641,7 @@ def test_cli_parser_and_run(monkeypatch: Any, capsys: Any) -> None:
     assert parsed_replay.output_render_contexts == "contexts.json"
     assert parsed_replay.output_render_intents == "intents.json"
     assert parsed_replay.render_intent_review == "intents.html"
+    assert parsed_replay.review_dir == "review"
     assert parsed_replay.output_timeline == "timeline.json"
     assert parsed_replay.timeline_screenshot_dir == "frames"
     assert parsed_replay.screenshot == "scene.png"
@@ -858,6 +861,94 @@ def test_cli_replay_captures_timeline_screenshots(tmp_path: Any, monkeypatch: An
     assert "window.__gibsonReplayFrames" in review_html
     assert capsys.readouterr().out.splitlines() == [
         f"captured replay timeline screenshots: {screenshot_dir} (1 frames)",
+        "replayed 1 steps; scene revision 1",
+    ]
+
+
+def test_cli_replay_writes_review_bundle(tmp_path: Any, monkeypatch: Any, capsys: Any) -> None:
+    replay_path = tmp_path / "replay.json"
+    review_dir = tmp_path / "review"
+    calls: list[tuple[int, int, Path, int, int]] = []
+    replay_path.write_text(
+        json.dumps(
+            {
+                "steps": [
+                    {
+                        "type": "event",
+                        "event": {
+                            "sequence": 1,
+                            "timestampMs": 10,
+                            "source": "test",
+                            "eventType": "tool_call",
+                            "phase": "before",
+                            "title": "Tool preflight",
+                            "summary": "bash starting",
+                            "payload": {"type": "tool_call", "toolName": "bash"},
+                        },
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    def fake_capture_frames(result: Any, output_dir: str | Path, *, width: int, height: int) -> tuple[Any, ...]:
+        calls.append((len(result.frames), len(result.renderer_contexts), Path(output_dir), width, height))
+        screenshot = BrowserScreenshotResult(
+            Path(output_dir) / "frame-0000.png",
+            "http://127.0.0.1:1",
+            result.frames[0].scene["revision"],
+            width,
+            height,
+            {"nonblank": True},
+        )
+        return (ReplayFrameScreenshot(0, result.steps[0], screenshot.to_dict()),)
+
+    monkeypatch.setattr("harn_gibson.replay.capture_replay_frame_screenshots", fake_capture_frames)
+
+    assert (
+        cli.run(
+            [
+                "replay",
+                str(replay_path),
+                "--review-dir",
+                str(review_dir),
+                "--screenshot-width",
+                "640",
+                "--screenshot-height",
+                "480",
+            ]
+        )
+        == 0
+    )
+
+    manifest = json.loads((review_dir / "manifest.json").read_text(encoding="utf-8"))
+    result = json.loads((review_dir / "result.json").read_text(encoding="utf-8"))
+    contexts = json.loads((review_dir / "renderer-contexts.json").read_text(encoding="utf-8"))
+    intents = json.loads((review_dir / "render-intents.json").read_text(encoding="utf-8"))
+    frame_manifest = json.loads((review_dir / "frames" / "manifest.json").read_text(encoding="utf-8"))
+    overview = (review_dir / "index.html").read_text(encoding="utf-8")
+    frame_review = (review_dir / "frames" / "index.html").read_text(encoding="utf-8")
+    intent_review = (review_dir / "render-intents.html").read_text(encoding="utf-8")
+
+    assert calls == [(1, 1, review_dir / "frames", 640, 480)]
+    assert manifest["schema"] == "harn-gibson.replay-review-bundle.v1"
+    assert manifest["artifacts"]["rendererContexts"] == "renderer-contexts.json"
+    assert manifest["artifacts"]["frameReview"] == "frames/index.html"
+    assert manifest["contextCount"] == 1
+    assert manifest["intentCount"] == 1
+    assert manifest["screenshotCount"] == 1
+    assert result["rendererContexts"][0]["context"]["mode"] == "compaction"
+    assert contexts["contextCount"] == 1
+    assert intents["intentCount"] == 1
+    assert frame_manifest["screenshotCount"] == 1
+    assert "unnamed replay replay review" in overview
+    assert 'href="frames/index.html"' in overview
+    assert "window.__gibsonReplayReview" in overview
+    assert "window.__gibsonReplayFrames" in frame_review
+    assert "render intent review" in intent_review
+    assert capsys.readouterr().out.splitlines() == [
+        f"wrote replay review bundle: {review_dir} (1 frames)",
         "replayed 1 steps; scene revision 1",
     ]
 

@@ -49,6 +49,7 @@ def build_parser() -> argparse.ArgumentParser:
     replay.add_argument("--output-render-contexts", default=None, help="write captured renderer context JSON")
     replay.add_argument("--output-render-intents", default=None, help="write recorded renderer intent JSON")
     replay.add_argument("--render-intent-review", default=None, help="write a renderer intent review HTML page")
+    replay.add_argument("--review-dir", default=None, help="write a complete replay review bundle directory")
     replay.add_argument(
         "--timeline-screenshot-dir",
         default=None,
@@ -203,6 +204,7 @@ def run(argv: Sequence[str] | None = None) -> int:
             write_replay_render_intents_review_html,
             write_replay_renderer_contexts,
             write_replay_result,
+            write_replay_review_bundle,
             write_replay_timeline,
             write_scene,
         )
@@ -213,8 +215,8 @@ def run(argv: Sequence[str] | None = None) -> int:
             result = run_replay_file(
                 args.path,
                 replay_state,
-                capture_frames=bool(args.output_timeline or args.timeline_screenshot_dir),
-                capture_renderer_contexts=bool(args.output_render_contexts),
+                capture_frames=bool(args.output_timeline or args.timeline_screenshot_dir or args.review_dir),
+                capture_renderer_contexts=bool(args.output_render_contexts or args.review_dir),
             )
         except ReplayExpectationError as error:
             for failure in error.failures:
@@ -253,6 +255,15 @@ def run(argv: Sequence[str] | None = None) -> int:
                 screenshot_manifest,
             )
             print(f"captured replay timeline screenshots: {args.timeline_screenshot_dir} ({len(screenshots)} frames)")
+        if args.review_dir:
+            review_screenshots = capture_replay_frame_screenshots(
+                result,
+                Path(args.review_dir) / "frames",
+                width=args.screenshot_width,
+                height=args.screenshot_height,
+            )
+            write_replay_review_bundle(args.review_dir, result, review_screenshots)
+            print(f"wrote replay review bundle: {args.review_dir} ({len(review_screenshots)} frames)")
         if args.screenshot:
             from harn_gibson.browser_capture import capture_scene_screenshot
 

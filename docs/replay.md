@@ -97,6 +97,7 @@ uv run harn-gibson replay examples/replays/stream-and-diagnostic.json \
   --output-render-contexts test-artifacts/replays/renderer-contexts.json \
   --output-render-intents test-artifacts/replays/render-intents.json \
   --render-intent-review test-artifacts/replays/render-intents.html \
+  --review-dir test-artifacts/replays/review \
   --output-timeline test-artifacts/replays/timeline.json \
   --timeline-screenshot-dir test-artifacts/replays/timeline-frames \
   --screenshot test-artifacts/replays/scene.png \
@@ -104,6 +105,8 @@ uv run harn-gibson replay examples/replays/stream-and-diagnostic.json \
 ```
 
 Screenshot result metadata includes `canvasMetrics` with canvas dimensions, sampled pixel count, luminance total, lit-pixel count, lit ratio, maximum channel total, and a `nonblank` boolean. This makes replay screenshot artifacts reviewable in CI output even before a human opens the PNG.
+
+`--review-dir` is the fastest historical-session review path. It captures renderer contexts and per-step frames automatically, renders timeline screenshots under `frames/`, and writes `scene.json`, `result.json`, `timeline.json`, `renderer-contexts.json`, `render-intents.json`, `render-intents.html`, `frames/index.html`, `frames/manifest.json`, `manifest.json`, and a top-level `index.html` overview. Use the lower-level flags below when CI only needs one artifact family.
 
 `--output-render-contexts` records each `harn-gibson.renderer-context.v1` payload that replay sent to a renderer. Stream-buffer, debug-only, direct-scene, and saved-render-plan steps do not invent renderer contexts; the artifact is an exact review aid for model-renderer prompt inputs, compaction cadence, repo topology, touched-file extraction, and render-input batching.
 

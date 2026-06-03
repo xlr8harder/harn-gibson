@@ -136,6 +136,7 @@ uv run harn-gibson replay examples/replays/stream-and-diagnostic.json \
   --output-render-contexts test-artifacts/replays/renderer-contexts.json \
   --output-render-intents test-artifacts/replays/render-intents.json \
   --render-intent-review test-artifacts/replays/render-intents.html \
+  --review-dir test-artifacts/replays/review \
   --screenshot test-artifacts/replays/scene.png
 
 uv run harn-gibson replay examples/replays/renderer-plan.json \
