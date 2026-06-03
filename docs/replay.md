@@ -57,10 +57,30 @@ Run every replay JSON under a directory with `replay-dir`:
 ```bash
 uv run harn-gibson replay-dir examples/replays \
   --output-result test-artifacts/replays/suite.json \
+  --baseline-dir examples/baselines/replays \
   --screenshot-dir test-artifacts/replays/screenshots
 ```
 
-The command exits with status `1` if any fixture fails to load, replay, satisfy expectations, or render its requested browser screenshot. The suite result JSON uses `harn-gibson.replay-suite-result.v1` and records per-file step counts, scene revisions, expectation counts, screenshot metadata, and failures.
+The command exits with status `1` if any fixture fails to load, replay, satisfy expectations, match its requested baseline, or render its requested browser screenshot. The suite result JSON uses `harn-gibson.replay-suite-result.v1` and records per-file step counts, scene revisions, expectation counts, baseline metadata, screenshot metadata, and failures.
+
+## Baseline Review
+
+Replay baselines are canonical final-scene snapshots. They compare the visual state that renderers leave behind, including primitives, animations, event logs, and render-intent history. Absolute render-intent start/end timestamps are normalized out of baselines; duration, effects, targets, routes, and metadata remain comparable.
+
+Update baselines after intentionally changing visual output:
+
+```bash
+uv run harn-gibson replay-dir examples/replays \
+  --baseline-dir examples/baselines/replays \
+  --update-baselines
+```
+
+Check current output against committed baselines:
+
+```bash
+uv run harn-gibson replay-dir examples/replays \
+  --baseline-dir examples/baselines/replays
+```
 
 ## Screenshot Review
 

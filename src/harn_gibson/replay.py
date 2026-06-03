@@ -4,7 +4,10 @@ from __future__ import annotations
 
 import json
 from collections.abc import Iterable, Mapping
+from copy import deepcopy
 from dataclasses import dataclass, field
+from difflib import unified_diff
+from itertools import islice
 from pathlib import Path
 from typing import Any, Literal
 
@@ -70,6 +73,26 @@ class ReplayExpectationError(AssertionError):
 
 
 @dataclass(frozen=True, slots=True)
+class ReplayBaselineResult:
+    path: str
+    ok: bool
+    updated: bool = False
+    error: str = ""
+    checked: tuple[str, ...] = ("scene",)
+
+    def to_dict(self) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "path": self.path,
+            "ok": self.ok,
+            "updated": self.updated,
+            "checked": list(self.checked),
+        }
+        if self.error:
+            payload["error"] = self.error
+        return payload
+
+
+@dataclass(frozen=True, slots=True)
 class ReplayFileResult:
     path: str
     ok: bool
@@ -79,6 +102,7 @@ class ReplayFileResult:
     error: str = ""
     expectation_failures: tuple[ReplayExpectationResult, ...] = ()
     screenshot: dict[str, Any] | None = None
+    baseline: ReplayBaselineResult | None = None
 
     def to_dict(self) -> dict[str, Any]:
         payload: dict[str, Any] = {
@@ -95,6 +119,8 @@ class ReplayFileResult:
             payload["expectationFailures"] = [failure.to_dict() for failure in self.expectation_failures]
         if self.screenshot is not None:
             payload["screenshot"] = self.screenshot
+        if self.baseline is not None:
+            payload["baseline"] = self.baseline.to_dict()
         return payload
 
 
@@ -157,14 +183,20 @@ def run_replay_suite(
     screenshot_dir: str | Path | None = None,
     screenshot_width: int = 1280,
     screenshot_height: int = 900,
+    baseline_dir: str | Path | None = None,
+    update_baselines: bool = False,
 ) -> ReplaySuiteResult:
+    if update_baselines and baseline_dir is None:
+        raise ValueError("update_baselines requires baseline_dir")
     root = Path(path)
     files = discover_replay_files(root)
     screenshot_root = Path(screenshot_dir) if screenshot_dir is not None else None
+    baseline_root = Path(baseline_dir) if baseline_dir is not None else None
     results = []
     for replay_file in files:
         state = GibsonServerState()
         result: ReplayResult | None = None
+        baseline = None
         try:
             result = run_replay_file(replay_file, state)
             screenshot = None
@@ -177,6 +209,13 @@ def run_replay_suite(
                     width=screenshot_width,
                     height=screenshot_height,
                 )
+            if baseline_root is not None:
+                baseline_path = _suite_baseline_path(root, replay_file, baseline_root)
+                if update_baselines:
+                    write_replay_baseline(baseline_path, result)
+                    baseline = ReplayBaselineResult(path=baseline_path.as_posix(), ok=True, updated=True)
+                else:
+                    baseline = compare_replay_baseline(baseline_path, result)
         except ReplayExpectationError as error:
             results.append(
                 ReplayFileResult(
@@ -196,17 +235,21 @@ def run_replay_suite(
                     scene_revision=result.scene.revision if result is not None else state.scene.state.revision,
                     expectations=len(result.expectations) if result is not None else 0,
                     error=str(error),
+                    baseline=baseline,
                 )
             )
         else:
+            ok = baseline is None or baseline.ok
             results.append(
                 ReplayFileResult(
                     path=_suite_path(root, replay_file),
-                    ok=True,
+                    ok=ok,
                     steps=len(result.steps),
                     scene_revision=result.scene.revision,
                     expectations=len(result.expectations),
+                    error="" if ok else baseline.error,
                     screenshot=screenshot,
+                    baseline=baseline,
                 )
             )
         finally:
@@ -255,6 +298,61 @@ def replay_data_from_event_log(path: str | Path, *, name: str | None = None) -> 
         },
         "steps": steps,
     }
+
+
+def replay_baseline_from_result(result: ReplayResult) -> dict[str, Any]:
+    return {
+        "schema": "harn-gibson.replay-baseline.v1",
+        "replayName": result.name,
+        "replaySchema": result.schema,
+        "stepCount": len(result.steps),
+        "scene": replay_baseline_scene(result.scene),
+        "metadata": result.metadata,
+    }
+
+
+def write_replay_baseline(path: str | Path, result: ReplayResult) -> None:
+    baseline_path = Path(path)
+    baseline_path.parent.mkdir(parents=True, exist_ok=True)
+    baseline_path.write_text(
+        json.dumps(replay_baseline_from_result(result), indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+
+def compare_replay_baseline(path: str | Path, result: ReplayResult) -> ReplayBaselineResult:
+    baseline_path = Path(path)
+    if not baseline_path.exists():
+        return ReplayBaselineResult(path=baseline_path.as_posix(), ok=False, error=f"baseline missing: {baseline_path}")
+    try:
+        payload = json.loads(baseline_path.read_text(encoding="utf-8"))
+        if not isinstance(payload, Mapping):
+            raise ValueError("baseline file must contain a JSON object")
+        expected_scene = payload.get("scene")
+        if not isinstance(expected_scene, Mapping):
+            raise ValueError("baseline scene must be a JSON object")
+    except (OSError, json.JSONDecodeError, ValueError) as error:
+        return ReplayBaselineResult(path=baseline_path.as_posix(), ok=False, error=f"baseline invalid: {error}")
+    actual_scene = replay_baseline_scene(result.scene)
+    if dict(expected_scene) != actual_scene:
+        return ReplayBaselineResult(
+            path=baseline_path.as_posix(),
+            ok=False,
+            error=_baseline_mismatch_error(dict(expected_scene), actual_scene),
+        )
+    return ReplayBaselineResult(path=baseline_path.as_posix(), ok=True)
+
+
+def replay_baseline_scene(scene: SceneState) -> dict[str, Any]:
+    payload = deepcopy(scene.to_dict())
+    metadata = payload.get("metadata")
+    if isinstance(metadata, dict):
+        _normalize_render_intent(metadata.get("lastRenderIntent"))
+        render_intents = metadata.get("renderIntents")
+        if isinstance(render_intents, list):
+            for intent in render_intents:
+                _normalize_render_intent(intent)
+    return payload
 
 
 def run_replay_data(data: Mapping[str, Any], state: GibsonServerState | None = None) -> ReplayResult:
@@ -413,6 +511,14 @@ def _suite_screenshot_path(root: Path, path: Path, screenshot_root: Path) -> Pat
     return screenshot_root / relative_path.with_suffix(".png")
 
 
+def _suite_baseline_path(root: Path, path: Path, baseline_root: Path) -> Path:
+    if root.is_dir():
+        relative_path = path.relative_to(root)
+    else:
+        relative_path = Path(path.name)
+    return baseline_root / relative_path.with_suffix(".json")
+
+
 def _capture_suite_screenshot(
     root: Path,
     path: Path,
@@ -556,6 +662,21 @@ def write_replay_result(path: str | Path, result: ReplayResult) -> None:
     result_path.write_text(json.dumps(result.to_dict(), indent=2) + "\n", encoding="utf-8")
 
 
+def _baseline_mismatch_error(expected_scene: Mapping[str, Any], actual_scene: Mapping[str, Any]) -> str:
+    expected = json.dumps(expected_scene, indent=2, sort_keys=True).splitlines()
+    actual = json.dumps(actual_scene, indent=2, sort_keys=True).splitlines()
+    diff = "\n".join(islice(unified_diff(expected, actual, fromfile="baseline", tofile="actual", lineterm=""), 80))
+    return f"baseline scene mismatch\n{diff}"
+
+
+def _normalize_render_intent(value: Any) -> None:
+    if not isinstance(value, dict):
+        return
+    timeline = value.get("timeline")
+    if isinstance(timeline, dict):
+        value["timeline"] = {"durationMs": timeline.get("durationMs", 0)}
+
+
 def _step_result(
     index: int,
     kind: ReplayStepKind,
@@ -591,6 +712,7 @@ def _string_tuple(value: Any) -> tuple[str, ...]:
 
 
 __all__ = [
+    "ReplayBaselineResult",
     "ReplayFileResult",
     "ReplayExpectationError",
     "ReplayExpectationOp",
@@ -600,6 +722,7 @@ __all__ = [
     "ReplayStepResult",
     "ReplaySuiteResult",
     "discover_replay_files",
+    "compare_replay_baseline",
     "evaluate_replay_expectations",
     "load_replay_file",
     "mutations_from_value",
@@ -607,9 +730,12 @@ __all__ = [
     "render_request_from_mapping",
     "render_step_from_mapping",
     "replay_data_from_event_log",
+    "replay_baseline_from_result",
+    "replay_baseline_scene",
     "run_replay_data",
     "run_replay_file",
     "run_replay_suite",
     "write_replay_result",
+    "write_replay_baseline",
     "write_scene",
 ]

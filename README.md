@@ -134,6 +134,7 @@ Run the checked-in replay fixture suite:
 ```bash
 uv run harn-gibson replay-dir examples/replays \
   --output-result test-artifacts/replays/suite.json \
+  --baseline-dir examples/baselines/replays \
   --screenshot-dir test-artifacts/replays/screenshots
 ```
 

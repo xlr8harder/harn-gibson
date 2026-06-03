@@ -1,0 +1,190 @@
+{
+  "metadata": {
+    "purpose": "exercise renderer-side replay from a saved render plan"
+  },
+  "replayName": "saved renderer plan",
+  "replaySchema": "harn-gibson.replay.v1",
+  "scene": {
+    "animations": {
+      "renderer-plan-command": {
+        "durationMs": 2400,
+        "id": "renderer-plan-command",
+        "kind": "phase-pulse",
+        "loop": false,
+        "props": {
+          "phase": "before",
+          "sequence": 21,
+          "tone": "green"
+        },
+        "startedAtMs": 2100,
+        "targetId": "scan-grid"
+      }
+    },
+    "log": [
+      {
+        "eventType": "renderer_plan",
+        "phase": "before",
+        "sequence": 21,
+        "summary": "spinning up saved command effect",
+        "title": "Renderer plan"
+      },
+      {
+        "eventType": "renderer_plan",
+        "phase": "after",
+        "sequence": 22,
+        "summary": "settled saved effect after tool completion",
+        "title": "Renderer plan"
+      }
+    ],
+    "metadata": {
+      "lastRenderIntent": {
+        "effects": [
+          "patch",
+          "append_log",
+          "animation:phase-pulse"
+        ],
+        "eventTypes": [
+          "tool_call",
+          "tool_result"
+        ],
+        "intent": "visualize a precomputed command timeline",
+        "metadata": {
+          "intent": "visualize a precomputed command timeline",
+          "renderer": "saved-fixture",
+          "route": {
+            "route": "saved_renderer_plan"
+          }
+        },
+        "mutationCount": 6,
+        "renderer": "saved-fixture",
+        "requestCount": 2,
+        "routes": [
+          "renderer_agent"
+        ],
+        "schema": "harn-gibson.render-intent.v1",
+        "stepCount": 2,
+        "targets": [
+          "status",
+          "scan-grid",
+          "decision-log"
+        ],
+        "timeline": {
+          "durationMs": 7000
+        }
+      },
+      "renderIntents": [
+        {
+          "effects": [
+            "patch",
+            "append_log",
+            "animation:phase-pulse"
+          ],
+          "eventTypes": [
+            "tool_call",
+            "tool_result"
+          ],
+          "intent": "visualize a precomputed command timeline",
+          "metadata": {
+            "intent": "visualize a precomputed command timeline",
+            "renderer": "saved-fixture",
+            "route": {
+              "route": "saved_renderer_plan"
+            }
+          },
+          "mutationCount": 6,
+          "renderer": "saved-fixture",
+          "requestCount": 2,
+          "routes": [
+            "renderer_agent"
+          ],
+          "schema": "harn-gibson.render-intent.v1",
+          "stepCount": 2,
+          "targets": [
+            "status",
+            "scan-grid",
+            "decision-log"
+          ],
+          "timeline": {
+            "durationMs": 7000
+          }
+        }
+      ]
+    },
+    "primitives": {
+      "decision-log": {
+        "children": [],
+        "id": "decision-log",
+        "kind": "code",
+        "props": {
+          "language": "json",
+          "text": [
+            {
+              "intent": "prove saved render plans can replay without harn",
+              "renderer": "fixture"
+            }
+          ]
+        },
+        "region": "side"
+      },
+      "event-feed": {
+        "children": [],
+        "id": "event-feed",
+        "kind": "feed",
+        "props": {
+          "maxItems": 80
+        },
+        "region": "side"
+      },
+      "scan-grid": {
+        "children": [],
+        "id": "scan-grid",
+        "kind": "grid",
+        "props": {
+          "intensity": 0.2
+        },
+        "region": "stage"
+      },
+      "stage": {
+        "children": [
+          "status",
+          "event-feed",
+          "trace-log",
+          "decision-log",
+          "scan-grid"
+        ],
+        "id": "stage",
+        "kind": "viewport",
+        "props": {
+          "theme": "gibson",
+          "title": "GIBSON LINK"
+        },
+        "region": "root"
+      },
+      "status": {
+        "children": [],
+        "id": "status",
+        "kind": "status",
+        "props": {
+          "phase": "after",
+          "text": "renderer:coverage locked",
+          "tone": "magenta"
+        },
+        "region": "mast"
+      },
+      "trace-log": {
+        "children": [],
+        "id": "trace-log",
+        "kind": "code",
+        "props": {
+          "language": "text",
+          "text": []
+        },
+        "region": "side"
+      }
+    },
+    "revision": 2,
+    "schema": "harn-gibson.scene.v1"
+  },
+  "schema": "harn-gibson.replay-baseline.v1",
+  "stepCount": 1
+}

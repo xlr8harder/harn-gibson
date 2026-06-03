@@ -15,9 +15,11 @@ from harn_gibson import (
 )
 from harn_gibson.events import GibsonEvent
 from harn_gibson.replay import (
+    ReplayBaselineResult,
     ReplayExpectationResult,
     ReplayFileResult,
     ReplaySuiteResult,
+    compare_replay_baseline,
     discover_replay_files,
     evaluate_replay_expectations,
     load_replay_file,
@@ -25,8 +27,11 @@ from harn_gibson.replay import (
     render_plan_from_mapping,
     render_request_from_mapping,
     render_step_from_mapping,
+    replay_baseline_from_result,
+    replay_baseline_scene,
     replay_data_from_event_log,
     run_replay_suite,
+    write_replay_baseline,
     write_replay_result,
     write_scene,
 )
@@ -132,6 +137,71 @@ def test_replay_data_from_event_log(tmp_path: Path) -> None:
     bad.write_text("[]\n", encoding="utf-8")
     with pytest.raises(ValueError, match="event log line 1 must contain a JSON object"):
         replay_data_from_event_log(bad)
+
+
+def test_replay_baseline_write_compare_and_validation(tmp_path: Path) -> None:
+    result = run_replay_data(
+        {
+            "name": "baseline replay",
+            "metadata": {"fixture": True},
+            "steps": [{"type": "event", "event": event_payload(1, "tool_call", {"toolName": "bash"})}],
+        }
+    )
+    baseline_path = tmp_path / "baselines" / "fixture.json"
+
+    baseline = replay_baseline_from_result(result)
+    write_replay_baseline(baseline_path, result)
+    compared = compare_replay_baseline(baseline_path, result)
+
+    assert baseline["schema"] == "harn-gibson.replay-baseline.v1"
+    assert baseline["replayName"] == "baseline replay"
+    assert baseline["metadata"] == {"fixture": True}
+    assert baseline["scene"] == replay_baseline_scene(result.scene)
+    assert baseline["scene"]["metadata"]["lastRenderIntent"]["timeline"] == {"durationMs": 0}
+    assert compared == ReplayBaselineResult(path=baseline_path.as_posix(), ok=True)
+    assert compared.to_dict() == {
+        "path": baseline_path.as_posix(),
+        "ok": True,
+        "updated": False,
+        "checked": ["scene"],
+    }
+
+    missing = compare_replay_baseline(tmp_path / "missing.json", result)
+    assert missing.ok is False
+    assert missing.error.startswith("baseline missing:")
+    assert missing.to_dict()["error"] == missing.error
+
+    invalid = tmp_path / "invalid.json"
+    invalid.write_text("[]", encoding="utf-8")
+    assert compare_replay_baseline(invalid, result).error == (
+        "baseline invalid: baseline file must contain a JSON object"
+    )
+
+    no_scene = tmp_path / "no-scene.json"
+    no_scene.write_text("{}", encoding="utf-8")
+    assert compare_replay_baseline(no_scene, result).error == "baseline invalid: baseline scene must be a JSON object"
+
+    broken_json = tmp_path / "broken.json"
+    broken_json.write_text("{", encoding="utf-8")
+    assert compare_replay_baseline(broken_json, result).error.startswith("baseline invalid: Expecting")
+
+    changed = json.loads(baseline_path.read_text(encoding="utf-8"))
+    changed["scene"]["primitives"]["status"]["props"]["text"] = "wrong"
+    baseline_path.write_text(json.dumps(changed), encoding="utf-8")
+    mismatch = compare_replay_baseline(baseline_path, result)
+    assert mismatch.ok is False
+    assert "baseline scene mismatch" in mismatch.error
+    assert '"text": "wrong"' in mismatch.error
+    assert '"text": "before:tool_call"' in mismatch.error
+
+    result.scene.metadata = "not a dict"  # type: ignore[assignment]
+    assert replay_baseline_scene(result.scene)["metadata"] == "not a dict"
+    result.scene.metadata = {"lastRenderIntent": "not an intent", "renderIntents": "not a list"}
+    assert replay_baseline_scene(result.scene)["metadata"]["renderIntents"] == "not a list"
+    result.scene.metadata = {"lastRenderIntent": {"timeline": "not a dict"}, "renderIntents": [{"timeline": {}}]}
+    normalized = replay_baseline_scene(result.scene)["metadata"]
+    assert normalized["lastRenderIntent"]["timeline"] == "not a dict"
+    assert normalized["renderIntents"][0]["timeline"] == {"durationMs": 0}
 
 
 def test_checked_in_replay_fixtures_cover_agent_and_renderer_sides() -> None:
@@ -379,6 +449,62 @@ def test_replay_suite_captures_screenshots(tmp_path: Path, monkeypatch: pytest.M
 
     single = run_replay_suite(first, screenshot_dir=tmp_path / "single-screenshot")
     assert single.files[0].screenshot["path"] == str(tmp_path / "single-screenshot" / "first.png")
+
+
+def test_replay_suite_updates_checks_and_fails_baselines(tmp_path: Path) -> None:
+    fixture_dir = tmp_path / "fixtures"
+    nested = fixture_dir / "nested"
+    baseline_dir = tmp_path / "baselines"
+    nested.mkdir(parents=True)
+    first = fixture_dir / "first.json"
+    second = nested / "second.json"
+    event = event_payload(1, "message_update", {"assistantMessageEvent": {"delta": "ok"}})
+    for replay_file in (first, second):
+        replay_file.write_text(
+            json.dumps({"steps": [{"type": "event", "event": event}], "expect": {"sceneRevision": 1}}),
+            "utf-8",
+        )
+
+    with pytest.raises(ValueError, match="update_baselines requires baseline_dir"):
+        run_replay_suite(fixture_dir, update_baselines=True)
+
+    missing = run_replay_suite(fixture_dir, baseline_dir=baseline_dir)
+    assert missing.ok is False
+    assert missing.files[0].baseline == ReplayBaselineResult(
+        path=(baseline_dir / "first.json").as_posix(),
+        ok=False,
+        error=f"baseline missing: {baseline_dir / 'first.json'}",
+    )
+
+    updated = run_replay_suite(fixture_dir, baseline_dir=baseline_dir, update_baselines=True)
+    assert updated.ok is True
+    assert updated.files[0].baseline == ReplayBaselineResult(
+        path=(baseline_dir / "first.json").as_posix(),
+        ok=True,
+        updated=True,
+    )
+    assert updated.files[1].baseline.path == (baseline_dir / "nested" / "second.json").as_posix()
+    assert json.loads((baseline_dir / "nested" / "second.json").read_text(encoding="utf-8"))["scene"]["revision"] == 1
+    assert updated.to_dict()["files"][0]["baseline"]["updated"] is True
+
+    single = run_replay_suite(first, baseline_dir=tmp_path / "single-baseline", update_baselines=True)
+    assert single.files[0].baseline.path == (tmp_path / "single-baseline" / "first.json").as_posix()
+
+    checked = run_replay_suite(fixture_dir, baseline_dir=baseline_dir)
+    assert checked.ok is True
+    assert checked.files[0].baseline.ok is True
+    assert checked.files[0].baseline.updated is False
+
+    corrupted = json.loads((baseline_dir / "first.json").read_text(encoding="utf-8"))
+    corrupted["scene"]["revision"] = 99
+    (baseline_dir / "first.json").write_text(json.dumps(corrupted), encoding="utf-8")
+    failed = run_replay_suite(fixture_dir, baseline_dir=baseline_dir)
+    assert failed.ok is False
+    assert failed.files[0].steps == 1
+    assert failed.files[0].scene_revision == 1
+    assert failed.files[0].expectations == 1
+    assert failed.files[0].baseline.ok is False
+    assert failed.files[0].error.startswith("baseline scene mismatch")
 
 
 def test_replay_suite_reports_screenshot_failures(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

@@ -1,0 +1,396 @@
+{
+  "metadata": {
+    "purpose": "exercise event routing, local stream buffering, and traceback display"
+  },
+  "replayName": "stream and diagnostic",
+  "replaySchema": "harn-gibson.replay.v1",
+  "scene": {
+    "animations": {
+      "pulse-1": {
+        "durationMs": 1600,
+        "id": "pulse-1",
+        "kind": "phase-pulse",
+        "loop": false,
+        "props": {
+          "phase": "before",
+          "sequence": 1,
+          "tone": "green"
+        },
+        "startedAtMs": 1000,
+        "targetId": "scan-grid"
+      },
+      "stream-pulse-2": {
+        "durationMs": 600,
+        "id": "stream-pulse-2",
+        "kind": "stream-pulse",
+        "loop": false,
+        "props": {
+          "sequence": 2,
+          "streamId": "assistant-main"
+        },
+        "startedAtMs": 1250,
+        "targetId": "scan-grid"
+      }
+    },
+    "log": [
+      {
+        "eventType": "tool_call",
+        "phase": "before",
+        "sequence": 1,
+        "summary": "bash starting with {command}",
+        "title": "Tool preflight"
+      },
+      {
+        "eventType": "runtime_error",
+        "phase": "after",
+        "sequence": 3,
+        "summary": "error: simulated renderer failure",
+        "title": "Runtime error"
+      }
+    ],
+    "metadata": {
+      "lastRenderIntent": {
+        "effects": [
+          "append_log",
+          "patch"
+        ],
+        "eventTypes": [
+          "replay_mutations"
+        ],
+        "intent": "visualize replay_mutations",
+        "metadata": {
+          "renderer": "replay",
+          "stepType": "mutations"
+        },
+        "mutationCount": 2,
+        "renderer": "replay",
+        "requestCount": 1,
+        "routes": [
+          "direct_scene"
+        ],
+        "schema": "harn-gibson.render-intent.v1",
+        "stepCount": 1,
+        "targets": [
+          "trace-log"
+        ],
+        "timeline": {
+          "durationMs": 0
+        }
+      },
+      "renderIntents": [
+        {
+          "effects": [
+            "patch",
+            "append_log",
+            "animation:phase-pulse"
+          ],
+          "eventTypes": [
+            "tool_call"
+          ],
+          "intent": "visualize tool_call",
+          "metadata": {
+            "renderer": "deterministic"
+          },
+          "mutationCount": 4,
+          "renderer": "deterministic",
+          "requestCount": 1,
+          "routes": [
+            "renderer_agent"
+          ],
+          "schema": "harn-gibson.render-intent.v1",
+          "stepCount": 1,
+          "targets": [
+            "status",
+            "decision-log",
+            "scan-grid"
+          ],
+          "timeline": {
+            "durationMs": 0
+          }
+        },
+        {
+          "effects": [
+            "primitive:text_stream",
+            "patch",
+            "animation:stream-pulse"
+          ],
+          "eventTypes": [
+            "message_update"
+          ],
+          "intent": "visualize message_update",
+          "metadata": {
+            "renderInput": {
+              "metadata": {
+                "route": {
+                  "metadata": {
+                    "binding": {
+                      "eventType": "message_update",
+                      "flushMs": 100,
+                      "kind": "text_stream",
+                      "maxChars": 4000,
+                      "region": "stage",
+                      "streamId": "assistant-main",
+                      "summaryEveryMs": 1500,
+                      "targetId": "assistant-stream",
+                      "title": "Assistant stream"
+                    }
+                  },
+                  "reason": "append streaming text locally",
+                  "rendererVisible": false,
+                  "route": "stream_buffer",
+                  "streamId": "assistant-main",
+                  "targetId": "assistant-stream"
+                },
+                "stream": {
+                  "startedAtMs": 1250,
+                  "streamId": "assistant-main",
+                  "targetId": "assistant-stream",
+                  "text": "collecting event telemetry...",
+                  "title": "Assistant stream",
+                  "updateCount": 1,
+                  "updatedAtMs": 1250
+                }
+              },
+              "requests": [
+                {
+                  "event": {
+                    "eventType": "message_update",
+                    "payload": {
+                      "assistantMessageEvent": {
+                        "delta": "collecting event telemetry...",
+                        "type": "text_delta"
+                      },
+                      "type": "message_update"
+                    },
+                    "phase": "during",
+                    "recentContext": [],
+                    "schema": "harn-gibson.event.v1",
+                    "sequence": 2,
+                    "source": "harn",
+                    "summary": "assistant stream {type, delta}",
+                    "timestampMs": 1250,
+                    "title": "Stream update",
+                    "visualizationContext": []
+                  },
+                  "metadata": {
+                    "renderBatch": {
+                      "index": 0,
+                      "route": "stream_buffer",
+                      "size": 1,
+                      "timeline": {
+                        "durationMs": 0,
+                        "endMs": 1250,
+                        "startMs": 1250
+                      }
+                    },
+                    "route": {
+                      "metadata": {
+                        "binding": {
+                          "eventType": "message_update",
+                          "flushMs": 100,
+                          "kind": "text_stream",
+                          "maxChars": 4000,
+                          "region": "stage",
+                          "streamId": "assistant-main",
+                          "summaryEveryMs": 1500,
+                          "targetId": "assistant-stream",
+                          "title": "Assistant stream"
+                        }
+                      },
+                      "reason": "append streaming text locally",
+                      "rendererVisible": false,
+                      "route": "stream_buffer",
+                      "streamId": "assistant-main",
+                      "targetId": "assistant-stream"
+                    },
+                    "stream": {
+                      "startedAtMs": 1250,
+                      "streamId": "assistant-main",
+                      "targetId": "assistant-stream",
+                      "text": "collecting event telemetry...",
+                      "title": "Assistant stream",
+                      "updateCount": 1,
+                      "updatedAtMs": 1250
+                    }
+                  },
+                  "route": "stream_buffer"
+                }
+              ],
+              "route": "stream_buffer",
+              "schema": "harn-gibson.render-input.v1",
+              "timeline": {
+                "durationMs": 0,
+                "endMs": 1250,
+                "startMs": 1250
+              }
+            },
+            "renderer": "direct",
+            "route": {
+              "metadata": {
+                "binding": {
+                  "eventType": "message_update",
+                  "flushMs": 100,
+                  "kind": "text_stream",
+                  "maxChars": 4000,
+                  "region": "stage",
+                  "streamId": "assistant-main",
+                  "summaryEveryMs": 1500,
+                  "targetId": "assistant-stream",
+                  "title": "Assistant stream"
+                }
+              },
+              "reason": "append streaming text locally",
+              "rendererVisible": false,
+              "route": "stream_buffer",
+              "streamId": "assistant-main",
+              "targetId": "assistant-stream"
+            }
+          },
+          "mutationCount": 3,
+          "renderer": "direct",
+          "requestCount": 1,
+          "routes": [
+            "stream_buffer"
+          ],
+          "schema": "harn-gibson.render-intent.v1",
+          "stepCount": 1,
+          "targets": [
+            "assistant-stream",
+            "status",
+            "scan-grid"
+          ],
+          "timeline": {
+            "durationMs": 0
+          }
+        },
+        {
+          "effects": [
+            "append_log",
+            "patch"
+          ],
+          "eventTypes": [
+            "replay_mutations"
+          ],
+          "intent": "visualize replay_mutations",
+          "metadata": {
+            "renderer": "replay",
+            "stepType": "mutations"
+          },
+          "mutationCount": 2,
+          "renderer": "replay",
+          "requestCount": 1,
+          "routes": [
+            "direct_scene"
+          ],
+          "schema": "harn-gibson.render-intent.v1",
+          "stepCount": 1,
+          "targets": [
+            "trace-log"
+          ],
+          "timeline": {
+            "durationMs": 0
+          }
+        }
+      ]
+    },
+    "primitives": {
+      "assistant-stream": {
+        "children": [],
+        "id": "assistant-stream",
+        "kind": "text_stream",
+        "props": {
+          "flushMs": 100,
+          "isStreaming": true,
+          "maxChars": 4000,
+          "startedAtMs": 1250,
+          "streamId": "assistant-main",
+          "summaryEveryMs": 1500,
+          "targetId": "assistant-stream",
+          "text": "collecting event telemetry...",
+          "title": "Assistant stream",
+          "updateCount": 1,
+          "updatedAtMs": 1250
+        },
+        "region": "stage"
+      },
+      "decision-log": {
+        "children": [],
+        "id": "decision-log",
+        "kind": "code",
+        "props": {
+          "language": "json",
+          "text": []
+        },
+        "region": "side"
+      },
+      "event-feed": {
+        "children": [],
+        "id": "event-feed",
+        "kind": "feed",
+        "props": {
+          "maxItems": 80
+        },
+        "region": "side"
+      },
+      "scan-grid": {
+        "children": [],
+        "id": "scan-grid",
+        "kind": "grid",
+        "props": {
+          "intensity": 0.2
+        },
+        "region": "stage"
+      },
+      "stage": {
+        "children": [
+          "status",
+          "event-feed",
+          "trace-log",
+          "decision-log",
+          "scan-grid"
+        ],
+        "id": "stage",
+        "kind": "viewport",
+        "props": {
+          "theme": "gibson",
+          "title": "GIBSON LINK"
+        },
+        "region": "root"
+      },
+      "status": {
+        "children": [],
+        "id": "status",
+        "kind": "status",
+        "props": {
+          "phase": "during",
+          "text": "stream:assistant-main",
+          "tone": "cyan"
+        },
+        "region": "mast"
+      },
+      "trace-log": {
+        "children": [],
+        "id": "trace-log",
+        "kind": "code",
+        "props": {
+          "language": "text",
+          "text": [
+            {
+              "details": "fixture-only traceback for display review",
+              "eventType": "runtime_error",
+              "message": "simulated renderer failure",
+              "sequence": 3,
+              "title": "Runtime error",
+              "traceback": "Traceback (most recent call last):\\n  File \"renderer.py\", line 42, in render\\nRuntimeError: simulated renderer failure"
+            }
+          ]
+        },
+        "region": "side"
+      }
+    },
+    "revision": 3,
+    "schema": "harn-gibson.scene.v1"
+  },
+  "schema": "harn-gibson.replay-baseline.v1",
+  "stepCount": 3
+}

@@ -51,6 +51,12 @@ def build_parser() -> argparse.ArgumentParser:
     replay_dir.add_argument("--screenshot-dir", default=None, help="write one browser screenshot per replay file")
     replay_dir.add_argument("--screenshot-width", type=int, default=1280, help="screenshot viewport width")
     replay_dir.add_argument("--screenshot-height", type=int, default=900, help="screenshot viewport height")
+    replay_dir.add_argument("--baseline-dir", default=None, help="compare final scenes against baselines in this path")
+    replay_dir.add_argument(
+        "--update-baselines",
+        action="store_true",
+        help="write replay baselines instead of checking",
+    )
 
     event_log = subcommands.add_parser(
         "event-log-to-replay",
@@ -200,11 +206,16 @@ def run(argv: Sequence[str] | None = None) -> int:
 
         from harn_gibson.replay import run_replay_suite
 
+        if args.update_baselines and args.baseline_dir is None:
+            print("--update-baselines requires --baseline-dir", file=sys.stderr)
+            return 2
         result = run_replay_suite(
             args.path,
             screenshot_dir=args.screenshot_dir,
             screenshot_width=args.screenshot_width,
             screenshot_height=args.screenshot_height,
+            baseline_dir=args.baseline_dir,
+            update_baselines=args.update_baselines,
         )
         if args.output_result:
             Path(args.output_result).parent.mkdir(parents=True, exist_ok=True)
@@ -214,6 +225,9 @@ def run(argv: Sequence[str] | None = None) -> int:
                 line = f"ok {file_result.path}: {file_result.steps} steps, revision {file_result.scene_revision}"
                 if file_result.screenshot is not None:
                     line = f"{line}, screenshot {file_result.screenshot['path']}"
+                if file_result.baseline is not None:
+                    action = "updated" if file_result.baseline.updated else "checked"
+                    line = f"{line}, baseline {action} {file_result.baseline.path}"
                 print(line)
             else:
                 print(f"failed {file_result.path}: {file_result.error}", file=sys.stderr)

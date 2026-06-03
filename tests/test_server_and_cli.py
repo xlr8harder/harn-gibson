@@ -596,6 +596,9 @@ def test_cli_parser_and_run(monkeypatch: Any, capsys: Any) -> None:
             "1024",
             "--screenshot-height",
             "768",
+            "--baseline-dir",
+            "baselines",
+            "--update-baselines",
         ]
     )
     assert parsed_replay_dir.command == "replay-dir"
@@ -604,6 +607,8 @@ def test_cli_parser_and_run(monkeypatch: Any, capsys: Any) -> None:
     assert parsed_replay_dir.screenshot_dir == "shots"
     assert parsed_replay_dir.screenshot_width == 1024
     assert parsed_replay_dir.screenshot_height == 768
+    assert parsed_replay_dir.baseline_dir == "baselines"
+    assert parsed_replay_dir.update_baselines is True
     parsed_event_log = parser.parse_args(
         ["event-log-to-replay", "events.jsonl", "--output", "fixture.json", "--name", "captured"]
     )
@@ -834,6 +839,60 @@ def test_cli_replay_dir_writes_suite_result_without_screenshots(tmp_path: Any, c
     assert cli.run(["replay-dir", str(replay_dir)]) == 0
     assert capsys.readouterr().out.splitlines() == [
         "ok ok.json: 1 steps, revision 0",
+        "replayed 1 replay files; 0 failed",
+    ]
+
+
+def test_cli_replay_dir_updates_and_checks_baselines(tmp_path: Any, capsys: Any) -> None:
+    replay_dir = tmp_path / "replays"
+    baseline_dir = tmp_path / "baselines"
+    output = tmp_path / "suite.json"
+    replay_dir.mkdir()
+    (replay_dir / "ok.json").write_text(
+        json.dumps({"steps": [{"type": "mutations", "mutations": []}], "expect": {"sceneRevision": 0}}),
+        encoding="utf-8",
+    )
+
+    assert cli.run(["replay-dir", str(replay_dir), "--update-baselines"]) == 2
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert captured.err.strip() == "--update-baselines requires --baseline-dir"
+
+    assert (
+        cli.run(
+            [
+                "replay-dir",
+                str(replay_dir),
+                "--baseline-dir",
+                str(baseline_dir),
+                "--update-baselines",
+            ]
+        )
+        == 0
+    )
+    assert (baseline_dir / "ok.json").exists()
+    assert capsys.readouterr().out.splitlines() == [
+        f"ok ok.json: 1 steps, revision 0, baseline updated {baseline_dir / 'ok.json'}",
+        "replayed 1 replay files; 0 failed",
+    ]
+
+    assert (
+        cli.run(
+            [
+                "replay-dir",
+                str(replay_dir),
+                "--baseline-dir",
+                str(baseline_dir),
+                "--output-result",
+                str(output),
+            ]
+        )
+        == 0
+    )
+    suite = json.loads(output.read_text(encoding="utf-8"))
+    assert suite["files"][0]["baseline"]["ok"] is True
+    assert capsys.readouterr().out.splitlines() == [
+        f"ok ok.json: 1 steps, revision 0, baseline checked {baseline_dir / 'ok.json'}",
         "replayed 1 replay files; 0 failed",
     ]
 
