@@ -12,6 +12,15 @@ from harn_gibson.external_renderer import (
     renderer_timeout_seconds_from_env,
 )
 from harn_gibson.hooks import HookDecision, HookDispatcher, load_hook_module, result_for_harn
+from harn_gibson.model_renderer import (
+    MODEL_RENDERER_REQUEST_SCHEMA,
+    PromptCommandModelClient,
+    PromptedModelRenderer,
+    RendererModelClient,
+    model_renderer_from_env,
+    model_renderer_request_payload,
+    render_plan_from_model_response,
+)
 from harn_gibson.renderer_prompt import (
     RENDERER_PROMPT_MESSAGES_SCHEMA,
     RENDERER_PROMPT_SCHEMA,
@@ -119,6 +128,9 @@ __all__ = [
     "HookDispatcher",
     "DeterministicSceneRenderer",
     "EventRouter",
+    "MODEL_RENDERER_REQUEST_SCHEMA",
+    "PromptCommandModelClient",
+    "PromptedModelRenderer",
     "RenderPipeline",
     "RenderInputBatch",
     "RenderPlan",
@@ -134,6 +146,7 @@ __all__ = [
     "RendererContextBuilder",
     "RendererContextConfig",
     "RendererEventInterest",
+    "RendererModelClient",
     "ReplayBaselineResult",
     "ReplayFileResult",
     "ReplayExpectationError",
@@ -169,6 +182,8 @@ __all__ = [
     "external_renderer_payload",
     "initial_scene",
     "load_hook_module",
+    "model_renderer_from_env",
+    "model_renderer_request_payload",
     "parse_renderer_command",
     "phase_for_event",
     "result_for_harn",
@@ -191,6 +206,7 @@ __all__ = [
     "replay_review_bundle_manifest",
     "replay_timeline_from_result",
     "render_plan_from_external_response",
+    "render_plan_from_model_response",
     "render_plan_diagnostics_payload",
     "render_plan_has_validation_errors",
     "render_intent_from_plan",

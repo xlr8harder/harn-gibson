@@ -15,6 +15,7 @@ from typing import Any
 from harn_gibson.catalog import VisualCatalog, default_visual_catalog
 from harn_gibson.events import GibsonEvent, diagnostic_event
 from harn_gibson.external_renderer import external_renderer_from_env
+from harn_gibson.model_renderer import model_renderer_from_env
 from harn_gibson.rendering import (
     DeterministicSceneRenderer,
     RendererContextBuilder,
@@ -197,6 +198,10 @@ def run_server(host: str = "127.0.0.1", port: int = 8765, *, style: str | None =
 def build_state_from_env(env: dict[str, str] | None = None) -> GibsonServerState:
     source = environ if env is None else env
     renderer_interest = renderer_interest_from_env(source.get("HARN_GIBSON_RENDERER_INTEREST"))
+    model_renderer = model_renderer_from_env(
+        source.get("HARN_GIBSON_RENDERER_MODEL_COMMAND"),
+        source.get("HARN_GIBSON_RENDERER_MODEL_TIMEOUT_MS") or source.get("HARN_GIBSON_RENDERER_TIMEOUT_MS"),
+    )
     renderer = external_renderer_from_env(
         source.get("HARN_GIBSON_RENDERER_COMMAND"),
         source.get("HARN_GIBSON_RENDERER_TIMEOUT_MS"),
@@ -207,7 +212,7 @@ def build_state_from_env(env: dict[str, str] | None = None) -> GibsonServerState
         render_mode=coerce_render_mode(source.get("HARN_GIBSON_RENDER_MODE")),
         render_batch_window_ms=coerce_batch_window_ms(source.get("HARN_GIBSON_RENDER_BATCH_MS")),
         render_timing_mode=coerce_render_timing_mode(source.get("HARN_GIBSON_RENDER_TIMING")),
-        renderer=renderer or DeterministicSceneRenderer(),
+        renderer=model_renderer or renderer or DeterministicSceneRenderer(),
         style_pack=style_pack_from_name(source.get("HARN_GIBSON_STYLE")),
     )
 

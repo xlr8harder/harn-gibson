@@ -14,6 +14,7 @@ from harn_gibson import (
     EventRouter,
     EventRouteRule,
     ExternalRenderer,
+    PromptedModelRenderer,
     RendererEventInterest,
     RenderPlan,
     RenderRequest,
@@ -507,6 +508,13 @@ def test_build_state_from_env() -> None:
             "HARN_GIBSON_RENDERER_TIMEOUT_MS": "250",
         }
     )
+    model_renderer_state = build_state_from_env(
+        {
+            "HARN_GIBSON_RENDERER_MODEL_COMMAND": json.dumps([sys.executable, "-c", "print('{}')"]),
+            "HARN_GIBSON_RENDERER_MODEL_TIMEOUT_MS": "125",
+            "HARN_GIBSON_RENDERER_COMMAND": json.dumps([sys.executable, "-c", "print('external')"]),
+        }
+    )
 
     assert state.pipeline.mode == "async"
     assert state.pipeline.batch_window_ms == 5
@@ -517,8 +525,12 @@ def test_build_state_from_env() -> None:
     assert isinstance(renderer_state.renderer, ExternalRenderer)
     assert renderer_state.renderer.command == (sys.executable, "-c", "print('{}')")
     assert renderer_state.renderer.timeout_seconds == 0.25
+    assert isinstance(model_renderer_state.renderer, PromptedModelRenderer)
+    assert model_renderer_state.renderer.client.command == (sys.executable, "-c", "print('{}')")  # type: ignore[attr-defined]
+    assert model_renderer_state.renderer.client.timeout_seconds == 0.125  # type: ignore[attr-defined]
     state.pipeline.stop()
     renderer_state.pipeline.stop()
+    model_renderer_state.pipeline.stop()
 
 
 def test_renderer_interest_from_env_and_build_state() -> None:

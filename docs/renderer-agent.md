@@ -2,7 +2,7 @@
 
 The renderer agent is the model-driven version of the current deterministic renderer. It receives harn events, current scene state, and recent visualization context, then returns a `RenderPlan`.
 
-There is no model-backed renderer agent in the current implementation. The server uses the deterministic renderer by default while we harden the event, scene, and browser fixtures. Dogfood runs can also use an external renderer command as a process-backed adapter for future model calls.
+The server still uses the deterministic renderer by default. For dogfood and adapter work, it now has two optional process boundaries: an external render-plan command that receives raw renderer context, and a prompt-command model adapter that receives the exact provider-neutral messages a model would receive and returns model-style JSON text. Provider SDK wiring remains deferred, but the prompt, parse, validation, diagnostics, and fail-open path are now executable.
 
 ## Render Plan Contract
 
@@ -87,6 +87,35 @@ The command returns a render plan on stdout. Live requests from harn remain auth
 If the command exits nonzero, times out, or writes invalid JSON, harn-gibson applies the deterministic fallback and patches the renderer failure into the trace/debug scene state. That keeps harn progress fail-open while making renderer-agent problems visible in the browser.
 
 External renderer plans are validated before they are applied to scene state. Warning-only plans still run, but the applied render intent metadata includes `renderPlanDiagnostics` with `harn-gibson.render-plan-diagnostics.v1` issues such as unsupported primitive kinds, unknown SVG symbols, unknown regions, or animation targets that will fall back to generic pulse placement. Unsafe plans are rejected before scene application. Current hard failures include patching a missing target, missing mutation payloads required by the scene engine, exceeding plan size limits, and trying to render raw SVG/HTML/external references through `svg_layer`. Rejected plans use the deterministic fallback and add the diagnostics payload to both render metadata and the trace/debug scene state.
+
+## Prompt-Command Model Adapter
+
+Set `HARN_GIBSON_RENDERER_MODEL_COMMAND` to run a local command at the provider-neutral prompt boundary. This is useful for testing model prompts, mock model processes, or thin provider wrappers without giving the command direct access to the full in-process renderer objects. The command receives one JSON object on stdin:
+
+```json
+{
+  "schema": "harn-gibson.model-renderer-request.v1",
+  "messageCount": 2,
+  "messages": [
+    {"role": "system", "content": "You are the harn-gibson cinematic renderer..."},
+    {"role": "user", "content": "Render the current harn-gibson batch..."}
+  ],
+  "metadata": {
+    "renderer": "model-command",
+    "prompt": {"schema": "harn-gibson.renderer-prompt.v1", "mode": "compaction"}
+  }
+}
+```
+
+The command writes the model response text to stdout. The adapter accepts a raw render-plan JSON object, a JSON object with `content`, fenced JSON, or text with one embedded JSON object. It binds the returned plan to the current live request batch, validates it against scene/catalog safety rules, and records compact `rendererPrompt` metadata in the render intent. Use `HARN_GIBSON_RENDERER_MODEL_TIMEOUT_MS` to control the prompt-command timeout; if omitted, it falls back to `HARN_GIBSON_RENDERER_TIMEOUT_MS`.
+
+```bash
+HARN_GIBSON_RENDERER_MODEL_COMMAND='uv run python examples/renderers/gibson_prompt_echo_renderer.py' \
+HARN_GIBSON_RENDERER_MODEL_TIMEOUT_MS=10000 \
+uv run harn-gibson dogfood
+```
+
+If both `HARN_GIBSON_RENDERER_MODEL_COMMAND` and `HARN_GIBSON_RENDERER_COMMAND` are set, the model command wins. Command failures, invalid model output, and unsafe model plans are fail-open: harn-gibson applies deterministic fallback mutations and patches the failure into trace/debug scene state.
 
 ## Blocking Vs Async
 
@@ -183,7 +212,7 @@ This mirrors harn session compaction, but it is separate from the primary agent 
 
 Use `harn-gibson replay --output-render-contexts path.json ...` to inspect the exact renderer contexts produced by a fixture or converted event log. The artifact is `harn-gibson.replay-renderer-contexts.v1` and contains only contexts for steps that actually reached the renderer boundary. It is the quickest way to review model prompt inputs, compaction mode, catalog summaries, repo topology, touched-file batches, and render-input timing without starting a live model-backed renderer.
 
-Use `harn-gibson replay --output-render-prompts prompts.json --render-prompt-review prompts.html ...` to inspect the provider-neutral system/user messages that a future model-backed renderer would receive for each captured renderer context. The artifact is `harn-gibson.replay-renderer-prompts.v1`; each prompt is `harn-gibson.renderer-prompt.v1` with message content, context index, mode, event types, routes, timeline metadata, and prompt size. This is intentionally offline and model-free so the prompt contract, context growth, and safety instructions can be reviewed before wiring a live provider adapter.
+Use `harn-gibson replay --output-render-prompts prompts.json --render-prompt-review prompts.html ...` to inspect the provider-neutral system/user messages that a prompt-command or future provider-backed renderer would receive for each captured renderer context. The artifact is `harn-gibson.replay-renderer-prompts.v1`; each prompt is `harn-gibson.renderer-prompt.v1` with message content, context index, mode, event types, routes, timeline metadata, and prompt size. This remains offline and model-free so the prompt contract, context growth, and safety instructions can be reviewed before wiring a live provider adapter.
 
 Use `harn-gibson replay --output-render-intents intents.json --render-intent-review intents.html ...` to review the renderer decisions that were actually recorded in scene metadata. The JSON artifact is `harn-gibson.replay-render-intents.v1`; the HTML page summarizes renderer, intent text, event types, routes, timeline, effects, targets, mutation counts, and plan metadata. This is intentionally separate from renderer contexts: contexts answer "what did the renderer see?", while render intents answer "what did the renderer decide to do?".
 
