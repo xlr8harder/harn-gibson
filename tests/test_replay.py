@@ -421,6 +421,12 @@ def test_replay_event_steps_file_io_and_writers(tmp_path: Path, monkeypatch: pyt
     ]
     assert replay_frame_screenshot_manifest(framed, frame_screenshots)["screenshotCount"] == 2
     bundle_result = run_replay_file(path, capture_frames=True, capture_renderer_contexts=True)
+    bundle_result.metadata["captureSummary"] = {
+        "durationMs": 2200,
+        "eventTypes": ["tool_call", "tool_result"],
+        "phases": ["before", "after"],
+        "sources": ["capture"],
+    }
     bundle_path = tmp_path / "bundle"
     bundle_manifest = write_replay_review_bundle(bundle_path, bundle_result, frame_screenshots)
     bundle_index = (bundle_path / "index.html").read_text(encoding="utf-8")
@@ -436,6 +442,12 @@ def test_replay_event_steps_file_io_and_writers(tmp_path: Path, monkeypatch: pyt
     assert bundle_manifest["artifacts"]["rendererChunks"] == "renderer-chunks.json"
     assert bundle_manifest["artifacts"]["rendererChunkReview"] == "renderer-chunks.html"
     assert bundle_manifest["artifacts"]["rendererPromptReview"] == "renderer-prompts.html"
+    assert bundle_manifest["captureSummary"] == {
+        "durationMs": 2200,
+        "eventTypes": ["tool_call", "tool_result"],
+        "phases": ["before", "after"],
+        "sources": ["capture"],
+    }
     assert bundle_manifest_file == bundle_manifest
     assert json.loads((bundle_path / "renderer-contexts.json").read_text(encoding="utf-8"))["contextCount"] == 1
     assert json.loads((bundle_path / "renderer-prompts.json").read_text(encoding="utf-8"))["promptCount"] == 1
@@ -448,6 +460,11 @@ def test_replay_event_steps_file_io_and_writers(tmp_path: Path, monkeypatch: pyt
     assert 'href="frames/index.html"' in bundle_index
     assert "Renderer Chunk Review" in bundle_index
     assert "Renderer Prompt Review" in bundle_index
+    assert "captured duration" in bundle_index
+    assert "2200 ms" in bundle_index
+    assert "tool_call, tool_result" in bundle_index
+    assert "before, after" in bundle_index
+    assert "capture" in bundle_index
     assert "window.__gibsonReplayReview" in bundle_index
     assert "<\\/script>" in replay_review_bundle_index_html(
         replay_review_bundle_manifest(
@@ -458,6 +475,20 @@ def test_replay_event_steps_file_io_and_writers(tmp_path: Path, monkeypatch: pyt
     )
     assert "Replay Result JSON" not in replay_review_bundle_index_html({"artifacts": "bad"})
     assert replay_review_bundle_manifest(bundle_result, (), {})["screenshotCount"] == 0
+    sparse_bundle_index = replay_review_bundle_index_html(
+        {
+            "captureSummary": {
+                "durationMs": "bad",
+                "eventTypes": "bad",
+                "phases": [],
+                "sources": [None, ""],
+            }
+        }
+    )
+    assert "captured duration" not in sparse_bundle_index
+    assert "captured event types" not in sparse_bundle_index
+    assert "captured phases" not in sparse_bundle_index
+    assert "captured sources" not in sparse_bundle_index
     assert 'src="frame-0000.png"' in review_html
     assert 'id="timelineScrubber"' in review_html
     assert 'data-frame-select="1"' in review_html

@@ -1601,7 +1601,7 @@ def replay_review_bundle_manifest(
     render_intents = replay_render_intents_from_result(result)
     renderer_prompts = replay_renderer_prompts_from_result(result)
     renderer_chunks = replay_renderer_chunks_from_result(result, chunk_size=render_chunk_size)
-    return {
+    manifest = {
         "schema": "harn-gibson.replay-review-bundle.v1",
         "replayName": result.name,
         "replaySchema": result.schema,
@@ -1617,23 +1617,17 @@ def replay_review_bundle_manifest(
         "artifacts": dict(artifacts),
         "metadata": result.metadata,
     }
+    capture_summary = result.metadata.get("captureSummary") if isinstance(result.metadata, Mapping) else None
+    if isinstance(capture_summary, Mapping):
+        manifest["captureSummary"] = dict(capture_summary)
+    return manifest
 
 
 def replay_review_bundle_index_html(manifest: Mapping[str, Any]) -> str:
     title = str(manifest.get("replayName") or "replay review")
     schema = escape(str(manifest.get("schema", "")))
     cards = "\n".join(
-        _replay_review_metric(label, manifest.get(key, 0))
-        for label, key in (
-            ("steps", "stepCount"),
-            ("scene revision", "sceneRevision"),
-            ("frames", "frameCount"),
-            ("screenshots", "screenshotCount"),
-            ("renderer contexts", "contextCount"),
-            ("render intents", "intentCount"),
-            ("renderer prompts", "promptCount"),
-            ("renderer chunks", "chunkCount"),
-        )
+        _replay_review_metric(label, value) for label, value in _replay_review_metric_items(manifest)
     )
     artifact_links = "\n".join(
         _replay_review_artifact_link(label, href)
@@ -1706,6 +1700,40 @@ def replay_review_bundle_index_html(manifest: Mapping[str, Any]) -> str:
 </body>
 </html>
 """
+
+
+def _replay_review_metric_items(manifest: Mapping[str, Any]) -> tuple[tuple[str, Any], ...]:
+    items: list[tuple[str, Any]] = [
+        ("steps", manifest.get("stepCount", 0)),
+        ("scene revision", manifest.get("sceneRevision", 0)),
+        ("frames", manifest.get("frameCount", 0)),
+        ("screenshots", manifest.get("screenshotCount", 0)),
+        ("renderer contexts", manifest.get("contextCount", 0)),
+        ("render intents", manifest.get("intentCount", 0)),
+        ("renderer prompts", manifest.get("promptCount", 0)),
+        ("renderer chunks", manifest.get("chunkCount", 0)),
+    ]
+    capture_summary = manifest.get("captureSummary")
+    if isinstance(capture_summary, Mapping):
+        duration_ms = capture_summary.get("durationMs")
+        if isinstance(duration_ms, int | float):
+            items.append(("captured duration", f"{duration_ms} ms"))
+        event_types = _joined_summary_values(capture_summary.get("eventTypes"))
+        if event_types:
+            items.append(("captured event types", event_types))
+        phases = _joined_summary_values(capture_summary.get("phases"))
+        if phases:
+            items.append(("captured phases", phases))
+        sources = _joined_summary_values(capture_summary.get("sources"))
+        if sources:
+            items.append(("captured sources", sources))
+    return tuple(items)
+
+
+def _joined_summary_values(value: Any) -> str:
+    if not isinstance(value, list):
+        return ""
+    return ", ".join(str(item) for item in value[:6] if item)
 
 
 def write_replay_review_bundle(
