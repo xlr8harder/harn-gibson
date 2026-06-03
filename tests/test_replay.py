@@ -12,6 +12,7 @@ from harn_gibson import (
     ReplayFrameScreenshot,
     ReplayResult,
     ReplayStepResult,
+    replay_frame_review_html,
     replay_timeline_from_result,
     run_replay_data,
     run_replay_file,
@@ -37,6 +38,7 @@ from harn_gibson.replay import (
     replay_frame_screenshot_manifest,
     run_replay_suite,
     write_replay_baseline,
+    write_replay_frame_review_html,
     write_replay_frame_screenshot_manifest,
     write_replay_result,
     write_replay_timeline,
@@ -150,7 +152,10 @@ def test_replay_event_steps_file_io_and_writers(tmp_path: Path, monkeypatch: pyt
     frame_screenshots = capture_replay_frame_screenshots(framed, tmp_path / "frames", width=640, height=480)
     manifest_path = tmp_path / "frames" / "manifest.json"
     write_replay_frame_screenshot_manifest(manifest_path, framed, frame_screenshots)
+    html_path = tmp_path / "frames" / "index.html"
+    write_replay_frame_review_html(html_path, replay_frame_screenshot_manifest(framed, frame_screenshots))
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    review_html = html_path.read_text(encoding="utf-8")
 
     assert isinstance(frame_screenshots[0], ReplayFrameScreenshot)
     assert captures == [
@@ -158,6 +163,23 @@ def test_replay_event_steps_file_io_and_writers(tmp_path: Path, monkeypatch: pyt
         (2, tmp_path / "frames" / "frame-0001.png", 640, 480),
     ]
     assert replay_frame_screenshot_manifest(framed, frame_screenshots)["screenshotCount"] == 2
+    assert 'src="frame-0000.png"' in review_html
+    assert "event replay timeline review" in replay_frame_review_html(
+        replay_frame_screenshot_manifest(framed, frame_screenshots)
+    )
+    relative_html = replay_frame_review_html(
+        {
+            "replayName": "relative",
+            "schema": "test",
+            "frames": [
+                {"index": 0, "step": {}, "screenshot": {"path": "relative/frame.png"}},
+                {"index": 1, "step": {}, "screenshot": {}},
+            ],
+        },
+        output_path=tmp_path / "relative" / "index.html",
+    )
+    assert 'relative/frame.png"' in relative_html
+    assert 'src=""' in relative_html
     assert manifest["schema"] == "harn-gibson.replay-frame-screenshots.v1"
     assert manifest["frames"][1]["screenshot"]["canvasMetrics"] == {"nonblank": True}
 

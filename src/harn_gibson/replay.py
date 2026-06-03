@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import json
+import os
 from collections.abc import Iterable, Mapping
 from copy import deepcopy
 from dataclasses import dataclass, field
 from difflib import unified_diff
+from html import escape
 from itertools import islice
 from pathlib import Path
 from typing import Any, Literal
@@ -793,11 +795,112 @@ def write_replay_frame_screenshot_manifest(
     )
 
 
+def replay_frame_review_html(manifest: Mapping[str, Any], *, output_path: str | Path | None = None) -> str:
+    frames = manifest.get("frames")
+    rendered_frames = [frame for frame in frames if isinstance(frame, Mapping)] if isinstance(frames, list) else []
+    title = str(manifest.get("replayName") or "replay timeline")
+    frame_count = escape(str(manifest.get("screenshotCount", len(rendered_frames))))
+    schema = escape(str(manifest.get("schema", "")))
+    cards = "\n".join(_replay_frame_review_card(frame, output_path) for frame in rendered_frames)
+    return f"""<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{escape(title)} timeline review</title>
+  <style>
+    :root {{ color-scheme: dark; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }}
+    body {{ margin: 0; background: #020608; color: #d9fff7; }}
+    header {{
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      padding: 18px 22px;
+      background: rgba(2, 6, 8, 0.92);
+      border-bottom: 1px solid rgba(35, 255, 214, 0.32);
+    }}
+    h1 {{ margin: 0 0 6px; font-size: 22px; letter-spacing: 0; }}
+    .meta {{ color: #7ee8d0; font-size: 13px; }}
+    main {{
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 18px;
+      padding: 20px;
+    }}
+    figure {{
+      margin: 0;
+      border: 1px solid rgba(35, 255, 214, 0.28);
+      background: rgba(4, 16, 18, 0.86);
+    }}
+    img {{ display: block; width: 100%; height: auto; background: #000; }}
+    figcaption {{ display: grid; gap: 5px; padding: 12px; font-size: 12px; color: #b8fff3; }}
+    code {{ color: #ffcf63; }}
+    .bad {{ color: #ff5f9d; }}
+  </style>
+</head>
+<body>
+  <header>
+    <h1>{escape(title)} timeline review</h1>
+    <div class="meta">{frame_count} frames &middot; schema {schema}</div>
+  </header>
+  <main>
+{cards}
+  </main>
+</body>
+</html>
+"""
+
+
+def write_replay_frame_review_html(path: str | Path, manifest: Mapping[str, Any]) -> None:
+    review_path = Path(path)
+    review_path.parent.mkdir(parents=True, exist_ok=True)
+    review_path.write_text(replay_frame_review_html(manifest, output_path=review_path), encoding="utf-8")
+
+
 def _baseline_mismatch_error(expected_scene: Mapping[str, Any], actual_scene: Mapping[str, Any]) -> str:
     expected = json.dumps(expected_scene, indent=2, sort_keys=True).splitlines()
     actual = json.dumps(actual_scene, indent=2, sort_keys=True).splitlines()
     diff = "\n".join(islice(unified_diff(expected, actual, fromfile="baseline", tofile="actual", lineterm=""), 80))
     return f"baseline scene mismatch\n{diff}"
+
+
+def _replay_frame_review_card(frame: Mapping[str, Any], output_path: str | Path | None) -> str:
+    step = frame.get("step") if isinstance(frame.get("step"), Mapping) else {}
+    screenshot = frame.get("screenshot") if isinstance(frame.get("screenshot"), Mapping) else {}
+    index = frame.get("index", step.get("index") if isinstance(step, Mapping) else "")
+    image_src = _replay_frame_image_src(screenshot.get("path"), output_path)
+    canvas_metrics = screenshot.get("canvasMetrics")
+    nonblank = canvas_metrics.get("nonblank") if isinstance(canvas_metrics, Mapping) else None
+    nonblank_class = "" if nonblank is True else ' class="bad"'
+    kind = escape(str(step.get("kind", "")))
+    revision = escape(str(step.get("sceneRevision", screenshot.get("sceneRevision", ""))))
+    updates = escape(str(step.get("updates", "")))
+    route = escape(str(step.get("route", "n/a")))
+    step_line = (
+        f"frame <code>{escape(str(index))}</code> &middot; "
+        f"step <code>{kind}</code> &middot; revision <code>{revision}</code>"
+    )
+    route_line = f"updates <code>{updates}</code> &middot; route <code>{route}</code>"
+    return f"""    <figure>
+      <img src="{escape(image_src)}" alt="Replay frame {escape(str(index))}">
+      <figcaption>
+        <span>{step_line}</span>
+        <span>{route_line}</span>
+        <span{nonblank_class}>canvas nonblank: <code>{escape(str(nonblank))}</code></span>
+      </figcaption>
+    </figure>"""
+
+
+def _replay_frame_image_src(value: Any, output_path: str | Path | None) -> str:
+    if not isinstance(value, str) or not value:
+        return ""
+    if output_path is None:
+        return Path(value).as_posix()
+    output_parent = Path(output_path).parent.resolve()
+    image_path = Path(value)
+    if not image_path.is_absolute():
+        image_path = (Path.cwd() / image_path).resolve()
+    return Path(os.path.relpath(image_path, output_parent)).as_posix()
 
 
 def _normalize_render_intent(value: Any) -> None:
@@ -867,12 +970,14 @@ __all__ = [
     "replay_baseline_from_result",
     "replay_baseline_scene",
     "replay_frame_screenshot_manifest",
+    "replay_frame_review_html",
     "replay_timeline_from_result",
     "run_replay_data",
     "run_replay_file",
     "run_replay_suite",
     "write_replay_result",
     "write_replay_frame_screenshot_manifest",
+    "write_replay_frame_review_html",
     "write_replay_timeline",
     "write_replay_baseline",
     "write_scene",

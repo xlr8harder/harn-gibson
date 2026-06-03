@@ -191,7 +191,9 @@ def run(argv: Sequence[str] | None = None) -> int:
         from harn_gibson.replay import (
             ReplayExpectationError,
             capture_replay_frame_screenshots,
+            replay_frame_screenshot_manifest,
             run_replay_file,
+            write_replay_frame_review_html,
             write_replay_frame_screenshot_manifest,
             write_replay_result,
             write_replay_timeline,
@@ -223,10 +225,15 @@ def run(argv: Sequence[str] | None = None) -> int:
                 width=args.screenshot_width,
                 height=args.screenshot_height,
             )
+            screenshot_manifest = replay_frame_screenshot_manifest(result, screenshots)
             write_replay_frame_screenshot_manifest(
                 Path(args.timeline_screenshot_dir) / "manifest.json",
                 result,
                 screenshots,
+            )
+            write_replay_frame_review_html(
+                Path(args.timeline_screenshot_dir) / "index.html",
+                screenshot_manifest,
             )
             print(f"captured replay timeline screenshots: {args.timeline_screenshot_dir} ({len(screenshots)} frames)")
         if args.screenshot:
