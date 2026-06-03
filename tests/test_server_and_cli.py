@@ -614,6 +614,10 @@ def test_cli_parser_and_run(monkeypatch: Any, capsys: Any) -> None:
             "result.json",
             "--output-render-contexts",
             "contexts.json",
+            "--output-render-intents",
+            "intents.json",
+            "--render-intent-review",
+            "intents.html",
             "--output-timeline",
             "timeline.json",
             "--timeline-screenshot-dir",
@@ -633,6 +637,8 @@ def test_cli_parser_and_run(monkeypatch: Any, capsys: Any) -> None:
     assert parsed_replay.output_scene == "scene.json"
     assert parsed_replay.output_result == "result.json"
     assert parsed_replay.output_render_contexts == "contexts.json"
+    assert parsed_replay.output_render_intents == "intents.json"
+    assert parsed_replay.render_intent_review == "intents.html"
     assert parsed_replay.output_timeline == "timeline.json"
     assert parsed_replay.timeline_screenshot_dir == "frames"
     assert parsed_replay.screenshot == "scene.png"
@@ -693,6 +699,8 @@ def test_cli_replay_writes_outputs(tmp_path: Any, capsys: Any) -> None:
     scene_path = tmp_path / "scene.json"
     result_path = tmp_path / "result.json"
     contexts_path = tmp_path / "contexts.json"
+    intents_path = tmp_path / "intents.json"
+    intents_review_path = tmp_path / "intents.html"
     timeline_path = tmp_path / "timeline.json"
     event = {
         "sequence": 1,
@@ -717,6 +725,10 @@ def test_cli_replay_writes_outputs(tmp_path: Any, capsys: Any) -> None:
                 str(result_path),
                 "--output-render-contexts",
                 str(contexts_path),
+                "--output-render-intents",
+                str(intents_path),
+                "--render-intent-review",
+                str(intents_review_path),
                 "--output-timeline",
                 str(timeline_path),
                 "--style",
@@ -731,11 +743,18 @@ def test_cli_replay_writes_outputs(tmp_path: Any, capsys: Any) -> None:
     assert scene["metadata"]["displayStyle"] == "mainframe"
     result = json.loads(result_path.read_text(encoding="utf-8"))
     contexts = json.loads(contexts_path.read_text(encoding="utf-8"))
+    intents = json.loads(intents_path.read_text(encoding="utf-8"))
+    intents_review = intents_review_path.read_text(encoding="utf-8")
     timeline = json.loads(timeline_path.read_text(encoding="utf-8"))
     assert result["steps"][0]["updates"] == 1
     assert result["rendererContexts"][0]["context"]["mode"] == "compaction"
     assert contexts["contextCount"] == 1
     assert contexts["contexts"][0]["context"]["project"]["displayStyle"] == "mainframe"
+    assert intents["schema"] == "harn-gibson.replay-render-intents.v1"
+    assert intents["intentCount"] == 1
+    assert intents["intents"][0]["intent"]["renderer"] == "deterministic"
+    assert "render intent review" in intents_review
+    assert "deterministic" in intents_review
     assert result["frames"][0]["scene"]["metadata"]["displayStyle"] == "mainframe"
     assert timeline["frameCount"] == 1
     assert timeline["frames"][0]["step"]["sceneRevision"] == 1

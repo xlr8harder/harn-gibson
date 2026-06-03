@@ -95,6 +95,8 @@ uv run harn-gibson replay examples/replays/stream-and-diagnostic.json \
   --output-scene test-artifacts/replays/scene.json \
   --output-result test-artifacts/replays/result.json \
   --output-render-contexts test-artifacts/replays/renderer-contexts.json \
+  --output-render-intents test-artifacts/replays/render-intents.json \
+  --render-intent-review test-artifacts/replays/render-intents.html \
   --output-timeline test-artifacts/replays/timeline.json \
   --timeline-screenshot-dir test-artifacts/replays/timeline-frames \
   --screenshot test-artifacts/replays/scene.png \
@@ -104,5 +106,7 @@ uv run harn-gibson replay examples/replays/stream-and-diagnostic.json \
 Screenshot result metadata includes `canvasMetrics` with canvas dimensions, sampled pixel count, luminance total, lit-pixel count, lit ratio, maximum channel total, and a `nonblank` boolean. This makes replay screenshot artifacts reviewable in CI output even before a human opens the PNG.
 
 `--output-render-contexts` records each `harn-gibson.renderer-context.v1` payload that replay sent to a renderer. Stream-buffer, debug-only, direct-scene, and saved-render-plan steps do not invent renderer contexts; the artifact is an exact review aid for model-renderer prompt inputs, compaction cadence, repo topology, touched-file extraction, and render-input batching.
+
+`--output-render-intents` writes `harn-gibson.replay-render-intents.v1`, a compact artifact extracted from `scene.metadata.renderIntents`. It preserves exact render-intent timelines, renderer names, requested intents, event types, routes, effects, targets, mutation counts, and plan metadata. `--render-intent-review` writes a standalone HTML page over the same payload, which is useful when reviewing whether a renderer planned a coherent sequence before looking at screenshots or final scene JSON.
 
 `--output-timeline` enables per-step frame capture and writes `harn-gibson.replay-timeline.v1`. Each frame contains the replay step result and the full scene snapshot after that step. `--timeline-screenshot-dir` renders those captured frames as `frame-0000.png`, `frame-0001.png`, and so on, plus a `manifest.json` with canvas metrics for each screenshot and an `index.html` review page. The review page includes a large active frame, previous/next controls, autoplay, a scrubber, and a clickable filmstrip. This is intentionally separate from the final-scene baseline so a long captured session can be reviewed, chunked for a future renderer agent, or converted into screenshot/keyframe tooling without changing ordinary replay result size.

@@ -796,6 +796,28 @@ def write_replay_renderer_contexts(path: str | Path, result: ReplayResult) -> No
     )
 
 
+def replay_render_intents_from_result(result: ReplayResult) -> dict[str, Any]:
+    intents = _render_intents_from_scene_metadata(result.scene.metadata)
+    return {
+        "schema": "harn-gibson.replay-render-intents.v1",
+        "replayName": result.name,
+        "replaySchema": result.schema,
+        "stepCount": len(result.steps),
+        "intentCount": len(intents),
+        "intents": [{"index": index, "intent": intent} for index, intent in enumerate(intents)],
+        "metadata": result.metadata,
+    }
+
+
+def write_replay_render_intents(path: str | Path, result: ReplayResult) -> None:
+    intents_path = Path(path)
+    intents_path.parent.mkdir(parents=True, exist_ok=True)
+    intents_path.write_text(
+        json.dumps(replay_render_intents_from_result(result), indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+
 def capture_replay_frame_screenshots(
     result: ReplayResult,
     output_dir: str | Path,
@@ -1074,11 +1096,211 @@ def write_replay_frame_review_html(path: str | Path, manifest: Mapping[str, Any]
     review_path.write_text(replay_frame_review_html(manifest, output_path=review_path), encoding="utf-8")
 
 
+def replay_render_intents_review_html(payload: Mapping[str, Any]) -> str:
+    entries = payload.get("intents")
+    rendered_entries = [entry for entry in entries if isinstance(entry, Mapping)] if isinstance(entries, list) else []
+    title = str(payload.get("replayName") or "replay render intents")
+    schema = escape(str(payload.get("schema", "")))
+    intent_count = escape(str(payload.get("intentCount", len(rendered_entries))))
+    review_entries = [_render_intent_review_entry(entry) for entry in rendered_entries]
+    embedded_entries = _html_script_json(review_entries)
+    cards = "\n".join(_render_intent_review_card(entry) for entry in review_entries)
+    if not cards:
+        cards = '    <section class="empty">No render intents were recorded for this replay.</section>'
+    return f"""<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{escape(title)} render intent review</title>
+  <style>
+    :root {{ color-scheme: dark; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }}
+    body {{ margin: 0; background: #030507; color: #d9fff7; }}
+    header {{
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      padding: 18px 22px;
+      background: rgba(3, 5, 7, 0.94);
+      border-bottom: 1px solid rgba(35, 255, 214, 0.30);
+    }}
+    h1 {{ margin: 0 0 6px; font-size: 22px; letter-spacing: 0; }}
+    .meta {{ color: #7ee8d0; font-size: 13px; }}
+    main {{
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+      gap: 18px;
+      padding: 20px;
+    }}
+    article {{
+      display: grid;
+      gap: 12px;
+      border: 1px solid rgba(35, 255, 214, 0.26);
+      background: rgba(5, 16, 19, 0.88);
+      padding: 16px;
+    }}
+    article[data-renderer="direct"] {{ border-color: rgba(255, 207, 99, 0.34); }}
+    h2 {{ margin: 0; color: #ffcf63; font-size: 15px; letter-spacing: 0; overflow-wrap: anywhere; }}
+    .summary {{
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+      color: #b8fff3;
+      font-size: 12px;
+    }}
+    .summary span {{ overflow-wrap: anywhere; }}
+    code {{ color: #ffcf63; }}
+    .badge-set {{ display: grid; gap: 5px; }}
+    .badge-label {{ color: #7ee8d0; font-size: 11px; text-transform: uppercase; }}
+    .badge-row {{ display: flex; flex-wrap: wrap; gap: 6px; }}
+    .badge {{
+      border: 1px solid rgba(35, 255, 214, 0.28);
+      background: rgba(2, 8, 10, 0.92);
+      color: #d9fff7;
+      padding: 4px 7px;
+      font-size: 11px;
+    }}
+    .badge.effect {{ border-color: rgba(255, 95, 157, 0.36); color: #ffc2dc; }}
+    .badge.target {{ border-color: rgba(126, 232, 208, 0.36); color: #b8fff3; }}
+    pre {{
+      margin: 0;
+      max-height: 260px;
+      overflow: auto;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      border-top: 1px solid rgba(35, 255, 214, 0.18);
+      padding-top: 10px;
+      color: #9bd7ca;
+      font-size: 11px;
+      line-height: 1.42;
+    }}
+    .empty {{
+      border: 1px solid rgba(255, 207, 99, 0.30);
+      padding: 18px;
+      color: #ffcf63;
+      background: rgba(6, 12, 14, 0.86);
+    }}
+  </style>
+</head>
+<body>
+  <header>
+    <h1>{escape(title)} render intent review</h1>
+    <div class="meta">{intent_count} intents &middot; schema {schema}</div>
+  </header>
+  <main>
+{cards}
+  </main>
+  <script>
+    window.__gibsonRenderIntents = {embedded_entries};
+  </script>
+</body>
+</html>
+"""
+
+
+def write_replay_render_intents_review_html(path: str | Path, payload: Mapping[str, Any]) -> None:
+    review_path = Path(path)
+    review_path.parent.mkdir(parents=True, exist_ok=True)
+    review_path.write_text(replay_render_intents_review_html(payload), encoding="utf-8")
+
+
 def _baseline_mismatch_error(expected_scene: Mapping[str, Any], actual_scene: Mapping[str, Any]) -> str:
     expected = json.dumps(expected_scene, indent=2, sort_keys=True).splitlines()
     actual = json.dumps(actual_scene, indent=2, sort_keys=True).splitlines()
     diff = "\n".join(islice(unified_diff(expected, actual, fromfile="baseline", tofile="actual", lineterm=""), 80))
     return f"baseline scene mismatch\n{diff}"
+
+
+def _render_intents_from_scene_metadata(metadata: Mapping[str, Any]) -> tuple[dict[str, Any], ...]:
+    value = metadata.get("renderIntents")
+    if isinstance(value, list):
+        intents = [deepcopy(dict(item)) for item in value if isinstance(item, Mapping)]
+        if intents:
+            return tuple(intents)
+    last = metadata.get("lastRenderIntent")
+    if isinstance(last, Mapping):
+        return (deepcopy(dict(last)),)
+    return ()
+
+
+def _render_intent_review_entry(entry: Mapping[str, Any]) -> dict[str, Any]:
+    raw_intent = entry.get("intent")
+    intent = dict(raw_intent) if isinstance(raw_intent, Mapping) else dict(entry)
+    timeline = intent.get("timeline")
+    timeline_payload = dict(timeline) if isinstance(timeline, Mapping) else {}
+    metadata = intent.get("metadata")
+    return {
+        "index": _coerce_int(entry.get("index"), 0),
+        "renderer": str(intent.get("renderer") or "unknown"),
+        "intent": str(intent.get("intent") or "render scene"),
+        "requestCount": _coerce_int(intent.get("requestCount"), 0),
+        "stepCount": _coerce_int(intent.get("stepCount"), 0),
+        "mutationCount": _coerce_int(intent.get("mutationCount"), 0),
+        "eventTypes": _string_list(intent.get("eventTypes")),
+        "routes": _string_list(intent.get("routes")),
+        "effects": _string_list(intent.get("effects")),
+        "targets": _string_list(intent.get("targets")),
+        "timeline": {
+            "startMs": _coerce_int(timeline_payload.get("startMs"), 0),
+            "endMs": _coerce_int(timeline_payload.get("endMs"), 0),
+            "durationMs": _coerce_int(timeline_payload.get("durationMs"), 0),
+        },
+        "metadata": dict(metadata) if isinstance(metadata, Mapping) else {},
+    }
+
+
+def _render_intent_review_card(entry: Mapping[str, Any]) -> str:
+    index = escape(str(entry.get("index", "")))
+    renderer = escape(str(entry.get("renderer", "unknown")))
+    intent = escape(str(entry.get("intent", "render scene")))
+    timeline = entry.get("timeline") if isinstance(entry.get("timeline"), Mapping) else {}
+    timeline_text = (
+        f"{escape(str(timeline.get('startMs', 0)))}ms -> "
+        f"{escape(str(timeline.get('endMs', 0)))}ms "
+        f"({escape(str(timeline.get('durationMs', 0)))}ms)"
+    )
+    event_types = _badge_row(entry.get("eventTypes"), "event")
+    routes = _badge_row(entry.get("routes"), "route")
+    effects = _badge_row(entry.get("effects"), "effect")
+    targets = _badge_row(entry.get("targets"), "target")
+    metadata = escape(json.dumps(entry.get("metadata", {}), indent=2, sort_keys=True))
+    return f"""    <article data-renderer="{renderer}">
+      <h2>#{index} {intent}</h2>
+      <div class="summary">
+        <span>renderer <code>{renderer}</code></span>
+        <span>timeline <code>{timeline_text}</code></span>
+        <span>requests <code>{escape(str(entry.get("requestCount", 0)))}</code></span>
+        <span>steps <code>{escape(str(entry.get("stepCount", 0)))}</code></span>
+        <span>mutations <code>{escape(str(entry.get("mutationCount", 0)))}</code></span>
+      </div>
+      <div class="badge-set"><span class="badge-label">events</span><div class="badge-row">{event_types}</div></div>
+      <div class="badge-set"><span class="badge-label">routes</span><div class="badge-row">{routes}</div></div>
+      <div class="badge-set"><span class="badge-label">effects</span><div class="badge-row">{effects}</div></div>
+      <div class="badge-set"><span class="badge-label">targets</span><div class="badge-row">{targets}</div></div>
+      <pre>{metadata}</pre>
+    </article>"""
+
+
+def _badge_row(value: Any, badge_class: str) -> str:
+    items = _string_list(value)
+    if not items:
+        return f'<span class="badge {badge_class}">none</span>'
+    return "".join(f'<span class="badge {badge_class}">{escape(item)}</span>' for item in items)
+
+
+def _string_list(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [str(item) for item in value if isinstance(item, str | int | float | bool)]
+
+
+def _coerce_int(value: Any, fallback: int) -> int:
+    if value is None:
+        return fallback
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return fallback
 
 
 def _replay_frame_review_card(position: int, frame: Mapping[str, Any], output_path: str | Path | None) -> str:
@@ -1224,6 +1446,8 @@ __all__ = [
     "replay_frame_screenshot_manifest",
     "replay_frame_review_html",
     "replay_renderer_contexts_from_result",
+    "replay_render_intents_from_result",
+    "replay_render_intents_review_html",
     "replay_timeline_from_result",
     "run_replay_data",
     "run_replay_file",
@@ -1232,6 +1456,8 @@ __all__ = [
     "write_replay_frame_screenshot_manifest",
     "write_replay_frame_review_html",
     "write_replay_renderer_contexts",
+    "write_replay_render_intents",
+    "write_replay_render_intents_review_html",
     "write_replay_timeline",
     "write_replay_baseline",
     "write_scene",

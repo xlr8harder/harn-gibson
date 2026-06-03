@@ -14,6 +14,8 @@ from harn_gibson import (
     ReplayResult,
     ReplayStepResult,
     replay_frame_review_html,
+    replay_render_intents_from_result,
+    replay_render_intents_review_html,
     replay_timeline_from_result,
     run_replay_data,
     run_replay_file,
@@ -42,12 +44,14 @@ from harn_gibson.replay import (
     write_replay_baseline,
     write_replay_frame_review_html,
     write_replay_frame_screenshot_manifest,
+    write_replay_render_intents,
+    write_replay_render_intents_review_html,
     write_replay_renderer_contexts,
     write_replay_result,
     write_replay_timeline,
     write_scene,
 )
-from harn_gibson.scene import SceneMutation
+from harn_gibson.scene import SceneMutation, SceneState
 from harn_gibson.server import GibsonServerState
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -148,6 +152,59 @@ def test_replay_event_steps_file_io_and_writers(tmp_path: Path, monkeypatch: pyt
     assert len(forwarded_contexts) == 1
     assert chained_result.renderer_contexts[0].context["mode"] == "compaction"
     assert chained_state.pipeline.context_recorder is record_forwarded_context
+
+    render_intents_path = tmp_path / "out" / "render-intents.json"
+    render_intents_review_path = tmp_path / "out" / "render-intents.html"
+    render_intents = replay_render_intents_from_result(result)
+    write_replay_render_intents(render_intents_path, result)
+    write_replay_render_intents_review_html(render_intents_review_path, render_intents)
+    render_intents_payload = json.loads(render_intents_path.read_text(encoding="utf-8"))
+    render_intents_review = render_intents_review_path.read_text(encoding="utf-8")
+
+    assert render_intents["schema"] == "harn-gibson.replay-render-intents.v1"
+    assert render_intents["intentCount"] == 2
+    assert render_intents["intents"][0]["index"] == 0
+    assert render_intents["intents"][0]["intent"]["eventTypes"] == ["tool_call"]
+    assert render_intents["intents"][0]["intent"]["routes"] == ["renderer_agent"]
+    assert render_intents["intents"][0]["intent"]["timeline"] == {"startMs": 1001, "endMs": 1001, "durationMs": 0}
+    assert render_intents["intents"][1]["intent"]["routes"] == ["stream_buffer"]
+    assert render_intents_payload["intentCount"] == 2
+    assert "event replay render intent review" in render_intents_review
+    assert "window.__gibsonRenderIntents" in render_intents_review
+    assert "stream_buffer" in render_intents_review
+    assert "<\\/script>" in replay_render_intents_review_html(
+        {
+            "replayName": "script",
+            "schema": "test",
+            "intents": [
+                {
+                    "index": "bad",
+                    "intent": {
+                        "renderer": "</script>",
+                        "intent": "<b>bold</b>",
+                        "eventTypes": ["tool_call"],
+                        "metadata": {"payload": "</script>"},
+                    },
+                }
+            ],
+        }
+    )
+    assert "No render intents" in replay_render_intents_review_html(
+        {"replayName": "empty", "schema": "test", "intents": []}
+    )
+    fallback_result = ReplayResult(
+        schema="test",
+        name="fallback",
+        steps=(),
+        scene=SceneState(),
+    )
+    fallback_result.scene.metadata["renderIntents"] = []
+    fallback_result.scene.metadata["lastRenderIntent"] = {"renderer": "legacy", "intent": "old scene"}
+    assert replay_render_intents_from_result(fallback_result)["intents"] == [
+        {"index": 0, "intent": {"renderer": "legacy", "intent": "old scene"}}
+    ]
+    fallback_result.scene.metadata.clear()
+    assert replay_render_intents_from_result(fallback_result)["intentCount"] == 0
 
     framed = run_replay_file(path, capture_frames=True)
     timeline_path = tmp_path / "out" / "timeline.json"
