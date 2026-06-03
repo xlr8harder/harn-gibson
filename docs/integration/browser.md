@@ -16,7 +16,7 @@ uv run pytest
 
 Screenshots from the browser integration test are written under `test-artifacts/screenshots/`. Replay screenshot capture also records canvas metrics, rejects blank canvas output by default, and can apply fixture-level `screenshotExpect` checks against those metrics.
 
-Replay fixtures can also render their final scene through the browser display. The browser integration suite renders the checked-in replay fixtures, verifies nonblank canvas metrics, checks non-default style packs, and inspects the `hologram` projection state, `signal_scope` radar/waveform state, `tunnel_grid` corridor state, `trace_route` packet state, `city_block` camera state, `svg_layer` structured vector render state including path morph counts, sampled vector keyframe state, vector filter/clip effect state, `timeline_cue` and `breach_wave` animation state, plus `data_rain` glyph-curtain state used by the primitive gallery:
+Replay fixtures can also render their final scene through the browser display. The browser integration suite renders the checked-in replay fixtures, verifies nonblank canvas metrics, checks non-default style packs, and inspects the `hologram` projection state, `signal_scope` radar/waveform state, `tunnel_grid` corridor state, `trace_route` packet state, `city_block` camera state, `svg_layer` structured vector render state including path morph counts, sampled vector keyframe state, vector filter/clip effect state, `timeline_cue`, `breach_wave`, and `camera_jolt` animation state, plus `data_rain` glyph-curtain state used by the primitive gallery:
 
 ```bash
 uv run harn-gibson replay examples/replays/stream-and-diagnostic.json \

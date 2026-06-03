@@ -393,15 +393,18 @@ def test_browser_display_renders_timeline_cue_animation() -> None:
                 page.goto(base, wait_until="domcontentloaded")
                 page.wait_for_function("window.__gibsonTimelineCueState?.['gallery-cues']?.cueCount === 4")
                 page.wait_for_function("window.__gibsonBreachWaveState?.['gallery-breach']?.ringCount === 5")
+                page.wait_for_function("window.__gibsonCameraState?.animationIds?.includes('gallery-camera')")
                 state_payload = page.evaluate(
                     """() => ({
                       animationKinds: window.__gibsonAnimationState.kinds,
                       cueState: window.__gibsonTimelineCueState["gallery-cues"],
                       breachState: window.__gibsonBreachWaveState["gallery-breach"],
+                      cameraState: window.__gibsonCameraState,
                     })"""
                 )
                 assert "timeline_cue" in state_payload["animationKinds"]
                 assert "breach_wave" in state_payload["animationKinds"]
+                assert "camera_jolt" in state_payload["animationKinds"]
                 assert state_payload["cueState"] == {
                     "targetId": "animation-vector",
                     "cueCount": 4,
@@ -423,6 +426,20 @@ def test_browser_display_renders_timeline_cue_animation() -> None:
                     "progress": state_payload["breachState"]["progress"],
                 }
                 assert 0 <= state_payload["breachState"]["progress"] <= 1
+                assert state_payload["cameraState"] == {
+                    "activeCount": 1,
+                    "animationIds": ["gallery-camera"],
+                    "targetIds": ["animation-vector"],
+                    "anchorX": state_payload["cameraState"]["anchorX"],
+                    "anchorY": state_payload["cameraState"]["anchorY"],
+                    "x": state_payload["cameraState"]["x"],
+                    "y": state_payload["cameraState"]["y"],
+                    "scale": state_payload["cameraState"]["scale"],
+                    "rotation": state_payload["cameraState"]["rotation"],
+                }
+                assert state_payload["cameraState"]["anchorX"] > 0
+                assert state_payload["cameraState"]["anchorY"] > 0
+                assert state_payload["cameraState"]["scale"] > 0
                 assert_canvas_nonblank(page)
             finally:
                 browser.close()

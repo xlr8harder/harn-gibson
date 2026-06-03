@@ -73,6 +73,7 @@ _BROWSER_ANIMATION_KINDS = frozenset(
         "scan",
         "glitch",
         "breach_wave",
+        "camera_jolt",
         "flythrough",
         "extrude",
         "hold",

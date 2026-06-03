@@ -307,6 +307,13 @@ def default_visual_catalog() -> VisualCatalog:
                 ("gibson", "cinematic", "motion", "timed"),
             ),
             CatalogEntry(
+                "camera_jolt",
+                "effect",
+                "Scene-level shake, zoom, and roll for impact beats or sudden traversal changes.",
+                ("targetId", "durationMs", "intensity", "zoom", "roll", "position", "seed"),
+                ("gibson", "cinematic", "camera", "timed"),
+            ),
+            CatalogEntry(
                 "scan",
                 "effect",
                 "Sweep a beam, line, frustum, or grid over a target.",

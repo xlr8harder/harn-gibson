@@ -49,6 +49,7 @@ def test_default_visual_catalog_has_generic_and_cinematic_building_blocks() -> N
     assert {
         "glitch",
         "breach_wave",
+        "camera_jolt",
         "flythrough",
         "packet_burst",
         "timeline_cue",
@@ -128,6 +129,10 @@ def test_default_visual_catalog_has_generic_and_cinematic_building_blocks() -> N
     assert breach_wave is not None
     assert {"targetId", "intensity", "rings", "shards", "label", "position"} <= set(breach_wave.props)
     assert {"gibson", "cinematic", "motion", "timed"} <= set(breach_wave.tags)
+    camera_jolt = catalog.entry("camera_jolt")
+    assert camera_jolt is not None
+    assert {"targetId", "intensity", "zoom", "roll", "position", "seed"} <= set(camera_jolt.props)
+    assert {"gibson", "cinematic", "camera", "timed"} <= set(camera_jolt.tags)
     timeline_cue = catalog.entry("timeline_cue")
     assert timeline_cue is not None
     assert {"targetId", "cues", "durationMs", "label"} <= set(timeline_cue.props)

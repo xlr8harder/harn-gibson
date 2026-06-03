@@ -25,6 +25,21 @@
         "startedAtMs": 9670,
         "targetId": "animation-vector"
       },
+      "gallery-camera": {
+        "durationMs": 3600,
+        "id": "gallery-camera",
+        "kind": "camera_jolt",
+        "loop": true,
+        "props": {
+          "intensity": 0.84,
+          "phase": "after",
+          "roll": 0.014,
+          "seed": 964,
+          "zoom": 0.022
+        },
+        "startedAtMs": 9675,
+        "targetId": "animation-vector"
+      },
       "gallery-cues": {
         "durationMs": 6200,
         "id": "gallery-cues",
@@ -165,7 +180,7 @@
         "eventType": "animation_gallery",
         "phase": "lifecycle",
         "sequence": 960,
-        "summary": "persistent pulses, packets, timeline cues, scans, glitch, breach waves, flythrough, extrusion, and hold brackets",
+        "summary": "persistent pulses, packets, timeline cues, scans, glitch, breach waves, camera jolts, flythrough, extrusion, and hold brackets",
         "title": "Animation gallery"
       }
     ],
@@ -183,6 +198,7 @@
           "animation:scan",
           "animation:glitch",
           "animation:breach_wave",
+          "animation:camera_jolt",
           "animation:flythrough",
           "animation:extrude",
           "animation:hold"
@@ -195,7 +211,7 @@
           "renderer": "replay",
           "stepType": "mutations"
         },
-        "mutationCount": 14,
+        "mutationCount": 15,
         "renderer": "replay",
         "requestCount": 1,
         "routes": [
@@ -228,6 +244,7 @@
             "animation:scan",
             "animation:glitch",
             "animation:breach_wave",
+            "animation:camera_jolt",
             "animation:flythrough",
             "animation:extrude",
             "animation:hold"
@@ -240,7 +257,7 @@
             "renderer": "replay",
             "stepType": "mutations"
           },
-          "mutationCount": 14,
+          "mutationCount": 15,
           "renderer": "replay",
           "requestCount": 1,
           "routes": [

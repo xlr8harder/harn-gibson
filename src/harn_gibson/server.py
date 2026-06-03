@@ -1078,8 +1078,13 @@ function draw() {
   const w = canvas.width;
   const h = canvas.height;
   const now = performance.now();
+  syncAnimationClocks(currentScene, now);
+  const camera = sceneCameraState(currentScene, w, h, now);
   drawBackdrop(w, h, now);
+  ctx.save();
+  applySceneCamera(camera, w, h);
   drawScenePrimitives(currentScene, w, h, now);
+  ctx.restore();
   drawSceneAnimations(currentScene, w, h, now);
   drawPulses(w, h);
   requestAnimationFrame(draw);
@@ -1229,6 +1234,91 @@ function animationProgress(animation, now) {
 
 function animationTone(animation) {
   return animation.props?.tone || colorPhaseTone(animation.props?.phase) || "cyan";
+}
+
+function sceneCameraState(scene, w, h, now) {
+  const animations = Object.values(scene?.animations || {});
+  const active = [];
+  for (const animation of animations) {
+    if (animation.kind !== "camera_jolt") continue;
+    const progress = animationProgress(animation, now);
+    if (!animation.loop && progress >= 1) continue;
+    const props = animation.props || {};
+    const intensity = clamp(finiteNumber(props.intensity, 0.72), 0.02, 2.5);
+    const seed = finiteNumber(props.seed, animation.id.length);
+    const envelope = Math.sin(progress * Math.PI);
+    const tremor = Math.sin(now * 0.049 + seed * 1.37) * Math.cos(now * 0.029 + seed * 0.73);
+    const anchor = props.position ? normalizedPoint(props.position, w, h) : animationAnchor(animation, scene, w, h);
+    active.push({
+      id: animation.id,
+      targetId: animation.targetId,
+      progress,
+      anchor,
+      intensity,
+      x: Math.sin(now * 0.041 + seed) * Math.min(w, h) * 0.012 * intensity * envelope,
+      y: Math.cos(now * 0.052 + seed * 0.43) * Math.min(w, h) * 0.009 * intensity * envelope,
+      scale: 1 + envelope * finiteNumber(props.zoom, 0.028) * intensity + tremor * 0.003 * intensity,
+      rotation:
+        Math.sin(now * 0.035 + seed * 0.31)
+        * finiteNumber(props.roll ?? props.rotation, 0.018)
+        * intensity
+        * envelope,
+    });
+  }
+  const state = active.reduce(
+    (camera, item) => ({
+      activeCount: camera.activeCount + 1,
+      animationIds: [...camera.animationIds, item.id],
+      targetIds: [...camera.targetIds, item.targetId],
+      anchorX: camera.anchorX + item.anchor.x,
+      anchorY: camera.anchorY + item.anchor.y,
+      x: camera.x + item.x,
+      y: camera.y + item.y,
+      scale: camera.scale * item.scale,
+      rotation: camera.rotation + item.rotation,
+    }),
+    {
+      activeCount: 0,
+      animationIds: [],
+      targetIds: [],
+      anchorX: 0,
+      anchorY: 0,
+      x: 0,
+      y: 0,
+      scale: 1,
+      rotation: 0,
+    },
+  );
+  if (state.activeCount > 0) {
+    state.anchorX /= state.activeCount;
+    state.anchorY /= state.activeCount;
+  } else {
+    state.anchorX = w * 0.5;
+    state.anchorY = h * 0.5;
+  }
+  const rounded = {
+    activeCount: state.activeCount,
+    animationIds: state.animationIds,
+    targetIds: state.targetIds,
+    anchorX: vectorRounded(state.anchorX),
+    anchorY: vectorRounded(state.anchorY),
+    x: vectorRounded(state.x),
+    y: vectorRounded(state.y),
+    scale: vectorRounded(state.scale),
+    rotation: vectorRounded(state.rotation),
+  };
+  if (typeof window !== "undefined") window.__gibsonCameraState = rounded;
+  return state;
+}
+
+function applySceneCamera(camera, w, h) {
+  if (!camera || camera.activeCount <= 0) return;
+  const anchorX = Number.isFinite(camera.anchorX) ? camera.anchorX : w * 0.5;
+  const anchorY = Number.isFinite(camera.anchorY) ? camera.anchorY : h * 0.5;
+  ctx.translate(anchorX + camera.x, anchorY + camera.y);
+  ctx.rotate(camera.rotation);
+  ctx.scale(camera.scale, camera.scale);
+  ctx.translate(-anchorX, -anchorY);
 }
 
 function colorPhaseTone(phase) {

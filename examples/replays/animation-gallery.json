@@ -19,6 +19,7 @@
       {"path": "animations.gallery-glitch.kind", "equals": "glitch"},
       {"path": "animations.gallery-breach.kind", "equals": "breach_wave"},
       {"path": "animations.gallery-breach.props.label", "equals": "ICE BREACH"},
+      {"path": "animations.gallery-camera.kind", "equals": "camera_jolt"},
       {"path": "animations.gallery-fly.kind", "equals": "flythrough"},
       {"path": "animations.gallery-extrude.kind", "equals": "extrude"},
       {"path": "animations.gallery-hold.kind", "equals": "hold"}
@@ -52,7 +53,7 @@
             "phase": "lifecycle",
             "eventType": "animation_gallery",
             "title": "Animation gallery",
-            "summary": "persistent pulses, packets, timeline cues, scans, glitch, breach waves, flythrough, extrusion, and hold brackets"
+            "summary": "persistent pulses, packets, timeline cues, scans, glitch, breach waves, camera jolts, flythrough, extrusion, and hold brackets"
           }
         },
         {
@@ -263,6 +264,24 @@
               "slices": 6,
               "label": "ICE BREACH",
               "seed": 963
+            }
+          }
+        },
+        {
+          "op": "start_animation",
+          "animation": {
+            "id": "gallery-camera",
+            "targetId": "animation-vector",
+            "kind": "camera_jolt",
+            "startedAtMs": 9675,
+            "durationMs": 3600,
+            "loop": true,
+            "props": {
+              "phase": "after",
+              "intensity": 0.84,
+              "zoom": 0.022,
+              "roll": 0.014,
+              "seed": 964
             }
           }
         },
