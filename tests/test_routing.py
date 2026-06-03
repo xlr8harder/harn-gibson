@@ -5,11 +5,14 @@ from harn_gibson.rendering import RenderRequest
 from harn_gibson.routing import (
     EventRouter,
     EventRouteRule,
+    RendererEventInterest,
     RenderInputBatch,
     RouteDecision,
     StreamBinding,
     TimelineWindow,
     default_stream_bindings,
+    renderer_event_interest_from_renderer,
+    renderer_event_interest_from_value,
     stream_buffer_mutations,
     stream_text_for_event,
 )
@@ -37,6 +40,14 @@ def test_stream_binding_route_decision_and_defaults_to_dict() -> None:
     binding = StreamBinding("message_update", "main", "target", "Main stream", flush_ms=50)
     decision = RouteDecision("stream_buffer", "local append", False, "main", "target", {"binding": binding.to_dict()})
     rule = EventRouteRule("tool_result", "direct_scene", "local result handling", {"sample": True})
+    interest = RendererEventInterest(
+        event_types=("tool_call",),
+        phases=("before",),
+        exclude_event_types=("browser_input",),
+        fallback_route="debug_only",
+        reason="selective renderer",
+        metadata={"owner": "renderer"},
+    )
 
     assert default_stream_bindings()[0].event_type == "message_update"
     assert binding.to_dict()["flushMs"] == 50
@@ -53,6 +64,20 @@ def test_stream_binding_route_decision_and_defaults_to_dict() -> None:
         "route": "direct_scene",
         "reason": "local result handling",
         "metadata": {"sample": True},
+    }
+    assert interest.to_dict() == {
+        "fallbackRoute": "debug_only",
+        "reason": "selective renderer",
+        "eventTypes": ["tool_call"],
+        "phases": ["before"],
+        "excludeEventTypes": ["browser_input"],
+        "metadata": {"owner": "renderer"},
+    }
+    assert interest.wants(event(1, "tool_call")) is True
+    assert interest.wants(event(2, "tool_result")) is False
+    assert RendererEventInterest().to_dict() == {
+        "fallbackRoute": "direct_scene",
+        "reason": "renderer not interested",
     }
 
 
@@ -95,6 +120,90 @@ def test_event_router_route_rules_cover_renderer_direct_debug_and_drop() -> None
     assert dropped.batch.to_dict()["route"] == "drop"
     assert renderer.uses_renderer is True
     assert renderer.decision.reason == "force renderer"
+
+
+def test_event_router_uses_renderer_interest_after_streams_and_rules() -> None:
+    router = EventRouter(
+        route_rules=(EventRouteRule("session_tree", "debug_only", "rule before interest"),),
+        renderer_interest=RendererEventInterest(event_types=("tool_call",), fallback_route="direct_scene"),
+    )
+
+    renderer = router.route(event(1, "tool_call"))
+    direct = router.route(event(2, "tool_result", {"toolName": "bash"}))
+    stream = router.route(event(3, "message_update", {"assistantMessageEvent": {"delta": "abc"}}))
+    rule = router.route(event(4, "session_tree"))
+
+    assert renderer.uses_renderer is True
+    assert direct.decision.route == "direct_scene"
+    assert direct.request.metadata["route"]["metadata"]["rendererInterest"]["eventTypes"] == ["tool_call"]
+    assert direct.direct_mutations[0].target_id == "status"
+    assert stream.decision.route == "stream_buffer"
+    assert rule.decision.reason == "rule before interest"
+
+
+def test_renderer_interest_mapping_and_resolution_variants() -> None:
+    interest = RendererEventInterest.from_mapping(
+        {
+            "eventTypes": ["tool_call", "tool_result"],
+            "phases": ["before", "after"],
+            "excludeEventTypes": ["tool_result"],
+            "fallbackRoute": "drop",
+            "reason": "only preflight",
+            "metadata": {"renderer": "test"},
+        }
+    )
+
+    class MappingRenderer:
+        event_interest = {
+            "event_types": ["tool_call"],
+            "fallback_route": "debug_only",
+        }
+
+    class CallableRenderer:
+        def event_interest(self) -> RendererEventInterest:
+            return interest
+
+    assert interest.wants(event(1, "tool_call")) is True
+    assert interest.wants(event(2, "tool_result")) is False
+    assert interest.to_dict()["fallbackRoute"] == "drop"
+    assert renderer_event_interest_from_renderer(MappingRenderer()).fallback_route == "debug_only"  # type: ignore[union-attr]
+    assert renderer_event_interest_from_renderer(CallableRenderer()) is interest
+    assert renderer_event_interest_from_renderer(object()) is None
+    assert renderer_event_interest_from_value(None) is None
+    assert renderer_event_interest_from_value(interest) is interest
+    assert renderer_event_interest_from_value({"eventTypes": ["input"]}).event_types == ("input",)  # type: ignore[union-attr]
+    assert RendererEventInterest.from_mapping({"eventTypes": "tool_call"}).event_types == ()
+    assert RendererEventInterest.from_mapping({"phases": ["after"]}).wants(event(8, "tool_call")) is False
+
+
+def test_renderer_interest_validation_errors() -> None:
+    class BadRenderer:
+        event_interest = object()
+
+    for payload, message in (
+        ({"fallbackRoute": "renderer_agent"}, "unsupported renderer interest fallback route"),
+        ({"phases": ["sideways"]}, "unsupported renderer interest phase"),
+    ):
+        try:
+            RendererEventInterest.from_mapping(payload)
+        except ValueError as error:
+            assert message in str(error)
+        else:
+            raise AssertionError("expected ValueError")
+
+    try:
+        renderer_event_interest_from_renderer(BadRenderer())
+    except ValueError as error:
+        assert "event_interest" in str(error)
+    else:
+        raise AssertionError("expected ValueError")
+
+    try:
+        renderer_event_interest_from_value(object())
+    except ValueError as error:
+        assert "renderer interest value" in str(error)
+    else:
+        raise AssertionError("expected ValueError")
 
 
 def test_event_router_routes_text_streams_to_local_buffer() -> None:

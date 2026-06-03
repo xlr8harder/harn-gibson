@@ -8,7 +8,17 @@ from http.server import ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 
-from harn_gibson import BrowserScreenshotResult, EventRouter, EventRouteRule, cli
+from harn_gibson import (
+    BrowserScreenshotResult,
+    EventRouter,
+    EventRouteRule,
+    RendererEventInterest,
+    RenderPlan,
+    RenderRequest,
+    RenderStep,
+    SceneMutation,
+    cli,
+)
 from harn_gibson.server import (
     BrowserInputQueue,
     GibsonServerState,
@@ -23,6 +33,7 @@ from harn_gibson.server import (
     format_sse,
     health_payload,
     publish_diagnostic_event,
+    renderer_interest_from_env,
     submit_event_to_renderer,
 )
 
@@ -292,6 +303,74 @@ def test_drop_route_rule_accepts_without_scene_update() -> None:
     assert accepted == {"ok": True, "renderMode": "blocking", "sceneRevision": 0}
 
 
+def test_renderer_advertised_interest_controls_default_routing() -> None:
+    class SelectiveRenderer:
+        event_interest = RendererEventInterest(event_types=("tool_call",), fallback_route="direct_scene")
+
+        def __init__(self) -> None:
+            self.requests: list[tuple[RenderRequest, ...]] = []
+
+        def render(self, requests: tuple[RenderRequest, ...], _scene: object) -> RenderPlan:
+            self.requests.append(requests)
+            return RenderPlan(
+                requests=requests,
+                steps=(
+                    RenderStep(
+                        (SceneMutation("append_log", entry={"eventType": "renderer", "summary": "renderer saw it"}),),
+                        event_index=0,
+                    ),
+                ),
+                metadata={"renderer": "selective"},
+            )
+
+    renderer = SelectiveRenderer()
+    state = GibsonServerState(renderer=renderer)
+    fallback_payload = {
+        "sequence": 15,
+        "timestampMs": 1500,
+        "source": "unit",
+        "eventType": "tool_result",
+        "phase": "after",
+        "title": "Tool result",
+        "summary": "bash completed: ok",
+        "payload": {"type": "tool_result", "toolName": "bash"},
+    }
+    renderer_payload = {
+        "sequence": 16,
+        "timestampMs": 1600,
+        "source": "unit",
+        "eventType": "tool_call",
+        "phase": "before",
+        "title": "Tool preflight",
+        "summary": "bash starting with {command}",
+        "payload": {"type": "tool_call", "toolName": "bash", "input": {"command": "pwd"}},
+    }
+
+    fallback = submit_event_to_renderer(fallback_payload, state)
+    rendered = submit_event_to_renderer(renderer_payload, state)
+
+    assert renderer.requests[0][0].event.event_type == "tool_call"
+    assert fallback.updates[0]["renderPlan"]["metadata"]["route"]["route"] == "direct_scene"
+    assert fallback.updates[0]["renderPlan"]["metadata"]["route"]["metadata"]["rendererInterest"]["eventTypes"] == [
+        "tool_call"
+    ]
+    assert rendered.updates[0]["renderPlan"]["metadata"] == {"renderer": "selective"}
+
+
+def test_explicit_router_interest_is_not_overwritten_by_renderer() -> None:
+    class InterestedRenderer:
+        event_interest = RendererEventInterest(event_types=("tool_call",), fallback_route="direct_scene")
+
+        def render(self, requests: tuple[RenderRequest, ...], _scene: object) -> RenderPlan:
+            return RenderPlan(requests=requests, steps=(), metadata={"renderer": "unused"})
+
+    router = EventRouter(renderer_interest=RendererEventInterest(event_types=("tool_result",), fallback_route="drop"))
+    state = GibsonServerState(renderer=InterestedRenderer(), router=router)
+
+    assert state.router.renderer_interest is router.renderer_interest
+    assert state.router.renderer_interest.event_types == ("tool_result",)  # type: ignore[union-attr]
+
+
 def test_event_from_payload_validation() -> None:
     state = GibsonServerState()
     for payload, message in (
@@ -393,6 +472,38 @@ def test_build_state_from_env() -> None:
     assert state.pipeline.mode == "async"
     assert state.pipeline.batch_window_ms == 5
     state.pipeline.stop()
+
+
+def test_renderer_interest_from_env_and_build_state() -> None:
+    payload = json.dumps(
+        {
+            "eventTypes": ["tool_call"],
+            "phases": ["before"],
+            "fallbackRoute": "drop",
+            "reason": "dogfood renderer scope",
+        }
+    )
+    interest = renderer_interest_from_env(payload)
+    state = build_state_from_env({"HARN_GIBSON_RENDERER_INTEREST": payload})
+
+    assert renderer_interest_from_env(None) is None
+    assert renderer_interest_from_env("") is None
+    assert interest is not None
+    assert interest.event_types == ("tool_call",)
+    assert interest.fallback_route == "drop"
+    assert state.router.renderer_interest == interest
+
+    for value, message in (
+        ("{", "JSON object"),
+        ("[]", "invalid"),
+        (json.dumps({"fallbackRoute": "renderer_agent"}), "fallback route"),
+    ):
+        try:
+            renderer_interest_from_env(value)
+        except ValueError as error:
+            assert message in str(error)
+        else:
+            raise AssertionError("expected ValueError")
 
 
 def test_format_sse() -> None:

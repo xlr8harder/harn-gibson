@@ -6,12 +6,13 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
-from harn_gibson.events import GibsonEvent
+from harn_gibson.events import EventPhase, GibsonEvent
 from harn_gibson.rendering import RenderRequest
 from harn_gibson.scene import SceneAnimation, SceneMutation, ScenePrimitive, default_mutations_for_event
 
 RouteKind = Literal["renderer_agent", "direct_scene", "stream_buffer", "debug_only", "drop"]
 RuleRouteKind = Literal["renderer_agent", "direct_scene", "debug_only", "drop"]
+RendererFallbackRoute = Literal["direct_scene", "debug_only", "drop"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -137,6 +138,57 @@ class EventRouteRule:
 
 
 @dataclass(frozen=True, slots=True)
+class RendererEventInterest:
+    """Renderer-advertised event subscription before default renderer routing."""
+
+    event_types: tuple[str, ...] = ()
+    phases: tuple[EventPhase, ...] = ()
+    exclude_event_types: tuple[str, ...] = ()
+    fallback_route: RendererFallbackRoute = "direct_scene"
+    reason: str = "renderer not interested"
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+    @classmethod
+    def from_mapping(cls, value: Mapping[str, Any]) -> RendererEventInterest:
+        fallback_route = str(value.get("fallbackRoute", value.get("fallback_route", "direct_scene")))
+        if fallback_route not in {"direct_scene", "debug_only", "drop"}:
+            raise ValueError(f"unsupported renderer interest fallback route: {fallback_route}")
+        phases = _phase_tuple(value.get("phases", ()))
+        return cls(
+            event_types=_string_tuple(value.get("eventTypes", value.get("event_types", ()))),
+            phases=phases,
+            exclude_event_types=_string_tuple(
+                value.get("excludeEventTypes", value.get("exclude_event_types", ()))
+            ),
+            fallback_route=fallback_route,  # type: ignore[arg-type]
+            reason=str(value.get("reason") or "renderer not interested"),
+            metadata=dict(value.get("metadata") or {}),
+        )
+
+    def wants(self, event: GibsonEvent) -> bool:
+        if event.event_type in self.exclude_event_types:
+            return False
+        if self.event_types and event.event_type not in self.event_types:
+            return False
+        return not (self.phases and event.phase not in self.phases)
+
+    def to_dict(self) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "fallbackRoute": self.fallback_route,
+            "reason": self.reason,
+        }
+        if self.event_types:
+            payload["eventTypes"] = list(self.event_types)
+        if self.phases:
+            payload["phases"] = list(self.phases)
+        if self.exclude_event_types:
+            payload["excludeEventTypes"] = list(self.exclude_event_types)
+        if self.metadata:
+            payload["metadata"] = self.metadata
+        return payload
+
+
+@dataclass(frozen=True, slots=True)
 class RenderInputBatch:
     requests: tuple[RenderRequest, ...]
     timeline: TimelineWindow
@@ -198,10 +250,12 @@ class EventRouter:
         self,
         stream_bindings: Sequence[StreamBinding] | None = None,
         route_rules: Sequence[EventRouteRule] | None = None,
+        renderer_interest: RendererEventInterest | None = None,
     ) -> None:
         bindings = stream_bindings or default_stream_bindings()
         self.stream_bindings = {binding.event_type: binding for binding in bindings}
         self.route_rules = {rule.event_type: rule for rule in route_rules or ()}
+        self.renderer_interest = renderer_interest
         self.stream_buffers: dict[str, StreamBuffer] = {}
 
     def route(self, event: GibsonEvent, decisions: Sequence[dict[str, Any]] = ()) -> RouteResult:
@@ -214,6 +268,8 @@ class EventRouter:
             if text:
                 return self._stream_result(event, decisions, binding, text)
             return self._debug_result(event, decisions, "stream update without text")
+        if self.renderer_interest is not None and not self.renderer_interest.wants(event):
+            return self._interest_fallback_result(event, decisions, self.renderer_interest)
         return self._renderer_result(event, decisions, "default renderer route")
 
     def stream_snapshot(self) -> dict[str, Any]:
@@ -241,26 +297,56 @@ class EventRouter:
     ) -> RouteResult:
         if rule.route == "renderer_agent":
             return self._renderer_result(event, decisions, rule.reason)
-        metadata = {"rule": rule.to_dict()}
-        if rule.route == "direct_scene":
+        return self._local_route_result(
+            event,
+            decisions,
+            route=rule.route,
+            reason=rule.reason,
+            metadata={"rule": rule.to_dict()},
+        )
+
+    def _interest_fallback_result(
+        self,
+        event: GibsonEvent,
+        decisions: Sequence[dict[str, Any]],
+        interest: RendererEventInterest,
+    ) -> RouteResult:
+        return self._local_route_result(
+            event,
+            decisions,
+            route=interest.fallback_route,
+            reason=interest.reason,
+            metadata={"rendererInterest": interest.to_dict()},
+        )
+
+    def _local_route_result(
+        self,
+        event: GibsonEvent,
+        decisions: Sequence[dict[str, Any]],
+        *,
+        route: RendererFallbackRoute,
+        reason: str,
+        metadata: dict[str, Any],
+    ) -> RouteResult:
+        if route == "direct_scene":
             return self._direct_result(
                 event,
                 decisions,
                 RouteDecision(
                     route="direct_scene",
-                    reason=rule.reason,
+                    reason=reason,
                     renderer_visible=False,
                     metadata=metadata,
                 ),
                 tuple(default_mutations_for_event(event, decisions)),
             )
-        if rule.route == "debug_only":
+        if route == "debug_only":
             return self._direct_result(
                 event,
                 decisions,
                 RouteDecision(
                     route="debug_only",
-                    reason=rule.reason,
+                    reason=reason,
                     renderer_visible=False,
                     metadata=metadata,
                 ),
@@ -271,7 +357,7 @@ class EventRouter:
             decisions,
             RouteDecision(
                 route="drop",
-                reason=rule.reason,
+                reason=reason,
                 renderer_visible=False,
                 metadata=metadata,
             ),
@@ -413,10 +499,49 @@ def _clip_stream_text(text: str, limit: int) -> str:
     return "..." + text[-max(0, limit - 3) :]
 
 
+def renderer_event_interest_from_renderer(renderer: object) -> RendererEventInterest | None:
+    value = getattr(renderer, "event_interest", None)
+    if value is None:
+        return None
+    if isinstance(value, RendererEventInterest):
+        return value
+    if isinstance(value, Mapping):
+        return RendererEventInterest.from_mapping(value)
+    if callable(value):
+        return renderer_event_interest_from_value(value())
+    raise ValueError("renderer event_interest must be RendererEventInterest, mapping, callable, or None")
+
+
+def renderer_event_interest_from_value(value: object) -> RendererEventInterest | None:
+    if value is None:
+        return None
+    if isinstance(value, RendererEventInterest):
+        return value
+    if isinstance(value, Mapping):
+        return RendererEventInterest.from_mapping(value)
+    raise ValueError("renderer interest value must be RendererEventInterest, mapping, or None")
+
+
+def _string_tuple(value: object) -> tuple[str, ...]:
+    if not isinstance(value, Sequence) or isinstance(value, str | bytes):
+        return ()
+    return tuple(str(item) for item in value)
+
+
+def _phase_tuple(value: object) -> tuple[EventPhase, ...]:
+    phases = _string_tuple(value)
+    invalid = [phase for phase in phases if phase not in {"before", "during", "after", "lifecycle"}]
+    if invalid:
+        raise ValueError(f"unsupported renderer interest phase: {invalid[0]}")
+    return phases  # type: ignore[return-value]
+
+
 __all__ = [
     "EventRouteRule",
     "EventRouter",
     "RenderInputBatch",
+    "RendererEventInterest",
+    "RendererFallbackRoute",
     "RouteDecision",
     "RouteKind",
     "RouteResult",
@@ -425,6 +550,8 @@ __all__ = [
     "StreamBuffer",
     "TimelineWindow",
     "default_stream_bindings",
+    "renderer_event_interest_from_renderer",
+    "renderer_event_interest_from_value",
     "stream_buffer_mutations",
     "stream_text_for_event",
 ]

@@ -25,7 +25,12 @@ from harn_gibson.rendering import (
     decisions_from_payload,
     render_accept_payload,
 )
-from harn_gibson.routing import EventRouter
+from harn_gibson.routing import (
+    EventRouter,
+    RendererEventInterest,
+    renderer_event_interest_from_renderer,
+    renderer_event_interest_from_value,
+)
 from harn_gibson.scene import SceneEngine
 from harn_gibson.sinks import EventBuffer
 
@@ -38,12 +43,16 @@ class GibsonServerState:
     inputs: BrowserInputQueue = field(default_factory=lambda: BrowserInputQueue())
     input_bridge: HarnBridgeState = field(default_factory=lambda: HarnBridgeState())
     router: EventRouter = field(default_factory=EventRouter)
+    renderer_interest: RendererEventInterest | None = None
     render_mode: RenderMode = "blocking"
     render_batch_window_ms: int = 40
     renderer: SceneRenderer = field(default_factory=DeterministicSceneRenderer)
     pipeline: RenderPipeline = field(init=False)
 
     def __post_init__(self) -> None:
+        renderer_interest = self.renderer_interest or renderer_event_interest_from_renderer(self.renderer)
+        if renderer_interest is not None and self.router.renderer_interest is None:
+            self.router.renderer_interest = renderer_interest
         self.pipeline = RenderPipeline(
             scene=self.scene,
             buffer=self.buffer,
@@ -163,9 +172,23 @@ def run_server(host: str = "127.0.0.1", port: int = 8765) -> None:  # pragma: no
 def build_state_from_env(env: dict[str, str] | None = None) -> GibsonServerState:
     source = environ if env is None else env
     return GibsonServerState(
+        renderer_interest=renderer_interest_from_env(source.get("HARN_GIBSON_RENDERER_INTEREST")),
         render_mode=coerce_render_mode(source.get("HARN_GIBSON_RENDER_MODE")),
         render_batch_window_ms=coerce_batch_window_ms(source.get("HARN_GIBSON_RENDER_BATCH_MS")),
     )
+
+
+def renderer_interest_from_env(value: str | None) -> RendererEventInterest | None:
+    if not value:
+        return None
+    try:
+        payload = json.loads(value)
+    except json.JSONDecodeError as error:
+        raise ValueError("HARN_GIBSON_RENDERER_INTEREST must be a JSON object") from error
+    try:
+        return renderer_event_interest_from_value(payload)
+    except ValueError as error:
+        raise ValueError(f"HARN_GIBSON_RENDERER_INTEREST invalid: {error}") from error
 
 
 def make_handler(state: GibsonServerState) -> type[BaseHTTPRequestHandler]:
@@ -1138,6 +1161,7 @@ __all__ = [
     "health_payload",
     "make_handler",
     "publish_diagnostic_event",
+    "renderer_interest_from_env",
     "run_server",
     "submit_event_to_renderer",
 ]

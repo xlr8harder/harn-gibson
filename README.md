@@ -85,6 +85,12 @@ HARN_GIBSON_RENDER_MODE=blocking  # default
 HARN_GIBSON_RENDER_MODE=async HARN_GIBSON_RENDER_BATCH_MS=40
 ```
 
+Renderer event interest can also be narrowed with JSON. Events outside the interest fall back locally instead of going to the renderer:
+
+```bash
+HARN_GIBSON_RENDERER_INTEREST='{"eventTypes":["tool_call","tool_result"],"fallbackRoute":"direct_scene"}'
+```
+
 For offline inspection, write normalized events to JSONL:
 
 ```bash

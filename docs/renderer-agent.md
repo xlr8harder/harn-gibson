@@ -50,6 +50,39 @@ Each step can include multiple scene mutations. Multiple steps let the renderer 
 
 `HARN_GIBSON_RENDER_MODE=async` means the display server accepts events immediately and queues render jobs. The async worker batches events for `HARN_GIBSON_RENDER_BATCH_MS` milliseconds before asking the renderer for a plan. This avoids slowing the agent, but the renderer must tolerate receiving several events at once.
 
+## Event Interest
+
+A renderer can advertise which normalized events it wants to receive by exposing an `event_interest` attribute. The value may be a `RendererEventInterest`, a mapping with the same fields, or a callable returning either form.
+
+```python
+from harn_gibson import RendererEventInterest
+
+
+class GibsonRenderer:
+    event_interest = RendererEventInterest(
+        event_types=("tool_call", "tool_result", "runtime_error", "browser_input"),
+        fallback_route="direct_scene",
+    )
+```
+
+Routing precedence is explicit route rules, local stream buffers, then renderer interest. If an event does not match the advertised interest, the router uses the configured fallback route:
+
+- `direct_scene`: apply deterministic local scene mutations without sending the event to the renderer;
+- `debug_only`: keep the event out of the renderer and avoid scene mutation;
+- `drop`: accept the event without renderer or scene work.
+
+The same shape is accepted as JSON in `HARN_GIBSON_RENDERER_INTEREST` for dogfood runs:
+
+```json
+{
+  "eventTypes": ["tool_call", "tool_result"],
+  "phases": ["before", "after"],
+  "excludeEventTypes": ["message_update"],
+  "fallbackRoute": "direct_scene",
+  "reason": "renderer only wants tool boundaries"
+}
+```
+
 ## Context Strategy
 
 The renderer agent should not receive a full new transcript on every event. Use a rolling context:
