@@ -1177,6 +1177,7 @@ function drawScenePrimitives(scene, w, h, now) {
     "hologram",
     "svg_layer",
     "ribbon",
+    "trace_route",
     "node_graph",
     "glyph_layer",
   ];
@@ -1193,6 +1194,7 @@ function drawPrimitive(primitive, w, h, now) {
   if (primitive.kind === "hologram") drawHologram(primitive, w, h, now);
   if (primitive.kind === "svg_layer") drawSvgLayer(primitive, w, h, now);
   if (primitive.kind === "node_graph") drawNodeGraph(primitive, w, h);
+  if (primitive.kind === "trace_route") drawTraceRoute(primitive, w, h, now);
   if (primitive.kind === "ribbon") drawRibbon(primitive, w, h, now);
   if (primitive.kind === "glyph_layer") drawGlyphLayer(primitive, w, h, now);
   if (primitive.kind === "data_rain") drawDataRain(primitive, w, h, now);
@@ -2719,6 +2721,185 @@ function drawNodeGraph(primitive, w, h) {
       ctx.fillStyle = toneColor("white", 0.82);
       ctx.fillText(String(node.label).slice(0, 16), point.x, point.y + radius + 14 * devicePixelRatio);
     }
+  }
+  ctx.restore();
+}
+
+function traceRouteHops(props, w, h) {
+  const rawHops = Array.isArray(props.hops) ? props.hops : [];
+  return rawHops.map((hop, index) => {
+    const safeHop = hop && typeof hop === "object" ? hop : {};
+    const point = normalizedPoint({
+      x: safeHop.x ?? (0.14 + index * 0.14),
+      y: safeHop.y ?? (0.35 + Math.sin(index * 1.3) * 0.18),
+    }, w, h);
+    return {
+      ...safeHop,
+      id: String(safeHop.id || `hop-${index}`),
+      label: safeHop.label || safeHop.id || `hop-${index}`,
+      tone: safeHop.tone || props.tone || "cyan",
+      point,
+    };
+  });
+}
+
+function traceRouteLinks(props, hops) {
+  const hopById = new Map(hops.map((hop) => [hop.id, hop]));
+  const rawLinks = Array.isArray(props.links) && props.links.length
+    ? props.links
+    : hops.slice(1).map((hop, index) => ({source: hops[index].id, target: hop.id}));
+  return rawLinks
+    .map((link, index) => {
+      const safeLink = link && typeof link === "object" ? link : {};
+      const source = hopById.get(String(safeLink.source ?? safeLink.from ?? ""));
+      const target = hopById.get(String(safeLink.target ?? safeLink.to ?? ""));
+      if (!source || !target) return null;
+      return {
+        ...safeLink,
+        index,
+        source,
+        target,
+        tone: safeLink.tone || target.tone || props.tone || "cyan",
+        curve: finiteNumber(safeLink.curve, index % 2 === 0 ? 0.12 : -0.10),
+      };
+    })
+    .filter(Boolean);
+}
+
+function traceRoutePoint(link, progress) {
+  const a = link.source.point;
+  const b = link.target.point;
+  const mid = {x: (a.x + b.x) * 0.5, y: (a.y + b.y) * 0.5};
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const length = Math.max(1, Math.hypot(dx, dy));
+  const control = {
+    x: mid.x - (dy / length) * length * link.curve,
+    y: mid.y + (dx / length) * length * link.curve,
+  };
+  const t = clamp(progress, 0, 1);
+  const oneMinus = 1 - t;
+  return {
+    x: oneMinus * oneMinus * a.x + 2 * oneMinus * t * control.x + t * t * b.x,
+    y: oneMinus * oneMinus * a.y + 2 * oneMinus * t * control.y + t * t * b.y,
+    control,
+  };
+}
+
+function drawTraceRouteLink(link, props, now) {
+  const a = link.source.point;
+  const b = link.target.point;
+  const mid = traceRoutePoint(link, 0.5);
+  const tone = link.tone || props.tone || "cyan";
+  ctx.save();
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.shadowColor = toneColor(tone, 0.64);
+  ctx.shadowBlur = 12 * devicePixelRatio;
+  ctx.strokeStyle = toneColor(tone, 0.18);
+  ctx.lineWidth = Math.max(5 * devicePixelRatio, finiteNumber(props.width, 4) * devicePixelRatio);
+  ctx.beginPath();
+  ctx.moveTo(a.x, a.y);
+  ctx.quadraticCurveTo(mid.control.x, mid.control.y, b.x, b.y);
+  ctx.stroke();
+  ctx.setLineDash([14 * devicePixelRatio, 13 * devicePixelRatio]);
+  ctx.lineDashOffset = -now * 0.028 * Math.max(0.1, finiteNumber(props.speed, 0.65));
+  ctx.strokeStyle = toneColor("white", 0.58);
+  ctx.lineWidth = Math.max(1.2 * devicePixelRatio, finiteNumber(props.width, 2) * devicePixelRatio);
+  ctx.beginPath();
+  ctx.moveTo(a.x, a.y);
+  ctx.quadraticCurveTo(mid.control.x, mid.control.y, b.x, b.y);
+  ctx.stroke();
+  ctx.restore();
+  if (link.label) {
+    ctx.save();
+    ctx.font = `${10 * devicePixelRatio}px ui-monospace, monospace`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = toneColor("white", 0.62);
+    ctx.fillText(String(link.label).slice(0, 14), mid.x, mid.y - 10 * devicePixelRatio);
+    ctx.restore();
+  }
+}
+
+function drawTraceRoute(primitive, w, h, now) {
+  const props = primitive.props || {};
+  const hops = traceRouteHops(props, w, h);
+  const links = traceRouteLinks(props, hops);
+  if (!hops.length) return;
+  const tone = props.tone || "cyan";
+  const accentTone = props.accentTone || props.accent || "magenta";
+  const focusHopId = String(props.focusHopId || props.focus || hops[hops.length - 1].id);
+  const packetCount = Math.max(0, Math.min(96, Math.floor(finiteNumber(props.packets, links.length * 4 || 4))));
+  const speed = Math.max(0, finiteNumber(props.speed, 0.65));
+  const seed = finiteNumber(props.seed, 0);
+  if (typeof window !== "undefined") {
+    window.__gibsonTraceRouteState = window.__gibsonTraceRouteState || {};
+    window.__gibsonTraceRouteState[primitive.id] = {
+      hopCount: hops.length,
+      linkCount: links.length,
+      packetCount,
+      focusHopId,
+      tone,
+      accentTone,
+      hasLabels: hops.some((hop) => Boolean(hop.label)) || links.some((link) => Boolean(link.label)),
+    };
+  }
+
+  ctx.save();
+  ctx.globalCompositeOperation = props.blend === "source-over" ? "source-over" : "screen";
+  for (const link of links) drawTraceRouteLink(link, props, now);
+  for (let index = 0; index < packetCount && links.length; index++) {
+    const link = links[index % links.length];
+    const progress = (now * speed * 0.00018 + index / Math.max(1, packetCount) + seed * 0.013) % 1;
+    const point = traceRoutePoint(link, progress);
+    const packetTone = index % 5 === 0 ? accentTone : link.tone || tone;
+    const radius = (2.2 + seededUnit(seed + index * 4.7) * 2.4) * devicePixelRatio;
+    ctx.shadowColor = toneColor(packetTone, 0.82);
+    ctx.shadowBlur = 12 * devicePixelRatio;
+    ctx.fillStyle = toneColor(packetTone, 0.72);
+    ctx.beginPath();
+    ctx.arc(point.x, point.y, radius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = toneColor("white", 0.58);
+    ctx.lineWidth = 0.7 * devicePixelRatio;
+    ctx.stroke();
+  }
+  for (const hop of hops) {
+    const focus = hop.id === focusHopId;
+    const radius = (focus ? 18 : 12) * devicePixelRatio;
+    const hopTone = focus ? accentTone : hop.tone || tone;
+    const pulse = 1 + Math.sin(now * 0.004 + seed + hops.indexOf(hop)) * 0.12;
+    ctx.shadowColor = toneColor(hopTone, focus ? 0.9 : 0.54);
+    ctx.shadowBlur = (focus ? 23 : 13) * devicePixelRatio;
+    ctx.fillStyle = toneColor(hopTone, focus ? 0.46 : 0.28);
+    ctx.strokeStyle = toneColor("white", focus ? 0.78 : 0.48);
+    ctx.lineWidth = Math.max(1, 1.2 * devicePixelRatio);
+    ctx.beginPath();
+    ctx.arc(hop.point.x, hop.point.y, radius * pulse, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(hop.point.x, hop.point.y, radius * (0.46 + (focus ? 0.08 : 0)), 0, Math.PI * 2);
+    ctx.fillStyle = toneColor("white", focus ? 0.58 : 0.34);
+    ctx.fill();
+    if (hop.label) {
+      ctx.shadowBlur = 4 * devicePixelRatio;
+      ctx.font = `${11 * devicePixelRatio}px ui-monospace, monospace`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillStyle = toneColor("white", focus ? 0.88 : 0.68);
+      ctx.fillText(String(hop.label).slice(0, 14), hop.point.x, hop.point.y + radius + 14 * devicePixelRatio);
+    }
+  }
+  if (props.label) {
+    const first = hops[0].point;
+    ctx.shadowBlur = 7 * devicePixelRatio;
+    ctx.font = `${12 * devicePixelRatio}px ui-monospace, monospace`;
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = toneColor(accentTone, 0.86);
+    ctx.fillText(String(props.label).slice(0, 24), first.x, first.y - 28 * devicePixelRatio);
   }
   ctx.restore();
 }

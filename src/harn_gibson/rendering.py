@@ -54,6 +54,7 @@ _BROWSER_PRIMITIVE_KINDS = frozenset(
         "hologram",
         "svg_layer",
         "node_graph",
+        "trace_route",
         "ribbon",
         "glyph_layer",
         "data_rain",

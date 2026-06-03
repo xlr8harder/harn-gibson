@@ -598,7 +598,7 @@ def test_checked_in_replay_fixtures_cover_agent_and_renderer_sides() -> None:
     assert renderer_result.scene.primitives["decision-log"].props["text"][0]["renderer"] == "fixture"
 
     assert [step.kind for step in gallery_result.steps] == ["mutations"]
-    assert len(gallery_result.expectations) == 30
+    assert len(gallery_result.expectations) == 33
     assert gallery_result.scene.primitives["gallery-mesh"].kind == "mesh"
     assert gallery_result.scene.primitives["gallery-vector"].kind == "svg_layer"
     assert gallery_result.scene.primitives["gallery-vector"].props["gradients"][0]["id"] == "ice-gradient"
@@ -620,6 +620,9 @@ def test_checked_in_replay_fixtures_cover_agent_and_renderer_sides() -> None:
     assert gallery_result.scene.primitives["gallery-hologram"].props["rings"] == 6
     assert gallery_result.scene.primitives["gallery-hologram"].props["panels"] == 4
     assert gallery_result.scene.primitives["gallery-city"].kind == "city_block"
+    assert gallery_result.scene.primitives["gallery-trace"].kind == "trace_route"
+    assert gallery_result.scene.primitives["gallery-trace"].props["hops"][2]["label"] == "ICE"
+    assert gallery_result.scene.primitives["gallery-trace"].props["focusHopId"] == "gibson"
     assert gallery_result.scene.primitives["gallery-rain"].kind == "data_rain"
     assert gallery_result.scene.primitives["gallery-rain"].props["columns"] == 42
     assert gallery_result.scene.primitives["gallery-rain"].props["bands"] == 3

@@ -38,6 +38,7 @@
           "primitive:mesh",
           "primitive:svg_layer",
           "primitive:city_block",
+          "primitive:trace_route",
           "primitive:node_graph",
           "primitive:ribbon",
           "primitive:glyph_layer",
@@ -54,7 +55,7 @@
           "renderer": "replay",
           "stepType": "mutations"
         },
-        "mutationCount": 13,
+        "mutationCount": 14,
         "renderer": "replay",
         "requestCount": 1,
         "routes": [
@@ -68,6 +69,7 @@
           "gallery-mesh",
           "gallery-vector",
           "gallery-city",
+          "gallery-trace",
           "gallery-graph",
           "gallery-ribbon",
           "gallery-glyphs",
@@ -88,6 +90,7 @@
             "primitive:mesh",
             "primitive:svg_layer",
             "primitive:city_block",
+            "primitive:trace_route",
             "primitive:node_graph",
             "primitive:ribbon",
             "primitive:glyph_layer",
@@ -104,7 +107,7 @@
             "renderer": "replay",
             "stepType": "mutations"
           },
-          "mutationCount": 13,
+          "mutationCount": 14,
           "renderer": "replay",
           "requestCount": 1,
           "routes": [
@@ -118,6 +121,7 @@
             "gallery-mesh",
             "gallery-vector",
             "gallery-city",
+            "gallery-trace",
             "gallery-graph",
             "gallery-ribbon",
             "gallery-glyphs",
@@ -522,6 +526,74 @@
             }
           ],
           "width": 4
+        },
+        "region": "stage"
+      },
+      "gallery-trace": {
+        "children": [],
+        "id": "gallery-trace",
+        "kind": "trace_route",
+        "props": {
+          "accentTone": "magenta",
+          "focusHopId": "gibson",
+          "hops": [
+            {
+              "id": "local",
+              "label": "LOCAL",
+              "tone": "green",
+              "x": 0.09,
+              "y": 0.23
+            },
+            {
+              "id": "relay",
+              "label": "RELAY",
+              "tone": "cyan",
+              "x": 0.23,
+              "y": 0.18
+            },
+            {
+              "id": "ice",
+              "label": "ICE",
+              "tone": "amber",
+              "x": 0.39,
+              "y": 0.24
+            },
+            {
+              "id": "gibson",
+              "label": "GIBSON",
+              "tone": "magenta",
+              "x": 0.55,
+              "y": 0.18
+            }
+          ],
+          "label": "TRACE ROUTE",
+          "links": [
+            {
+              "curve": 0.1,
+              "label": "uplink",
+              "source": "local",
+              "target": "relay",
+              "tone": "green"
+            },
+            {
+              "curve": -0.14,
+              "label": "spoof",
+              "source": "relay",
+              "target": "ice",
+              "tone": "cyan"
+            },
+            {
+              "curve": 0.12,
+              "label": "breach",
+              "source": "ice",
+              "target": "gibson",
+              "tone": "magenta"
+            }
+          ],
+          "packets": 18,
+          "seed": 913,
+          "speed": 0.78,
+          "tone": "cyan"
         },
         "region": "stage"
       },

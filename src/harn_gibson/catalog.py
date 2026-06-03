@@ -185,6 +185,23 @@ def default_visual_catalog() -> VisualCatalog:
                 ("generic", "map"),
             ),
             CatalogEntry(
+                "trace_route",
+                "primitive",
+                "Animated hop-by-hop route with packet pulses, curved links, labels, and focus state.",
+                (
+                    "hops",
+                    "links",
+                    "focusHopId",
+                    "packets",
+                    "speed",
+                    "tone",
+                    "accentTone",
+                    "label",
+                    "seed",
+                ),
+                ("gibson", "network", "motion", "map"),
+            ),
+            CatalogEntry(
                 "particle_field",
                 "primitive",
                 "Low-level particles for packets, sparks, rain, snow, stars, or data motes.",

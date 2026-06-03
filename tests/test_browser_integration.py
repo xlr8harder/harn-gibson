@@ -234,6 +234,7 @@ def test_browser_display_renders_vector_symbols_and_data_rain() -> None:
                 page.wait_for_function("window.__gibsonVectorAnimationState?.['gallery-vector']?.keyframeCount === 6")
                 page.wait_for_function("window.__gibsonHologramState?.['gallery-hologram']?.ringCount === 6")
                 page.wait_for_function("window.__gibsonDataRainState?.['gallery-rain']?.visibleColumns > 0")
+                page.wait_for_function("window.__gibsonTraceRouteState?.['gallery-trace']?.packetCount === 18")
                 vector_state = page.evaluate(
                     """() => window.__gibsonVectorState["gallery-vector"]"""
                 )
@@ -245,6 +246,9 @@ def test_browser_display_renders_vector_symbols_and_data_rain() -> None:
                 )
                 data_rain_state = page.evaluate(
                     """() => window.__gibsonDataRainState["gallery-rain"]"""
+                )
+                trace_route_state = page.evaluate(
+                    """() => window.__gibsonTraceRouteState["gallery-trace"]"""
                 )
                 assert vector_state == {
                     "pathCount": 3,
@@ -293,6 +297,15 @@ def test_browser_display_renders_vector_symbols_and_data_rain() -> None:
                     "visibleColumns": data_rain_state["visibleColumns"],
                 }
                 assert 1 <= data_rain_state["visibleColumns"] <= 42
+                assert trace_route_state == {
+                    "hopCount": 4,
+                    "linkCount": 3,
+                    "packetCount": 18,
+                    "focusHopId": "gibson",
+                    "tone": "cyan",
+                    "accentTone": "magenta",
+                    "hasLabels": True,
+                }
                 assert page.locator("svg").count() == 0
                 assert page.locator("script", has_text="ignored").count() == 0
                 assert_canvas_nonblank(page)

@@ -28,6 +28,9 @@
       {"path": "primitives.gallery-hologram.props.rings", "equals": 6},
       {"path": "primitives.gallery-hologram.props.panels", "equals": 4},
       {"path": "primitives.gallery-city.kind", "equals": "city_block"},
+      {"path": "primitives.gallery-trace.kind", "equals": "trace_route"},
+      {"path": "primitives.gallery-trace.props.hops.2.label", "equals": "ICE"},
+      {"path": "primitives.gallery-trace.props.focusHopId", "equals": "gibson"},
       {"path": "primitives.gallery-graph.kind", "equals": "node_graph"},
       {"path": "primitives.gallery-ribbon.kind", "equals": "ribbon"},
       {"path": "primitives.gallery-glyphs.kind", "equals": "glyph_layer"},
@@ -376,6 +379,34 @@
                 {"id": "core-1", "x": 0.18, "y": 0.40, "w": 0.08, "d": 0.08, "h": 0.34, "tone": "green", "label": "ctx"},
                 {"id": "core-2", "x": 0.29, "y": 0.56, "w": 0.09, "d": 0.09, "h": 0.46, "tone": "magenta", "label": "render"},
                 {"id": "core-3", "x": 0.41, "y": 0.45, "w": 0.07, "d": 0.08, "h": 0.28, "tone": "amber", "label": "hooks"}
+              ]
+            }
+          }
+        },
+        {
+          "op": "upsert",
+          "primitive": {
+            "id": "gallery-trace",
+            "kind": "trace_route",
+            "region": "stage",
+            "props": {
+              "label": "TRACE ROUTE",
+              "focusHopId": "gibson",
+              "tone": "cyan",
+              "accentTone": "magenta",
+              "packets": 18,
+              "speed": 0.78,
+              "seed": 913,
+              "hops": [
+                {"id": "local", "label": "LOCAL", "x": 0.09, "y": 0.23, "tone": "green"},
+                {"id": "relay", "label": "RELAY", "x": 0.23, "y": 0.18, "tone": "cyan"},
+                {"id": "ice", "label": "ICE", "x": 0.39, "y": 0.24, "tone": "amber"},
+                {"id": "gibson", "label": "GIBSON", "x": 0.55, "y": 0.18, "tone": "magenta"}
+              ],
+              "links": [
+                {"source": "local", "target": "relay", "label": "uplink", "tone": "green", "curve": 0.10},
+                {"source": "relay", "target": "ice", "label": "spoof", "tone": "cyan", "curve": -0.14},
+                {"source": "ice", "target": "gibson", "label": "breach", "tone": "magenta", "curve": 0.12}
               ]
             }
           }
