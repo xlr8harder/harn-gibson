@@ -82,6 +82,114 @@ def test_deterministic_renderer_creates_one_step_per_request() -> None:
     assert plan.steps[0].mutations[0].target_id == "status"
 
 
+def test_deterministic_renderer_adds_repo_graph_from_context(tmp_path: Path) -> None:
+    repo_root = tmp_path / "repo"
+    for directory in (repo_root / "src" / "harn_gibson", repo_root / "docs"):
+        directory.mkdir(parents=True)
+    for path in (
+        repo_root / "README.md",
+        repo_root / "src" / "harn_gibson" / "rendering.py",
+        repo_root / "docs" / "renderer-agent.md",
+    ):
+        path.write_text("x", encoding="utf-8")
+    (repo_root / "README-link.md").symlink_to("README.md")
+    context_event = GibsonEvent.from_raw(
+        {
+            "type": "tool_call",
+            "toolName": "bash",
+            "input": {
+                "command": (
+                    "uv run pytest src/harn_gibson/rendering.py docs/renderer-agent.md tests/test_rendering.py"
+                )
+            },
+        },
+        8,
+        timestamp_ms=800,
+    )
+    scene = SceneEngine()
+    batch = RenderInputBatch.from_requests((RenderRequest(context_event),))
+    context = RendererContextBuilder(RendererContextConfig(project_root=str(repo_root))).build(
+        batch,
+        scene.state,
+        pipeline_catalog(),
+    )
+
+    plan = DeterministicSceneRenderer().render_with_context(batch.requests, scene.state, context)
+    mutations = plan.steps[-1].mutations
+    repo_map = next(
+        mutation.primitive for mutation in mutations if mutation.primitive and mutation.primitive.id == "repo-map"
+    )
+    touch_field = next(
+        mutation.primitive
+        for mutation in mutations
+        if mutation.primitive and mutation.primitive.id == "repo-touch-field"
+    )
+    repo_animation = next(
+        mutation.animation for mutation in mutations if mutation.animation and mutation.animation.id == "repo-touch-8"
+    )
+    intent = render_intent_from_plan(plan)
+
+    assert plan.metadata == {"renderer": "deterministic"}
+    assert repo_map is not None
+    assert repo_map.kind == "node_graph"
+    assert repo_map.props["focusNodeId"] == "touch:0"
+    assert {node["id"] for node in repo_map.props["nodes"]} >= {"repo-root", "repo:src", "repo:docs", "touch:0"}
+    assert next(node for node in repo_map.props["nodes"] if node["id"] == "repo:README-link.md")["tone"] == "amber"
+    assert repo_map.props["touchedFiles"][0]["path"] == "src/harn_gibson/rendering.py"
+    fallback_edge = next(edge for edge in repo_map.props["edges"] if edge["target"] == "touch:2")
+    assert fallback_edge["source"] == "repo-root"
+    assert touch_field is not None
+    assert touch_field.props["paths"] == [
+        "src/harn_gibson/rendering.py",
+        "docs/renderer-agent.md",
+        "tests/test_rendering.py",
+    ]
+    assert repo_animation is not None
+    assert repo_animation.target_id == "repo-map"
+    assert "repo-map" in intent["targets"]
+    assert "repo-touch-field" in intent["targets"]
+    assert "animation:packet_burst" in intent["effects"]
+
+    missing_context = RendererContextBuilder(RendererContextConfig(project_root=str(tmp_path / "missing"))).build(
+        RenderInputBatch.from_requests((RenderRequest(event(4)),)),
+        scene.state,
+        pipeline_catalog(),
+    )
+    fallback = DeterministicSceneRenderer().render_with_context(
+        (RenderRequest(event(4)),),
+        scene.state,
+        missing_context,
+    )
+    assert all(
+        mutation.primitive is None or mutation.primitive.id != "repo-map" for mutation in fallback.steps[0].mutations
+    )
+    bad_context = RendererContext(
+        "compaction",
+        {"repoTopology": "bad", "touchedFiles": "bad"},
+        {},
+        {},
+        {},
+    )
+    assert DeterministicSceneRenderer().render_with_context((RenderRequest(event(5)),), scene.state, bad_context).steps[
+        0
+    ].mutations == DeterministicSceneRenderer().render((RenderRequest(event(5)),), scene.state).steps[0].mutations
+    bad_shape_context = RendererContext(
+        "compaction",
+        {"repoTopology": {"entries": "bad"}, "touchedFiles": {"files": "bad"}},
+        {},
+        {},
+        {},
+    )
+    assert all(
+        mutation.primitive is None or mutation.primitive.id != "repo-map"
+        for mutation in DeterministicSceneRenderer()
+        .render_with_context((RenderRequest(event(6)),), scene.state, bad_shape_context)
+        .steps[0]
+        .mutations
+    )
+    assert DeterministicSceneRenderer().render_with_context((), scene.state, context).steps == ()
+
+
 def test_renderer_context_builder_compaction_rolling_and_history(tmp_path: Path) -> None:
     repo_root = tmp_path / "repo"
     for directory in (

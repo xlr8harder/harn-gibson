@@ -96,7 +96,7 @@
           "metadata": {
             "renderer": "deterministic"
           },
-          "mutationCount": 9,
+          "mutationCount": 10,
           "renderer": "deterministic",
           "requestCount": 1,
           "routes": [
@@ -112,7 +112,8 @@
             "data-ribbon",
             "glyph-layer",
             "packet-field",
-            "scan-grid"
+            "scan-grid",
+            "repo-map"
           ],
           "timeline": {
             "durationMs": 0
@@ -491,6 +492,130 @@
           },
           "seed": 1,
           "velocity": 0.27999999999999997
+        },
+        "region": "stage"
+      },
+      "repo-map": {
+        "children": [],
+        "id": "repo-map",
+        "kind": "node_graph",
+        "props": {
+          "edges": [
+            {
+              "label": "dir",
+              "source": "repo-root",
+              "target": "repo:docs"
+            },
+            {
+              "label": "dir",
+              "source": "repo-root",
+              "target": "repo:examples"
+            },
+            {
+              "label": "dir",
+              "source": "repo-root",
+              "target": "repo:src"
+            },
+            {
+              "label": "dir",
+              "source": "repo-root",
+              "target": "repo:tests"
+            },
+            {
+              "label": "file",
+              "source": "repo-root",
+              "target": "repo:.gitignore"
+            },
+            {
+              "label": "file",
+              "source": "repo-root",
+              "target": "repo:pyproject.toml"
+            },
+            {
+              "label": "file",
+              "source": "repo-root",
+              "target": "repo:README.md"
+            },
+            {
+              "label": "file",
+              "source": "repo-root",
+              "target": "repo:uv.lock"
+            }
+          ],
+          "eventSequence": 1,
+          "focusNodeId": "repo-root",
+          "labels": [
+            "harn-gibson",
+            "0 touched"
+          ],
+          "layout": "repo-topology",
+          "nodes": [
+            {
+              "id": "repo-root",
+              "label": "harn-gibson",
+              "tone": "amber",
+              "x": 0.12,
+              "y": 0.52
+            },
+            {
+              "id": "repo:docs",
+              "label": "docs",
+              "tone": "green",
+              "x": 0.18,
+              "y": 0.28
+            },
+            {
+              "id": "repo:examples",
+              "label": "examples",
+              "tone": "green",
+              "x": 0.275,
+              "y": 0.28
+            },
+            {
+              "id": "repo:src",
+              "label": "src",
+              "tone": "green",
+              "x": 0.37,
+              "y": 0.28
+            },
+            {
+              "id": "repo:tests",
+              "label": "tests",
+              "tone": "green",
+              "x": 0.465,
+              "y": 0.28
+            },
+            {
+              "id": "repo:.gitignore",
+              "label": ".gitignore",
+              "tone": "cyan",
+              "x": 0.18,
+              "y": 0.42
+            },
+            {
+              "id": "repo:pyproject.toml",
+              "label": "pyproject.toml",
+              "tone": "cyan",
+              "x": 0.275,
+              "y": 0.42
+            },
+            {
+              "id": "repo:README.md",
+              "label": "README.md",
+              "tone": "cyan",
+              "x": 0.37,
+              "y": 0.42
+            },
+            {
+              "id": "repo:uv.lock",
+              "label": "uv.lock",
+              "tone": "cyan",
+              "x": 0.465,
+              "y": 0.42
+            }
+          ],
+          "rootName": "harn-gibson",
+          "touchedFiles": []
         },
         "region": "stage"
       },

@@ -124,7 +124,7 @@ This mirrors harn session compaction, but it is separate from the primary agent 
 
 Streaming deltas need special handling before a remote renderer agent is added. `message_update` and similar stream events should update local stream buffers or named text primitives with throttled display refreshes. The renderer agent should receive coarse stream milestones or compact summaries, not every streaming delta as a separate model turn.
 
-Repo topology follows the same rule. The current context includes a bounded top-level directory/file sample and a coalesced `touchedFiles` list extracted from path-like event payload fields and command strings. Runtime/auth-looking paths such as `.harn`, `.venv`, `.env`, `auth.json`, caches, and test artifacts are omitted. A future renderer can use this to create directory graphs, edited-file pulses, or flythrough paths without receiving file contents or a full repository listing every turn.
+Repo topology follows the same rule. The current context includes a bounded top-level directory/file sample and a coalesced `touchedFiles` list extracted from path-like event payload fields and command strings. Runtime/auth-looking paths such as `.harn`, `.venv`, `.env`, `auth.json`, caches, and test artifacts are omitted. The deterministic renderer already turns this context into a `repo-map` `node_graph` and, when files are touched, a `repo-touch-field` particle burst. A future renderer can use the same context to create richer directory graphs, edited-file pulses, or flythrough paths without receiving file contents or a full repository listing every turn.
 
 ## Visual Catalog
 

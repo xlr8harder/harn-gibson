@@ -113,6 +113,7 @@ def test_browser_display_renders_events_debug_and_input_queue() -> None:
                       cityBlocks: window.__gibsonScene.primitives["gibson-city"].props.blocks.length,
                       graphKind: window.__gibsonScene.primitives["signal-graph"].kind,
                       packetKind: window.__gibsonScene.primitives["packet-field"].kind,
+                      repoKind: window.__gibsonScene.primitives["repo-map"].kind,
                     })"""
                 )
                 assert browser_scene == {
@@ -120,6 +121,7 @@ def test_browser_display_renders_events_debug_and_input_queue() -> None:
                     "cityBlocks": 7,
                     "graphKind": "node_graph",
                     "packetKind": "particle_field",
+                    "repoKind": "node_graph",
                 }
                 expect(page.locator("#phase")).to_have_text("before")
                 expect(page.locator("#eventType")).to_have_text("tool_call")

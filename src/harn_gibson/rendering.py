@@ -13,7 +13,15 @@ from typing import Any, Literal, Protocol
 
 from harn_gibson.catalog import VisualCatalog, default_visual_catalog
 from harn_gibson.events import GibsonEvent
-from harn_gibson.scene import SceneEngine, SceneMutation, SceneState, default_mutations_for_event, scene_update_payload
+from harn_gibson.scene import (
+    SceneAnimation,
+    SceneEngine,
+    SceneMutation,
+    ScenePrimitive,
+    SceneState,
+    default_mutations_for_event,
+    scene_update_payload,
+)
 from harn_gibson.sinks import EventBuffer
 
 RenderMode = Literal["blocking", "async"]
@@ -298,6 +306,28 @@ class DeterministicSceneRenderer:
             )
         return RenderPlan(requests=tuple(requests), steps=tuple(steps), metadata={"renderer": "deterministic"})
 
+    def render_with_context(
+        self,
+        requests: Sequence[RenderRequest],
+        scene: SceneState,
+        context: RendererContext,
+    ) -> RenderPlan:
+        base_plan = self.render(requests, scene)
+        if not base_plan.steps:
+            return base_plan
+        repo_mutations = _repo_visual_mutations(context, base_plan.primary_request.event)
+        if not repo_mutations:
+            return base_plan
+        steps = list(base_plan.steps)
+        final_step = steps[-1]
+        steps[-1] = RenderStep(
+            mutations=(*final_step.mutations, *repo_mutations),
+            delay_ms=final_step.delay_ms,
+            start_offset_ms=final_step.start_offset_ms,
+            event_index=final_step.event_index,
+        )
+        return RenderPlan(requests=base_plan.requests, steps=tuple(steps), metadata=base_plan.metadata)
+
 
 @dataclass(frozen=True, slots=True)
 class RenderSubmitResult:
@@ -532,6 +562,153 @@ def _recent_agent_context(batch: RenderInputBatch) -> tuple[str, ...]:
                 seen.add(item)
                 recent.append(item)
     return tuple(recent)
+
+
+def _repo_visual_mutations(context: RendererContext, event: GibsonEvent) -> tuple[SceneMutation, ...]:
+    topology = context.project.get("repoTopology")
+    touched = context.project.get("touchedFiles")
+    repo_entries = _repo_visual_entries(topology)
+    touched_files = _repo_visual_touched_files(touched)
+    if not repo_entries and not touched_files:
+        return ()
+    graph_props = _repo_graph_props(topology, repo_entries, touched_files, event)
+    mutations = [
+        SceneMutation(
+            op="upsert",
+            primitive=ScenePrimitive(
+                id="repo-map",
+                kind="node_graph",
+                region="stage",
+                props=graph_props,
+            ),
+        )
+    ]
+    if touched_files:
+        touched_paths = [str(item.get("path", "")) for item in touched_files if item.get("path")]
+        mutations.extend(
+            [
+                SceneMutation(
+                    op="upsert",
+                    primitive=ScenePrimitive(
+                        id="repo-touch-field",
+                        kind="particle_field",
+                        region="stage",
+                        props={
+                            "count": min(72, 14 + len(touched_paths) * 6),
+                            "velocity": 0.34,
+                            "emitter": {"x": 0.58, "y": 0.34},
+                            "color": "magenta",
+                            "blend": "screen",
+                            "seed": event.sequence + len(touched_paths),
+                            "paths": touched_paths,
+                        },
+                    ),
+                ),
+                SceneMutation(
+                    op="start_animation",
+                    animation=SceneAnimation(
+                        id=f"repo-touch-{event.sequence}",
+                        target_id="repo-map",
+                        kind="packet_burst",
+                        started_at_ms=event.timestamp_ms,
+                        duration_ms=2200,
+                        props={
+                            "phase": event.phase,
+                            "tone": "magenta",
+                            "sequence": event.sequence,
+                            "paths": touched_paths,
+                        },
+                    ),
+                ),
+            ]
+        )
+    return tuple(mutations)
+
+
+def _repo_visual_entries(topology: Any) -> tuple[dict[str, Any], ...]:
+    if not isinstance(topology, Mapping):
+        return ()
+    entries = topology.get("entries")
+    if not isinstance(entries, list):
+        return ()
+    return tuple(dict(entry) for entry in entries[:8] if isinstance(entry, Mapping))
+
+
+def _repo_visual_touched_files(touched: Any) -> tuple[dict[str, Any], ...]:
+    if not isinstance(touched, Mapping):
+        return ()
+    files = touched.get("files")
+    if not isinstance(files, list):
+        return ()
+    return tuple(dict(item) for item in files[:6] if isinstance(item, Mapping) and item.get("path"))
+
+
+def _repo_graph_props(
+    topology: Any,
+    repo_entries: Sequence[Mapping[str, Any]],
+    touched_files: Sequence[Mapping[str, Any]],
+    event: GibsonEvent,
+) -> dict[str, Any]:
+    root_name = str(topology.get("rootName") if isinstance(topology, Mapping) else "repo") or "repo"
+    nodes = [{"id": "repo-root", "label": root_name[:18], "x": 0.12, "y": 0.52, "tone": "amber"}]
+    edges: list[dict[str, str]] = []
+    entry_node_ids: set[str] = set()
+    for index, entry in enumerate(repo_entries):
+        path = str(entry.get("path") or entry.get("name") or f"entry-{index}")
+        node_id = f"repo:{path}"
+        entry_node_ids.add(node_id)
+        nodes.append(
+            {
+                "id": node_id,
+                "label": _repo_node_label(path),
+                "x": round(0.18 + (index % 4) * 0.095, 3),
+                "y": round(0.28 + (index // 4) * 0.14, 3),
+                "tone": _repo_entry_tone(str(entry.get("kind") or "")),
+            }
+        )
+        edges.append({"source": "repo-root", "target": node_id, "label": str(entry.get("kind") or "entry")})
+    for index, item in enumerate(touched_files):
+        path = str(item.get("path") or f"touch-{index}")
+        node_id = f"touch:{index}"
+        source = f"repo:{_repo_top_level(path)}"
+        if source not in entry_node_ids:
+            source = "repo-root"
+        nodes.append(
+            {
+                "id": node_id,
+                "label": _repo_node_label(path),
+                "x": round(0.56 + (index % 3) * 0.12, 3),
+                "y": round(0.26 + (index // 3) * 0.16, 3),
+                "tone": "magenta",
+            }
+        )
+        edges.append({"source": source, "target": node_id, "label": str(item.get("operation") or "touched")[:16]})
+    return {
+        "layout": "repo-topology",
+        "focusNodeId": "touch:0" if touched_files else "repo-root",
+        "rootName": root_name,
+        "nodes": nodes,
+        "edges": edges,
+        "touchedFiles": [dict(item) for item in touched_files],
+        "eventSequence": event.sequence,
+        "labels": [root_name, f"{len(touched_files)} touched"],
+    }
+
+
+def _repo_node_label(path: str) -> str:
+    return path.rsplit("/", 1)[-1][:18] or path[:18]
+
+
+def _repo_entry_tone(kind: str) -> str:
+    if kind == "dir":
+        return "green"
+    if kind == "symlink":
+        return "amber"
+    return "cyan"
+
+
+def _repo_top_level(path: str) -> str:
+    return path.split("/", 1)[0]
 
 
 _REPO_EXCLUDED_NAMES = {
