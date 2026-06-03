@@ -11,7 +11,18 @@ Events are published to one or more sinks:
 - JSONL append-only log (`HARN_GIBSON_EVENT_LOG`);
 - in-memory server buffer for browser SSE clients.
 
-The graphical server does not own the harn session. It displays normalized events and can later send user input through harn RPC, but this first fixture keeps the terminal harn interface usable.
+The graphical server does not own the harn session. It displays normalized events and keeps a browser input queue. The harn extension polls that queue and forwards messages into harn with `harn.sendUserMessage`, so the browser can be used as the primary interface while harn remains the session owner.
+
+## Browser Input
+
+The display server exposes:
+
+- `POST /input`: enqueue browser input, with `message` and optional `deliverAs`;
+- `GET /input/next`: harn extension poll endpoint, returning one queued input or `204`.
+
+`deliverAs="followUp"` is the default. In harn this runs immediately when idle and becomes a follow-up queue item while streaming. `deliverAs="steer"` sends steering input for the active run.
+
+The display applies a synthetic `browser_input` scene event as soon as input is accepted, so the primary display reacts before harn consumes the queued message.
 
 ## Scene Engine
 
@@ -26,6 +37,8 @@ The display is a persistent scene, not a sequence of independent event rendering
 - `reset_scene`: return to the boot scene.
 
 The current display agent is deterministic and maps each harn event to status, log, decision, and pulse mutations. Later, the LLM display agent should receive recent harn context plus recent scene context and return the same mutation format.
+
+The event feed and hook decisions are treated as debug surfaces. They remain in scene state for inspection, but the default browser layout hides them behind a debug drawer.
 
 ## Hook Phases
 

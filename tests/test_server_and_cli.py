@@ -8,7 +8,16 @@ from http.server import ThreadingHTTPServer
 from typing import Any
 
 from harn_gibson import cli
-from harn_gibson.server import GibsonServerState, apply_event_to_scene, create_server, event_from_payload, format_sse
+from harn_gibson.server import (
+    BrowserInputQueue,
+    GibsonServerState,
+    apply_event_to_scene,
+    browser_input_event_payload,
+    create_server,
+    enqueue_browser_input,
+    event_from_payload,
+    format_sse,
+)
 
 
 def request_text(url: str, data: bytes | None = None) -> tuple[int, str, str]:
@@ -17,9 +26,9 @@ def request_text(url: str, data: bytes | None = None) -> tuple[int, str, str]:
         request.add_header("Content-Type", "application/json")
     try:
         with urllib.request.urlopen(request, timeout=2) as response:  # noqa: S310
-            return response.status, response.headers["Content-Type"], response.read().decode("utf-8")
+            return response.status, response.headers.get("Content-Type", ""), response.read().decode("utf-8")
     except urllib.error.HTTPError as error:
-        return error.code, error.headers["Content-Type"], error.read().decode("utf-8")
+        return error.code, error.headers.get("Content-Type", ""), error.read().decode("utf-8")
 
 
 def start_server() -> tuple[ThreadingHTTPServer, str]:
@@ -47,6 +56,13 @@ def test_http_server_routes() -> None:
         assert json.loads(request_text(f"{base}/events", b'{"sequence":1}')[2]) == {
             "error": "event payload missing eventType"
         }
+        assert request_text(f"{base}/input/next")[0:2] == (204, "")
+        assert json.loads(request_text(f"{base}/input", b"{")[2]) == {"error": "invalid json"}
+        assert json.loads(request_text(f"{base}/input", b"[]")[2]) == {"error": "input payload must be an object"}
+        assert json.loads(request_text(f"{base}/input", b'{"message":1}')[2]) == {"error": "message must be a string"}
+        assert json.loads(request_text(f"{base}/input", b'{"message":"hi","deliverAs":1}')[2]) == {
+            "error": "deliverAs must be a string"
+        }
 
         payload = {
             "sequence": 1,
@@ -62,6 +78,22 @@ def test_http_server_routes() -> None:
         assert status == 202
         assert json.loads(body) == {"ok": True, "sceneRevision": 1}
         assert json.loads(request_text(f"{base}/healthz")[2]) == {"ok": True, "events": 1, "sceneRevision": 1}
+
+        status, _content_type, body = request_text(
+            f"{base}/input",
+            json.dumps({"message": " launch sequence ", "deliverAs": "steer"}).encode("utf-8"),
+        )
+        accepted = json.loads(body)
+        assert status == 202
+        assert accepted["input"] == {
+            "id": "input-1",
+            "sequence": 1,
+            "message": "launch sequence",
+            "deliverAs": "steer",
+        }
+        assert accepted["pendingInputs"] == 1
+        assert json.loads(request_text(f"{base}/input/next")[2]) == accepted["input"]
+        assert request_text(f"{base}/input/next")[0] == 204
     finally:
         server.shutdown()
         server.server_close()
@@ -106,6 +138,37 @@ def test_event_from_payload_validation() -> None:
             assert message in str(error)
         else:
             raise AssertionError("expected ValueError")
+
+
+def test_browser_input_queue_and_payload_validation(monkeypatch: Any) -> None:
+    state = GibsonServerState()
+    queue = BrowserInputQueue()
+    item = queue.enqueue(" hello ", "followUp")
+
+    assert item.to_dict() == {"id": "input-1", "sequence": 1, "message": "hello", "deliverAs": "followUp"}
+    assert queue.pending_count() == 1
+    assert queue.pop() == item
+    assert queue.pop() is None
+
+    for message, deliver_as, error in (
+        (" ", "followUp", "message cannot be empty"),
+        ("hi", "later", "deliverAs must be followUp or steer"),
+    ):
+        try:
+            queue.enqueue(message, deliver_as)
+        except ValueError as exc:
+            assert error in str(exc)
+        else:
+            raise AssertionError("expected ValueError")
+
+    queued = enqueue_browser_input({"message": "abc"}, state)
+    assert queued.deliver_as == "followUp"
+    monkeypatch.setattr("harn_gibson.server.time.time", lambda: 12.3)
+    payload = browser_input_event_payload(queued)
+    assert payload["timestampMs"] == 12300
+    assert payload["eventType"] == "browser_input"
+    assert payload["summary"] == "gibson input queued: abc"
+    assert "..." in browser_input_event_payload(queue.enqueue("x" * 120))["summary"]
 
 
 def test_format_sse() -> None:

@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import json
+import queue
+import threading
+import time
 from dataclasses import dataclass, field
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -17,6 +20,56 @@ from harn_gibson.sinks import EventBuffer
 class GibsonServerState:
     buffer: EventBuffer = field(default_factory=EventBuffer)
     scene: SceneEngine = field(default_factory=SceneEngine)
+    inputs: BrowserInputQueue = field(default_factory=lambda: BrowserInputQueue())
+
+
+@dataclass(frozen=True, slots=True)
+class BrowserInput:
+    id: str
+    sequence: int
+    message: str
+    deliver_as: str = "followUp"
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "sequence": self.sequence,
+            "message": self.message,
+            "deliverAs": self.deliver_as,
+        }
+
+
+@dataclass(slots=True)
+class BrowserInputQueue:
+    _items: queue.Queue[BrowserInput] = field(default_factory=queue.Queue)
+    _sequence: int = 0
+    _lock: threading.Lock = field(default_factory=threading.Lock)
+
+    def enqueue(self, message: str, deliver_as: str = "followUp") -> BrowserInput:
+        text = message.strip()
+        if not text:
+            raise ValueError("message cannot be empty")
+        if deliver_as not in {"followUp", "steer"}:
+            raise ValueError("deliverAs must be followUp or steer")
+        with self._lock:
+            self._sequence += 1
+            item = BrowserInput(
+                id=f"input-{self._sequence}",
+                sequence=self._sequence,
+                message=text,
+                deliver_as=deliver_as,
+            )
+        self._items.put(item)
+        return item
+
+    def pop(self) -> BrowserInput | None:
+        try:
+            return self._items.get_nowait()
+        except queue.Empty:
+            return None
+
+    def pending_count(self) -> int:
+        return self._items.qsize()
 
 
 def create_server(
@@ -64,23 +117,30 @@ def make_handler(state: GibsonServerState) -> type[BaseHTTPRequestHandler]:
             if self.path == "/scene":
                 self._json(HTTPStatus.OK, state.scene.state.to_dict())
                 return
+            if self.path == "/input/next":
+                item = state.inputs.pop()
+                if item is None:
+                    self._empty(HTTPStatus.NO_CONTENT)
+                    return
+                self._json(HTTPStatus.OK, item.to_dict())
+                return
             if self.path == "/events":  # pragma: no cover
                 self._stream_events()  # pragma: no cover
                 return  # pragma: no cover
             self._json(HTTPStatus.NOT_FOUND, {"error": "not found"})
 
         def do_POST(self) -> None:
-            if self.path != "/events":
-                self._json(HTTPStatus.NOT_FOUND, {"error": "not found"})
+            if self.path == "/events":
+                self._handle_event_post()
                 return
-            length = int(self.headers.get("Content-Length") or "0")
-            try:
-                payload = json.loads(self.rfile.read(length).decode("utf-8"))
-            except json.JSONDecodeError:
-                self._json(HTTPStatus.BAD_REQUEST, {"error": "invalid json"})
+            if self.path == "/input":
+                self._handle_input_post()
                 return
-            if not isinstance(payload, dict):
-                self._json(HTTPStatus.BAD_REQUEST, {"error": "event payload must be an object"})
+            self._json(HTTPStatus.NOT_FOUND, {"error": "not found"})
+
+        def _handle_event_post(self) -> None:
+            payload = self._read_json_payload("event payload must be an object")
+            if payload is None:
                 return
             try:
                 update = apply_event_to_scene(payload, state)
@@ -89,6 +149,39 @@ def make_handler(state: GibsonServerState) -> type[BaseHTTPRequestHandler]:
                 return
             state.buffer.publish(update)
             self._json(HTTPStatus.ACCEPTED, {"ok": True, "sceneRevision": state.scene.state.revision})
+
+        def _handle_input_post(self) -> None:
+            payload = self._read_json_payload("input payload must be an object")
+            if payload is None:
+                return
+            try:
+                item = enqueue_browser_input(payload, state)
+            except (TypeError, ValueError) as error:
+                self._json(HTTPStatus.BAD_REQUEST, {"error": str(error)})
+                return
+            update = apply_event_to_scene(browser_input_event_payload(item), state)
+            state.buffer.publish(update)
+            self._json(
+                HTTPStatus.ACCEPTED,
+                {
+                    "ok": True,
+                    "input": item.to_dict(),
+                    "pendingInputs": state.inputs.pending_count(),
+                    "sceneRevision": state.scene.state.revision,
+                },
+            )
+
+        def _read_json_payload(self, object_error: str) -> dict[str, Any] | None:
+            length = int(self.headers.get("Content-Length") or "0")
+            try:
+                payload = json.loads(self.rfile.read(length).decode("utf-8"))
+            except json.JSONDecodeError:
+                self._json(HTTPStatus.BAD_REQUEST, {"error": "invalid json"})
+                return None
+            if not isinstance(payload, dict):
+                self._json(HTTPStatus.BAD_REQUEST, {"error": object_error})
+                return None
+            return payload
 
         def log_message(self, _format: str, *_args: Any) -> None:
             return None
@@ -111,6 +204,11 @@ def make_handler(state: GibsonServerState) -> type[BaseHTTPRequestHandler]:
         def _json(self, status: HTTPStatus, payload: dict[str, Any]) -> None:
             self._write(status, json.dumps(payload, separators=(",", ":")), "application/json")
 
+        def _empty(self, status: HTTPStatus) -> None:
+            self.send_response(status)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+
         def _write(self, status: HTTPStatus, body: str, content_type: str) -> None:
             encoded = body.encode("utf-8")
             self.send_response(status)
@@ -120,6 +218,37 @@ def make_handler(state: GibsonServerState) -> type[BaseHTTPRequestHandler]:
             self.wfile.write(encoded)
 
     return GibsonRequestHandler
+
+
+def enqueue_browser_input(payload: dict[str, Any], state: GibsonServerState) -> BrowserInput:
+    message = payload.get("message")
+    if not isinstance(message, str):
+        raise TypeError("message must be a string")
+    deliver_as = payload.get("deliverAs", "followUp")
+    if not isinstance(deliver_as, str):
+        raise TypeError("deliverAs must be a string")
+    return state.inputs.enqueue(message, deliver_as)
+
+
+def browser_input_event_payload(item: BrowserInput) -> dict[str, Any]:
+    summary = f"gibson input queued: {_clip(item.message, 96)}"
+    return {
+        "sequence": item.sequence,
+        "timestampMs": int(time.time() * 1000),
+        "source": "gibson",
+        "eventType": "browser_input",
+        "phase": "before",
+        "title": "Browser input",
+        "summary": summary,
+        "payload": item.to_dict(),
+    }
+
+
+def _clip(text: str, limit: int) -> str:
+    compact = " ".join(text.split())
+    if len(compact) <= limit:
+        return compact
+    return compact[: limit - 1] + "..."
 
 
 def format_sse(payload: dict[str, Any]) -> str:
@@ -178,7 +307,10 @@ HTML = """<!doctype html>
             <p class="kicker">HARN DISPLAY RELAY</p>
             <h1>GIBSON LINK</h1>
           </div>
-          <div id="status" class="status">awaiting signal</div>
+          <div class="topbar">
+            <button id="debugToggle" class="debug-toggle" type="button" aria-expanded="false">DEBUG</button>
+            <div id="status" class="status">awaiting signal</div>
+          </div>
         </div>
         <div class="readout">
           <div>
@@ -194,8 +326,19 @@ HTML = """<!doctype html>
             <strong id="sequence">0</strong>
           </div>
         </div>
+        <form id="inputForm" class="composer" autocomplete="off">
+          <textarea id="promptInput" rows="2" placeholder="route input to harn"></textarea>
+          <div class="composer-actions">
+            <select id="deliverAs" aria-label="Input delivery mode">
+              <option value="followUp">queue</option>
+              <option value="steer">steer</option>
+            </select>
+            <button type="submit">SEND</button>
+          </div>
+          <p id="inputStatus" class="input-status">ready</p>
+        </form>
       </section>
-      <aside class="side" aria-label="Event stream">
+      <aside id="debugPanel" class="debug-panel" aria-label="Debug stream">
         <div class="panel">
           <h2>Event Feed</h2>
           <ol id="feed"></ol>
@@ -233,9 +376,7 @@ body {
   font-family: "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
 }
 .shell {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 380px;
-  gap: 18px;
+  position: relative;
   min-height: 100vh;
   padding: 18px;
 }
@@ -259,6 +400,7 @@ body {
   justify-content: space-between;
   align-items: flex-start;
   padding: 24px;
+  gap: 16px;
 }
 .kicker {
   margin: 0 0 8px;
@@ -271,6 +413,29 @@ h1 {
   font-weight: 700;
   letter-spacing: 0;
 }
+.topbar {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+.debug-toggle,
+.composer button,
+.composer select {
+  min-height: 38px;
+  border: 1px solid rgba(105, 255, 184, 0.36);
+  background: rgba(5, 10, 13, 0.82);
+  color: var(--green);
+  font: inherit;
+}
+.debug-toggle,
+.composer button {
+  padding: 0 12px;
+  cursor: pointer;
+}
+.debug-toggle[aria-expanded="true"] {
+  border-color: rgba(255, 204, 102, 0.65);
+  color: var(--amber);
+}
 .status {
   max-width: 220px;
   padding: 8px 10px;
@@ -282,7 +447,7 @@ h1 {
   position: absolute;
   left: 24px;
   right: 24px;
-  bottom: 24px;
+  bottom: 132px;
   z-index: 1;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -312,11 +477,68 @@ h1 {
   font-size: 17px;
   overflow-wrap: anywhere;
 }
-.side {
+.composer {
+  position: absolute;
+  left: 24px;
+  right: 24px;
+  bottom: 24px;
+  z-index: 2;
   display: grid;
-  grid-template-rows: 1fr 260px;
-  gap: 18px;
-  min-height: calc(100vh - 36px);
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: stretch;
+  border: 1px solid var(--line);
+  background: rgba(3, 6, 8, 0.9);
+  padding: 10px;
+}
+.composer textarea {
+  min-height: 68px;
+  max-height: 160px;
+  resize: vertical;
+  border: 1px solid rgba(88, 215, 255, 0.28);
+  background: rgba(7, 13, 16, 0.88);
+  color: var(--text);
+  font: inherit;
+  line-height: 1.4;
+  padding: 10px;
+  outline: none;
+}
+.composer textarea:focus {
+  border-color: rgba(88, 215, 255, 0.72);
+}
+.composer-actions {
+  display: grid;
+  grid-template-rows: 38px 1fr;
+  gap: 8px;
+  min-width: 110px;
+}
+.composer select {
+  padding: 0 8px;
+}
+.input-status {
+  grid-column: 1 / -1;
+  min-height: 16px;
+  margin: -2px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+.debug-panel {
+  position: fixed;
+  top: 18px;
+  right: 18px;
+  bottom: 18px;
+  z-index: 5;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) 260px;
+  gap: 12px;
+  width: min(420px, calc(100vw - 36px));
+  transform: translateX(calc(100% + 24px));
+  transition: transform 160ms ease-out;
+  pointer-events: none;
+}
+body.debug-open .debug-panel {
+  transform: translateX(0);
+  pointer-events: auto;
 }
 .panel {
   min-width: 0;
@@ -364,10 +586,22 @@ h1 {
   white-space: pre-wrap;
 }
 @media (max-width: 900px) {
-  .shell { grid-template-columns: 1fr; }
-  .stage { min-height: 58vh; }
-  .side { min-height: 42vh; grid-template-rows: 1fr 220px; }
+  .shell { padding: 10px; }
+  .stage { min-height: calc(100vh - 20px); }
+  .mast { flex-direction: column; padding: 16px; }
+  .topbar { width: 100%; justify-content: space-between; }
+  .readout {
+    left: 16px;
+    right: 16px;
+    bottom: 166px;
+  }
   .readout { grid-template-columns: 1fr; }
+  .composer {
+    left: 16px;
+    right: 16px;
+    grid-template-columns: 1fr;
+  }
+  .composer-actions { grid-template-columns: 1fr 1fr; grid-template-rows: 38px; }
 }
 """
 
@@ -380,7 +614,47 @@ const phaseEl = document.getElementById("phase");
 const eventEl = document.getElementById("eventType");
 const sequenceEl = document.getElementById("sequence");
 const decisionLog = document.getElementById("decisionLog");
+const debugToggle = document.getElementById("debugToggle");
+const inputForm = document.getElementById("inputForm");
+const promptInput = document.getElementById("promptInput");
+const deliverAs = document.getElementById("deliverAs");
+const inputStatus = document.getElementById("inputStatus");
 const pulses = [];
+
+debugToggle.addEventListener("click", () => {
+  const expanded = document.body.classList.toggle("debug-open");
+  debugToggle.setAttribute("aria-expanded", String(expanded));
+});
+
+promptInput.addEventListener("keydown", (event) => {
+  if (event.key === "Enter" && !event.shiftKey) {
+    event.preventDefault();
+    inputForm.requestSubmit();
+  }
+});
+
+inputForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const message = promptInput.value.trim();
+  if (!message) {
+    inputStatus.textContent = "empty input";
+    return;
+  }
+  inputStatus.textContent = "queueing";
+  try {
+    const response = await fetch("/input", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({message, deliverAs: deliverAs.value}),
+    });
+    const payload = await response.json();
+    if (!response.ok || !payload.ok) throw new Error(payload.error || "queue failed");
+    promptInput.value = "";
+    inputStatus.textContent = `queued ${payload.input.id}`;
+  } catch (error) {
+    inputStatus.textContent = error instanceof Error ? error.message : "queue failed";
+  }
+});
 
 function resize() {
   const rect = canvas.getBoundingClientRect();
@@ -493,12 +767,21 @@ source.onmessage = (message) => {
     statusEl.textContent = "decode fault";
   }
 };
+
+fetch("/scene")
+  .then((response) => response.json())
+  .then((scene) => renderScene(scene))
+  .catch(() => { statusEl.textContent = "scene fetch failed"; });
 """
 
 __all__ = [
+    "BrowserInput",
+    "BrowserInputQueue",
     "GibsonServerState",
     "apply_event_to_scene",
+    "browser_input_event_payload",
     "create_server",
+    "enqueue_browser_input",
     "event_from_payload",
     "format_sse",
     "make_handler",

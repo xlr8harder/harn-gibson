@@ -5,7 +5,7 @@
 - a harn extension that hooks before, during, and after core agent events;
 - a normalized JSON event stream for graphical displays;
 - a persistent scene engine with primitives, animations, and mutations;
-- a browser-based local display server with SSE updates;
+- a browser-based local display server with SSE updates and an input composer;
 - a hook dispatcher so future policies can block, transform, or post-process events.
 
 The current display agent is deterministic. The later LLM-driven visualization layer can consume the same event stream and emit scene mutations without changing the harn integration.
@@ -35,6 +35,15 @@ In another terminal, run harn with the extension:
 HARN_GIBSON_ENDPOINT=http://127.0.0.1:8765/events \
 harn -e "$(uv run harn-gibson extension-path)"
 ```
+
+The browser page can be used as the primary input surface. Submitted text is queued on the display server at `/input`; the harn extension polls `/input/next` and forwards messages via `harn.sendUserMessage`.
+
+Delivery modes:
+
+- `queue`: default. Runs immediately if harn is idle, or queues as a follow-up if harn is streaming.
+- `steer`: queues steering input for the active agent run.
+
+The raw event feed and hook decisions are in the debug drawer. Use the `DEBUG` button in the display to toggle it.
 
 For offline inspection, write normalized events to JSONL:
 

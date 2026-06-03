@@ -2,14 +2,19 @@
 
 from __future__ import annotations
 
+import asyncio
+import json
 import os
+import urllib.error
+import urllib.request
 from collections.abc import Mapping
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from harn_gibson.events import GibsonEvent
 from harn_gibson.hooks import HookDispatcher, load_hook_module, result_for_harn
-from harn_gibson.sinks import EventSink, build_sink_from_env
+from harn_gibson.sinks import DEFAULT_ENDPOINT, EventSink, build_sink_from_env
 
 HARN_EVENTS = (
     "resources_discover",
@@ -59,10 +64,58 @@ class GibsonRelay:
         return result_for_harn(event.event_type, decisions)
 
 
+@dataclass(slots=True)
+class BrowserInputPoller:
+    harn: Any
+    endpoint: str | None
+    poll_interval: float = 0.25
+    timeout: float = 0.2
+    task: asyncio.Task[None] | None = None
+
+    def start(self) -> None:
+        if self.endpoint is None:
+            return
+        if self.task is not None and not self.task.done():
+            return
+        self.task = asyncio.create_task(self._run())
+
+    def stop(self) -> None:
+        if self.task is not None and not self.task.done():
+            self.task.cancel()
+        self.task = None
+
+    async def poll_once(self) -> bool:
+        if self.endpoint is None:
+            return False
+        item = await fetch_browser_input(self.endpoint, self.timeout)
+        if item is None:
+            return False
+        message = item.get("message")
+        if not isinstance(message, str) or not message.strip():
+            return False
+        deliver_as = item.get("deliverAs")
+        options = {"deliverAs": deliver_as if deliver_as in {"followUp", "steer"} else "followUp"}
+        send_user_message = getattr(self.harn, "sendUserMessage", None)
+        if not callable(send_user_message):
+            return False
+        send_user_message(message, options)
+        return True
+
+    async def _run(self) -> None:
+        while True:
+            await self.poll_once()
+            await asyncio.sleep(self.poll_interval)
+
+
 def extension_factory(harn: Any) -> None:
     relay = GibsonRelay(build_sink_from_env(), build_dispatcher_from_env())
+    poller = BrowserInputPoller(
+        harn=harn,
+        endpoint=build_input_endpoint_from_env(),
+        poll_interval=_poll_interval_from_env(),
+    )
     for event_type in HARN_EVENTS:
-        harn.on(event_type, _handler_for(relay))
+        harn.on(event_type, _handler_for(relay, poller))
 
 
 def build_dispatcher_from_env(environ: Mapping[str, str] | None = None) -> HookDispatcher:
@@ -78,11 +131,66 @@ def extension_path() -> str:
     return str(Path(__file__).resolve())
 
 
-def _handler_for(relay: GibsonRelay) -> Any:
+async def fetch_browser_input(endpoint: str, timeout: float = 0.2) -> dict[str, Any] | None:
+    try:
+        return await asyncio.to_thread(_fetch_browser_input_sync, endpoint, timeout)
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
+def build_input_endpoint_from_env(environ: Mapping[str, str] | None = None) -> str | None:
+    env = os.environ if environ is None else environ
+    explicit = env.get("HARN_GIBSON_INPUT_ENDPOINT")
+    if explicit:
+        return explicit
+    endpoint = env.get("HARN_GIBSON_ENDPOINT", DEFAULT_ENDPOINT)
+    if endpoint.lower() in {"", "0", "false", "none"}:
+        return None
+    return _event_endpoint_to_input_endpoint(endpoint)
+
+
+def _handler_for(relay: GibsonRelay, poller: BrowserInputPoller) -> Any:
     async def handler(event: Any, ctx: Any = None) -> Any:
-        return await relay.handle(event, ctx)
+        result = await relay.handle(event, ctx)
+        event_type = event.get("type") if isinstance(event, Mapping) else getattr(event, "type", None)
+        if event_type == "session_start":
+            poller.start()
+        elif event_type == "session_shutdown":
+            poller.stop()
+        return result
 
     return handler
+
+
+def _fetch_browser_input_sync(endpoint: str, timeout: float) -> dict[str, Any] | None:
+    request = urllib.request.Request(endpoint, headers={"Accept": "application/json"})
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:  # noqa: S310
+            if response.status == 204:
+                return None
+            payload = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as error:
+        if error.code == 204:
+            return None
+        raise
+    return payload if isinstance(payload, dict) else None
+
+
+def _event_endpoint_to_input_endpoint(endpoint: str) -> str:
+    base = endpoint.rstrip("/")
+    if base.endswith("/events"):
+        base = base[: -len("/events")]
+    return f"{base}/input/next"
+
+
+def _poll_interval_from_env(environ: Mapping[str, str] | None = None) -> float:
+    env = os.environ if environ is None else environ
+    raw_value = env.get("HARN_GIBSON_INPUT_POLL_MS", "250")
+    try:
+        milliseconds = max(50, int(raw_value))
+    except ValueError:
+        milliseconds = 250
+    return milliseconds / 1000
 
 
 def _split_paths(value: str) -> list[str]:
