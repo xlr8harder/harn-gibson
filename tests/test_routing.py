@@ -123,6 +123,60 @@ def test_event_router_route_rules_cover_renderer_direct_debug_and_drop() -> None
     assert renderer.decision.reason == "force renderer"
 
 
+def test_event_router_route_rules_can_sample_noisy_events() -> None:
+    router = EventRouter(
+        route_rules=(
+            EventRouteRule.from_mapping(
+                {
+                    "eventType": "model_select",
+                    "route": "renderer_agent",
+                    "reason": "sample model chatter",
+                    "sampleEvery": 3,
+                    "sampleOffset": 1,
+                    "fallbackRoute": "debug_only",
+                }
+            ),
+            EventRouteRule.from_mapping(
+                {
+                    "eventType": "session_tree",
+                    "route": "direct_scene",
+                    "reason": "sample tree snapshots",
+                    "sampleEvery": 2,
+                    "fallbackRoute": "drop",
+                }
+            ),
+        )
+    )
+
+    skipped = router.route(event(1, "model_select"))
+    sampled = router.route(event(2, "model_select"))
+    skipped_again = router.route(event(3, "model_select"))
+    direct_sampled = router.route(event(4, "session_tree"))
+    direct_skipped = router.route(event(5, "session_tree"))
+
+    assert skipped.decision.route == "debug_only"
+    assert skipped.uses_renderer is False
+    assert skipped.direct_mutations == ()
+    assert skipped.decision.reason == "sample model chatter sample skipped"
+    assert skipped.request.metadata["route"]["metadata"]["sample"] == {
+        "index": 0,
+        "sampleEvery": 3,
+        "sampleOffset": 1,
+        "sampled": False,
+        "fallbackRoute": "debug_only",
+    }
+    assert sampled.uses_renderer is True
+    assert sampled.decision.metadata["sample"]["sampled"] is True
+    assert sampled.request.metadata["route"]["metadata"]["rule"]["fallbackRoute"] == "debug_only"
+    assert skipped_again.decision.route == "debug_only"
+    assert skipped_again.decision.metadata["sample"]["index"] == 2
+    assert direct_sampled.decision.route == "direct_scene"
+    assert direct_sampled.direct_mutations[0].target_id == "status"
+    assert direct_sampled.decision.metadata["sample"]["sampled"] is True
+    assert direct_skipped.dropped is True
+    assert direct_skipped.decision.metadata["sample"]["index"] == 1
+
+
 def test_event_route_rule_mapping_and_validation() -> None:
     first = EventRouteRule.from_mapping(
         {
@@ -133,6 +187,15 @@ def test_event_route_rule_mapping_and_validation() -> None:
         }
     )
     second = EventRouteRule.from_mapping({"event_type": "model_select", "route": "drop"})
+    sampled = EventRouteRule.from_mapping(
+        {
+            "eventType": "session_tree",
+            "route": "renderer_agent",
+            "sampleEvery": "4",
+            "sampleOffset": "2",
+            "sampleFallbackRoute": "debug_only",
+        }
+    )
     direct = EventRouteRule("tool_result", "direct_scene", "local result")
 
     assert first.to_dict() == {
@@ -142,12 +205,25 @@ def test_event_route_rule_mapping_and_validation() -> None:
         "metadata": {"source": "env"},
     }
     assert second.reason == "drop route rule"
+    assert sampled.to_dict() == {
+        "eventType": "session_tree",
+        "route": "renderer_agent",
+        "reason": "renderer_agent route rule",
+        "sampleEvery": 4,
+        "sampleOffset": 2,
+        "fallbackRoute": "debug_only",
+    }
     assert event_route_rules_from_value(None) == ()
     assert event_route_rules_from_value([first.to_dict(), direct]) == (first, direct)
 
     for value, message in (
         ({"route": "drop"}, "eventType"),
         ({"eventType": "tool_call", "route": "stream_buffer"}, "unsupported"),
+        ({"eventType": "tool_call", "sampleEvery": 0}, "sampleEvery"),
+        ({"eventType": "tool_call", "sampleEvery": "bad"}, "integer"),
+        ({"eventType": "tool_call", "sampleEvery": 2, "sampleOffset": -1}, "sampleOffset"),
+        ({"eventType": "tool_call", "sampleEvery": 2, "sampleOffset": 2}, "sampleOffset"),
+        ({"eventType": "tool_call", "sampleEvery": 2, "fallbackRoute": "renderer_agent"}, "fallback"),
     ):
         try:
             EventRouteRule.from_mapping(value)

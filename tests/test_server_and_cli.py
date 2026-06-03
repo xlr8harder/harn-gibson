@@ -540,6 +540,8 @@ def test_renderer_interest_from_env_and_build_state() -> None:
             {
                 "eventType": "model_select",
                 "route": "drop",
+                "sampleEvery": 4,
+                "fallbackRoute": "debug_only",
             },
         ]
     )
@@ -562,6 +564,8 @@ def test_renderer_interest_from_env_and_build_state() -> None:
     assert route_rules[0].event_type == "runtime_error"
     assert route_rules[0].route == "debug_only"
     assert route_rules[1].reason == "drop route rule"
+    assert route_rules[1].sample_every == 4
+    assert route_rules[1].sample_fallback_route == "debug_only"
     assert state.router.renderer_interest == interest
     assert state.router.route_rules["runtime_error"] == route_rules[0]
 

@@ -58,7 +58,7 @@ When replay is asked for a timeline, it captures a full scene keyframe after eac
 
 The display server accepts routed events into a render pipeline.
 
-Before events reach a renderer, an `EventRouter` can choose whether they should go to a renderer agent, patch scene state directly, update a stream buffer, remain debug-only, or be dropped/sampled. Explicit `EventRouteRule` entries provide direct-scene, debug-only, renderer, and drop routing for specific event types, and dogfood runs can provide them with `HARN_GIBSON_ROUTE_RULES`. Local stream bindings handle noisy stream deltas. Then a renderer-advertised `RendererEventInterest` can decide which remaining events should actually be sent to the renderer. Streaming assistant deltas currently update a local `text_stream` primitive so a future remote renderer agent does not need to receive every token-sized update.
+Before events reach a renderer, an `EventRouter` can choose whether they should go to a renderer agent, patch scene state directly, update a stream buffer, remain debug-only, or be dropped/sampled. Explicit `EventRouteRule` entries provide direct-scene, debug-only, renderer, drop, and every-N-event sampled routing for specific event types, and dogfood runs can provide them with `HARN_GIBSON_ROUTE_RULES`. Local stream bindings handle noisy stream deltas. Then a renderer-advertised `RendererEventInterest` can decide which remaining events should actually be sent to the renderer. Streaming assistant deltas currently update a local `text_stream` primitive so a future remote renderer agent does not need to receive every token-sized update.
 
 In blocking mode, the server builds and applies a render plan before responding to harn. This guarantees the scene saw the event before harn proceeds.
 

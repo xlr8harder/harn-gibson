@@ -98,6 +98,9 @@ class EventRouteRule:
     route: RuleRouteKind
     reason: str
     metadata: dict[str, Any] = field(default_factory=dict)
+    sample_every: int = 1
+    sample_offset: int = 0
+    sample_fallback_route: RendererFallbackRoute = "drop"
 
     @classmethod
     def from_mapping(cls, value: Mapping[str, Any]) -> EventRouteRule:
@@ -107,11 +110,26 @@ class EventRouteRule:
         route = str(value.get("route") or "renderer_agent")
         if route not in {"renderer_agent", "direct_scene", "debug_only", "drop"}:
             raise ValueError(f"unsupported event route rule route: {route}")
+        sample_every = _int_field(value, "sampleEvery", "sample_every", 1)
+        sample_offset = _int_field(value, "sampleOffset", "sample_offset", 0)
+        if sample_every < 1:
+            raise ValueError("event route rule sampleEvery must be at least 1")
+        if sample_offset < 0 or sample_offset >= sample_every:
+            raise ValueError("event route rule sampleOffset must satisfy 0 <= sampleOffset < sampleEvery")
+        fallback_value = value.get("fallbackRoute", value.get("fallback_route"))
+        if fallback_value is None:
+            fallback_value = value.get("sampleFallbackRoute", value.get("sample_fallback_route", "drop"))
+        sample_fallback_route = str(fallback_value)
+        if sample_fallback_route not in {"direct_scene", "debug_only", "drop"}:
+            raise ValueError(f"unsupported event route rule sample fallback route: {sample_fallback_route}")
         return cls(
             event_type=event_type,
             route=route,  # type: ignore[arg-type]
             reason=str(value.get("reason") or f"{route} route rule"),
             metadata=dict(value.get("metadata") or {}),
+            sample_every=sample_every,
+            sample_offset=sample_offset,
+            sample_fallback_route=sample_fallback_route,  # type: ignore[arg-type]
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -122,6 +140,10 @@ class EventRouteRule:
         }
         if self.metadata:
             payload["metadata"] = self.metadata
+        if self.sample_every != 1:
+            payload["sampleEvery"] = self.sample_every
+            payload["sampleOffset"] = self.sample_offset
+            payload["fallbackRoute"] = self.sample_fallback_route
         return payload
 
 
@@ -206,6 +228,7 @@ class EventRouter:
         self.route_rules = {rule.event_type: rule for rule in route_rules or ()}
         self.renderer_interest = renderer_interest
         self.stream_buffers: dict[str, StreamBuffer] = {}
+        self._sample_counts: dict[str, int] = {}
 
     def route(self, event: GibsonEvent, decisions: Sequence[dict[str, Any]] = ()) -> RouteResult:
         rule = self.route_rules.get(event.event_type)
@@ -232,8 +255,9 @@ class EventRouter:
         event: GibsonEvent,
         decisions: Sequence[dict[str, Any]],
         reason: str,
+        metadata: dict[str, Any] | None = None,
     ) -> RouteResult:
-        decision = RouteDecision(route="renderer_agent", reason=reason)
+        decision = RouteDecision(route="renderer_agent", reason=reason, metadata=dict(metadata or {}))
         request = RenderRequest(event, tuple(decisions), metadata={"route": decision.to_dict()})
         batch = RenderInputBatch.from_requests((request,), metadata={"route": decision.to_dict()})
         return RouteResult(decision, batch.requests[0], batch)
@@ -244,14 +268,53 @@ class EventRouter:
         decisions: Sequence[dict[str, Any]],
         rule: EventRouteRule,
     ) -> RouteResult:
+        if rule.sample_every != 1:
+            return self._sampled_rule_result(event, decisions, rule)
         if rule.route == "renderer_agent":
-            return self._renderer_result(event, decisions, rule.reason)
+            return self._renderer_result(event, decisions, rule.reason, {"rule": rule.to_dict()})
         return self._local_route_result(
             event,
             decisions,
             route=rule.route,
             reason=rule.reason,
             metadata={"rule": rule.to_dict()},
+        )
+
+    def _sampled_rule_result(
+        self,
+        event: GibsonEvent,
+        decisions: Sequence[dict[str, Any]],
+        rule: EventRouteRule,
+    ) -> RouteResult:
+        index = self._sample_counts.get(rule.event_type, 0)
+        self._sample_counts[rule.event_type] = index + 1
+        sampled = (index - rule.sample_offset) % rule.sample_every == 0
+        sample_metadata = {
+            "rule": rule.to_dict(),
+            "sample": {
+                "index": index,
+                "sampleEvery": rule.sample_every,
+                "sampleOffset": rule.sample_offset,
+                "sampled": sampled,
+                "fallbackRoute": rule.sample_fallback_route,
+            },
+        }
+        if not sampled:
+            return self._local_route_result(
+                event,
+                decisions,
+                route=rule.sample_fallback_route,
+                reason=f"{rule.reason} sample skipped",
+                metadata=sample_metadata,
+            )
+        if rule.route == "renderer_agent":
+            return self._renderer_result(event, decisions, rule.reason, sample_metadata)
+        return self._local_route_result(
+            event,
+            decisions,
+            route=rule.route,
+            reason=rule.reason,
+            metadata=sample_metadata,
         )
 
     def _interest_fallback_result(
@@ -491,6 +554,14 @@ def _string_tuple(value: object) -> tuple[str, ...]:
     if not isinstance(value, Sequence) or isinstance(value, str | bytes):
         return ()
     return tuple(str(item) for item in value)
+
+
+def _int_field(value: Mapping[str, Any], camel_key: str, snake_key: str, default: int) -> int:
+    raw = value.get(camel_key, value.get(snake_key, default))
+    try:
+        return int(raw)
+    except (TypeError, ValueError) as error:
+        raise ValueError(f"event route rule {camel_key} must be an integer") from error
 
 
 def _phase_tuple(value: object) -> tuple[EventPhase, ...]:

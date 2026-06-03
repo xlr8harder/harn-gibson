@@ -138,6 +138,21 @@ Explicit route rules have higher precedence than renderer interest and are usefu
 ]
 ```
 
+Route rules can also sample noisy events before routing them. `sampleEvery` keeps one matching event per N-event window, `sampleOffset` chooses which zero-based position in the sample window is kept, and `fallbackRoute` handles skipped events with `direct_scene`, `debug_only`, or `drop`:
+
+```json
+[
+  {
+    "eventType": "session_tree",
+    "route": "renderer_agent",
+    "reason": "sample repo snapshots",
+    "sampleEvery": 4,
+    "sampleOffset": 0,
+    "fallbackRoute": "debug_only"
+  }
+]
+```
+
 The same list is accepted as JSON in `HARN_GIBSON_ROUTE_RULES`.
 
 ## Context Strategy

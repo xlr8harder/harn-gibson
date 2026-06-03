@@ -103,6 +103,12 @@ Specific event types can be forced to renderer, direct scene, debug-only, or dro
 HARN_GIBSON_ROUTE_RULES='[{"eventType":"runtime_error","route":"debug_only"},{"eventType":"model_select","route":"drop"}]'
 ```
 
+Noisy event types can also be sampled before routing. This keeps one matching event per four-event window on the renderer path and sends skipped events to `debug_only`:
+
+```bash
+HARN_GIBSON_ROUTE_RULES='[{"eventType":"session_tree","route":"renderer_agent","sampleEvery":4,"fallbackRoute":"debug_only"}]'
+```
+
 To dogfood the renderer-agent process boundary without a live model call, point the server at an external renderer command. The command receives `harn-gibson.external-renderer-request.v1` JSON on stdin and returns a render plan with `steps` on stdout:
 
 ```bash
