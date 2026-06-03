@@ -45,7 +45,15 @@ def test_default_visual_catalog_has_generic_and_cinematic_building_blocks() -> N
         "city_block",
         "trace_route",
     } <= primitive_ids
-    assert {"glitch", "flythrough", "packet_burst", "vector_trace", "vector_keyframes", "hold"} <= effect_ids
+    assert {
+        "glitch",
+        "flythrough",
+        "packet_burst",
+        "timeline_cue",
+        "vector_trace",
+        "vector_keyframes",
+        "hold",
+    } <= effect_ids
     assert catalog.entry("city_block") is not None
     assert "gibson" in catalog.entry("city_block").tags  # type: ignore[union-attr]
     city_block = catalog.entry("city_block")
@@ -108,3 +116,7 @@ def test_default_visual_catalog_has_generic_and_cinematic_building_blocks() -> N
     assert trace_route is not None
     assert {"hops", "links", "focusHopId", "packets", "speed", "label"} <= set(trace_route.props)
     assert {"gibson", "network", "motion", "map"} <= set(trace_route.tags)
+    timeline_cue = catalog.entry("timeline_cue")
+    assert timeline_cue is not None
+    assert {"targetId", "cues", "durationMs", "label"} <= set(timeline_cue.props)
+    assert {"cinematic", "motion", "timed", "sequence"} <= set(timeline_cue.tags)

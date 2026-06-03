@@ -6,6 +6,47 @@
   "replaySchema": "harn-gibson.replay.v1",
   "scene": {
     "animations": {
+      "gallery-cues": {
+        "durationMs": 6200,
+        "id": "gallery-cues",
+        "kind": "timeline_cue",
+        "loop": true,
+        "props": {
+          "accentTone": "magenta",
+          "cues": [
+            {
+              "at": 0.05,
+              "label": "QUEUE",
+              "showLabel": true,
+              "tone": "green"
+            },
+            {
+              "label": "ROUTE",
+              "timeMs": 1700,
+              "tone": "cyan"
+            },
+            {
+              "label": "BREACH",
+              "timeMs": 3300,
+              "tone": "magenta"
+            },
+            {
+              "label": "HOLD",
+              "showLabel": true,
+              "timeMs": 5000,
+              "tone": "amber"
+            }
+          ],
+          "label": "COALESCED RENDER WINDOW",
+          "offsetY": 0.16,
+          "phase": "lifecycle",
+          "tone": "green",
+          "width": 0.32,
+          "window": 0.11
+        },
+        "startedAtMs": 9630,
+        "targetId": "animation-vector"
+      },
       "gallery-extrude": {
         "durationMs": 3000,
         "id": "gallery-extrude",
@@ -105,7 +146,7 @@
         "eventType": "animation_gallery",
         "phase": "lifecycle",
         "sequence": 960,
-        "summary": "persistent pulses, packets, scans, glitch, flythrough, extrusion, and hold brackets",
+        "summary": "persistent pulses, packets, timeline cues, scans, glitch, flythrough, extrusion, and hold brackets",
         "title": "Animation gallery"
       }
     ],
@@ -117,6 +158,7 @@
           "primitive:svg_layer",
           "primitive:city_block",
           "primitive:ribbon",
+          "animation:timeline_cue",
           "animation:phase-pulse",
           "animation:packet_burst",
           "animation:scan",
@@ -133,7 +175,7 @@
           "renderer": "replay",
           "stepType": "mutations"
         },
-        "mutationCount": 12,
+        "mutationCount": 13,
         "renderer": "replay",
         "requestCount": 1,
         "routes": [
@@ -160,6 +202,7 @@
             "primitive:svg_layer",
             "primitive:city_block",
             "primitive:ribbon",
+            "animation:timeline_cue",
             "animation:phase-pulse",
             "animation:packet_burst",
             "animation:scan",
@@ -176,7 +219,7 @@
             "renderer": "replay",
             "stepType": "mutations"
           },
-          "mutationCount": 12,
+          "mutationCount": 13,
           "renderer": "replay",
           "requestCount": 1,
           "routes": [

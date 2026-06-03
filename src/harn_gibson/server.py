@@ -1275,6 +1275,7 @@ function drawSceneAnimations(scene, w, h, now) {
 
 function drawSceneAnimation(animation, scene, w, h, now, progress) {
   if (animation.kind === "packet_burst") drawPacketBurstAnimation(animation, scene, w, h, now, progress);
+  else if (animation.kind === "timeline_cue") drawTimelineCueAnimation(animation, scene, w, h, progress);
   else if (animation.kind === "scan") drawScanAnimation(animation, w, h, progress);
   else if (animation.kind === "glitch") drawGlitchAnimation(animation, scene, w, h, now, progress);
   else if (animation.kind === "flythrough") drawFlythroughAnimation(animation, w, h, progress);
@@ -1324,6 +1325,124 @@ function drawPacketBurstAnimation(animation, scene, w, h, now, progress) {
     ctx.beginPath();
     ctx.arc(x, y, (1.4 + (index % 3)) * devicePixelRatio, 0, Math.PI * 2);
     ctx.fill();
+  }
+  ctx.restore();
+}
+
+function timelineCueItems(animation) {
+  const raw = Array.isArray(animation.props?.cues) ? animation.props.cues : [];
+  const duration = Math.max(1, Number(animation.durationMs || 1000));
+  return raw
+    .filter((cue) => cue && typeof cue === "object")
+    .slice(0, 32)
+    .map((cue, index) => {
+      let at = Number(cue.at ?? cue.progress ?? cue.offset);
+      if (!Number.isFinite(at)) {
+        const timeMs = Number(cue.timeMs ?? cue.ms ?? cue.delayMs);
+        at = Number.isFinite(timeMs) ? timeMs / duration : (raw.length <= 1 ? 0 : index / (raw.length - 1));
+      }
+      return {...cue, at: clamp(at, 0, 1), index};
+    })
+    .sort((left, right) => left.at - right.at);
+}
+
+function animationMeasure(value, fallback, extent) {
+  const numeric = finiteNumber(value, fallback);
+  return Math.abs(numeric) <= 1 ? numeric * extent : numeric * devicePixelRatio;
+}
+
+function drawTimelineCueAnimation(animation, scene, w, h, progress) {
+  const props = animation.props || {};
+  const cues = timelineCueItems(animation);
+  const base = props.position ? normalizedPoint(props.position, w, h) : animationAnchor(animation, scene, w, h);
+  const tone = animationTone(animation);
+  const accentTone = props.accentTone || props.accent || "magenta";
+  const width = Math.max(120 * devicePixelRatio, animationMeasure(props.width, 0.34, w));
+  const markerHeight = Math.max(18 * devicePixelRatio, animationMeasure(props.height, 0.045, h));
+  const x = base.x + animationMeasure(props.offsetX, 0, w);
+  const y = base.y + animationMeasure(props.offsetY, 0.085, h);
+  const windowSize = clamp(finiteNumber(props.window ?? props.beatWindow, 0.12), 0.02, 0.5);
+  let activeCue = null;
+  let activeDistance = Infinity;
+  for (const cue of cues) {
+    const distance = Math.abs(progress - cue.at);
+    if (distance < activeDistance) {
+      activeCue = cue;
+      activeDistance = distance;
+    }
+  }
+
+  if (typeof window !== "undefined") {
+    window.__gibsonTimelineCueState = window.__gibsonTimelineCueState || {};
+    window.__gibsonTimelineCueState[animation.id] = {
+      targetId: animation.targetId,
+      cueCount: cues.length,
+      activeCueIndex: activeCue ? activeCue.index : -1,
+      activeLabel: activeCue?.label || null,
+      progress: vectorRounded(progress),
+      hasLabels: cues.some((cue) => Boolean(cue.label)),
+    };
+  }
+
+  ctx.save();
+  ctx.globalCompositeOperation = props.blend === "source-over" ? "source-over" : "screen";
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.translate(x, y);
+  ctx.shadowColor = toneColor(tone, 0.72);
+  ctx.shadowBlur = 18 * devicePixelRatio;
+  ctx.lineWidth = Math.max(1, 1.25 * devicePixelRatio);
+  ctx.strokeStyle = toneColor(tone, 0.35);
+  ctx.beginPath();
+  ctx.moveTo(-width * 0.5, 0);
+  ctx.lineTo(width * 0.5, 0);
+  ctx.stroke();
+  const progressX = -width * 0.5 + width * progress;
+  const gradient = ctx.createLinearGradient(-width * 0.5, 0, progressX, 0);
+  gradient.addColorStop(0, toneColor(tone, 0.08));
+  gradient.addColorStop(1, toneColor(tone, 0.76));
+  ctx.strokeStyle = gradient;
+  ctx.lineWidth = Math.max(2, 2.2 * devicePixelRatio);
+  ctx.beginPath();
+  ctx.moveTo(-width * 0.5, 0);
+  ctx.lineTo(progressX, 0);
+  ctx.stroke();
+  ctx.strokeStyle = toneColor("white", 0.82);
+  ctx.beginPath();
+  ctx.moveTo(progressX, -markerHeight * 0.62);
+  ctx.lineTo(progressX, markerHeight * 0.62);
+  ctx.stroke();
+  ctx.font = `${9.5 * devicePixelRatio}px ui-monospace, monospace`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "bottom";
+  for (const cue of cues) {
+    const cueTone = cue.tone || (cue.index % 2 ? accentTone : tone);
+    const cueX = -width * 0.5 + width * cue.at;
+    const distance = Math.abs(progress - cue.at);
+    const activity = clamp(1 - distance / windowSize, 0, 1);
+    const radius = (2.4 + activity * 6.2) * devicePixelRatio;
+    ctx.shadowColor = toneColor(cueTone, 0.45 + activity * 0.45);
+    ctx.shadowBlur = (7 + activity * 14) * devicePixelRatio;
+    ctx.strokeStyle = toneColor(cueTone, 0.42 + activity * 0.42);
+    ctx.lineWidth = Math.max(0.8, (1 + activity * 1.4) * devicePixelRatio);
+    ctx.beginPath();
+    ctx.moveTo(cueX, -markerHeight * (0.34 + activity * 0.42));
+    ctx.lineTo(cueX, markerHeight * (0.34 + activity * 0.42));
+    ctx.stroke();
+    ctx.fillStyle = toneColor(cueTone, 0.48 + activity * 0.38);
+    ctx.beginPath();
+    ctx.arc(cueX, 0, radius, 0, Math.PI * 2);
+    ctx.fill();
+    if (cue.label && (activity > 0.15 || cue.showLabel === true)) {
+      ctx.fillStyle = toneColor("white", 0.58 + activity * 0.34);
+      ctx.fillText(String(cue.label).slice(0, 14), cueX, -markerHeight * (0.78 + activity * 0.3));
+    }
+  }
+  if (props.label) {
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = toneColor("white", 0.76);
+    ctx.fillText(String(props.label).slice(0, 22), -width * 0.5, markerHeight * 0.95);
   }
   ctx.restore();
 }

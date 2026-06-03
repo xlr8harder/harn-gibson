@@ -638,11 +638,13 @@ def test_checked_in_replay_fixtures_cover_agent_and_renderer_sides() -> None:
     assert gallery_result.scene.primitives["assistant-stream"].props["title"] == "CATALOG STREAM"
 
     assert [step.kind for step in animation_result.steps] == ["mutations"]
-    assert len(animation_result.expectations) == 12
+    assert len(animation_result.expectations) == 14
     assert animation_result.scene.primitives["animation-vector"].kind == "svg_layer"
     assert animation_result.scene.primitives["animation-vector"].props["gradients"][0]["id"] == "fx-gradient"
     assert animation_result.scene.primitives["animation-vector"].props["traces"][0]["direction"] == "reverse"
     assert animation_result.scene.animations["gallery-packets"].kind == "packet_burst"
+    assert animation_result.scene.animations["gallery-cues"].kind == "timeline_cue"
+    assert animation_result.scene.animations["gallery-cues"].props["cues"][2]["label"] == "BREACH"
     assert sorted(animation.kind for animation in animation_result.scene.animations.values()) == [
         "extrude",
         "flythrough",
@@ -651,6 +653,7 @@ def test_checked_in_replay_fixtures_cover_agent_and_renderer_sides() -> None:
         "packet_burst",
         "phase-pulse",
         "scan",
+        "timeline_cue",
     ]
 
 

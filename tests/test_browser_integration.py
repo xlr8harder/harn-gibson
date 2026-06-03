@@ -362,6 +362,47 @@ def test_browser_display_renders_vector_symbols_and_data_rain() -> None:
         server.server_close()
 
 
+def test_browser_display_renders_timeline_cue_animation() -> None:
+    state = GibsonServerState()
+    run_replay_file(EXAMPLE_REPLAYS / "animation-gallery.json", state)
+    server, state, base = start_display_server(state)
+    try:
+        with sync_playwright() as driver:
+            try:
+                browser = driver.chromium.launch()
+            except Error as exc:
+                pytest.skip(f"Chromium is not installed for Playwright: {exc}")
+            try:
+                page = browser.new_page(viewport={"width": 960, "height": 700})
+                page.goto(base, wait_until="domcontentloaded")
+                page.wait_for_function("window.__gibsonTimelineCueState?.['gallery-cues']?.cueCount === 4")
+                state_payload = page.evaluate(
+                    """() => ({
+                      animationKinds: window.__gibsonAnimationState.kinds,
+                      cueState: window.__gibsonTimelineCueState["gallery-cues"],
+                    })"""
+                )
+                assert "timeline_cue" in state_payload["animationKinds"]
+                assert state_payload["cueState"] == {
+                    "targetId": "animation-vector",
+                    "cueCount": 4,
+                    "activeCueIndex": state_payload["cueState"]["activeCueIndex"],
+                    "activeLabel": state_payload["cueState"]["activeLabel"],
+                    "progress": state_payload["cueState"]["progress"],
+                    "hasLabels": True,
+                }
+                assert 0 <= state_payload["cueState"]["activeCueIndex"] <= 3
+                assert state_payload["cueState"]["activeLabel"] in {"QUEUE", "ROUTE", "BREACH", "HOLD"}
+                assert 0 <= state_payload["cueState"]["progress"] <= 1
+                assert_canvas_nonblank(page)
+            finally:
+                browser.close()
+    finally:
+        state.pipeline.stop()
+        server.shutdown()
+        server.server_close()
+
+
 def test_replay_frame_review_html_player_switches_frames() -> None:
     html = replay_frame_review_html(
         {

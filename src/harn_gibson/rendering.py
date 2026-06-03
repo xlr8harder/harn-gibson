@@ -68,6 +68,7 @@ _BROWSER_ANIMATION_KINDS = frozenset(
         "phase-pulse",
         "stream-pulse",
         "packet_burst",
+        "timeline_cue",
         "scan",
         "glitch",
         "flythrough",

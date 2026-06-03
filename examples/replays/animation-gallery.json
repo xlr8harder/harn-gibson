@@ -13,6 +13,8 @@
       {"path": "primitives.animation-city.kind", "equals": "city_block"},
       {"path": "animations.gallery-phase.kind", "equals": "phase-pulse"},
       {"path": "animations.gallery-packets.kind", "equals": "packet_burst"},
+      {"path": "animations.gallery-cues.kind", "equals": "timeline_cue"},
+      {"path": "animations.gallery-cues.props.cues.2.label", "equals": "BREACH"},
       {"path": "animations.gallery-scan.kind", "equals": "scan"},
       {"path": "animations.gallery-glitch.kind", "equals": "glitch"},
       {"path": "animations.gallery-fly.kind", "equals": "flythrough"},
@@ -48,7 +50,7 @@
             "phase": "lifecycle",
             "eventType": "animation_gallery",
             "title": "Animation gallery",
-            "summary": "persistent pulses, packets, scans, glitch, flythrough, extrusion, and hold brackets"
+            "summary": "persistent pulses, packets, timeline cues, scans, glitch, flythrough, extrusion, and hold brackets"
           }
         },
         {
@@ -159,6 +161,32 @@
                 {"x": 0.52, "y": 0.63},
                 {"x": 0.72, "y": 0.48},
                 {"x": 0.90, "y": 0.28}
+              ]
+            }
+          }
+        },
+        {
+          "op": "start_animation",
+          "animation": {
+            "id": "gallery-cues",
+            "targetId": "animation-vector",
+            "kind": "timeline_cue",
+            "startedAtMs": 9630,
+            "durationMs": 6200,
+            "loop": true,
+            "props": {
+              "phase": "lifecycle",
+              "label": "COALESCED RENDER WINDOW",
+              "tone": "green",
+              "accentTone": "magenta",
+              "offsetY": 0.16,
+              "width": 0.32,
+              "window": 0.11,
+              "cues": [
+                {"at": 0.05, "label": "QUEUE", "tone": "green", "showLabel": true},
+                {"timeMs": 1700, "label": "ROUTE", "tone": "cyan"},
+                {"timeMs": 3300, "label": "BREACH", "tone": "magenta"},
+                {"timeMs": 5000, "label": "HOLD", "tone": "amber", "showLabel": true}
               ]
             }
           }

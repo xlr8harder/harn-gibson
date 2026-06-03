@@ -305,6 +305,13 @@ def default_visual_catalog() -> VisualCatalog:
                 ("cinematic", "motion", "timed"),
             ),
             CatalogEntry(
+                "timeline_cue",
+                "effect",
+                "Play a bounded sequence of labeled cue markers over one persistent animation window.",
+                ("targetId", "cues", "durationMs", "label", "width", "tone", "accentTone"),
+                ("cinematic", "motion", "timed", "sequence"),
+            ),
+            CatalogEntry(
                 "vector_trace",
                 "effect",
                 "Move glowing particles along declared vector-space points on an svg_layer.",
