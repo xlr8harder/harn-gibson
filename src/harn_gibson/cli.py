@@ -107,6 +107,7 @@ def build_parser() -> argparse.ArgumentParser:
     replay.add_argument("--screenshot-height", type=int, default=900, help="screenshot viewport height")
     replay.add_argument("--style", choices=style_pack_ids(), default=None, help="display style pack")
     _add_replay_renderer_arguments(replay)
+    _add_replay_project_arguments(replay)
 
     replay_dir = subcommands.add_parser("replay-dir", help="run every replay JSON fixture under a directory")
     replay_dir.add_argument("path", help="directory or replay JSON file")
@@ -119,6 +120,7 @@ def build_parser() -> argparse.ArgumentParser:
     replay_dir.add_argument("--render-chunk-size", type=int, default=4, help="renderer contexts per review chunk")
     replay_dir.add_argument("--style", choices=style_pack_ids(), default=None, help="display style pack")
     _add_replay_renderer_arguments(replay_dir)
+    _add_replay_project_arguments(replay_dir)
     replay_dir.add_argument(
         "--update-baselines",
         action="store_true",
@@ -168,6 +170,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="minimum screenshot canvas maxChannelTotal for --visual-fixture",
     )
     _add_replay_renderer_arguments(event_log)
+    _add_replay_project_arguments(event_log)
 
     subcommands.add_parser("extension-path", help="print the harn extension file path")
     return parser
@@ -197,15 +200,29 @@ def _add_replay_renderer_arguments(parser: argparse.ArgumentParser) -> None:
     )
 
 
+def _add_replay_project_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--project-root", default=None, help="project root used for renderer repo context")
+    parser.add_argument("--project-name", default=None, help="project display name used in renderer context")
+
+
 def _replay_state_from_args(args: argparse.Namespace):
     from harn_gibson.server import GibsonServerState, build_state_from_env
 
-    renderer_env = _explicit_replay_renderer_env_from_args(args)
-    if renderer_env:
-        if getattr(args, "style", None) is not None:
-            renderer_env["HARN_GIBSON_STYLE"] = args.style
-        return build_state_from_env(renderer_env)
+    state_env = _explicit_replay_state_env_from_args(args)
+    if state_env:
+        return build_state_from_env(state_env)
     return GibsonServerState(style_pack=style_pack_from_name(args.style))
+
+
+def _explicit_replay_state_env_from_args(args: argparse.Namespace) -> dict[str, str]:
+    state_env = _explicit_replay_renderer_env_from_args(args)
+    if getattr(args, "style", None) is not None:
+        state_env["HARN_GIBSON_STYLE"] = args.style
+    if getattr(args, "project_root", None) is not None:
+        state_env["HARN_GIBSON_PROJECT_ROOT"] = args.project_root
+    if getattr(args, "project_name", None) is not None:
+        state_env["HARN_GIBSON_PROJECT_NAME"] = args.project_name
+    return state_env
 
 
 def _explicit_replay_renderer_env_from_args(args: argparse.Namespace) -> dict[str, str]:
@@ -297,9 +314,13 @@ def run_dogfood(
     env = os.environ.copy()
     if env_overrides:
         env.update(env_overrides)
+    if harn_cwd is not None:
+        env.setdefault("HARN_GIBSON_PROJECT_ROOT", str(harn_cwd))
+        env.setdefault("HARN_GIBSON_PROJECT_NAME", harn_cwd.name or "workspace")
     if style is not None:
         env["HARN_GIBSON_STYLE"] = style
-    state = build_state_from_env(env) if style is not None or env_overrides else build_state_from_env()
+    state_needs_env = style is not None or env_overrides or harn_cwd is not None
+    state = build_state_from_env(env) if state_needs_env else build_state_from_env()
     server = create_server(host, port, state)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
@@ -633,9 +654,7 @@ def run(argv: Sequence[str] | None = None) -> int:
         if args.update_baselines and args.baseline_dir is None:
             print("--update-baselines requires --baseline-dir", file=sys.stderr)
             return 2
-        state_factory = (
-            (lambda: _replay_state_from_args(args)) if _explicit_replay_renderer_env_from_args(args) else None
-        )
+        state_factory = (lambda: _replay_state_from_args(args)) if _explicit_replay_state_env_from_args(args) else None
         result = run_replay_suite(
             args.path,
             screenshot_dir=args.screenshot_dir,
@@ -721,7 +740,7 @@ def run(argv: Sequence[str] | None = None) -> int:
             )
             if args.review_dir:
                 state_factory = (
-                    (lambda: _replay_state_from_args(args)) if _explicit_replay_renderer_env_from_args(args) else None
+                    (lambda: _replay_state_from_args(args)) if _explicit_replay_state_env_from_args(args) else None
                 )
                 review_manifest = write_replay_suite_review_bundle(
                     args.review_dir,

@@ -1,0 +1,250 @@
+{
+  "schema": "harn-gibson.replay.v1",
+  "name": "tiny project dogfood trajectory",
+  "metadata": {
+    "purpose": "exercise the hard-coded dogfood renderer against a realistic tiny-project bootstrap trajectory",
+    "renderer": "examples/renderers/gibson_dogfood_renderer.py",
+    "projectRoot": "examples/dogfood-workspaces/tiny-project"
+  },
+  "expect": {
+    "sceneRevision": 7,
+    "checks": [
+      {
+        "path": "primitives.status.props.text",
+        "equals": "dogfood::tool_result"
+      },
+      {
+        "path": "primitives.dogfood-city.kind",
+        "equals": "city_block"
+      },
+      {
+        "path": "primitives.dogfood-city.props.labels",
+        "contains": "4 touched"
+      },
+      {
+        "path": "primitives.dogfood-route.props.focusHopId",
+        "equals": "target-0"
+      },
+      {
+        "path": "primitives.dogfood-sigil.kind",
+        "equals": "svg_layer"
+      },
+      {
+        "path": "animations.dogfood-cues.kind",
+        "equals": "timeline_cue"
+      },
+      {
+        "path": "metadata.lastRenderIntent.renderer",
+        "equals": "gibson-dogfood-showcase"
+      }
+    ]
+  },
+  "screenshotExpect": {
+    "nonblank": true,
+    "checks": [
+      {"path": "canvasMetrics.litRatio", "min": 0.02},
+      {"path": "canvasMetrics.maxChannelTotal", "min": 60}
+    ]
+  },
+  "steps": [
+    {
+      "type": "event",
+      "event": {
+        "schema": "harn-gibson.event.v1",
+        "sequence": 1,
+        "timestampMs": 1000,
+        "source": "harn",
+        "eventType": "input",
+        "phase": "before",
+        "title": "Input intercept",
+        "summary": "user input: bootstrap a tiny Python CLI project",
+        "payload": {
+          "type": "input",
+          "source": "user",
+          "text": "bootstrap a tiny Python CLI project with tests and commits"
+        },
+        "recentContext": [
+          "user asked for a long dogfood capture trajectory"
+        ],
+        "visualizationContext": [
+          "dogfood display should become the primary cinematic view"
+        ]
+      }
+    },
+    {
+      "type": "event",
+      "event": {
+        "schema": "harn-gibson.event.v1",
+        "sequence": 2,
+        "timestampMs": 2400,
+        "source": "harn",
+        "eventType": "tool_call",
+        "phase": "before",
+        "title": "Tool preflight",
+        "summary": "bash starting with {command}",
+        "payload": {
+          "type": "tool_call",
+          "toolName": "bash",
+          "input": {
+            "command": "git init && git config user.name 'Capture Bot' && git config user.email capture@example.invalid"
+          }
+        },
+        "recentContext": [
+          "agent is preparing a bare workspace"
+        ],
+        "visualizationContext": []
+      }
+    },
+    {
+      "type": "event",
+      "event": {
+        "schema": "harn-gibson.event.v1",
+        "sequence": 3,
+        "timestampMs": 4600,
+        "source": "harn",
+        "eventType": "tool_result",
+        "phase": "after",
+        "title": "Tool result",
+        "summary": "bash completed: ok; initialized git repository",
+        "payload": {
+          "type": "tool_result",
+          "toolName": "bash",
+          "input": {
+            "command": "git init && git config user.name 'Capture Bot' && git config user.email capture@example.invalid"
+          },
+          "content": [
+            {
+              "type": "text",
+              "text": "Initialized empty Git repository in .git/"
+            }
+          ]
+        },
+        "recentContext": [],
+        "visualizationContext": []
+      }
+    },
+    {
+      "type": "event",
+      "event": {
+        "schema": "harn-gibson.event.v1",
+        "sequence": 4,
+        "timestampMs": 8200,
+        "source": "harn",
+        "eventType": "tool_call",
+        "phase": "before",
+        "title": "Tool preflight",
+        "summary": "bash starting with {command}",
+        "payload": {
+          "type": "tool_call",
+          "toolName": "bash",
+          "input": {
+            "command": "mkdir -p src/tiny_tasks tests && touch README.md pyproject.toml src/tiny_tasks/__init__.py src/tiny_tasks/cli.py tests/test_cli.py && python -m pytest"
+          }
+        },
+        "recentContext": [
+          "agent created project files and is checking tests"
+        ],
+        "visualizationContext": [
+          "highlight the filesystem districts being edited"
+        ]
+      }
+    },
+    {
+      "type": "event",
+      "event": {
+        "schema": "harn-gibson.event.v1",
+        "sequence": 5,
+        "timestampMs": 14200,
+        "source": "harn",
+        "eventType": "tool_result",
+        "phase": "after",
+        "title": "Tool result",
+        "summary": "bash completed: error; failing test observed",
+        "payload": {
+          "type": "tool_result",
+          "toolName": "bash",
+          "isError": true,
+          "input": {
+            "command": "python -m pytest tests/test_cli.py"
+          },
+          "content": [
+            {
+              "type": "text",
+              "text": "FAILED tests/test_cli.py::test_format_tasks_numbers_items - AssertionError"
+            }
+          ]
+        },
+        "recentContext": [
+          "agent intentionally observed a red test"
+        ],
+        "visualizationContext": [
+          "show a failure shock before the fix"
+        ]
+      }
+    },
+    {
+      "type": "event",
+      "event": {
+        "schema": "harn-gibson.event.v1",
+        "sequence": 6,
+        "timestampMs": 19800,
+        "source": "harn",
+        "eventType": "tool_call",
+        "phase": "before",
+        "title": "Tool preflight",
+        "summary": "bash starting with {command}",
+        "payload": {
+          "type": "tool_call",
+          "toolName": "bash",
+          "input": {
+            "command": "python -m pytest tests/test_cli.py && git add README.md pyproject.toml src/tiny_tasks/cli.py tests/test_cli.py && git commit -m 'bootstrap tiny task formatter'"
+          }
+        },
+        "recentContext": [
+          "agent fixed the formatter and is committing the working project"
+        ],
+        "visualizationContext": [
+          "show recovery and commit activity"
+        ]
+      }
+    },
+    {
+      "type": "event",
+      "event": {
+        "schema": "harn-gibson.event.v1",
+        "sequence": 7,
+        "timestampMs": 25600,
+        "source": "harn",
+        "eventType": "tool_result",
+        "phase": "after",
+        "title": "Tool result",
+        "summary": "bash completed: ok; tests passed and commit created",
+        "payload": {
+          "type": "tool_result",
+          "toolName": "bash",
+          "filePath": [
+            "README.md",
+            "pyproject.toml",
+            "src/tiny_tasks/cli.py",
+            "tests/test_cli.py"
+          ],
+          "input": {
+            "command": "git status --short README.md pyproject.toml src/tiny_tasks/cli.py tests/test_cli.py"
+          },
+          "content": [
+            {
+              "type": "text",
+              "text": "3 passed\\n[main 4f00ba7] bootstrap tiny task formatter\\nnothing to commit, working tree clean"
+            }
+          ]
+        },
+        "recentContext": [
+          "agent finished with a clean working tree"
+        ],
+        "visualizationContext": [
+          "leave the city focused on the files touched by the final status check"
+        ]
+      }
+    }
+  ]
+}

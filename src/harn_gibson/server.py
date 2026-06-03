@@ -10,6 +10,7 @@ from dataclasses import dataclass, field
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from os import environ
+from pathlib import Path
 from typing import Any
 
 from harn_gibson.catalog import VisualCatalog, default_visual_catalog
@@ -58,6 +59,8 @@ class GibsonServerState:
     render_batch_window_ms: int = 40
     render_timing_mode: RenderTimingMode = "immediate"
     renderer: SceneRenderer = field(default_factory=DeterministicSceneRenderer)
+    project_name: str = "harn-gibson"
+    project_root: str | None = None
     pipeline: RenderPipeline = field(init=False)
 
     def __post_init__(self) -> None:
@@ -75,6 +78,8 @@ class GibsonServerState:
             catalog=self.catalog,
             context_builder=RendererContextBuilder(
                 RendererContextConfig(
+                    project_name=self.project_name,
+                    project_root=self.project_root,
                     display_style=self.style_pack.id,
                     style_pack=style_payload,
                 )
@@ -197,6 +202,7 @@ def run_server(host: str = "127.0.0.1", port: int = 8765, *, style: str | None =
 
 def build_state_from_env(env: dict[str, str] | None = None) -> GibsonServerState:
     source = environ if env is None else env
+    project_root = project_root_from_env(source.get("HARN_GIBSON_PROJECT_ROOT"))
     renderer_interest = renderer_interest_from_env(source.get("HARN_GIBSON_RENDERER_INTEREST"))
     model_renderer = model_renderer_from_env(
         source.get("HARN_GIBSON_RENDERER_MODEL_COMMAND"),
@@ -214,7 +220,23 @@ def build_state_from_env(env: dict[str, str] | None = None) -> GibsonServerState
         render_timing_mode=coerce_render_timing_mode(source.get("HARN_GIBSON_RENDER_TIMING")),
         renderer=model_renderer or renderer or DeterministicSceneRenderer(),
         style_pack=style_pack_from_name(source.get("HARN_GIBSON_STYLE")),
+        project_name=project_name_from_env(source.get("HARN_GIBSON_PROJECT_NAME"), project_root),
+        project_root=project_root,
     )
+
+
+def project_root_from_env(value: str | None) -> str | None:
+    if value is None or not value.strip():
+        return None
+    return value
+
+
+def project_name_from_env(value: str | None, project_root: str | None) -> str:
+    if value is not None and value.strip():
+        return value.strip()
+    if project_root:
+        return str(Path(project_root).expanduser().resolve().name or "workspace")
+    return "harn-gibson"
 
 
 def route_rules_from_env(value: str | None) -> tuple[EventRouteRule, ...]:

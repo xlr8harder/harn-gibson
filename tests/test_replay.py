@@ -71,10 +71,12 @@ from harn_gibson.replay import (
     write_scene,
 )
 from harn_gibson.scene import SceneMutation, SceneState
-from harn_gibson.server import GibsonServerState
+from harn_gibson.server import GibsonServerState, build_state_from_env
 
 ROOT = Path(__file__).resolve().parents[1]
 EXAMPLE_REPLAYS = ROOT / "examples" / "replays"
+EXAMPLE_DOGFOOD_REPLAYS = ROOT / "examples" / "dogfood-replays"
+EXAMPLE_DOGFOOD_WORKSPACE = ROOT / "examples" / "dogfood-workspaces" / "tiny-project"
 
 
 def event_payload(
@@ -1129,6 +1131,33 @@ def test_checked_in_replay_fixtures_cover_agent_and_renderer_sides() -> None:
         "scan",
         "timeline_cue",
     ]
+
+
+def test_checked_in_dogfood_replay_exercises_showcase_renderer() -> None:
+    state = build_state_from_env(
+        {
+            "HARN_GIBSON_RENDERER_COMMAND": json.dumps(
+                ["uv", "run", "python", str(ROOT / "examples" / "renderers" / "gibson_dogfood_renderer.py")]
+            ),
+            "HARN_GIBSON_RENDERER_TIMEOUT_MS": "10000",
+            "HARN_GIBSON_PROJECT_ROOT": str(EXAMPLE_DOGFOOD_WORKSPACE),
+            "HARN_GIBSON_PROJECT_NAME": "tiny-project",
+        }
+    )
+    try:
+        result = run_replay_file(EXAMPLE_DOGFOOD_REPLAYS / "tiny-project-trajectory.json", state)
+    finally:
+        state.pipeline.stop()
+
+    assert [step.kind for step in result.steps] == ["event"] * 7
+    assert len(result.expectations) == 8
+    assert result.scene.primitives["status"].props["text"] == "dogfood::tool_result"
+    assert result.scene.primitives["dogfood-city"].kind == "city_block"
+    assert result.scene.primitives["dogfood-city"].props["labels"] == ["DOGFOOD CITY", "4 touched"]
+    assert result.scene.primitives["dogfood-route"].props["focusHopId"] == "target-0"
+    assert result.scene.primitives["dogfood-sigil"].kind == "svg_layer"
+    assert result.scene.animations["dogfood-cues"].kind == "timeline_cue"
+    assert result.scene.metadata["lastRenderIntent"]["renderer"] == "gibson-dogfood-showcase"
 
 
 def test_replay_raw_events_render_plans_and_mutations() -> None:

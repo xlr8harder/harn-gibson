@@ -45,7 +45,7 @@ uv run harn-gibson dogfood-capture \
   -- -p "$(cat examples/prompts/dogfood-tiny-project.md)"
 ```
 
-It launches the display with `examples/renderers/gibson_dogfood_renderer.py`, writes normalized event payloads as JSONL under ignored `test-artifacts/captures/` by default, and prints the exact conversion command for that capture. `--cwd` runs harn in a separate project directory while harn-gibson injects this repo's extension plus the Codex provider/model defaults explicitly, so the target directory does not need its own `.harn/settings.json`. The prompt in `examples/prompts/dogfood-tiny-project.md` is intentionally designed to produce a long trajectory with git initialization, file creation, edits, tests, command failures, fixes, commits, and final status. Pass `--event-log path/to/session.jsonl` if you want a stable capture path. With `--cwd`, relative event-log paths are resolved before launching harn so the log still lands under the launcher directory, not the target project. For longer sessions, pass `--split-every N` to make the printed follow-up command use split fixture conversion and suite review. Captures can contain prompts, tool output, file paths, diagnostics, and tracebacks, so keep the raw JSONL out of committed fixtures. `event-log-to-replay` redacts common token, key, password, and credential values by default before writing replay JSON; use `--no-redact-sensitive` only for private local debugging.
+It launches the display with `examples/renderers/gibson_dogfood_renderer.py`, writes normalized event payloads as JSONL under ignored `test-artifacts/captures/` by default, and prints the exact conversion command for that capture. `--cwd` runs harn in a separate project directory while harn-gibson injects this repo's extension plus the Codex provider/model defaults explicitly, so the target directory does not need its own `.harn/settings.json`; renderer context and repo-city visuals use that target directory as `HARN_GIBSON_PROJECT_ROOT`. The prompt in `examples/prompts/dogfood-tiny-project.md` is intentionally designed to produce a long trajectory with git initialization, file creation, edits, tests, command failures, fixes, commits, and final status. Pass `--event-log path/to/session.jsonl` if you want a stable capture path. With `--cwd`, relative event-log paths are resolved before launching harn so the log still lands under the launcher directory, not the target project. For longer sessions, pass `--split-every N` to make the printed follow-up command use split fixture conversion and suite review. Captures can contain prompts, tool output, file paths, diagnostics, and tracebacks, so keep the raw JSONL out of committed fixtures. `event-log-to-replay` redacts common token, key, password, and credential values by default before writing replay JSON; use `--no-redact-sensitive` only for private local debugging.
 
 When `HARN_GIBSON_EVENT_LOG` is set directly, the harn extension writes the same normalized event payloads as JSONL. Convert a captured log into a replay fixture with:
 
@@ -76,10 +76,11 @@ Split mode writes `manifest.json` plus numbered replay fixtures such as `capture
 ```bash
 uv run harn-gibson replay-dir test-artifacts/replays/captured-session-split \
   --screenshot-dir test-artifacts/replays/captured-session-split-screenshots \
-  --review-dir test-artifacts/replays/captured-session-split-review
+  --review-dir test-artifacts/replays/captured-session-split-review \
+  --project-root test-artifacts/dogfood-workspaces/tiny-project
 ```
 
-`replay-dir` skips `manifest.json` metadata files, so split fixture directories can be replayed directly. `--review-dir` creates `harn-gibson.replay-suite-review.v1`: a top-level `manifest.json` and `index.html` with aggregate metrics, split capture summary, per-fixture status, and links into one complete review bundle per replay fixture under `files/`.
+`replay-dir` skips `manifest.json` metadata files, so split fixture directories can be replayed directly. `--project-root PATH` and `--project-name NAME` are explicit replay controls for renderer context; use them when the original target workspace still exists and repo topology should match the captured session. `--review-dir` creates `harn-gibson.replay-suite-review.v1`: a top-level `manifest.json` and `index.html` with aggregate metrics, split capture summary, per-fixture status, and links into one complete review bundle per replay fixture under `files/`.
 
 ## Expectations
 
@@ -118,17 +119,19 @@ Replay does not use ambient `HARN_GIBSON_RENDERER_COMMAND` or `HARN_GIBSON_RENDE
 uv run harn-gibson replay examples/replays/stream-and-diagnostic.json \
   --renderer-model-command 'uv run python examples/renderers/gibson_prompt_echo_renderer.py' \
   --renderer-model-timeout-ms 10000 \
+  --project-root test-artifacts/dogfood-workspaces/tiny-project \
   --output-render-prompts test-artifacts/replays/prompts.json \
   --output-scene test-artifacts/replays/model-scene.json
 
 uv run harn-gibson replay-dir examples/replays \
   --renderer-command 'uv run python examples/renderers/gibson_dogfood_renderer.py' \
-  --renderer-timeout-ms 10000
+  --renderer-timeout-ms 10000 \
+  --project-root test-artifacts/dogfood-workspaces/tiny-project
 ```
 
 The model command receives `harn-gibson.model-renderer-request.v1`; the external command receives `harn-gibson.external-renderer-request.v1`. Returned plans still go through the same validation, diagnostics, fail-open fallback, and final-scene expectation checks as live dogfood rendering.
 
-The hard-coded `gibson_dogfood_renderer.py` is meant for live harn use before the renderer-agent backend is good enough. A useful future fixture workflow is to run `uv run harn-gibson dogfood-capture --cwd test-artifacts/dogfood-workspaces/NAME -- -p "$(cat examples/prompts/dogfood-tiny-project.md)"`, let harn spend a longer session bootstrapping a tiny project in a bare directory, then convert that event trajectory into a split replay directory and browser screenshots. Several such trajectories should become regression inputs for event coalescing, renderer timing, touched-file visualization, and visual continuity.
+The hard-coded `gibson_dogfood_renderer.py` is meant for live harn use before the renderer-agent backend is good enough. The checked-in `examples/dogfood-replays/tiny-project-trajectory.json` fixture exercises that renderer against `examples/dogfood-workspaces/tiny-project`, giving the showcase renderer a committed trajectory with git, file, test, failure, fix, commit, repo-topology, and touched-file signals. A useful future fixture workflow is to run `uv run harn-gibson dogfood-capture --cwd test-artifacts/dogfood-workspaces/NAME -- -p "$(cat examples/prompts/dogfood-tiny-project.md)"`, let harn spend a longer session bootstrapping a tiny project in a bare directory, then convert that event trajectory into a split replay directory and browser screenshots. Several such trajectories should become regression inputs for event coalescing, renderer timing, touched-file visualization, and visual continuity.
 
 ## Baseline Review
 
@@ -149,6 +152,18 @@ Check current output against committed baselines:
 ```bash
 uv run harn-gibson replay-dir examples/replays \
   --baseline-dir examples/baselines/replays
+```
+
+Check the hard-coded dogfood renderer trajectory against its committed baseline and browser screenshot expectations:
+
+```bash
+uv run harn-gibson replay-dir examples/dogfood-replays \
+  --renderer-command 'uv run python examples/renderers/gibson_dogfood_renderer.py' \
+  --renderer-timeout-ms 10000 \
+  --project-root examples/dogfood-workspaces/tiny-project \
+  --project-name tiny-project \
+  --baseline-dir examples/baselines/dogfood-replays \
+  --screenshot-dir test-artifacts/replays/dogfood-screenshots
 ```
 
 ## Screenshot Review

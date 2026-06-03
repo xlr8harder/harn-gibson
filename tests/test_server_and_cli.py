@@ -37,6 +37,8 @@ from harn_gibson.server import (
     event_from_payload,
     format_sse,
     health_payload,
+    project_name_from_env,
+    project_root_from_env,
     publish_diagnostic_event,
     renderer_interest_from_env,
     route_rules_from_env,
@@ -494,7 +496,9 @@ def test_async_state_accepts_without_immediate_scene_update() -> None:
     state.pipeline.stop()
 
 
-def test_build_state_from_env() -> None:
+def test_build_state_from_env(tmp_path: Path) -> None:
+    project_root = tmp_path / "tiny-project"
+    project_root.mkdir()
     state = build_state_from_env(
         {
             "HARN_GIBSON_RENDER_MODE": "async",
@@ -516,6 +520,13 @@ def test_build_state_from_env() -> None:
             "HARN_GIBSON_RENDERER_COMMAND": json.dumps([sys.executable, "-c", "print('external')"]),
         }
     )
+    project_state = build_state_from_env(
+        {
+            "HARN_GIBSON_PROJECT_ROOT": str(project_root),
+            "HARN_GIBSON_PROJECT_NAME": "tiny dogfood",
+        }
+    )
+    derived_project_state = build_state_from_env({"HARN_GIBSON_PROJECT_ROOT": str(project_root)})
 
     assert state.pipeline.mode == "async"
     assert state.pipeline.batch_window_ms == 5
@@ -529,9 +540,21 @@ def test_build_state_from_env() -> None:
     assert isinstance(model_renderer_state.renderer, PromptedModelRenderer)
     assert model_renderer_state.renderer.client.command == (sys.executable, "-c", "print('{}')")  # type: ignore[attr-defined]
     assert model_renderer_state.renderer.client.timeout_seconds == 0.125  # type: ignore[attr-defined]
+    assert project_state.pipeline.context_builder.config.project_root == str(project_root)
+    assert project_state.pipeline.context_builder.config.project_name == "tiny dogfood"
+    assert derived_project_state.pipeline.context_builder.config.project_name == "tiny-project"
+    assert project_root_from_env(None) is None
+    assert project_root_from_env("   ") is None
+    assert project_root_from_env(str(project_root)) == str(project_root)
+    assert project_name_from_env(None, None) == "harn-gibson"
+    assert project_name_from_env("  named  ", None) == "named"
+    assert project_name_from_env("", str(project_root)) == "tiny-project"
+    assert project_name_from_env(None, "/") == "workspace"
     state.pipeline.stop()
     renderer_state.pipeline.stop()
     model_renderer_state.pipeline.stop()
+    project_state.pipeline.stop()
+    derived_project_state.pipeline.stop()
 
 
 def test_renderer_interest_from_env_and_build_state() -> None:
@@ -746,6 +769,10 @@ def test_cli_parser_and_run(monkeypatch: Any, capsys: Any) -> None:
             '["python", "model-renderer.py"]',
             "--renderer-model-timeout-ms",
             "2500",
+            "--project-root",
+            "workspace",
+            "--project-name",
+            "tiny-project",
         ]
     )
     assert parsed_replay.command == "replay"
@@ -769,6 +796,8 @@ def test_cli_parser_and_run(monkeypatch: Any, capsys: Any) -> None:
     assert parsed_replay.style == "mainframe"
     assert parsed_replay.renderer_model_command == '["python", "model-renderer.py"]'
     assert parsed_replay.renderer_model_timeout_ms == "2500"
+    assert parsed_replay.project_root == "workspace"
+    assert parsed_replay.project_name == "tiny-project"
     parsed_replay_dir = parser.parse_args(
         [
             "replay-dir",
@@ -793,6 +822,10 @@ def test_cli_parser_and_run(monkeypatch: Any, capsys: Any) -> None:
             "python renderer.py",
             "--renderer-timeout-ms",
             "1500",
+            "--project-root",
+            "workspace",
+            "--project-name",
+            "tiny-project",
             "--update-baselines",
         ]
     )
@@ -808,6 +841,8 @@ def test_cli_parser_and_run(monkeypatch: Any, capsys: Any) -> None:
     assert parsed_replay_dir.style == "neon-noir"
     assert parsed_replay_dir.renderer_command == "python renderer.py"
     assert parsed_replay_dir.renderer_timeout_ms == "1500"
+    assert parsed_replay_dir.project_root == "workspace"
+    assert parsed_replay_dir.project_name == "tiny-project"
     assert parsed_replay_dir.update_baselines is True
     parsed_event_log = parser.parse_args(
         [
@@ -831,6 +866,10 @@ def test_cli_parser_and_run(monkeypatch: Any, capsys: Any) -> None:
             "python renderer.py",
             "--renderer-timeout-ms",
             "2000",
+            "--project-root",
+            "workspace",
+            "--project-name",
+            "tiny-project",
             "--render-chunk-size",
             "2",
             "--split-every",
@@ -854,6 +893,8 @@ def test_cli_parser_and_run(monkeypatch: Any, capsys: Any) -> None:
     assert parsed_event_log.style == "mainframe"
     assert parsed_event_log.renderer_command == "python renderer.py"
     assert parsed_event_log.renderer_timeout_ms == "2000"
+    assert parsed_event_log.project_root == "workspace"
+    assert parsed_event_log.project_name == "tiny-project"
     assert parsed_event_log.render_chunk_size == 2
     assert parsed_event_log.split_every == 50
     assert parsed_event_log.visual_fixture is True
@@ -878,6 +919,9 @@ def test_cli_replay_renderer_env_helpers(monkeypatch: Any) -> None:
     parser = cli.build_parser()
     monkeypatch.setenv("HARN_GIBSON_RENDERER_COMMAND", "python ambient-renderer.py")
     deterministic = parser.parse_args(["replay", "fixture.json"])
+    project_only = parser.parse_args(
+        ["replay", "fixture.json", "--project-root", "/tmp/workspace", "--project-name", "fixture workspace"]
+    )
     external_no_timeout = parser.parse_args(["replay", "fixture.json", "--renderer-command", "python renderer.py"])
     external_with_timeout = parser.parse_args(
         ["replay", "fixture.json", "--renderer-command", "python renderer.py", "--renderer-timeout-ms", "1500"]
@@ -900,6 +944,13 @@ def test_cli_replay_renderer_env_helpers(monkeypatch: Any) -> None:
         assert isinstance(default_state.renderer, DeterministicSceneRenderer)
     finally:
         default_state.pipeline.stop()
+    project_state = cli._replay_state_from_args(project_only)
+    try:
+        assert isinstance(project_state.renderer, DeterministicSceneRenderer)
+        assert project_state.pipeline.context_builder.config.project_root == "/tmp/workspace"
+        assert project_state.pipeline.context_builder.config.project_name == "fixture workspace"
+    finally:
+        project_state.pipeline.stop()
     state = cli._replay_state_from_args(external_no_timeout)
     try:
         assert isinstance(state.renderer, ExternalRenderer)
@@ -921,6 +972,10 @@ def test_cli_replay_renderer_env_helpers(monkeypatch: Any) -> None:
     assert cli._explicit_replay_renderer_env_from_args(model_specific_timeout) == {
         "HARN_GIBSON_RENDERER_MODEL_COMMAND": "python model.py",
         "HARN_GIBSON_RENDERER_MODEL_TIMEOUT_MS": "3500",
+    }
+    assert cli._explicit_replay_state_env_from_args(project_only) == {
+        "HARN_GIBSON_PROJECT_ROOT": "/tmp/workspace",
+        "HARN_GIBSON_PROJECT_NAME": "fixture workspace",
     }
 
 
@@ -2106,6 +2161,7 @@ def test_cli_dogfood_reports_missing_harn(monkeypatch: Any, capsys: Any) -> None
 
 def test_cli_dogfood_cwd_injects_project_config(monkeypatch: Any, tmp_path: Path, capsys: Any) -> None:
     harn_calls: list[tuple[list[str], dict[str, str], str | None]] = []
+    build_state_envs: list[dict[str, str]] = []
     workspace = tmp_path / "bare-project"
     workspace.mkdir()
     state = GibsonServerState()
@@ -2126,7 +2182,12 @@ def test_cli_dogfood_cwd_injects_project_config(monkeypatch: Any, tmp_path: Path
         harn_calls.append((command, env, cwd))
         return 0
 
-    monkeypatch.setattr("harn_gibson.server.build_state_from_env", lambda: state)
+    def fake_build_state(env: dict[str, str] | None = None) -> GibsonServerState:
+        assert env is not None
+        build_state_envs.append(env)
+        return state
+
+    monkeypatch.setattr("harn_gibson.server.build_state_from_env", fake_build_state)
     monkeypatch.setattr("harn_gibson.server.create_server", lambda _host, _port, _state: FakeServer())
     monkeypatch.setattr(cli.subprocess, "call", fake_call)
 
@@ -2148,6 +2209,8 @@ def test_cli_dogfood_cwd_injects_project_config(monkeypatch: Any, tmp_path: Path
     )
     command, env, cwd = harn_calls[0]
     assert cwd == str(workspace.resolve())
+    assert build_state_envs[0]["HARN_GIBSON_PROJECT_ROOT"] == str(workspace.resolve())
+    assert build_state_envs[0]["HARN_GIBSON_PROJECT_NAME"] == "bare-project"
     assert command == [
         "harn",
         "--provider",
@@ -2163,6 +2226,8 @@ def test_cli_dogfood_cwd_injects_project_config(monkeypatch: Any, tmp_path: Path
         "bootstrap",
     ]
     assert env["HARN_GIBSON_ENDPOINT"] == "http://127.0.0.1:9878/events"
+    assert env["HARN_GIBSON_PROJECT_ROOT"] == str(workspace.resolve())
+    assert env["HARN_GIBSON_PROJECT_NAME"] == "bare-project"
     assert cli.run_dogfood(cwd=str(tmp_path / "missing"), launch_browser=False, codex_auth_import=False) == 2
     assert "--cwd must be an existing directory" in capsys.readouterr().err
 

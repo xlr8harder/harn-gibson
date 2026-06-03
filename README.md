@@ -62,6 +62,8 @@ mkdir -p test-artifacts/dogfood-workspaces/tiny-project
 uv run harn-gibson dogfood --cwd test-artifacts/dogfood-workspaces/tiny-project -- -p "bootstrap a tiny project here"
 ```
 
+With `--cwd`, renderer context, repo topology, touched-file summaries, and repo-city visuals use the target project directory instead of the `harn-gibson` checkout.
+
 Use a specific harn executable with `--harn-bin`:
 
 ```bash
@@ -94,6 +96,8 @@ HARN_GIBSON_RENDER_MODE=blocking  # default
 HARN_GIBSON_RENDER_MODE=async HARN_GIBSON_RENDER_BATCH_MS=40
 HARN_GIBSON_RENDER_TIMING=immediate  # default
 HARN_GIBSON_RENDER_TIMING=scheduled  # honor render-plan startOffsetMs during playback
+HARN_GIBSON_PROJECT_ROOT=/path/to/project  # repo topology/touched-file context root
+HARN_GIBSON_PROJECT_NAME=my-project        # display name in renderer context
 ```
 
 Immediate timing keeps dogfood and replay runs responsive while still honoring explicit `delayMs`. Scheduled timing treats `startOffsetMs` as an absolute offset inside the coalesced render batch, which is useful for async renderer-agent plans that want a 5-10 second visual playback window after harn has already continued.
@@ -169,6 +173,8 @@ uv run harn-gibson replay-dir examples/replays \
   --renderer-timeout-ms 10000
 ```
 
+For captured sessions from a separate workspace, add `--project-root PATH` and optionally `--project-name NAME` so renderer context and repo-city visuals sample the preserved target project instead of this checkout.
+
 For offline inspection without the dogfood launcher, write normalized events to JSONL:
 
 ```bash
@@ -197,7 +203,8 @@ uv run harn-gibson event-log-to-replay .harn-gibson.jsonl \
   --output-dir test-artifacts/replays/captured-session-split \
   --split-every 200 \
   --visual-fixture \
-  --review-dir test-artifacts/replays/captured-session-split-review
+  --review-dir test-artifacts/replays/captured-session-split-review \
+  --project-root test-artifacts/dogfood-workspaces/tiny-project
 ```
 
 Split conversion writes one fixture per chunk plus `manifest.json`. With `--review-dir`, conversion immediately replays the generated directory and writes one complete per-chunk review bundle under `files/` plus a top-level suite overview that links the chunk frame players, renderer contexts, prompts, chunks, and render-intent reviews. You can still run `replay-dir` on the generated directory later; it skips the split manifest and replays the chunk fixtures directly.
@@ -235,6 +242,18 @@ uv run harn-gibson replay-dir examples/replays \
   --output-result test-artifacts/replays/suite.json \
   --baseline-dir examples/baselines/replays \
   --screenshot-dir test-artifacts/replays/screenshots
+```
+
+Run the hard-coded dogfood renderer against the tiny-project trajectory fixture:
+
+```bash
+uv run harn-gibson replay-dir examples/dogfood-replays \
+  --renderer-command 'uv run python examples/renderers/gibson_dogfood_renderer.py' \
+  --renderer-timeout-ms 10000 \
+  --project-root examples/dogfood-workspaces/tiny-project \
+  --project-name tiny-project \
+  --baseline-dir examples/baselines/dogfood-replays \
+  --screenshot-dir test-artifacts/replays/dogfood-screenshots
 ```
 
 ## Browser Tests
