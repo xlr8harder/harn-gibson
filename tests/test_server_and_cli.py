@@ -580,6 +580,10 @@ def test_cli_parser_and_run(monkeypatch: Any, capsys: Any) -> None:
     assert parsed_replay.screenshot == "scene.png"
     assert parsed_replay.screenshot_width == 800
     assert parsed_replay.screenshot_height == 600
+    parsed_replay_dir = parser.parse_args(["replay-dir", "examples/replays", "--output-result", "suite.json"])
+    assert parsed_replay_dir.command == "replay-dir"
+    assert parsed_replay_dir.path == "examples/replays"
+    assert parsed_replay_dir.output_result == "suite.json"
     assert cli.run(["extension-path"]) == 0
     assert capsys.readouterr().out.strip().endswith("extension.py")
 
@@ -736,6 +740,47 @@ def test_cli_replay_reports_expectation_failures(tmp_path: Any, capsys: Any) -> 
         "replay expectation failed: revision expected to equals 99, got 0",
         "replay expectation failed: primitives.status.props.text expected to equals 'wrong', got 'awaiting signal'",
     ]
+
+
+def test_cli_replay_dir_writes_suite_result(tmp_path: Any, capsys: Any) -> None:
+    replay_dir = tmp_path / "replays"
+    output = tmp_path / "out" / "suite.json"
+    replay_dir.mkdir()
+    event = {
+        "sequence": 1,
+        "timestampMs": 10,
+        "source": "test",
+        "eventType": "message_update",
+        "phase": "during",
+        "title": "Stream update",
+        "summary": "assistant stream {delta}",
+        "payload": {"type": "message_update", "assistantMessageEvent": {"delta": "ok"}},
+    }
+    (replay_dir / "ok.json").write_text(
+        json.dumps({"steps": [{"type": "event", "event": event}], "expect": {"sceneRevision": 1}}),
+        encoding="utf-8",
+    )
+
+    assert cli.run(["replay-dir", str(replay_dir), "--output-result", str(output)]) == 0
+    assert json.loads(output.read_text(encoding="utf-8"))["ok"] is True
+    assert capsys.readouterr().out.splitlines() == [
+        "ok ok.json: 1 steps, revision 1",
+        "replayed 1 replay files; 0 failed",
+    ]
+
+
+def test_cli_replay_dir_reports_failures(tmp_path: Any, capsys: Any) -> None:
+    replay_dir = tmp_path / "replays"
+    replay_dir.mkdir()
+    (replay_dir / "bad.json").write_text(
+        json.dumps({"steps": [], "expect": {"sceneRevision": 1}}),
+        encoding="utf-8",
+    )
+
+    assert cli.run(["replay-dir", str(replay_dir)]) == 1
+    captured = capsys.readouterr()
+    assert captured.out.strip() == "replayed 1 replay files; 1 failed"
+    assert "failed bad.json: replay expectations failed" in captured.err
 
 
 def test_cli_dogfood_launches_display_browser_and_harn(monkeypatch: Any, capsys: Any) -> None:

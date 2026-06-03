@@ -9,12 +9,16 @@ from harn_gibson import ReplayExpectationError, ReplayResult, ReplayStepResult, 
 from harn_gibson.events import GibsonEvent
 from harn_gibson.replay import (
     ReplayExpectationResult,
+    ReplayFileResult,
+    ReplaySuiteResult,
+    discover_replay_files,
     evaluate_replay_expectations,
     load_replay_file,
     mutations_from_value,
     render_plan_from_mapping,
     render_request_from_mapping,
     render_step_from_mapping,
+    run_replay_suite,
     write_replay_result,
     write_scene,
 )
@@ -244,6 +248,64 @@ def test_replay_expectations_pass_fail_and_serialize() -> None:
         )
     assert error.value.failures[0].path == "primitives.status.props.text"
     assert "expected to equals" in error.value.failures[0].message
+
+
+def test_replay_suite_discovers_runs_and_serializes(tmp_path: Path) -> None:
+    fixture_dir = tmp_path / "fixtures"
+    nested = fixture_dir / "nested"
+    nested.mkdir(parents=True)
+    first = fixture_dir / "first.json"
+    second = nested / "second.json"
+    ignored = nested / "ignored.txt"
+    event = event_payload(1, "message_update", {"assistantMessageEvent": {"delta": "ok"}})
+    first.write_text(
+        json.dumps({"steps": [{"type": "event", "event": event}], "expect": {"sceneRevision": 1}}),
+        "utf-8",
+    )
+    second.write_text(
+        json.dumps(
+            {
+                "steps": [{"type": "event", "event": event}],
+                "expect": {"checks": [{"path": "primitives.status.props.text", "equals": "wrong"}]},
+            }
+        ),
+        "utf-8",
+    )
+    ignored.write_text("not json", "utf-8")
+
+    assert [path.name for path in discover_replay_files(fixture_dir)] == ["first.json", "second.json"]
+    assert discover_replay_files(first) == (first,)
+    suite = run_replay_suite(fixture_dir)
+
+    assert isinstance(suite, ReplaySuiteResult)
+    assert suite.total == 2
+    assert suite.failed == 1
+    assert suite.ok is False
+    assert suite.files[0] == ReplayFileResult("first.json", True, steps=1, scene_revision=1, expectations=1)
+    assert ReplayFileResult("unrun.json", True).to_dict() == {
+        "path": "unrun.json",
+        "ok": True,
+        "steps": 0,
+        "expectations": 0,
+    }
+    assert suite.files[1].path == "nested/second.json"
+    assert suite.files[1].expectation_failures[0].path == "primitives.status.props.text"
+    assert suite.to_dict()["files"][1]["expectationFailures"][0]["passed"] is False
+    assert run_replay_suite(first).to_dict()["files"][0]["path"] == first.as_posix()
+
+
+def test_replay_suite_validation(tmp_path: Path) -> None:
+    with pytest.raises(FileNotFoundError, match="replay path not found"):
+        discover_replay_files(tmp_path / "missing")
+    with pytest.raises(ValueError, match="no replay JSON files"):
+        discover_replay_files(tmp_path)
+
+    bad = tmp_path / "bad.json"
+    bad.write_text("[not-json", "utf-8")
+    suite = run_replay_suite(bad)
+    assert suite.failed == 1
+    assert suite.files[0].ok is False
+    assert "Expecting value" in suite.files[0].error
 
 
 def test_replay_raw_event_without_decisions_and_empty_plan() -> None:

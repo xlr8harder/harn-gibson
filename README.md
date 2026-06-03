@@ -122,6 +122,13 @@ uv run harn-gibson replay examples/replays/renderer-plan.json \
 
 Replay files can include final-scene expectations so fixtures act as verifiers as well as demos. The fixture format is documented in [docs/replay.md](docs/replay.md).
 
+Run the checked-in replay fixture suite:
+
+```bash
+uv run harn-gibson replay-dir examples/replays \
+  --output-result test-artifacts/replays/suite.json
+```
+
 ## Browser Tests
 
 ```bash

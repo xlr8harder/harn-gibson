@@ -38,6 +38,17 @@ Supported operations:
 
 `harn-gibson replay` exits with status `1` when expectations fail and prints each failed check to stderr. Successful expectation results are also included in `--output-result`.
 
+## Batch Verification
+
+Run every replay JSON under a directory with `replay-dir`:
+
+```bash
+uv run harn-gibson replay-dir examples/replays \
+  --output-result test-artifacts/replays/suite.json
+```
+
+The command exits with status `1` if any fixture fails to load, replay, or satisfy expectations. The suite result JSON uses `harn-gibson.replay-suite-result.v1` and records per-file step counts, scene revisions, expectation counts, and failures.
+
 ## Screenshot Review
 
 Replay fixtures can still write final scene JSON, full replay result JSON, and browser screenshots:

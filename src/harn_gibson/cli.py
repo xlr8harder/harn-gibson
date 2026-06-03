@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import subprocess
 import sys
@@ -43,6 +44,10 @@ def build_parser() -> argparse.ArgumentParser:
     replay.add_argument("--screenshot", default=None, help="write a browser screenshot of the final replay scene")
     replay.add_argument("--screenshot-width", type=int, default=1280, help="screenshot viewport width")
     replay.add_argument("--screenshot-height", type=int, default=900, help="screenshot viewport height")
+
+    replay_dir = subcommands.add_parser("replay-dir", help="run every replay JSON fixture under a directory")
+    replay_dir.add_argument("path", help="directory or replay JSON file")
+    replay_dir.add_argument("--output-result", default=None, help="write replay suite result JSON to this path")
 
     subcommands.add_parser("extension-path", help="print the harn extension file path")
     return parser
@@ -179,6 +184,22 @@ def run(argv: Sequence[str] | None = None) -> int:
             f"replayed {len(result.steps)} steps; scene revision {result.scene.revision}",
         )
         return 0
+    if args.command == "replay-dir":
+        from pathlib import Path
+
+        from harn_gibson.replay import run_replay_suite
+
+        result = run_replay_suite(args.path)
+        if args.output_result:
+            Path(args.output_result).parent.mkdir(parents=True, exist_ok=True)
+            Path(args.output_result).write_text(json.dumps(result.to_dict(), indent=2) + "\n", encoding="utf-8")
+        for file_result in result.files:
+            if file_result.ok:
+                print(f"ok {file_result.path}: {file_result.steps} steps, revision {file_result.scene_revision}")
+            else:
+                print(f"failed {file_result.path}: {file_result.error}", file=sys.stderr)
+        print(f"replayed {result.total} replay files; {result.failed} failed")
+        return 0 if result.ok else 1
     if args.command == "dogfood":
         return run_dogfood(
             host=args.host,

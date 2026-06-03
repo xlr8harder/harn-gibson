@@ -70,6 +70,60 @@ class ReplayExpectationError(AssertionError):
 
 
 @dataclass(frozen=True, slots=True)
+class ReplayFileResult:
+    path: str
+    ok: bool
+    steps: int = 0
+    scene_revision: int | None = None
+    expectations: int = 0
+    error: str = ""
+    expectation_failures: tuple[ReplayExpectationResult, ...] = ()
+
+    def to_dict(self) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "path": self.path,
+            "ok": self.ok,
+            "steps": self.steps,
+            "expectations": self.expectations,
+        }
+        if self.scene_revision is not None:
+            payload["sceneRevision"] = self.scene_revision
+        if self.error:
+            payload["error"] = self.error
+        if self.expectation_failures:
+            payload["expectationFailures"] = [failure.to_dict() for failure in self.expectation_failures]
+        return payload
+
+
+@dataclass(frozen=True, slots=True)
+class ReplaySuiteResult:
+    root: str
+    files: tuple[ReplayFileResult, ...]
+
+    @property
+    def total(self) -> int:
+        return len(self.files)
+
+    @property
+    def failed(self) -> int:
+        return sum(1 for result in self.files if not result.ok)
+
+    @property
+    def ok(self) -> bool:
+        return self.failed == 0
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "schema": "harn-gibson.replay-suite-result.v1",
+            "root": self.root,
+            "ok": self.ok,
+            "total": self.total,
+            "failed": self.failed,
+            "files": [result.to_dict() for result in self.files],
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class ReplayResult:
     schema: str
     name: str
@@ -92,6 +146,60 @@ class ReplayResult:
 
 def run_replay_file(path: str | Path, state: GibsonServerState | None = None) -> ReplayResult:
     return run_replay_data(load_replay_file(path), state)
+
+
+def run_replay_suite(path: str | Path) -> ReplaySuiteResult:
+    root = Path(path)
+    files = discover_replay_files(root)
+    results = []
+    for replay_file in files:
+        state = GibsonServerState()
+        try:
+            result = run_replay_file(replay_file, state)
+        except ReplayExpectationError as error:
+            results.append(
+                ReplayFileResult(
+                    path=_suite_path(root, replay_file),
+                    ok=False,
+                    scene_revision=state.scene.state.revision,
+                    error=str(error),
+                    expectation_failures=error.failures,
+                )
+            )
+        except Exception as error:
+            results.append(
+                ReplayFileResult(
+                    path=_suite_path(root, replay_file),
+                    ok=False,
+                    scene_revision=state.scene.state.revision,
+                    error=str(error),
+                )
+            )
+        else:
+            results.append(
+                ReplayFileResult(
+                    path=_suite_path(root, replay_file),
+                    ok=True,
+                    steps=len(result.steps),
+                    scene_revision=result.scene.revision,
+                    expectations=len(result.expectations),
+                )
+            )
+        finally:
+            state.pipeline.stop()
+    return ReplaySuiteResult(root=str(root), files=tuple(results))
+
+
+def discover_replay_files(path: str | Path) -> tuple[Path, ...]:
+    root = Path(path)
+    if root.is_file():
+        return (root,)
+    if not root.is_dir():
+        raise FileNotFoundError(f"replay path not found: {root}")
+    files = tuple(sorted(item for item in root.rglob("*.json") if item.is_file()))
+    if not files:
+        raise ValueError(f"no replay JSON files found under {root}")
+    return files
 
 
 def load_replay_file(path: str | Path) -> dict[str, Any]:
@@ -138,7 +246,7 @@ def evaluate_replay_expectations(scene: SceneState, value: Any) -> tuple[ReplayE
     scene_payload = scene.to_dict()
     if "sceneRevision" in value:
         checks.append(_evaluate_expectation(scene_payload, "revision", "equals", value["sceneRevision"]))
-    checks_value = value.get("checks", ())
+    checks_value = value.get("checks", [])
     if not isinstance(checks_value, list):
         raise ValueError("replay expect checks must be a list")
     for index, check in enumerate(checks_value):
@@ -242,6 +350,12 @@ def _mapping_contains(actual: Mapping[str, Any], expected: Mapping[str, Any]) ->
 def _expectation_message(path: str, op: ReplayExpectationOp, expected: Any, actual: Any) -> str:
     actual_text = "<missing>" if actual is MISSING else repr(actual)
     return f"{path} expected to {op} {expected!r}, got {actual_text}"
+
+
+def _suite_path(root: Path, path: Path) -> str:
+    if root.is_dir():
+        return path.relative_to(root).as_posix()
+    return path.as_posix()
 
 
 def _run_event_step(index: int, step: Mapping[str, Any], state: GibsonServerState) -> ReplayStepResult:
@@ -407,12 +521,15 @@ def _string_tuple(value: Any) -> tuple[str, ...]:
 
 
 __all__ = [
+    "ReplayFileResult",
     "ReplayExpectationError",
     "ReplayExpectationOp",
     "ReplayExpectationResult",
     "ReplayResult",
     "ReplayStepKind",
     "ReplayStepResult",
+    "ReplaySuiteResult",
+    "discover_replay_files",
     "evaluate_replay_expectations",
     "load_replay_file",
     "mutations_from_value",
@@ -421,6 +538,7 @@ __all__ = [
     "render_step_from_mapping",
     "run_replay_data",
     "run_replay_file",
+    "run_replay_suite",
     "write_replay_result",
     "write_scene",
 ]
