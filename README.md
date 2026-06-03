@@ -55,6 +55,13 @@ Forward arguments to harn after `--`:
 uv run harn-gibson dogfood -- -p "summarize this repo"
 ```
 
+Run harn in a separate project directory while keeping this repo's Gibson extension and Codex model defaults:
+
+```bash
+mkdir -p test-artifacts/dogfood-workspaces/tiny-project
+uv run harn-gibson dogfood --cwd test-artifacts/dogfood-workspaces/tiny-project -- -p "bootstrap a tiny project here"
+```
+
 Use a specific harn executable with `--harn-bin`:
 
 ```bash
@@ -126,10 +133,14 @@ uv run harn-gibson dogfood-capture -- -p "bootstrap a tiny project here"
 For 15-20 minute captures, ask the wrapper to print the split-review follow-up directly:
 
 ```bash
-uv run harn-gibson dogfood-capture --split-every 200 -- -p "bootstrap a tiny project here"
+mkdir -p test-artifacts/dogfood-workspaces/tiny-project
+uv run harn-gibson dogfood-capture \
+  --cwd test-artifacts/dogfood-workspaces/tiny-project \
+  --split-every 200 \
+  -- -p "$(cat examples/prompts/dogfood-tiny-project.md)"
 ```
 
-Pass `--event-log path/to/session.jsonl` if you want a stable capture path. JSONL captures can contain prompts, tool output, file paths, and diagnostics, so keep the raw logs under ignored artifact paths. The follow-up `event-log-to-replay` conversion redacts common token, key, password, and credential values by default before writing replay fixtures; use `--no-redact-sensitive` only for private local debugging.
+Pass `--event-log path/to/session.jsonl` if you want a stable capture path. With `--cwd`, relative event-log paths are resolved before launching harn so the log still lands under the launcher directory, not the target project. JSONL captures can contain prompts, tool output, file paths, and diagnostics, so keep the raw logs under ignored artifact paths. The follow-up `event-log-to-replay` conversion redacts common token, key, password, and credential values by default before writing replay fixtures; use `--no-redact-sensitive` only for private local debugging.
 
 Use `examples/renderers/gibson_echo_renderer.py` when you want the smallest possible external-renderer contract example.
 
@@ -165,7 +176,7 @@ HARN_GIBSON_EVENT_LOG=.harn-gibson.jsonl \
 harn --no-extensions -e .harn/extensions/gibson.py
 ```
 
-A useful capture workflow is to run `uv run harn-gibson dogfood-capture` in a bare directory, ask harn to bootstrap a tiny project, and preserve the resulting event trajectory as replay input. Those longer captured trajectories should become the basis for future renderer-regression fixtures and screenshot reviews.
+A useful capture workflow is to run `uv run harn-gibson dogfood-capture --cwd PATH` in a bare directory and pass [examples/prompts/dogfood-tiny-project.md](examples/prompts/dogfood-tiny-project.md). It asks harn to initialize git, create files for a tiny project, run tests, make commits, introduce and fix a failure, and summarize status. Those longer captured trajectories should become the basis for future renderer-regression fixtures and screenshot reviews.
 
 Convert a captured event log into a replay fixture:
 

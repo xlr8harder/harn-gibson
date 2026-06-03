@@ -38,10 +38,14 @@ Replay fixtures use `harn-gibson.replay.v1`. They can replay either side of the 
 For live trajectory capture, use the dogfood capture wrapper:
 
 ```bash
-uv run harn-gibson dogfood-capture -- -p "bootstrap a tiny project here"
+mkdir -p test-artifacts/dogfood-workspaces/tiny-project
+uv run harn-gibson dogfood-capture \
+  --cwd test-artifacts/dogfood-workspaces/tiny-project \
+  --split-every 200 \
+  -- -p "$(cat examples/prompts/dogfood-tiny-project.md)"
 ```
 
-It launches the display with `examples/renderers/gibson_dogfood_renderer.py`, writes normalized event payloads as JSONL under ignored `test-artifacts/captures/` by default, and prints the exact conversion command for that capture. Pass `--event-log path/to/session.jsonl` for a stable path. For longer sessions, pass `--split-every N` to make the printed follow-up command use split fixture conversion and suite review. Captures can contain prompts, tool output, file paths, diagnostics, and tracebacks, so keep the raw JSONL out of committed fixtures. `event-log-to-replay` redacts common token, key, password, and credential values by default before writing replay JSON; use `--no-redact-sensitive` only for private local debugging.
+It launches the display with `examples/renderers/gibson_dogfood_renderer.py`, writes normalized event payloads as JSONL under ignored `test-artifacts/captures/` by default, and prints the exact conversion command for that capture. `--cwd` runs harn in a separate project directory while harn-gibson injects this repo's extension plus the Codex provider/model defaults explicitly, so the target directory does not need its own `.harn/settings.json`. The prompt in `examples/prompts/dogfood-tiny-project.md` is intentionally designed to produce a long trajectory with git initialization, file creation, edits, tests, command failures, fixes, commits, and final status. Pass `--event-log path/to/session.jsonl` if you want a stable capture path. With `--cwd`, relative event-log paths are resolved before launching harn so the log still lands under the launcher directory, not the target project. For longer sessions, pass `--split-every N` to make the printed follow-up command use split fixture conversion and suite review. Captures can contain prompts, tool output, file paths, diagnostics, and tracebacks, so keep the raw JSONL out of committed fixtures. `event-log-to-replay` redacts common token, key, password, and credential values by default before writing replay JSON; use `--no-redact-sensitive` only for private local debugging.
 
 When `HARN_GIBSON_EVENT_LOG` is set directly, the harn extension writes the same normalized event payloads as JSONL. Convert a captured log into a replay fixture with:
 
@@ -124,7 +128,7 @@ uv run harn-gibson replay-dir examples/replays \
 
 The model command receives `harn-gibson.model-renderer-request.v1`; the external command receives `harn-gibson.external-renderer-request.v1`. Returned plans still go through the same validation, diagnostics, fail-open fallback, and final-scene expectation checks as live dogfood rendering.
 
-The hard-coded `gibson_dogfood_renderer.py` is meant for live harn use before the renderer-agent backend is good enough. A useful future fixture workflow is to run `uv run harn-gibson dogfood-capture`, ask harn to spend 15-20 minutes bootstrapping a tiny project in a bare directory, then convert that event trajectory into a split replay directory and browser screenshots. Several such trajectories should become regression inputs for event coalescing, renderer timing, touched-file visualization, and visual continuity.
+The hard-coded `gibson_dogfood_renderer.py` is meant for live harn use before the renderer-agent backend is good enough. A useful future fixture workflow is to run `uv run harn-gibson dogfood-capture --cwd test-artifacts/dogfood-workspaces/NAME -- -p "$(cat examples/prompts/dogfood-tiny-project.md)"`, let harn spend a longer session bootstrapping a tiny project in a bare directory, then convert that event trajectory into a split replay directory and browser screenshots. Several such trajectories should become regression inputs for event coalescing, renderer timing, touched-file visualization, and visual continuity.
 
 ## Baseline Review
 

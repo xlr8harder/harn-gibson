@@ -611,13 +611,66 @@ def test_format_sse() -> None:
     assert format_sse({"a": 1}) == 'data: {"a":1}\n\n'
 
 
+def test_cli_harn_args_with_project_defaults() -> None:
+    assert cli._harn_args_with_project_defaults(["-p", "hello"]) == [
+        "--provider",
+        cli.PROJECT_HARN_PROVIDER,
+        "--model",
+        cli.PROJECT_HARN_MODEL,
+        "--thinking",
+        cli.PROJECT_HARN_THINKING,
+        "--no-extensions",
+        "--extension",
+        cli.extension_path(),
+        "-p",
+        "hello",
+    ]
+    extension = cli.extension_path()
+    assert cli._harn_args_with_project_defaults([f"--extension={extension}", "-p", "hello"]) == [
+        "--provider",
+        cli.PROJECT_HARN_PROVIDER,
+        "--model",
+        cli.PROJECT_HARN_MODEL,
+        "--thinking",
+        cli.PROJECT_HARN_THINKING,
+        "--no-extensions",
+        f"--extension={extension}",
+        "-p",
+        "hello",
+    ]
+    supplied = [
+        "--provider=custom",
+        "--model",
+        "custom-model",
+        "--thinking=low",
+        "-ne",
+        "--extension",
+        extension,
+        "-p",
+        "hello",
+    ]
+    assert cli._harn_args_with_project_defaults(supplied) == supplied
+    assert cli._argv_has_option(["--provider=custom"], "--provider") is True
+    assert cli._argv_has_option(["--providers=custom"], "--provider") is False
+    assert cli._argv_has_extension([extension], extension) is True
+    assert cli._argv_has_extension(["--extension", extension], extension) is True
+    assert cli._argv_has_extension(["-e", extension], extension) is True
+    assert cli._argv_has_extension([f"--extension={extension}"], extension) is True
+    assert cli._argv_has_extension([f"-e={extension}"], extension) is True
+    assert cli._argv_has_extension(["--extension"], extension) is False
+    assert cli._argv_has_extension(["--extension", "other.py"], extension) is False
+
+
 def test_cli_parser_and_run(monkeypatch: Any, capsys: Any) -> None:
     parser = cli.build_parser()
     assert parser.parse_args(["extension-path"]).command == "extension-path"
-    parsed_dogfood = parser.parse_args(["dogfood", "--no-browser", "--style", "neon-noir", "--", "-p", "hello"])
+    parsed_dogfood = parser.parse_args(
+        ["dogfood", "--no-browser", "--style", "neon-noir", "--cwd", "work", "--", "-p", "hello"]
+    )
     assert parsed_dogfood.command == "dogfood"
     assert parsed_dogfood.browser is False
     assert parsed_dogfood.style == "neon-noir"
+    assert parsed_dogfood.cwd == "work"
     assert parsed_dogfood.harn_args == ["--", "-p", "hello"]
     parsed_capture = parser.parse_args(
         [
@@ -625,6 +678,8 @@ def test_cli_parser_and_run(monkeypatch: Any, capsys: Any) -> None:
             "--no-browser",
             "--style",
             "mainframe",
+            "--cwd",
+            "capture-work",
             "--event-log",
             "events.jsonl",
             "--renderer-command",
@@ -641,6 +696,7 @@ def test_cli_parser_and_run(monkeypatch: Any, capsys: Any) -> None:
     assert parsed_capture.command == "dogfood-capture"
     assert parsed_capture.browser is False
     assert parsed_capture.style == "mainframe"
+    assert parsed_capture.cwd == "capture-work"
     assert parsed_capture.event_log == "events.jsonl"
     assert parsed_capture.renderer_command == "python renderer.py"
     assert parsed_capture.renderer_timeout_ms == "1234"
@@ -2048,6 +2104,69 @@ def test_cli_dogfood_reports_missing_harn(monkeypatch: Any, capsys: Any) -> None
     assert "harn executable not found: missing-harn" in capsys.readouterr().err
 
 
+def test_cli_dogfood_cwd_injects_project_config(monkeypatch: Any, tmp_path: Path, capsys: Any) -> None:
+    harn_calls: list[tuple[list[str], dict[str, str], str | None]] = []
+    workspace = tmp_path / "bare-project"
+    workspace.mkdir()
+    state = GibsonServerState()
+
+    class FakeServer:
+        server_address = ("127.0.0.1", 9878)
+
+        def serve_forever(self) -> None:
+            return None
+
+        def shutdown(self) -> None:
+            return None
+
+        def server_close(self) -> None:
+            return None
+
+    def fake_call(command: list[str], env: dict[str, str], cwd: str | None = None) -> int:
+        harn_calls.append((command, env, cwd))
+        return 0
+
+    monkeypatch.setattr("harn_gibson.server.build_state_from_env", lambda: state)
+    monkeypatch.setattr("harn_gibson.server.create_server", lambda _host, _port, _state: FakeServer())
+    monkeypatch.setattr(cli.subprocess, "call", fake_call)
+
+    assert (
+        cli.run(
+            [
+                "dogfood",
+                "--cwd",
+                str(workspace),
+                "--no-browser",
+                "--no-codex-auth-import",
+                "--no-hold-on-error",
+                "--",
+                "-p",
+                "bootstrap",
+            ]
+        )
+        == 0
+    )
+    command, env, cwd = harn_calls[0]
+    assert cwd == str(workspace.resolve())
+    assert command == [
+        "harn",
+        "--provider",
+        cli.PROJECT_HARN_PROVIDER,
+        "--model",
+        cli.PROJECT_HARN_MODEL,
+        "--thinking",
+        cli.PROJECT_HARN_THINKING,
+        "--no-extensions",
+        "--extension",
+        cli.extension_path(),
+        "-p",
+        "bootstrap",
+    ]
+    assert env["HARN_GIBSON_ENDPOINT"] == "http://127.0.0.1:9878/events"
+    assert cli.run_dogfood(cwd=str(tmp_path / "missing"), launch_browser=False, codex_auth_import=False) == 2
+    assert "--cwd must be an existing directory" in capsys.readouterr().err
+
+
 def test_cli_dogfood_applies_env_overrides_to_state_and_harn(monkeypatch: Any) -> None:
     harn_calls: list[tuple[list[str], dict[str, str]]] = []
     build_state_envs: list[dict[str, str]] = []
@@ -2146,6 +2265,7 @@ def test_cli_dogfood_capture_sets_env_and_replay_hint(
             "codex_auth_import": False,
             "hold_on_error": False,
             "style": "mainframe",
+            "cwd": None,
             "env_overrides": {
                 "HARN_GIBSON_EVENT_LOG": str(event_log),
                 "HARN_GIBSON_RENDERER_COMMAND": "python renderer.py",
@@ -2206,6 +2326,70 @@ def test_cli_dogfood_capture_split_hint(
 
     assert cli.run_dogfood_capture(split_every=0, launch_browser=False, codex_auth_import=False) == 2
     assert "--split-every must be positive" in capsys.readouterr().err
+
+
+def test_cli_dogfood_capture_cwd_resolves_event_log(
+    monkeypatch: Any,
+    tmp_path: Path,
+) -> None:
+    dogfood_calls: list[dict[str, Any]] = []
+    workspace = tmp_path / "workspace"
+    launcher_dir = tmp_path / "launcher"
+    workspace.mkdir()
+    launcher_dir.mkdir()
+
+    def fake_run_dogfood(**kwargs: Any) -> int:
+        dogfood_calls.append(kwargs)
+        return 0
+
+    monkeypatch.setattr(cli, "run_dogfood", fake_run_dogfood)
+    monkeypatch.chdir(launcher_dir)
+
+    assert (
+        cli.run_dogfood_capture(
+            cwd=str(workspace),
+            event_log="captures/events.jsonl",
+            launch_browser=False,
+            codex_auth_import=False,
+            hold_on_error=False,
+        )
+        == 0
+    )
+    assert dogfood_calls[0]["cwd"] == str(workspace.resolve())
+    assert dogfood_calls[0]["env_overrides"]["HARN_GIBSON_EVENT_LOG"] == str(
+        launcher_dir / "captures" / "events.jsonl"
+    )
+    assert (launcher_dir / "captures").is_dir()
+
+
+def test_cli_dogfood_capture_rejects_missing_cwd_before_artifacts(
+    monkeypatch: Any,
+    tmp_path: Path,
+    capsys: Any,
+) -> None:
+    dogfood_called = False
+
+    def fake_run_dogfood(**_kwargs: Any) -> int:
+        nonlocal dogfood_called
+        dogfood_called = True
+        return 0
+
+    monkeypatch.setattr(cli, "run_dogfood", fake_run_dogfood)
+    monkeypatch.chdir(tmp_path)
+
+    assert (
+        cli.run_dogfood_capture(
+            cwd=str(tmp_path / "missing"),
+            event_log="captures/events.jsonl",
+            launch_browser=False,
+            codex_auth_import=False,
+            hold_on_error=False,
+        )
+        == 2
+    )
+    assert dogfood_called is False
+    assert (tmp_path / "captures").exists() is False
+    assert "--cwd must be an existing directory" in capsys.readouterr().err
 
 
 def test_cli_dogfood_capture_defaults_to_ignored_timestamped_log(monkeypatch: Any, capsys: Any) -> None:

@@ -19,6 +19,9 @@ from harn_gibson.extension import extension_path
 from harn_gibson.styles import style_pack_from_name, style_pack_ids
 
 DOGFOOD_CAPTURE_RENDERER_TIMEOUT_MS = "10000"
+PROJECT_HARN_PROVIDER = "openai-codex"
+PROJECT_HARN_MODEL = "gpt-5.5"
+PROJECT_HARN_THINKING = "high"
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -34,6 +37,7 @@ def build_parser() -> argparse.ArgumentParser:
     dogfood.add_argument("--host", default="127.0.0.1")
     dogfood.add_argument("--port", type=int, default=0)
     dogfood.add_argument("--harn-bin", default="harn", help="harn executable to launch")
+    dogfood.add_argument("--cwd", default=None, help="working directory for the launched harn process")
     dogfood.add_argument("--browser", action=argparse.BooleanOptionalAction, default=True)
     dogfood.add_argument("--codex-auth-import", action=argparse.BooleanOptionalAction, default=True)
     dogfood.add_argument("--hold-on-error", action=argparse.BooleanOptionalAction, default=True)
@@ -47,6 +51,7 @@ def build_parser() -> argparse.ArgumentParser:
     capture.add_argument("--host", default="127.0.0.1")
     capture.add_argument("--port", type=int, default=0)
     capture.add_argument("--harn-bin", default="harn", help="harn executable to launch")
+    capture.add_argument("--cwd", default=None, help="working directory for the launched harn process")
     capture.add_argument("--browser", action=argparse.BooleanOptionalAction, default=True)
     capture.add_argument("--codex-auth-import", action=argparse.BooleanOptionalAction, default=True)
     capture.add_argument("--hold-on-error", action=argparse.BooleanOptionalAction, default=True)
@@ -222,6 +227,53 @@ def _explicit_replay_renderer_env_from_args(args: argparse.Namespace) -> dict[st
     return renderer_env
 
 
+def _coerce_harn_cwd(cwd: str | None) -> Path | None:
+    if cwd is None:
+        return None
+    path = Path(cwd).expanduser().resolve()
+    if not path.is_dir():
+        raise ValueError(f"--cwd must be an existing directory: {path}")
+    return path
+
+
+def _harn_args_with_project_defaults(args: Sequence[str]) -> list[str]:
+    forwarded = list(args)
+    defaults: list[str] = []
+    if not _argv_has_option(forwarded, "--provider"):
+        defaults.extend(["--provider", PROJECT_HARN_PROVIDER])
+    if not _argv_has_option(forwarded, "--model"):
+        defaults.extend(["--model", PROJECT_HARN_MODEL])
+    if not _argv_has_option(forwarded, "--thinking"):
+        defaults.extend(["--thinking", PROJECT_HARN_THINKING])
+    if not _argv_has_option(forwarded, "--no-extensions", "-ne"):
+        defaults.append("--no-extensions")
+    extension = extension_path()
+    if not _argv_has_extension(forwarded, extension):
+        defaults.extend(["--extension", extension])
+    return [*defaults, *forwarded]
+
+
+def _argv_has_option(args: Sequence[str], *names: str) -> bool:
+    long_names = tuple(name for name in names if name.startswith("--"))
+    for arg in args:
+        if arg in names:
+            return True
+        if any(arg.startswith(f"{name}=") for name in long_names):
+            return True
+    return False
+
+
+def _argv_has_extension(args: Sequence[str], extension: str) -> bool:
+    for index, arg in enumerate(args):
+        if arg == extension:
+            return True
+        if arg == f"--extension={extension}" or arg == f"-e={extension}":
+            return True
+        if arg in {"--extension", "-e"} and args[index + 1 : index + 2] == [extension]:
+            return True
+    return False
+
+
 def run_dogfood(
     *,
     host: str = "127.0.0.1",
@@ -233,9 +285,15 @@ def run_dogfood(
     hold_on_error: bool = True,
     style: str | None = None,
     env_overrides: Mapping[str, str] | None = None,
+    cwd: str | None = None,
 ) -> int:
     from harn_gibson.server import build_state_from_env, create_server, publish_diagnostic_event
 
+    try:
+        harn_cwd = _coerce_harn_cwd(cwd)
+    except ValueError as error:
+        print(error, file=sys.stderr)
+        return 2
     env = os.environ.copy()
     if env_overrides:
         env.update(env_overrides)
@@ -252,6 +310,8 @@ def run_dogfood(
     forwarded_args = list(harn_args)
     if forwarded_args[:1] == ["--"]:
         forwarded_args = forwarded_args[1:]
+    if harn_cwd is not None:
+        forwarded_args = _harn_args_with_project_defaults(forwarded_args)
 
     env["HARN_GIBSON_ENDPOINT"] = endpoint
     env["HARN_GIBSON_INPUT_ENDPOINT"] = input_endpoint
@@ -291,7 +351,10 @@ def run_dogfood(
                 severity="info" if auth_result.available else "error",
                 title="Codex auth ready" if auth_result.available else "Codex auth unavailable",
             )
-        exit_code = subprocess.call(command, env=env)
+        if harn_cwd is None:
+            exit_code = subprocess.call(command, env=env)
+        else:
+            exit_code = subprocess.call(command, env=env, cwd=str(harn_cwd))
         if exit_code != 0:
             message = f"harn exited with code {exit_code}"
             publish_launcher_diagnostic(message=message, event_type="harn_exit", severity="error", title="Harn exit")
@@ -325,11 +388,19 @@ def run_dogfood_capture(
     renderer_command: str | None = None,
     renderer_timeout_ms: str = DOGFOOD_CAPTURE_RENDERER_TIMEOUT_MS,
     split_every: int | None = None,
+    cwd: str | None = None,
 ) -> int:
+    try:
+        harn_cwd = _coerce_harn_cwd(cwd)
+    except ValueError as error:
+        print(error, file=sys.stderr)
+        return 2
     if split_every is not None and split_every <= 0:
         print("--split-every must be positive", file=sys.stderr)
         return 2
     event_log_path = Path(event_log) if event_log is not None else _default_capture_event_log_path()
+    if harn_cwd is not None:
+        event_log_path = event_log_path.expanduser().resolve()
     event_log_path.parent.mkdir(parents=True, exist_ok=True)
     capture_renderer_command = renderer_command if renderer_command is not None else _default_dogfood_renderer_command()
     env_overrides = {
@@ -349,6 +420,7 @@ def run_dogfood_capture(
         hold_on_error=hold_on_error,
         style=style,
         env_overrides=env_overrides,
+        cwd=str(harn_cwd) if harn_cwd is not None else None,
     )
     print(
         "build a replay review from this capture with:\n"
@@ -720,6 +792,7 @@ def run(argv: Sequence[str] | None = None) -> int:
             codex_auth_import=args.codex_auth_import,
             hold_on_error=args.hold_on_error,
             style=args.style,
+            cwd=args.cwd,
         )
     if args.command == "dogfood-capture":
         return run_dogfood_capture(
@@ -735,6 +808,7 @@ def run(argv: Sequence[str] | None = None) -> int:
             renderer_command=args.renderer_command,
             renderer_timeout_ms=args.renderer_timeout_ms,
             split_every=args.split_every,
+            cwd=args.cwd,
         )
     if args.command in {None, "serve"}:
         from harn_gibson.server import run_server
