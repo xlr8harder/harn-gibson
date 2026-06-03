@@ -21,6 +21,7 @@ from harn_gibson.rendering import (
     coerce_render_mode,
     decisions_from_payload,
     render_accept_payload,
+    render_intent_from_plan,
     render_update_payload,
 )
 from harn_gibson.scene import SceneAnimation, SceneEngine, SceneMutation, ScenePrimitive
@@ -148,6 +149,8 @@ def test_renderer_context_builder_compaction_rolling_and_history() -> None:
     assert stream_summary["propsPreview"]["text"] == ["abcde...", {"nested": "zyxwv..."}]
     assert stream_summary["propsPreview"]["isStreaming"] is True
     assert rolling.visualization_context[0]["renderer"] == "first"
+    assert rolling.visualization_context[0]["intent"] == "visualize tool_call"
+    assert rolling.visualization_context[0]["renderIntent"]["renderer"] == "first"
     assert rolling.visualization_context[0]["mutationCount"] == 1
 
     builder.record_plan(RenderPlan(batch.requests, (), {"renderer": "second"}))
@@ -156,14 +159,78 @@ def test_renderer_context_builder_compaction_rolling_and_history() -> None:
     assert builder.snapshot_history() == (
         {
             "renderer": "second",
+            "intent": "visualize tool_call",
             "requestCount": 1,
             "stepCount": 0,
             "mutationCount": 0,
             "eventTypes": ["tool_call"],
             "routes": ["renderer_agent"],
+            "renderIntent": {
+                "schema": "harn-gibson.render-intent.v1",
+                "renderer": "second",
+                "intent": "visualize tool_call",
+                "requestCount": 1,
+                "stepCount": 0,
+                "mutationCount": 0,
+                "eventTypes": ["tool_call"],
+                "routes": ["renderer_agent"],
+                "timeline": {"startMs": 900, "endMs": 900, "durationMs": 0},
+                "effects": [],
+                "targets": [],
+                "metadata": {"renderer": "second"},
+            },
             "metadata": {"renderer": "second"},
         },
     )
+
+
+def test_render_intent_from_plan_summarizes_effects_targets_and_defaults() -> None:
+    request = RenderRequest(event(1, "tool_call"))
+    duplicate_request = RenderRequest(event(2, "tool_call"), route="direct_scene")
+    plan = RenderPlan(
+        (request, duplicate_request),
+        (
+            RenderStep(
+                (
+                    SceneMutation("upsert", primitive=ScenePrimitive("city", "city_block", "stage")),
+                    SceneMutation(
+                        "start_animation",
+                        animation=SceneAnimation("burst", "city", "packet_burst", 10, 200),
+                    ),
+                    SceneMutation("patch", target_id="status", props={"text": "running"}),
+                    SceneMutation("patch", target_id="status", props={"tone": "cyan"}),
+                    SceneMutation("append_log", entry={"summary": "rendered"}),
+                ),
+                event_index=0,
+            ),
+        ),
+        {"renderer": "fixture", "intent": "map command path"},
+    )
+
+    intent = render_intent_from_plan(plan)
+
+    assert intent == {
+        "schema": "harn-gibson.render-intent.v1",
+        "renderer": "fixture",
+        "intent": "map command path",
+        "requestCount": 2,
+        "stepCount": 1,
+        "mutationCount": 5,
+        "eventTypes": ["tool_call", "tool_call"],
+        "routes": ["direct_scene", "renderer_agent"],
+        "timeline": {"startMs": 10, "endMs": 20, "durationMs": 10},
+        "effects": ["primitive:city_block", "animation:packet_burst", "patch", "append_log"],
+        "targets": ["city", "status"],
+        "metadata": {"renderer": "fixture", "intent": "map command path"},
+    }
+
+    empty = render_intent_from_plan(RenderPlan((), (), {"intent": ""}))
+    assert empty["intent"] == "render idle scene"
+    assert empty["renderer"] == "unknown"
+    assert empty["timeline"] == {"startMs": 0, "endMs": 0, "durationMs": 0}
+
+    generated = render_intent_from_plan(RenderPlan((request, duplicate_request), (), {"renderer": "blank"}))
+    assert generated["intent"] == "visualize tool_call"
 
 
 def pipeline_catalog():
@@ -184,6 +251,10 @@ def test_blocking_pipeline_applies_and_publishes_updates() -> None:
     update = result.updates[0]
     assert update["decisions"] == [{"block": True}]
     assert update["renderPlan"]["batchSize"] == 1
+    assert update["renderPlan"]["intent"]["renderer"] == "deterministic"
+    assert update["renderIntent"] == update["renderPlan"]["intent"]
+    assert update["scene"]["metadata"]["renderIntents"] == [update["renderIntent"]]
+    assert pipeline.scene.state.metadata["lastRenderIntent"]["intent"] == "visualize input"
     assert update["events"][0]["eventType"] == "input"
     assert update["renderRequests"][0]["event"]["eventType"] == "input"
     assert buffer.snapshot() == [update]
@@ -359,6 +430,7 @@ def test_pipeline_validation_empty_and_delayed_steps() -> None:
     result = pipeline.submit(RenderRequest(event(5)))
     assert sleeps == [0.01]
     assert result.updates[0]["renderPlan"]["metadata"] == {"custom": True}
+    assert result.updates[0]["renderPlan"]["intent"]["intent"] == "visualize input"
     assert result.updates[1]["scene"]["revision"] == 1
     with pytest.raises(ValueError, match="render mode"):
         RenderPipeline(scene=SceneEngine(), buffer=EventBuffer(), mode="later")  # type: ignore[arg-type]
@@ -392,6 +464,7 @@ def test_pipeline_direct_apply_bypasses_renderer_queue() -> None:
     )
     assert plan_result.updates[0]["renderPlan"]["metadata"] == {"renderer": "saved"}
     assert buffer.snapshot()[-1] == plan_result.updates[0]
+    assert pipeline.scene.state.metadata["renderIntents"][-1]["renderer"] == "saved"
 
 
 def test_render_update_and_coercion_helpers() -> None:
@@ -402,6 +475,7 @@ def test_render_update_and_coercion_helpers() -> None:
 
     assert "decisions" not in update
     assert update["renderPlan"]["stepCount"] == 1
+    assert update["renderIntent"]["effects"] == ["append_log"]
     assert RenderSubmitResult("blocking", 0, ({"scene": {"revision": "bad"}},)).scene_revision is None
     assert coerce_render_mode("async") == "async"
     assert coerce_render_mode("blocking") == "blocking"

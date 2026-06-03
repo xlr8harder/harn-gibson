@@ -17,6 +17,7 @@ from harn_gibson.rendering import (
     RenderStep,
     RenderSubmitResult,
     TimelineWindow,
+    render_intent_from_plan,
 )
 from harn_gibson.replay import (
     ReplayExpectationError,
@@ -101,6 +102,7 @@ __all__ = [
     "result_for_harn",
     "renderer_event_interest_from_renderer",
     "renderer_event_interest_from_value",
+    "render_intent_from_plan",
     "replay_data_from_event_log",
     "run_replay_data",
     "run_replay_file",

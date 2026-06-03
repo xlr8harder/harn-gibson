@@ -40,7 +40,7 @@ The display is a persistent scene, not a sequence of independent event rendering
 
 The current display agent is deterministic and maps each harn event to status, log, decision, and pulse mutations. Later, the LLM display agent should receive recent harn context plus recent scene context and return the same mutation format.
 
-The raw event details, event feed, and hook decisions are treated as debug surfaces. They remain in scene state for inspection, but the default browser layout hides them behind a debug drawer.
+The raw event details, event feed, render intents, tracebacks, and hook decisions are treated as debug surfaces. They remain in scene state for inspection, but the default browser layout hides them behind a debug drawer.
 
 ## Replay Testing
 
@@ -60,7 +60,9 @@ In async mode, the server accepts the event immediately and a background worker 
 
 Immediately before renderer execution, the pipeline normalizes the queued requests into a render-input batch. That gives each request a timeline offset, coalesced count, and batch metadata, and the same render-input envelope is included on published scene updates for replay/debug inspection.
 
-The pipeline also builds a `RendererContext` for renderers that opt into `render_with_context`. The context alternates between full compaction payloads and rolling summaries, combining project metadata, catalog entries, current scene state, recent agent context, and recent visualization history without requiring a full transcript on each renderer turn.
+Each applied render plan also records a bounded render-intent history in scene metadata. A render intent summarizes the renderer, requested intent, event types, routes, timeline, effects, targets, and original plan metadata. The browser debug drawer and replay final-scene snapshots expose this history so a future model-backed renderer can preserve visual continuity across turns.
+
+The pipeline also builds a `RendererContext` for renderers that opt into `render_with_context`. The context alternates between full compaction payloads and rolling summaries, combining project metadata, catalog entries, current scene state, recent agent context, render intents, and recent visualization history without requiring a full transcript on each renderer turn.
 
 The deterministic renderer returns one render step per event today. A model-backed renderer should return the same `RenderPlan` shape and may include multiple delayed steps for sequential effects.
 

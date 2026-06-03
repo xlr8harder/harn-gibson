@@ -65,6 +65,7 @@ def test_http_server_routes() -> None:
         assert request_text(f"{base}/")[0:2] == (200, "text/html; charset=utf-8")
         assert "GIBSON LINK" in request_text(f"{base}/index.html")[2]
         assert "Tracebacks" in request_text(f"{base}/index.html")[2]
+        assert "Render Intents" in request_text(f"{base}/index.html")[2]
         assert request_text(f"{base}/assets/app.css")[1] == "text/css; charset=utf-8"
         assert request_text(f"{base}/assets/app.js")[1] == "application/javascript; charset=utf-8"
         health = json.loads(request_text(f"{base}/healthz")[2])
@@ -116,6 +117,9 @@ def test_http_server_routes() -> None:
         status, _content_type, body = request_text(f"{base}/events", json.dumps(payload).encode("utf-8"))
         assert status == 202
         assert json.loads(body) == {"ok": True, "renderMode": "blocking", "sceneRevision": 1}
+        scene = json.loads(request_text(f"{base}/scene")[2])
+        assert scene["metadata"]["lastRenderIntent"]["renderer"] == "deterministic"
+        assert scene["metadata"]["lastRenderIntent"]["intent"] == "visualize input"
         health = json.loads(request_text(f"{base}/healthz")[2])
         assert health["ok"] is True
         assert health["events"] == 1

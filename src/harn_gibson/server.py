@@ -553,6 +553,10 @@ HTML = """<!doctype html>
           <ol id="feed"></ol>
         </div>
         <div class="panel">
+          <h2>Render Intents</h2>
+          <pre id="intentLog">[]</pre>
+        </div>
+        <div class="panel">
           <h2>Tracebacks</h2>
           <pre id="traceLog">[]</pre>
         </div>
@@ -797,7 +801,7 @@ h1 {
   bottom: 18px;
   z-index: 5;
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr) minmax(120px, 0.45fr) minmax(120px, 0.45fr);
+  grid-template-rows: auto auto minmax(0, 1fr) minmax(96px, 0.38fr) minmax(96px, 0.38fr) minmax(96px, 0.38fr);
   gap: 12px;
   width: min(420px, calc(100vw - 36px));
   transform: translateX(calc(100% + 24px));
@@ -878,6 +882,13 @@ body.debug-open .debug-panel {
   color: var(--amber);
   white-space: pre-wrap;
 }
+#intentLog {
+  height: calc(100% - 32px);
+  margin: 0;
+  overflow: auto;
+  color: var(--cyan);
+  white-space: pre-wrap;
+}
 #traceLog {
   height: calc(100% - 32px);
   margin: 0;
@@ -941,6 +952,7 @@ const streamPanel = document.getElementById("streamPanel");
 const streamTitle = document.getElementById("streamTitle");
 const streamText = document.getElementById("streamText");
 const decisionLog = document.getElementById("decisionLog");
+const intentLog = document.getElementById("intentLog");
 const traceLog = document.getElementById("traceLog");
 const debugToggle = document.getElementById("debugToggle");
 const debugClose = document.getElementById("debugClose");
@@ -1057,6 +1069,9 @@ function pushEvent(event) {
     renderScene(scene);
   } else {
     decisionLog.textContent = JSON.stringify(decisions, null, 2);
+    if (update.renderIntent) {
+      intentLog.textContent = JSON.stringify([update.renderIntent], null, 2);
+    }
     appendFeedItem(current);
   }
   for (const mutation of update.mutations || []) {
@@ -1086,6 +1101,7 @@ function renderScene(scene) {
   if (status.text) statusEl.textContent = status.text;
   renderStream(stream);
   decisionLog.textContent = JSON.stringify(scene.primitives?.["decision-log"]?.props?.text || [], null, 2);
+  intentLog.textContent = JSON.stringify(scene.metadata?.renderIntents || [], null, 2);
   traceLog.textContent = JSON.stringify(scene.primitives?.["trace-log"]?.props?.text || [], null, 2);
   feed.replaceChildren();
   for (const entry of scene.log || []) {

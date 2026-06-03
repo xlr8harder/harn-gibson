@@ -118,6 +118,7 @@ def test_browser_display_renders_events_debug_and_input_queue() -> None:
                     ) < 2"""
                 )
                 expect(page.locator("#feed")).to_contain_text("Tool preflight")
+                expect(page.locator("#intentLog")).to_contain_text("visualize tool_call")
                 page.screenshot(path=desktop, full_page=True)
                 assert_screenshot(desktop)
 

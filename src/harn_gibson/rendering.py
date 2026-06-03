@@ -419,12 +419,18 @@ class RenderPipeline:
 
     def _apply_plan(self, plan: RenderPlan) -> list[dict[str, Any]]:
         updates: list[dict[str, Any]] = []
+        render_input = RenderInputBatch.from_requests(
+            plan.requests,
+            route=plan.requests[-1].route if plan.requests else "renderer_agent",
+        )
+        render_intent = render_intent_from_plan(plan, render_input)
+        self.scene.record_render_intent(render_intent)
         for index, step in enumerate(plan.steps):
             if step.delay_ms > 0:
                 self._sleep(step.delay_ms / 1000)
             request = plan.request_for_step(step)
             scene = self.scene.apply(step.mutations)
-            update = render_update_payload(plan, step, index, request, scene)
+            update = render_update_payload(plan, step, index, request, scene, render_input, render_intent)
             self.buffer.publish(update)
             updates.append(update)
         self.context_builder.record_plan(plan)
@@ -519,15 +525,88 @@ def _recent_agent_context(batch: RenderInputBatch) -> tuple[str, ...]:
 
 def _render_plan_summary(plan: RenderPlan) -> dict[str, Any]:
     mutation_count = sum(len(step.mutations) for step in plan.steps)
+    render_intent = render_intent_from_plan(plan)
     return {
         "renderer": plan.metadata.get("renderer", "unknown"),
+        "intent": render_intent["intent"],
         "requestCount": len(plan.requests),
         "stepCount": len(plan.steps),
         "mutationCount": mutation_count,
         "eventTypes": [request.event.event_type for request in plan.requests],
         "routes": sorted({request.route for request in plan.requests}),
+        "renderIntent": render_intent,
         "metadata": plan.metadata,
     }
+
+
+def render_intent_from_plan(
+    plan: RenderPlan,
+    render_input: RenderInputBatch | None = None,
+) -> dict[str, Any]:
+    input_batch = render_input or RenderInputBatch.from_requests(
+        plan.requests,
+        route=plan.requests[-1].route if plan.requests else "renderer_agent",
+    )
+    mutation_count = sum(len(step.mutations) for step in plan.steps)
+    effects: list[str] = []
+    targets: list[str] = []
+    for step in plan.steps:
+        for mutation in step.mutations:
+            _append_unique(effects, _mutation_effect_label(mutation))
+            target = _mutation_target_id(mutation)
+            if target is not None:
+                _append_unique(targets, target)
+    metadata = dict(plan.metadata)
+    intent = metadata.get("intent")
+    if not isinstance(intent, str) or not intent.strip():
+        intent = _default_plan_intent(plan)
+    return {
+        "schema": "harn-gibson.render-intent.v1",
+        "renderer": str(metadata.get("renderer") or "unknown"),
+        "intent": intent,
+        "requestCount": len(plan.requests),
+        "stepCount": len(plan.steps),
+        "mutationCount": mutation_count,
+        "eventTypes": [request.event.event_type for request in plan.requests],
+        "routes": sorted({request.route for request in plan.requests}),
+        "timeline": input_batch.timeline.to_dict(),
+        "effects": effects,
+        "targets": targets,
+        "metadata": metadata,
+    }
+
+
+def _append_unique(items: list[str], item: str) -> None:
+    if item not in items:
+        items.append(item)
+
+
+def _mutation_effect_label(mutation: SceneMutation) -> str:
+    if mutation.animation is not None:
+        return f"animation:{mutation.animation.kind}"
+    if mutation.primitive is not None:
+        return f"primitive:{mutation.primitive.kind}"
+    return mutation.op
+
+
+def _mutation_target_id(mutation: SceneMutation) -> str | None:
+    if mutation.target_id is not None:
+        return mutation.target_id
+    if mutation.animation is not None:
+        return mutation.animation.target_id
+    if mutation.primitive is not None:
+        return mutation.primitive.id
+    return None
+
+
+def _default_plan_intent(plan: RenderPlan) -> str:
+    event_types = []
+    for request in plan.requests:
+        if request.event.event_type not in event_types:
+            event_types.append(request.event.event_type)
+    if not event_types:
+        return "render idle scene"
+    return f"visualize {' + '.join(event_types)}"
 
 
 def render_update_payload(
@@ -536,16 +615,21 @@ def render_update_payload(
     step_index: int,
     request: RenderRequest,
     scene: SceneState,
+    render_input: RenderInputBatch | None = None,
+    render_intent: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     update = scene_update_payload(request.event, step.mutations, scene)
-    render_input = RenderInputBatch.from_requests(plan.requests, route=request.route)
+    render_input = render_input or RenderInputBatch.from_requests(plan.requests, route=request.route)
+    render_intent = render_intent or render_intent_from_plan(plan, render_input)
     update["renderPlan"] = {
         "stepIndex": step_index,
         "stepCount": len(plan.steps),
         "batchSize": len(plan.requests),
         "timeline": render_input.timeline.to_dict(),
+        "intent": render_intent,
         "metadata": plan.metadata,
     }
+    update["renderIntent"] = render_intent
     update["events"] = [current.event.to_dict() for current in plan.requests]
     update["renderInput"] = render_input.to_dict()
     update["renderRequests"] = [current.to_dict() for current in plan.requests]

@@ -89,6 +89,7 @@ class SceneState:
     primitives: dict[str, ScenePrimitive] = field(default_factory=dict)
     animations: dict[str, SceneAnimation] = field(default_factory=dict)
     log: list[dict[str, Any]] = field(default_factory=list)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -97,15 +98,23 @@ class SceneState:
             "primitives": {key: primitive.to_dict() for key, primitive in self.primitives.items()},
             "animations": {key: animation.to_dict() for key, animation in self.animations.items()},
             "log": list(self.log),
+            "metadata": self.metadata,
         }
 
 
 class SceneEngine:
     """Applies scene mutations to persistent scene state."""
 
-    def __init__(self, state: SceneState | None = None, *, max_log_entries: int = 120) -> None:
+    def __init__(
+        self,
+        state: SceneState | None = None,
+        *,
+        max_log_entries: int = 120,
+        max_render_intents: int = 24,
+    ) -> None:
         self.state = state or initial_scene()
         self.max_log_entries = max_log_entries
+        self.max_render_intents = max(1, max_render_intents)
 
     def apply(self, mutations: Iterable[SceneMutation | Mapping[str, Any]]) -> SceneState:
         applied = False
@@ -156,6 +165,22 @@ class SceneEngine:
             self.state.animations.pop(target_id, None)
             return
         raise ValueError(f"unsupported scene mutation op: {mutation.op}")
+
+    def record_render_intent(self, intent: Mapping[str, Any]) -> None:
+        rendered_intent = dict(intent)
+        current = self.state.metadata.get("renderIntents", ())
+        if isinstance(current, list):
+            history = [dict(item) for item in current if isinstance(item, Mapping)]
+        else:
+            history = []
+        history.append(rendered_intent)
+        if len(history) > self.max_render_intents:
+            del history[: len(history) - self.max_render_intents]
+        self.state.metadata = {
+            **self.state.metadata,
+            "lastRenderIntent": rendered_intent,
+            "renderIntents": history,
+        }
 
 
 def initial_scene() -> SceneState:

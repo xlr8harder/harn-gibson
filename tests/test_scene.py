@@ -39,7 +39,30 @@ def test_scene_primitive_animation_mutation_and_state_to_dict() -> None:
     }
     assert mutation.to_dict()["primitive"] == primitive.to_dict()
     assert state.to_dict()["schema"] == "harn-gibson.scene.v1"
+    assert state.to_dict()["metadata"] == {}
     assert "status" in state.primitives
+
+
+def test_scene_engine_records_bounded_render_intents() -> None:
+    engine = SceneEngine(max_render_intents=2)
+
+    engine.record_render_intent({"intent": "one", "renderer": "test"})
+    engine.record_render_intent({"intent": "two", "renderer": "test"})
+    engine.record_render_intent({"intent": "three", "renderer": "test"})
+
+    assert engine.state.revision == 0
+    assert engine.state.metadata["lastRenderIntent"]["intent"] == "three"
+    assert engine.state.metadata["renderIntents"] == [
+        {"intent": "two", "renderer": "test"},
+        {"intent": "three", "renderer": "test"},
+    ]
+
+    engine.state.metadata["renderIntents"] = "bad"
+    engine.record_render_intent({"intent": "fresh"})
+    assert engine.state.metadata["renderIntents"] == [{"intent": "fresh"}]
+
+    engine.apply([SceneMutation("reset_scene")])
+    assert engine.state.metadata == {}
 
 
 def test_scene_engine_applies_all_mutations_and_trims_log() -> None:

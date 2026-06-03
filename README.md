@@ -76,7 +76,7 @@ Delivery modes:
 - `queue`: default. Runs immediately if harn is idle, or queues as a follow-up if harn is streaming.
 - `steer`: queues steering input for the active agent run.
 
-The raw event details, event feed, tracebacks, and hook decisions are in the debug drawer. Use `DEBUG` to open it and `CLOSE` inside the drawer to collapse it. Dogfood launcher failures and extension delivery exceptions are published into the same feed. If harn exits with an error while the browser is open, the display stays up until Ctrl-C so the failure remains visible.
+The raw event details, event feed, render intents, tracebacks, and hook decisions are in the debug drawer. Use `DEBUG` to open it and `CLOSE` inside the drawer to collapse it. Dogfood launcher failures and extension delivery exceptions are published into the same feed. If harn exits with an error while the browser is open, the display stays up until Ctrl-C so the failure remains visible.
 
 Project-local harn settings in `.harn/settings.json` select the `openai-codex` provider, `gpt-5.5`, and this extension. The Codex auth import is a temporary workaround for harn's current Codex `/login` callback issue.
 

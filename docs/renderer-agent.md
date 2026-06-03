@@ -44,6 +44,8 @@ The renderer can answer with steps that use delays and start offsets to make the
 
 Each step can include multiple scene mutations. Multiple steps let the renderer queue effects in sequence, for example: flash a node, add a trace line, then settle the status panel.
 
+Every applied plan is summarized as `harn-gibson.render-intent.v1` and stored in `scene.metadata.renderIntents`. The intent summary includes renderer name, human intent, event types, routes, timeline, effects, targets, and original plan metadata. Published scene updates also include the current `renderIntent`, which makes replay/debug inspection independent of renderer implementation details.
+
 ## Blocking Vs Async
 
 `HARN_GIBSON_RENDER_MODE=blocking` means the display server applies the render plan before responding to harn. This is easier to reason about and guarantees the scene has acknowledged the event.
@@ -103,7 +105,7 @@ The renderer agent should not receive a full new transcript on every event. Use 
 - Stable project metadata: repo name, current renderer schema, primitive catalog, active display style.
 - Current renderer state: compact `SceneState` summary, not screenshots.
 - Recent harn events: the newest event batch plus short summaries of recent prior events.
-- Recent visualization context: recent render plans and active animations/effects.
+- Recent visualization context: recent render intents, render plans, and active animations/effects.
 
 The executable fixture for this is `RendererContext`. A renderer that only implements `render(requests, scene)` receives the existing deterministic-compatible call shape. A renderer that implements `render_with_context(requests, scene, context)` receives a `harn-gibson.renderer-context.v1` object with project metadata, catalog data, scene context, render input, recent agent context, visualization history, and compaction metadata.
 
