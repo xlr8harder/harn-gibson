@@ -106,6 +106,13 @@ HARN_GIBSON_EVENT_LOG=.harn-gibson.jsonl \
 harn --no-extensions -e .harn/extensions/gibson.py
 ```
 
+Convert a captured event log into a replay fixture:
+
+```bash
+uv run harn-gibson event-log-to-replay .harn-gibson.jsonl \
+  --output examples/replays/captured-session.json
+```
+
 Replay fixtures can drive the same scene pipeline without a live harn process:
 
 ```bash

@@ -25,6 +25,7 @@ from harn_gibson.replay import (
     render_plan_from_mapping,
     render_request_from_mapping,
     render_step_from_mapping,
+    replay_data_from_event_log,
     run_replay_suite,
     write_replay_result,
     write_scene,
@@ -101,6 +102,36 @@ def test_replay_event_steps_file_io_and_writers(tmp_path: Path) -> None:
 
     assert json.loads(scene_path.read_text(encoding="utf-8"))["revision"] == 2
     assert json.loads(result_path.read_text(encoding="utf-8"))["name"] == "event replay"
+
+
+def test_replay_data_from_event_log(tmp_path: Path) -> None:
+    path = tmp_path / "events.jsonl"
+    path.write_text(
+        "\n".join(
+            [
+                "",
+                json.dumps(event_payload(1, "tool_call", {"toolName": "bash"})),
+                json.dumps(event_payload(2, "message_update", {"assistantMessageEvent": {"delta": "ok"}})),
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    fixture = replay_data_from_event_log(path)
+    result = run_replay_data(fixture)
+
+    assert fixture["schema"] == "harn-gibson.replay.v1"
+    assert fixture["name"] == "event log: events.jsonl"
+    assert fixture["metadata"] == {"sourceEventLog": path.as_posix(), "eventCount": 2}
+    assert fixture["steps"][0]["type"] == "event"
+    assert result.name == "event log: events.jsonl"
+    assert result.steps[0].kind == "event"
+
+    bad = tmp_path / "bad.jsonl"
+    bad.write_text("[]\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="event log line 1 must contain a JSON object"):
+        replay_data_from_event_log(bad)
 
 
 def test_checked_in_replay_fixtures_cover_agent_and_renderer_sides() -> None:

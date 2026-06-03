@@ -234,6 +234,29 @@ def load_replay_file(path: str | Path) -> dict[str, Any]:
     return payload
 
 
+def replay_data_from_event_log(path: str | Path, *, name: str | None = None) -> dict[str, Any]:
+    event_log_path = Path(path)
+    steps: list[dict[str, Any]] = []
+    with event_log_path.open(encoding="utf-8") as handle:
+        for line_number, line in enumerate(handle, start=1):
+            stripped = line.strip()
+            if not stripped:
+                continue
+            event = json.loads(stripped)
+            if not isinstance(event, dict):
+                raise ValueError(f"event log line {line_number} must contain a JSON object")
+            steps.append({"type": "event", "event": event})
+    return {
+        "schema": "harn-gibson.replay.v1",
+        "name": name if name is not None else f"event log: {event_log_path.name}",
+        "metadata": {
+            "sourceEventLog": event_log_path.as_posix(),
+            "eventCount": len(steps),
+        },
+        "steps": steps,
+    }
+
+
 def run_replay_data(data: Mapping[str, Any], state: GibsonServerState | None = None) -> ReplayResult:
     replay_state = state or GibsonServerState()
     schema = str(data.get("schema") or "harn-gibson.replay.v1")
@@ -583,6 +606,7 @@ __all__ = [
     "render_plan_from_mapping",
     "render_request_from_mapping",
     "render_step_from_mapping",
+    "replay_data_from_event_log",
     "run_replay_data",
     "run_replay_file",
     "run_replay_suite",

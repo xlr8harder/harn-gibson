@@ -26,6 +26,18 @@ Replay fixtures use `harn-gibson.replay.v1`. They can replay either side of the 
 - `render_plan`: applies saved renderer requests and delayed render steps directly against scene state.
 - `mutations`: applies explicit scene mutations, optionally associated with a normalized event.
 
+## Captured Event Logs
+
+When `HARN_GIBSON_EVENT_LOG` is set, the harn extension writes normalized event payloads as JSONL. Convert that captured log into a replay fixture with:
+
+```bash
+uv run harn-gibson event-log-to-replay .harn-gibson.jsonl \
+  --output examples/replays/captured-session.json \
+  --name "captured dogfood session"
+```
+
+Without `--output`, the fixture JSON is printed to stdout. The generated fixture uses `event` steps so hook decisions and renderer routing are replayed through the same path as live display events.
+
 ## Expectations
 
 `expect.sceneRevision` is shorthand for `{"path": "revision", "equals": N}`. `expect.checks` paths are dot-separated paths into the final `SceneState.to_dict()` payload. Numeric path segments index arrays.

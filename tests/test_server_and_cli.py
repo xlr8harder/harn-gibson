@@ -600,6 +600,13 @@ def test_cli_parser_and_run(monkeypatch: Any, capsys: Any) -> None:
     assert parsed_replay_dir.screenshot_dir == "shots"
     assert parsed_replay_dir.screenshot_width == 1024
     assert parsed_replay_dir.screenshot_height == 768
+    parsed_event_log = parser.parse_args(
+        ["event-log-to-replay", "events.jsonl", "--output", "fixture.json", "--name", "captured"]
+    )
+    assert parsed_event_log.command == "event-log-to-replay"
+    assert parsed_event_log.path == "events.jsonl"
+    assert parsed_event_log.output == "fixture.json"
+    assert parsed_event_log.name == "captured"
     assert cli.run(["extension-path"]) == 0
     assert capsys.readouterr().out.strip().endswith("extension.py")
 
@@ -839,6 +846,42 @@ def test_cli_replay_dir_reports_failures(tmp_path: Any, capsys: Any) -> None:
     captured = capsys.readouterr()
     assert captured.out.strip() == "replayed 1 replay files; 1 failed"
     assert "failed bad.json: replay expectations failed" in captured.err
+
+
+def test_cli_event_log_to_replay_writes_and_prints(tmp_path: Any, capsys: Any) -> None:
+    event_log = tmp_path / "events.jsonl"
+    output = tmp_path / "fixtures" / "captured.json"
+    event_log.write_text(
+        json.dumps(
+            {
+                "sequence": 1,
+                "timestampMs": 10,
+                "source": "test",
+                "eventType": "message_update",
+                "phase": "during",
+                "title": "Stream update",
+                "summary": "assistant stream ok",
+                "payload": {"type": "message_update", "assistantMessageEvent": {"delta": "ok"}},
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    assert (
+        cli.run(["event-log-to-replay", str(event_log), "--output", str(output), "--name", "captured dogfood"])
+        == 0
+    )
+    assert capsys.readouterr().out.strip() == f"wrote replay fixture: {output} (1 events)"
+    written = json.loads(output.read_text(encoding="utf-8"))
+    assert written["name"] == "captured dogfood"
+    assert written["metadata"]["eventCount"] == 1
+    assert written["steps"][0]["event"]["eventType"] == "message_update"
+
+    assert cli.run(["event-log-to-replay", str(event_log)]) == 0
+    printed = json.loads(capsys.readouterr().out)
+    assert printed["name"] == "event log: events.jsonl"
+    assert printed["steps"][0]["type"] == "event"
 
 
 def test_cli_dogfood_launches_display_browser_and_harn(monkeypatch: Any, capsys: Any) -> None:

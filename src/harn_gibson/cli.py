@@ -52,6 +52,14 @@ def build_parser() -> argparse.ArgumentParser:
     replay_dir.add_argument("--screenshot-width", type=int, default=1280, help="screenshot viewport width")
     replay_dir.add_argument("--screenshot-height", type=int, default=900, help="screenshot viewport height")
 
+    event_log = subcommands.add_parser(
+        "event-log-to-replay",
+        help="convert a HARN_GIBSON_EVENT_LOG JSONL file into a replay fixture",
+    )
+    event_log.add_argument("path", help="path to a normalized harn-gibson JSONL event log")
+    event_log.add_argument("--output", "-o", default=None, help="write replay fixture JSON to this path")
+    event_log.add_argument("--name", default=None, help="fixture name; defaults to the event log filename")
+
     subcommands.add_parser("extension-path", help="print the harn extension file path")
     return parser
 
@@ -211,6 +219,20 @@ def run(argv: Sequence[str] | None = None) -> int:
                 print(f"failed {file_result.path}: {file_result.error}", file=sys.stderr)
         print(f"replayed {result.total} replay files; {result.failed} failed")
         return 0 if result.ok else 1
+    if args.command == "event-log-to-replay":
+        from pathlib import Path
+
+        from harn_gibson.replay import replay_data_from_event_log
+
+        fixture = replay_data_from_event_log(args.path, name=args.name)
+        text = json.dumps(fixture, indent=2) + "\n"
+        if args.output:
+            Path(args.output).parent.mkdir(parents=True, exist_ok=True)
+            Path(args.output).write_text(text, encoding="utf-8")
+            print(f"wrote replay fixture: {args.output} ({len(fixture['steps'])} events)")
+        else:
+            print(text, end="")
+        return 0
     if args.command == "dogfood":
         return run_dogfood(
             host=args.host,
