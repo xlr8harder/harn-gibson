@@ -44,11 +44,13 @@ def main() -> None:
         },
         _upsert_data_rain(event_type, summary, tone, accent, sequence),
         _upsert_tunnel(event_type, tone, accent, sequence, touched),
+        _upsert_ice_mesh(event_type, phase, tone, accent, sequence, touched),
         _upsert_scope(event_type, phase, tone, accent, sequence, touched),
         _upsert_route(event_type, phase, tone, accent, sequence, touched),
         _upsert_city(entries, touched, event_type, tone, accent, sequence),
         _upsert_file_particles(entries, touched, tone, accent, sequence),
         _upsert_hologram(project_name, event_type, tone, accent, sequence, touched, entries),
+        _upsert_command_ribbon(event_type, phase, tone, accent, sequence, touched),
         _upsert_sigil(event_type, summary, tone, accent, sequence, touched),
         _timeline_cue_animation(event_type, phase, sequence, timestamp_ms, duration_ms, tone, accent, touched),
         _camera_path_animation(sequence, timestamp_ms, duration_ms),
@@ -202,6 +204,73 @@ def _upsert_scope(
     }
 
 
+def _upsert_ice_mesh(
+    event_type: str,
+    phase: str,
+    tone: str,
+    accent: str,
+    sequence: int,
+    touched: list[dict[str, Any]],
+) -> dict[str, Any]:
+    height = 0.72 + min(0.22, len(touched) * 0.035)
+    vertices = [
+        [-0.52, -0.42, -0.52],
+        [0.52, -0.42, -0.52],
+        [0.52, 0.42, -0.52],
+        [-0.52, 0.42, -0.52],
+        [-0.38, -height, 0.34],
+        [0.38, -height, 0.34],
+        [0.48, 0.36, 0.48],
+        [-0.48, 0.36, 0.48],
+        [0.0, -0.08, 0.92],
+        [0.0, 0.60, -0.06],
+    ]
+    edges = [
+        [0, 1],
+        [1, 2],
+        [2, 3],
+        [3, 0],
+        [4, 5],
+        [5, 6],
+        [6, 7],
+        [7, 4],
+        [0, 4],
+        [1, 5],
+        [2, 6],
+        [3, 7],
+        [0, 8],
+        [2, 8],
+        [4, 8],
+        [6, 8],
+        [1, 9],
+        [3, 9],
+        [5, 9],
+        [7, 9],
+    ]
+    return {
+        "op": "upsert",
+        "primitive": {
+            "id": "dogfood-ice-mesh",
+            "kind": "mesh",
+            "region": "stage",
+            "props": {
+                "vertices": vertices,
+                "edges": edges,
+                "faces": [[0, 1, 5, 4], [2, 3, 7, 6], [0, 3, 9], [1, 2, 9], [4, 5, 8], [6, 7, 8]],
+                "material": tone,
+                "tone": tone,
+                "accentTone": accent,
+                "position": {"x": 0.51, "y": 0.46},
+                "scale": round(0.18 + min(0.04, len(touched) * 0.007), 3),
+                "rotation": {"x": 0.58 + (sequence % 3) * 0.06, "y": 0.70 + (sequence % 5) * 0.04},
+                "spin": 0.52 if phase == "after" else 0.32,
+                "label": _clip(f"ICE {event_type.upper().replace('_', ' ')}", 18),
+                "seed": sequence + 37,
+            },
+        },
+    }
+
+
 def _upsert_route(
     event_type: str,
     phase: str,
@@ -250,6 +319,39 @@ def _upsert_route(
                 "accentTone": accent,
                 "label": "LIVE ROUTE",
                 "seed": sequence + 41,
+            },
+        },
+    }
+
+
+def _upsert_command_ribbon(
+    event_type: str,
+    phase: str,
+    tone: str,
+    accent: str,
+    sequence: int,
+    touched: list[dict[str, Any]],
+) -> dict[str, Any]:
+    lift = min(0.10, len(touched) * 0.018)
+    return {
+        "op": "upsert",
+        "primitive": {
+            "id": "dogfood-command-ribbon",
+            "kind": "ribbon",
+            "region": "stage",
+            "props": {
+                "points": [
+                    {"x": 0.08, "y": 0.78},
+                    {"x": 0.24, "y": round(0.70 - lift, 3)},
+                    {"x": 0.43, "y": round(0.64 - lift * 0.5, 3)},
+                    {"x": 0.60, "y": round(0.58 - lift, 3)},
+                    {"x": 0.80, "y": 0.50},
+                ],
+                "width": 2.2 + min(1.4, len(touched) * 0.25),
+                "material": accent,
+                "direction": "east" if sequence % 2 else "west",
+                "labels": [phase.upper()[:8], event_type.upper()[:14]],
+                "seed": sequence + 53,
             },
         },
     }

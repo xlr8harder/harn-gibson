@@ -667,11 +667,13 @@ def test_dogfood_showcase_renderer_returns_valid_event_reactive_plan(tmp_path: P
     assert primitive_kinds == {
         "dogfood-rain": "data_rain",
         "dogfood-tunnel": "tunnel_grid",
+        "dogfood-ice-mesh": "mesh",
         "dogfood-scope": "signal_scope",
         "dogfood-route": "trace_route",
         "dogfood-city": "city_block",
         "dogfood-file-sparks": "particle_field",
         "dogfood-hologram": "hologram",
+        "dogfood-command-ribbon": "ribbon",
         "dogfood-sigil": "svg_layer",
     }
     assert animation_kinds["dogfood-camera-path"] == "camera_path"
@@ -684,6 +686,8 @@ def test_dogfood_showcase_renderer_returns_valid_event_reactive_plan(tmp_path: P
     assert scene.state.primitives["dogfood-city"].props["blocks"][1]["h"] == 0.271
     assert scene.state.primitives["dogfood-file-sparks"].props["label"] == "3 TOUCHED FILES"
     assert len(scene.state.primitives["dogfood-file-sparks"].props["emitters"]) == 3
+    assert scene.state.primitives["dogfood-ice-mesh"].props["label"] == "ICE TOOL RESULT"
+    assert scene.state.primitives["dogfood-command-ribbon"].props["labels"] == ["AFTER", "TOOL_RESULT"]
     assert scene.state.primitives["dogfood-route"].props["focusHopId"] == "target-0"
     assert scene.state.primitives["dogfood-hologram"].props["rings"] == 6
     assert scene.state.animations["dogfood-camera-path"].props["keyframes"][1]["scale"] == 1.038

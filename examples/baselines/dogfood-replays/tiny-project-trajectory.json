@@ -223,11 +223,13 @@
           "append_log",
           "primitive:data_rain",
           "primitive:tunnel_grid",
+          "primitive:mesh",
           "primitive:signal_scope",
           "primitive:trace_route",
           "primitive:city_block",
           "primitive:particle_field",
           "primitive:hologram",
+          "primitive:ribbon",
           "primitive:svg_layer",
           "animation:timeline_cue",
           "animation:camera_path",
@@ -248,7 +250,7 @@
           "renderer": "gibson-dogfood-showcase",
           "touchedFileCount": 4
         },
-        "mutationCount": 17,
+        "mutationCount": 19,
         "renderer": "gibson-dogfood-showcase",
         "requestCount": 1,
         "routes": [
@@ -260,11 +262,13 @@
           "status",
           "dogfood-rain",
           "dogfood-tunnel",
+          "dogfood-ice-mesh",
           "dogfood-scope",
           "dogfood-route",
           "dogfood-city",
           "dogfood-file-sparks",
           "dogfood-hologram",
+          "dogfood-command-ribbon",
           "dogfood-sigil",
           "scan-grid"
         ],
@@ -279,11 +283,13 @@
             "append_log",
             "primitive:data_rain",
             "primitive:tunnel_grid",
+            "primitive:mesh",
             "primitive:signal_scope",
             "primitive:trace_route",
             "primitive:city_block",
             "primitive:particle_field",
             "primitive:hologram",
+            "primitive:ribbon",
             "primitive:svg_layer",
             "animation:timeline_cue",
             "animation:camera_path",
@@ -303,7 +309,7 @@
             "renderer": "gibson-dogfood-showcase",
             "touchedFileCount": 0
           },
-          "mutationCount": 16,
+          "mutationCount": 18,
           "renderer": "gibson-dogfood-showcase",
           "requestCount": 1,
           "routes": [
@@ -315,11 +321,13 @@
             "status",
             "dogfood-rain",
             "dogfood-tunnel",
+            "dogfood-ice-mesh",
             "dogfood-scope",
             "dogfood-route",
             "dogfood-city",
             "dogfood-file-sparks",
             "dogfood-hologram",
+            "dogfood-command-ribbon",
             "dogfood-sigil",
             "scan-grid"
           ],
@@ -333,11 +341,13 @@
             "append_log",
             "primitive:data_rain",
             "primitive:tunnel_grid",
+            "primitive:mesh",
             "primitive:signal_scope",
             "primitive:trace_route",
             "primitive:city_block",
             "primitive:particle_field",
             "primitive:hologram",
+            "primitive:ribbon",
             "primitive:svg_layer",
             "animation:timeline_cue",
             "animation:camera_path",
@@ -357,7 +367,7 @@
             "renderer": "gibson-dogfood-showcase",
             "touchedFileCount": 0
           },
-          "mutationCount": 16,
+          "mutationCount": 18,
           "renderer": "gibson-dogfood-showcase",
           "requestCount": 1,
           "routes": [
@@ -369,11 +379,13 @@
             "status",
             "dogfood-rain",
             "dogfood-tunnel",
+            "dogfood-ice-mesh",
             "dogfood-scope",
             "dogfood-route",
             "dogfood-city",
             "dogfood-file-sparks",
             "dogfood-hologram",
+            "dogfood-command-ribbon",
             "dogfood-sigil",
             "scan-grid"
           ],
@@ -387,11 +399,13 @@
             "append_log",
             "primitive:data_rain",
             "primitive:tunnel_grid",
+            "primitive:mesh",
             "primitive:signal_scope",
             "primitive:trace_route",
             "primitive:city_block",
             "primitive:particle_field",
             "primitive:hologram",
+            "primitive:ribbon",
             "primitive:svg_layer",
             "animation:timeline_cue",
             "animation:camera_path",
@@ -412,7 +426,7 @@
             "renderer": "gibson-dogfood-showcase",
             "touchedFileCount": 0
           },
-          "mutationCount": 17,
+          "mutationCount": 19,
           "renderer": "gibson-dogfood-showcase",
           "requestCount": 1,
           "routes": [
@@ -424,11 +438,13 @@
             "status",
             "dogfood-rain",
             "dogfood-tunnel",
+            "dogfood-ice-mesh",
             "dogfood-scope",
             "dogfood-route",
             "dogfood-city",
             "dogfood-file-sparks",
             "dogfood-hologram",
+            "dogfood-command-ribbon",
             "dogfood-sigil",
             "scan-grid"
           ],
@@ -442,11 +458,13 @@
             "append_log",
             "primitive:data_rain",
             "primitive:tunnel_grid",
+            "primitive:mesh",
             "primitive:signal_scope",
             "primitive:trace_route",
             "primitive:city_block",
             "primitive:particle_field",
             "primitive:hologram",
+            "primitive:ribbon",
             "primitive:svg_layer",
             "animation:timeline_cue",
             "animation:camera_path",
@@ -466,7 +484,7 @@
             "renderer": "gibson-dogfood-showcase",
             "touchedFileCount": 4
           },
-          "mutationCount": 16,
+          "mutationCount": 18,
           "renderer": "gibson-dogfood-showcase",
           "requestCount": 1,
           "routes": [
@@ -478,11 +496,13 @@
             "status",
             "dogfood-rain",
             "dogfood-tunnel",
+            "dogfood-ice-mesh",
             "dogfood-scope",
             "dogfood-route",
             "dogfood-city",
             "dogfood-file-sparks",
             "dogfood-hologram",
+            "dogfood-command-ribbon",
             "dogfood-sigil",
             "scan-grid"
           ],
@@ -496,11 +516,13 @@
             "append_log",
             "primitive:data_rain",
             "primitive:tunnel_grid",
+            "primitive:mesh",
             "primitive:signal_scope",
             "primitive:trace_route",
             "primitive:city_block",
             "primitive:particle_field",
             "primitive:hologram",
+            "primitive:ribbon",
             "primitive:svg_layer",
             "animation:timeline_cue",
             "animation:camera_path",
@@ -521,7 +543,7 @@
             "renderer": "gibson-dogfood-showcase",
             "touchedFileCount": 1
           },
-          "mutationCount": 17,
+          "mutationCount": 19,
           "renderer": "gibson-dogfood-showcase",
           "requestCount": 1,
           "routes": [
@@ -533,11 +555,13 @@
             "status",
             "dogfood-rain",
             "dogfood-tunnel",
+            "dogfood-ice-mesh",
             "dogfood-scope",
             "dogfood-route",
             "dogfood-city",
             "dogfood-file-sparks",
             "dogfood-hologram",
+            "dogfood-command-ribbon",
             "dogfood-sigil",
             "scan-grid"
           ],
@@ -551,11 +575,13 @@
             "append_log",
             "primitive:data_rain",
             "primitive:tunnel_grid",
+            "primitive:mesh",
             "primitive:signal_scope",
             "primitive:trace_route",
             "primitive:city_block",
             "primitive:particle_field",
             "primitive:hologram",
+            "primitive:ribbon",
             "primitive:svg_layer",
             "animation:timeline_cue",
             "animation:camera_path",
@@ -575,7 +601,7 @@
             "renderer": "gibson-dogfood-showcase",
             "touchedFileCount": 2
           },
-          "mutationCount": 16,
+          "mutationCount": 18,
           "renderer": "gibson-dogfood-showcase",
           "requestCount": 1,
           "routes": [
@@ -587,11 +613,13 @@
             "status",
             "dogfood-rain",
             "dogfood-tunnel",
+            "dogfood-ice-mesh",
             "dogfood-scope",
             "dogfood-route",
             "dogfood-city",
             "dogfood-file-sparks",
             "dogfood-hologram",
+            "dogfood-command-ribbon",
             "dogfood-sigil",
             "scan-grid"
           ],
@@ -605,11 +633,13 @@
             "append_log",
             "primitive:data_rain",
             "primitive:tunnel_grid",
+            "primitive:mesh",
             "primitive:signal_scope",
             "primitive:trace_route",
             "primitive:city_block",
             "primitive:particle_field",
             "primitive:hologram",
+            "primitive:ribbon",
             "primitive:svg_layer",
             "animation:timeline_cue",
             "animation:camera_path",
@@ -630,7 +660,7 @@
             "renderer": "gibson-dogfood-showcase",
             "touchedFileCount": 4
           },
-          "mutationCount": 17,
+          "mutationCount": 19,
           "renderer": "gibson-dogfood-showcase",
           "requestCount": 1,
           "routes": [
@@ -642,11 +672,13 @@
             "status",
             "dogfood-rain",
             "dogfood-tunnel",
+            "dogfood-ice-mesh",
             "dogfood-scope",
             "dogfood-route",
             "dogfood-city",
             "dogfood-file-sparks",
             "dogfood-hologram",
+            "dogfood-command-ribbon",
             "dogfood-sigil",
             "scan-grid"
           ],
@@ -773,6 +805,44 @@
         },
         "region": "stage"
       },
+      "dogfood-command-ribbon": {
+        "children": [],
+        "id": "dogfood-command-ribbon",
+        "kind": "ribbon",
+        "props": {
+          "direction": "east",
+          "labels": [
+            "AFTER",
+            "TOOL_RESULT"
+          ],
+          "material": "white",
+          "points": [
+            {
+              "x": 0.08,
+              "y": 0.78
+            },
+            {
+              "x": 0.24,
+              "y": 0.628
+            },
+            {
+              "x": 0.43,
+              "y": 0.604
+            },
+            {
+              "x": 0.6,
+              "y": 0.508
+            },
+            {
+              "x": 0.8,
+              "y": 0.5
+            }
+          ],
+          "seed": 60,
+          "width": 3.2
+        },
+        "region": "stage"
+      },
       "dogfood-file-sparks": {
         "children": [],
         "id": "dogfood-file-sparks",
@@ -860,6 +930,197 @@
           "seed": 87,
           "spin": 0.48,
           "tone": "magenta"
+        },
+        "region": "stage"
+      },
+      "dogfood-ice-mesh": {
+        "children": [],
+        "id": "dogfood-ice-mesh",
+        "kind": "mesh",
+        "props": {
+          "accentTone": "white",
+          "edges": [
+            [
+              0,
+              1
+            ],
+            [
+              1,
+              2
+            ],
+            [
+              2,
+              3
+            ],
+            [
+              3,
+              0
+            ],
+            [
+              4,
+              5
+            ],
+            [
+              5,
+              6
+            ],
+            [
+              6,
+              7
+            ],
+            [
+              7,
+              4
+            ],
+            [
+              0,
+              4
+            ],
+            [
+              1,
+              5
+            ],
+            [
+              2,
+              6
+            ],
+            [
+              3,
+              7
+            ],
+            [
+              0,
+              8
+            ],
+            [
+              2,
+              8
+            ],
+            [
+              4,
+              8
+            ],
+            [
+              6,
+              8
+            ],
+            [
+              1,
+              9
+            ],
+            [
+              3,
+              9
+            ],
+            [
+              5,
+              9
+            ],
+            [
+              7,
+              9
+            ]
+          ],
+          "faces": [
+            [
+              0,
+              1,
+              5,
+              4
+            ],
+            [
+              2,
+              3,
+              7,
+              6
+            ],
+            [
+              0,
+              3,
+              9
+            ],
+            [
+              1,
+              2,
+              9
+            ],
+            [
+              4,
+              5,
+              8
+            ],
+            [
+              6,
+              7,
+              8
+            ]
+          ],
+          "label": "ICE TOOL RESULT",
+          "material": "magenta",
+          "position": {
+            "x": 0.51,
+            "y": 0.46
+          },
+          "rotation": {
+            "x": 0.6399999999999999,
+            "y": 0.7799999999999999
+          },
+          "scale": 0.208,
+          "seed": 44,
+          "spin": 0.52,
+          "tone": "magenta",
+          "vertices": [
+            [
+              -0.52,
+              -0.42,
+              -0.52
+            ],
+            [
+              0.52,
+              -0.42,
+              -0.52
+            ],
+            [
+              0.52,
+              0.42,
+              -0.52
+            ],
+            [
+              -0.52,
+              0.42,
+              -0.52
+            ],
+            [
+              -0.38,
+              -0.86,
+              0.34
+            ],
+            [
+              0.38,
+              -0.86,
+              0.34
+            ],
+            [
+              0.48,
+              0.36,
+              0.48
+            ],
+            [
+              -0.48,
+              0.36,
+              0.48
+            ],
+            [
+              0.0,
+              -0.08,
+              0.92
+            ],
+            [
+              0.0,
+              0.6,
+              -0.06
+            ]
+          ]
         },
         "region": "stage"
       },

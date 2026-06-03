@@ -22,6 +22,14 @@
         "contains": "4 touched"
       },
       {
+        "path": "primitives.dogfood-ice-mesh.kind",
+        "equals": "mesh"
+      },
+      {
+        "path": "primitives.dogfood-command-ribbon.kind",
+        "equals": "ribbon"
+      },
+      {
         "path": "primitives.dogfood-file-sparks.kind",
         "equals": "particle_field"
       },

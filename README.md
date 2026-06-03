@@ -120,7 +120,7 @@ Noisy event types can also be sampled before routing. This keeps one matching ev
 HARN_GIBSON_ROUTE_RULES='[{"eventType":"session_tree","route":"renderer_agent","sampleEvery":4,"fallbackRoute":"debug_only"}]'
 ```
 
-To dogfood the renderer-agent process boundary without a live model call, point the server at an external renderer command. The command receives `harn-gibson.external-renderer-request.v1` JSON on stdin and returns a render plan with `steps` on stdout. `examples/renderers/gibson_dogfood_renderer.py` is the hard-coded showcase renderer for live harn sessions; it reacts to event phase, event type, coalesced timing, touched files, and repo topology with a staged scene using the current cinematic primitive/effect set, including a project hologram, touched-file spark field, data tunnel, signal scope, route trace, repo city, vector sigil, data rain, and persistent effects:
+To dogfood the renderer-agent process boundary without a live model call, point the server at an external renderer command. The command receives `harn-gibson.external-renderer-request.v1` JSON on stdin and returns a render plan with `steps` on stdout. `examples/renderers/gibson_dogfood_renderer.py` is the hard-coded showcase renderer for live harn sessions; it reacts to event phase, event type, coalesced timing, touched files, and repo topology with a staged scene using the current cinematic primitive/effect set, including a project hologram, ICE mesh, command ribbon, touched-file spark field, data tunnel, signal scope, route trace, repo city, vector sigil, data rain, and persistent effects:
 
 ```bash
 HARN_GIBSON_RENDERER_COMMAND='uv run python examples/renderers/gibson_dogfood_renderer.py' \

@@ -1150,10 +1150,12 @@ def test_checked_in_dogfood_replay_exercises_showcase_renderer() -> None:
         state.pipeline.stop()
 
     assert [step.kind for step in result.steps] == ["event"] * 7
-    assert len(result.expectations) == 11
+    assert len(result.expectations) == 13
     assert result.scene.primitives["status"].props["text"] == "dogfood::tool_result"
     assert result.scene.primitives["dogfood-city"].kind == "city_block"
     assert result.scene.primitives["dogfood-city"].props["labels"] == ["DOGFOOD CITY", "4 touched"]
+    assert result.scene.primitives["dogfood-ice-mesh"].kind == "mesh"
+    assert result.scene.primitives["dogfood-command-ribbon"].kind == "ribbon"
     assert result.scene.primitives["dogfood-file-sparks"].kind == "particle_field"
     assert result.scene.primitives["dogfood-file-sparks"].props["label"] == "4 TOUCHED FILES"
     assert result.scene.primitives["dogfood-hologram"].props["label"] == "TINY-PROJECT"
