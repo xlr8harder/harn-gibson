@@ -107,7 +107,14 @@ def default_visual_catalog() -> VisualCatalog:
                         "structured vector data only; no raw markup, scripts, event handlers, foreignObject, "
                         "or external refs"
                     ),
-                    "curatedSymbols": ("globe", "filesystem_gate", "reticle"),
+                    "curatedSymbols": (
+                        "globe",
+                        "filesystem_gate",
+                        "reticle",
+                        "data_tunnel",
+                        "ice_wall",
+                        "mainframe_core",
+                    ),
                     "animation": (
                         "stroke_reveal",
                         "dash_motion",

@@ -18,6 +18,10 @@
       {"path": "primitives.gallery-vector.props.traces.0.count", "equals": 9},
       {"path": "primitives.gallery-vector.props.symbols.0.kind", "equals": "globe"},
       {"path": "primitives.gallery-vector.props.symbols.1.kind", "equals": "filesystem_gate"},
+      {"path": "primitives.gallery-vector.props.symbols.2.kind", "equals": "reticle"},
+      {"path": "primitives.gallery-vector.props.symbols.3.kind", "equals": "data_tunnel"},
+      {"path": "primitives.gallery-vector.props.symbols.4.kind", "equals": "ice_wall"},
+      {"path": "primitives.gallery-vector.props.symbols.5.kind", "equals": "mainframe_core"},
       {"path": "primitives.gallery-city.kind", "equals": "city_block"},
       {"path": "primitives.gallery-graph.kind", "equals": "node_graph"},
       {"path": "primitives.gallery-ribbon.kind", "equals": "ribbon"},
@@ -251,6 +255,41 @@
                   "tone": "green",
                   "accentTone": "white",
                   "speed": 0.006
+                },
+                {
+                  "kind": "data_tunnel",
+                  "x": 50,
+                  "y": 49,
+                  "w": 34,
+                  "h": 23,
+                  "tone": "magenta",
+                  "accentTone": "cyan",
+                  "rings": 6,
+                  "packets": 11,
+                  "speed": 0.00038
+                },
+                {
+                  "kind": "ice_wall",
+                  "x": 25,
+                  "y": 76,
+                  "w": 25,
+                  "h": 15,
+                  "tone": "cyan",
+                  "accentTone": "white",
+                  "columns": 7,
+                  "scanSpeed": 0.00036,
+                  "label": "ICE"
+                },
+                {
+                  "kind": "mainframe_core",
+                  "x": 76,
+                  "y": 75,
+                  "w": 26,
+                  "h": 21,
+                  "tone": "amber",
+                  "accentTone": "green",
+                  "lanes": 4,
+                  "label": "SYS"
                 }
               ],
               "labels": [

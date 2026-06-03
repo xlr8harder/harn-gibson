@@ -2093,6 +2093,190 @@ function drawSvgSymbolReticle(symbol, props, now) {
   ctx.restore();
 }
 
+function drawSvgSymbolDataTunnel(symbol, props, now) {
+  const center = vectorSymbolPoint(symbol);
+  const width = vectorSymbolNumber(symbol.w ?? symbol.width, 44, 6, 900);
+  const height = vectorSymbolNumber(symbol.h ?? symbol.height, 30, 6, 900);
+  const rings = Math.max(3, Math.min(12, Number(symbol.rings || 6)));
+  const packets = Math.max(0, Math.min(28, Number(symbol.packets || 10)));
+  const tone = symbol.tone || props.tone || "magenta";
+  const accentTone = symbol.accentTone || "cyan";
+  const alpha = clamp(Number(symbol.alpha ?? 0.84), 0, 1);
+  const phase = (now * Number(symbol.speed ?? 0.00034) + Number(symbol.offset || 0)) % 1;
+  const twist = Number(symbol.twist ?? 0.26);
+  ctx.save();
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.shadowColor = toneColor(tone, alpha);
+  ctx.shadowBlur = Number(symbol.glow ?? props.glow ?? 7);
+  for (let index = 0; index < rings; index++) {
+    const depth = (index + phase) / rings;
+    const scale = 1 - depth * 0.78;
+    const x = center.x + Math.sin(depth * Math.PI * 2 + phase * Math.PI * 2) * width * twist;
+    const y = center.y + Math.cos(depth * Math.PI * 2 + phase * Math.PI * 2) * height * twist * 0.34;
+    const ringWidth = width * scale;
+    const ringHeight = height * scale;
+    const ringAlpha = alpha * (0.18 + (1 - depth) * 0.54);
+    ctx.lineWidth = Math.max(0.35, Number(symbol.strokeWidth || 0.75) * (1 + (1 - depth) * 0.6));
+    ctx.strokeStyle = toneColor(index % 2 ? accentTone : tone, ringAlpha);
+    ctx.beginPath();
+    ctx.moveTo(x - ringWidth * 0.5, y - ringHeight * 0.36);
+    ctx.lineTo(x, y - ringHeight * 0.5);
+    ctx.lineTo(x + ringWidth * 0.5, y - ringHeight * 0.36);
+    ctx.lineTo(x + ringWidth * 0.5, y + ringHeight * 0.36);
+    ctx.lineTo(x, y + ringHeight * 0.5);
+    ctx.lineTo(x - ringWidth * 0.5, y + ringHeight * 0.36);
+    ctx.closePath();
+    ctx.stroke();
+  }
+  ctx.strokeStyle = toneColor(accentTone, alpha * 0.28);
+  ctx.lineWidth = Math.max(0.28, Number(symbol.spokeWidth || 0.45));
+  for (const angle of [-0.42, 0, 0.42, Math.PI - 0.42, Math.PI, Math.PI + 0.42]) {
+    ctx.beginPath();
+    ctx.moveTo(center.x, center.y);
+    ctx.lineTo(center.x + Math.cos(angle) * width * 0.72, center.y + Math.sin(angle) * height * 0.62);
+    ctx.stroke();
+  }
+  ctx.fillStyle = toneColor("white", alpha * 0.9);
+  for (let index = 0; index < packets; index++) {
+    const progress = (phase + index / Math.max(1, packets)) % 1;
+    const scale = 1 - progress * 0.72;
+    const angle = progress * Math.PI * 2 + index * 0.73;
+    const x = center.x + Math.cos(angle) * width * 0.5 * scale;
+    const y = center.y + Math.sin(angle) * height * 0.42 * scale;
+    ctx.beginPath();
+    ctx.arc(x, y, Math.max(0.45, width * 0.018 * (1 + scale)), 0, Math.PI * 2);
+    ctx.fill();
+  }
+  if (symbol.label) {
+    ctx.font = `${Math.max(3, Number(symbol.labelSize || height * 0.18))}px ui-monospace, monospace`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = toneColor("white", alpha * 0.74);
+    ctx.fillText(String(symbol.label).slice(0, 16), center.x, center.y);
+  }
+  ctx.restore();
+}
+
+function drawSvgSymbolIceWall(symbol, props, now) {
+  const center = vectorSymbolPoint(symbol);
+  const width = vectorSymbolNumber(symbol.w ?? symbol.width, 42, 6, 900);
+  const height = vectorSymbolNumber(symbol.h ?? symbol.height, 26, 6, 900);
+  const columns = Math.max(3, Math.min(14, Number(symbol.columns || symbol.shards || 7)));
+  const tone = symbol.tone || props.tone || "cyan";
+  const accentTone = symbol.accentTone || "white";
+  const alpha = clamp(Number(symbol.alpha ?? 0.82), 0, 1);
+  const left = center.x - width * 0.5;
+  const top = center.y - height * 0.5;
+  const scan = (now * Number(symbol.scanSpeed ?? 0.00028) + Number(symbol.offset || 0)) % 1;
+  ctx.save();
+  ctx.lineJoin = "round";
+  ctx.shadowColor = toneColor(tone, alpha);
+  ctx.shadowBlur = Number(symbol.glow ?? props.glow ?? 8);
+  for (let index = 0; index < columns; index++) {
+    const x0 = left + (index / columns) * width;
+    const x1 = left + ((index + 1) / columns) * width;
+    const jitter = Math.sin(now * 0.001 + index * 1.7) * height * 0.08;
+    const shardTop = top + Math.abs(Math.sin(index * 1.13)) * height * 0.18 + jitter;
+    const shardBottom = top + height - Math.abs(Math.cos(index * 1.31)) * height * 0.16;
+    ctx.fillStyle = toneColor(index % 2 ? tone : accentTone, alpha * (0.07 + (index % 3) * 0.035));
+    ctx.strokeStyle = toneColor(index % 2 ? accentTone : tone, alpha * 0.48);
+    ctx.lineWidth = Math.max(0.35, Number(symbol.strokeWidth || 0.7));
+    ctx.beginPath();
+    ctx.moveTo(x0, shardBottom);
+    ctx.lineTo(x0 + (x1 - x0) * 0.28, shardTop);
+    ctx.lineTo(x1, shardTop + height * 0.08);
+    ctx.lineTo(x1 - (x1 - x0) * 0.12, shardBottom);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+  }
+  ctx.strokeStyle = toneColor(accentTone, alpha * 0.5);
+  ctx.lineWidth = Math.max(0.3, Number(symbol.crackWidth || 0.48));
+  for (let crack = 0; crack < Math.min(7, columns); crack++) {
+    const x = left + ((crack + 0.5) / columns) * width;
+    ctx.beginPath();
+    ctx.moveTo(x, top + height * 0.16);
+    ctx.lineTo(x + Math.sin(crack * 1.9) * width * 0.05, top + height * 0.46);
+    ctx.lineTo(x + Math.cos(crack * 2.1) * width * 0.08, top + height * 0.78);
+    ctx.stroke();
+  }
+  if (symbol.scan !== false) {
+    const y = top + scan * height;
+    ctx.fillStyle = toneColor("white", alpha * 0.16);
+    ctx.strokeStyle = toneColor("white", alpha * 0.82);
+    ctx.fillRect(left, y - height * 0.045, width, height * 0.09);
+    ctx.beginPath();
+    ctx.moveTo(left - width * 0.05, y);
+    ctx.lineTo(left + width * 1.05, y);
+    ctx.stroke();
+  }
+  if (symbol.label) {
+    ctx.font = `${Math.max(3, Number(symbol.labelSize || height * 0.2))}px ui-monospace, monospace`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "bottom";
+    ctx.fillStyle = toneColor("white", alpha * 0.76);
+    ctx.fillText(String(symbol.label).slice(0, 16), center.x, top - 2);
+  }
+  ctx.restore();
+}
+
+function drawSvgSymbolMainframeCore(symbol, props, now) {
+  const center = vectorSymbolPoint(symbol);
+  const width = vectorSymbolNumber(symbol.w ?? symbol.width, 36, 6, 900);
+  const height = vectorSymbolNumber(symbol.h ?? symbol.height, 30, 6, 900);
+  const tone = symbol.tone || props.tone || "amber";
+  const accentTone = symbol.accentTone || "green";
+  const alpha = clamp(Number(symbol.alpha ?? 0.86), 0, 1);
+  const phase = now * Number(symbol.speed ?? 0.0018) + Number(symbol.offset || 0);
+  const left = center.x - width * 0.5;
+  const top = center.y - height * 0.5;
+  ctx.save();
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.shadowColor = toneColor(tone, alpha);
+  ctx.shadowBlur = Number(symbol.glow ?? props.glow ?? 7);
+  for (let ring = 0; ring < 3; ring++) {
+    const inset = ring * Math.min(width, height) * 0.13;
+    ctx.lineWidth = Math.max(0.38, Number(symbol.strokeWidth || 0.72) * (1 - ring * 0.12));
+    ctx.strokeStyle = toneColor(ring === 1 ? accentTone : tone, alpha * (0.62 - ring * 0.13));
+    ctx.strokeRect(left + inset, top + inset, Math.max(1, width - inset * 2), Math.max(1, height - inset * 2));
+  }
+  const lanes = Math.max(2, Math.min(8, Number(symbol.lanes || 5)));
+  ctx.strokeStyle = toneColor(accentTone, alpha * 0.44);
+  ctx.lineWidth = Math.max(0.26, Number(symbol.circuitWidth || 0.45));
+  for (let lane = 0; lane < lanes; lane++) {
+    const y = top + ((lane + 0.5) / lanes) * height;
+    const xPulse = ((phase * 18 + lane * 9) % width) + left;
+    ctx.beginPath();
+    ctx.moveTo(left - width * 0.22, y);
+    ctx.lineTo(left + width * 0.18, y);
+    ctx.moveTo(left + width * 0.82, y);
+    ctx.lineTo(left + width * 1.22, y);
+    ctx.stroke();
+    ctx.fillStyle = toneColor("white", alpha * 0.78);
+    ctx.beginPath();
+    ctx.arc(xPulse, y, Math.max(0.45, width * 0.018), 0, Math.PI * 2);
+    ctx.fill();
+  }
+  const corePulse = 1 + Math.sin(phase * 2.4) * 0.08;
+  ctx.fillStyle = toneColor(accentTone, alpha * 0.18);
+  ctx.strokeStyle = toneColor("white", alpha * 0.72);
+  ctx.lineWidth = Math.max(0.4, Number(symbol.coreWidth || 0.75));
+  ctx.beginPath();
+  ctx.arc(center.x, center.y, Math.min(width, height) * 0.18 * corePulse, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  if (symbol.label) {
+    ctx.font = `${Math.max(3, Number(symbol.labelSize || height * 0.17))}px ui-monospace, monospace`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = toneColor("white", alpha * 0.78);
+    ctx.fillText(String(symbol.label).slice(0, 16), center.x, center.y);
+  }
+  ctx.restore();
+}
+
 function drawSvgSymbols(symbols, props, now) {
   for (const symbol of symbols) {
     const safeSymbol = symbol && typeof symbol === "object" ? symbol : {};
@@ -2100,6 +2284,9 @@ function drawSvgSymbols(symbols, props, now) {
     if (kind === "globe" || kind === "spinning_globe") drawSvgSymbolGlobe(safeSymbol, props, now);
     else if (kind === "filesystem_gate" || kind === "gate") drawSvgSymbolFilesystemGate(safeSymbol, props, now);
     else if (kind === "reticle" || kind === "target") drawSvgSymbolReticle(safeSymbol, props, now);
+    else if (kind === "data_tunnel" || kind === "tunnel") drawSvgSymbolDataTunnel(safeSymbol, props, now);
+    else if (kind === "ice_wall" || kind === "ice") drawSvgSymbolIceWall(safeSymbol, props, now);
+    else if (kind === "mainframe_core" || kind === "core") drawSvgSymbolMainframeCore(safeSymbol, props, now);
   }
 }
 

@@ -230,7 +230,7 @@ def test_browser_display_renders_svg_layer_symbols() -> None:
             try:
                 page = browser.new_page(viewport={"width": 960, "height": 700})
                 page.goto(base, wait_until="domcontentloaded")
-                page.wait_for_function("window.__gibsonVectorState?.['gallery-vector']?.symbolCount === 3")
+                page.wait_for_function("window.__gibsonVectorState?.['gallery-vector']?.symbolCount === 6")
                 vector_state = page.evaluate(
                     """() => window.__gibsonVectorState["gallery-vector"]"""
                 )
@@ -238,8 +238,15 @@ def test_browser_display_renders_svg_layer_symbols() -> None:
                     "pathCount": 3,
                     "circleCount": 3,
                     "traceCount": 1,
-                    "symbolCount": 3,
-                    "symbolKinds": ["globe", "filesystem_gate", "reticle"],
+                    "symbolCount": 6,
+                    "symbolKinds": [
+                        "globe",
+                        "filesystem_gate",
+                        "reticle",
+                        "data_tunnel",
+                        "ice_wall",
+                        "mainframe_core",
+                    ],
                     "labelCount": 2,
                     "rectCount": 2,
                     "lineCount": 2,

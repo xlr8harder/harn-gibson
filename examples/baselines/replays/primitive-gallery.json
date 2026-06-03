@@ -736,6 +736,41 @@
               "tone": "green",
               "x": 50,
               "y": 73
+            },
+            {
+              "accentTone": "cyan",
+              "h": 23,
+              "kind": "data_tunnel",
+              "packets": 11,
+              "rings": 6,
+              "speed": 0.00038,
+              "tone": "magenta",
+              "w": 34,
+              "x": 50,
+              "y": 49
+            },
+            {
+              "accentTone": "white",
+              "columns": 7,
+              "h": 15,
+              "kind": "ice_wall",
+              "label": "ICE",
+              "scanSpeed": 0.00036,
+              "tone": "cyan",
+              "w": 25,
+              "x": 25,
+              "y": 76
+            },
+            {
+              "accentTone": "green",
+              "h": 21,
+              "kind": "mainframe_core",
+              "label": "SYS",
+              "lanes": 4,
+              "tone": "amber",
+              "w": 26,
+              "x": 76,
+              "y": 75
             }
           ],
           "tone": "amber",

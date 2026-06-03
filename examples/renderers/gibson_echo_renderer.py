@@ -80,6 +80,17 @@ def main() -> None:
                                         "accentTone": "magenta",
                                         "packets": 6,
                                         "label": "EXT",
+                                    },
+                                    {
+                                        "kind": "data_tunnel",
+                                        "x": 50,
+                                        "y": 45,
+                                        "w": 38,
+                                        "h": 24,
+                                        "tone": "magenta",
+                                        "accentTone": tone,
+                                        "rings": 5,
+                                        "packets": 8,
                                     }
                                 ],
                                 "labels": [{"text": text[:12], "x": 50, "y": 54, "tone": "white", "size": 6.8}],

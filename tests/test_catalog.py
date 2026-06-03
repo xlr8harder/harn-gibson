@@ -43,7 +43,14 @@ def test_default_visual_catalog_has_generic_and_cinematic_building_blocks() -> N
     assert {"rects", "lines", "polylines", "polygons", "groups", "gradients", "traces", "symbols"} <= set(
         svg_layer.props
     )
-    assert svg_layer.metadata["curatedSymbols"] == ("globe", "filesystem_gate", "reticle")
+    assert svg_layer.metadata["curatedSymbols"] == (
+        "globe",
+        "filesystem_gate",
+        "reticle",
+        "data_tunnel",
+        "ice_wall",
+        "mainframe_core",
+    )
     assert "path_trace_particles" in svg_layer.metadata["animation"]
     assert "symbol_orbit" in svg_layer.metadata["animation"]
     assert "group_transform" in svg_layer.metadata["animation"]
