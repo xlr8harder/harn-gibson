@@ -604,8 +604,11 @@ def test_checked_in_replay_fixtures_cover_agent_and_renderer_sides() -> None:
     assert renderer_result.scene.primitives["decision-log"].props["text"][0]["renderer"] == "fixture"
 
     assert [step.kind for step in gallery_result.steps] == ["mutations"]
-    assert len(gallery_result.expectations) == 41
+    assert len(gallery_result.expectations) == 44
     assert gallery_result.scene.primitives["gallery-mesh"].kind == "mesh"
+    assert gallery_result.scene.primitives["gallery-tunnel"].kind == "tunnel_grid"
+    assert gallery_result.scene.primitives["gallery-tunnel"].props["rings"] == 14
+    assert gallery_result.scene.primitives["gallery-tunnel"].props["packets"] == 44
     assert gallery_result.scene.primitives["gallery-vector"].kind == "svg_layer"
     assert gallery_result.scene.primitives["gallery-vector"].props["gradients"][0]["id"] == "ice-gradient"
     assert gallery_result.scene.primitives["gallery-vector"].props["rects"][0]["rx"] == 5

@@ -25,7 +25,7 @@
         "eventType": "primitive_gallery",
         "phase": "lifecycle",
         "sequence": 900,
-        "summary": "mesh, signal scope, vector paths, vector symbols, city blocks, graphs, ribbons, glyphs, data rain, particles, stream panel",
+        "summary": "mesh, signal scope, tunnel grid, vector paths, vector symbols, city blocks, graphs, ribbons, glyphs, data rain, particles, stream panel",
         "title": "Primitive gallery"
       }
     ],
@@ -37,6 +37,7 @@
           "primitive:hologram",
           "primitive:signal_scope",
           "primitive:mesh",
+          "primitive:tunnel_grid",
           "primitive:svg_layer",
           "primitive:city_block",
           "primitive:trace_route",
@@ -56,7 +57,7 @@
           "renderer": "replay",
           "stepType": "mutations"
         },
-        "mutationCount": 15,
+        "mutationCount": 16,
         "renderer": "replay",
         "requestCount": 1,
         "routes": [
@@ -69,6 +70,7 @@
           "gallery-hologram",
           "gallery-scope",
           "gallery-mesh",
+          "gallery-tunnel",
           "gallery-vector",
           "gallery-city",
           "gallery-trace",
@@ -91,6 +93,7 @@
             "primitive:hologram",
             "primitive:signal_scope",
             "primitive:mesh",
+            "primitive:tunnel_grid",
             "primitive:svg_layer",
             "primitive:city_block",
             "primitive:trace_route",
@@ -110,7 +113,7 @@
             "renderer": "replay",
             "stepType": "mutations"
           },
-          "mutationCount": 15,
+          "mutationCount": 16,
           "renderer": "replay",
           "requestCount": 1,
           "routes": [
@@ -123,6 +126,7 @@
             "gallery-hologram",
             "gallery-scope",
             "gallery-mesh",
+            "gallery-tunnel",
             "gallery-vector",
             "gallery-city",
             "gallery-trace",
@@ -688,6 +692,36 @@
           "seed": 913,
           "speed": 0.78,
           "tone": "cyan"
+        },
+        "region": "stage"
+      },
+      "gallery-tunnel": {
+        "children": [],
+        "id": "gallery-tunnel",
+        "kind": "tunnel_grid",
+        "props": {
+          "accentTone": "magenta",
+          "blend": "screen",
+          "depth": 1.25,
+          "direction": "inward",
+          "label": "DATA CORRIDOR",
+          "lanes": 9,
+          "opacity": 0.68,
+          "packets": 44,
+          "position": {
+            "x": 0.5,
+            "y": 0.53
+          },
+          "rings": 14,
+          "seed": 611,
+          "size": {
+            "h": 0.72,
+            "w": 0.82
+          },
+          "speed": 0.82,
+          "spokes": 18,
+          "tone": "cyan",
+          "twist": 0.54
         },
         "region": "stage"
       },

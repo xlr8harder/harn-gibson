@@ -53,6 +53,7 @@ _BROWSER_PRIMITIVE_KINDS = frozenset(
         "city_block",
         "hologram",
         "signal_scope",
+        "tunnel_grid",
         "svg_layer",
         "node_graph",
         "trace_route",

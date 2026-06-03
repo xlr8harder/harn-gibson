@@ -245,6 +245,7 @@ def test_browser_display_renders_vector_symbols_and_data_rain() -> None:
                 page.wait_for_function("window.__gibsonVectorEffectState?.['gallery-vector']?.filterCount === 2")
                 page.wait_for_function("window.__gibsonHologramState?.['gallery-hologram']?.ringCount === 6")
                 page.wait_for_function("window.__gibsonSignalScopeState?.['gallery-scope']?.blipCount === 3")
+                page.wait_for_function("window.__gibsonTunnelState?.['gallery-tunnel']?.packetCount === 44")
                 page.wait_for_function("window.__gibsonCityState?.['gallery-city']?.cameraKeyframeCount === 3")
                 page.wait_for_function("window.__gibsonDataRainState?.['gallery-rain']?.visibleColumns > 0")
                 page.wait_for_function("window.__gibsonTraceRouteState?.['gallery-trace']?.packetCount === 18")
@@ -262,6 +263,9 @@ def test_browser_display_renders_vector_symbols_and_data_rain() -> None:
                 )
                 signal_scope_state = page.evaluate(
                     """() => window.__gibsonSignalScopeState["gallery-scope"]"""
+                )
+                tunnel_state = page.evaluate(
+                    """() => window.__gibsonTunnelState["gallery-tunnel"]"""
                 )
                 city_state = page.evaluate(
                     """() => window.__gibsonCityState["gallery-city"]"""
@@ -325,6 +329,18 @@ def test_browser_display_renders_vector_symbols_and_data_rain() -> None:
                     "accentTone": "magenta",
                     "hasLabels": True,
                 }
+                assert tunnel_state == {
+                    "ringCount": 14,
+                    "spokeCount": 18,
+                    "laneCount": 9,
+                    "packetCount": 44,
+                    "direction": "inward",
+                    "tone": "cyan",
+                    "accentTone": "magenta",
+                    "hasLabels": True,
+                    "phase": tunnel_state["phase"],
+                }
+                assert 0 <= tunnel_state["phase"] <= 1
                 assert city_state["blockCount"] == 4
                 assert city_state["focusBlockId"] == "core-2"
                 assert city_state["cameraKeyframeCount"] == 3

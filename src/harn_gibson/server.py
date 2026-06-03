@@ -1171,6 +1171,7 @@ function drawScenePrimitives(scene, w, h, now) {
   const primitives = Object.values(scene.primitives).filter((primitive) => primitive.region === "stage");
   const orderedKinds = [
     "data_rain",
+    "tunnel_grid",
     "particle_field",
     "mesh",
     "city_block",
@@ -1194,6 +1195,7 @@ function drawPrimitive(primitive, w, h, now) {
   if (primitive.kind === "city_block") drawCityBlock(primitive, w, h, now);
   if (primitive.kind === "hologram") drawHologram(primitive, w, h, now);
   if (primitive.kind === "signal_scope") drawSignalScope(primitive, w, h, now);
+  if (primitive.kind === "tunnel_grid") drawTunnelGrid(primitive, w, h, now);
   if (primitive.kind === "svg_layer") drawSvgLayer(primitive, w, h, now);
   if (primitive.kind === "node_graph") drawNodeGraph(primitive, w, h);
   if (primitive.kind === "trace_route") drawTraceRoute(primitive, w, h, now);
@@ -2004,6 +2006,166 @@ function drawSignalScope(primitive, w, h, now) {
     ctx.shadowBlur = 5 * devicePixelRatio;
     ctx.fillText(String(props.label).slice(0, 22), 0, -radius - 13 * devicePixelRatio);
   }
+  ctx.restore();
+}
+
+function tunnelPoint(center, width, height, progress, angle, rotation) {
+  const radius = Math.pow(clamp(progress, 0, 1), 1.35);
+  const rotated = angle + rotation * (1 - radius);
+  return {
+    x: center.x + Math.cos(rotated) * width * (0.04 + radius * 0.5),
+    y: center.y + Math.sin(rotated) * height * (0.035 + radius * 0.48),
+    radius,
+  };
+}
+
+function drawTunnelRing(center, width, height, progress, rotation, tone, alpha) {
+  const corners = [
+    tunnelPoint(center, width, height, progress, -Math.PI * 0.75, rotation),
+    tunnelPoint(center, width, height, progress, -Math.PI * 0.25, rotation),
+    tunnelPoint(center, width, height, progress, Math.PI * 0.25, rotation),
+    tunnelPoint(center, width, height, progress, Math.PI * 0.75, rotation),
+  ];
+  ctx.beginPath();
+  ctx.moveTo(corners[0].x, corners[0].y);
+  for (const corner of corners.slice(1)) ctx.lineTo(corner.x, corner.y);
+  ctx.closePath();
+  ctx.strokeStyle = toneColor(tone, alpha);
+  ctx.stroke();
+  if (progress > 0.82) {
+    ctx.fillStyle = toneColor(tone, alpha * 0.08);
+    ctx.fill();
+  }
+}
+
+function drawTunnelGrid(primitive, w, h, now) {
+  const props = primitive.props || {};
+  const size = props.size && typeof props.size === "object" ? props.size : {};
+  const center = normalizedPoint(props.position || {x: 0.5, y: 0.5}, w, h);
+  const width = clamp(finiteNumber(size.w ?? size.width ?? props.width, 0.78), 0.08, 1.8) * w;
+  const height = clamp(finiteNumber(size.h ?? size.height ?? props.height, 0.70), 0.08, 1.8) * h;
+  const ringCount = Math.max(1, Math.min(36, Math.floor(finiteNumber(props.rings, 13))));
+  const spokeCount = Math.max(0, Math.min(48, Math.floor(finiteNumber(props.spokes, 16))));
+  const laneCount = Math.max(0, Math.min(32, Math.floor(finiteNumber(props.lanes, 8))));
+  const packetCount = Math.max(0, Math.min(160, Math.floor(finiteNumber(props.packets, 34))));
+  const speed = Math.max(0, finiteNumber(props.speed, 0.72));
+  const twist = finiteNumber(props.twist, 0.42);
+  const depth = clamp(finiteNumber(props.depth, 1), 0.25, 2.5);
+  const tone = props.tone || "cyan";
+  const accentTone = props.accentTone || props.accent || "magenta";
+  const opacity = clamp(finiteNumber(props.opacity, 0.76), 0, 1);
+  const seed = finiteNumber(props.seed, 0);
+  const direction = props.direction === "outward" ? "outward" : "inward";
+  const directionSign = direction === "outward" ? -1 : 1;
+  const phase = ((now * speed * 0.00013 * directionSign + seed * 0.017) % 1 + 1) % 1;
+
+  if (typeof window !== "undefined") {
+    window.__gibsonTunnelState = window.__gibsonTunnelState || {};
+    window.__gibsonTunnelState[primitive.id] = {
+      ringCount,
+      spokeCount,
+      laneCount,
+      packetCount,
+      direction,
+      tone,
+      accentTone,
+      hasLabels: Boolean(props.label),
+      phase: vectorRounded(phase),
+    };
+  }
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(center.x - width * 0.55, center.y - height * 0.55, width * 1.1, height * 1.1);
+  ctx.clip();
+  ctx.globalCompositeOperation = props.blend === "source-over" ? "source-over" : "screen";
+  ctx.globalAlpha *= opacity;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.shadowColor = toneColor(tone, 0.62);
+  ctx.shadowBlur = 15 * devicePixelRatio;
+
+  if (spokeCount > 0) {
+    ctx.lineWidth = Math.max(0.5, 0.78 * devicePixelRatio);
+    for (let spoke = 0; spoke < spokeCount; spoke++) {
+      const angle = (spoke / spokeCount) * Math.PI * 2 + twist * 0.2;
+      const inner = tunnelPoint(center, width, height, 0.08, angle, twist);
+      const outer = tunnelPoint(center, width, height, 1, angle, twist);
+      ctx.strokeStyle = toneColor(spoke % 4 === 0 ? accentTone : tone, spoke % 4 === 0 ? 0.24 : 0.14);
+      ctx.beginPath();
+      ctx.moveTo(inner.x, inner.y);
+      ctx.lineTo(outer.x, outer.y);
+      ctx.stroke();
+    }
+  }
+
+  ctx.lineWidth = Math.max(0.7, finiteNumber(props.lineWidth, 1.05) * devicePixelRatio);
+  for (let ring = 0; ring < ringCount; ring++) {
+    const rawProgress = (ring / ringCount + phase) % 1;
+    const progress = Math.pow(rawProgress, 1 / depth);
+    const ringTone = ring % 3 === 0 ? accentTone : tone;
+    const alpha = 0.12 + progress * 0.48;
+    drawTunnelRing(center, width, height, progress, twist, ringTone, alpha);
+  }
+
+  for (let lane = 0; lane < laneCount; lane++) {
+    const angle = (lane / Math.max(1, laneCount)) * Math.PI * 2 + phase * twist;
+    ctx.setLineDash([11 * devicePixelRatio, 13 * devicePixelRatio]);
+    ctx.lineDashOffset = -now * speed * 0.024;
+    ctx.strokeStyle = toneColor(lane % 2 ? accentTone : "white", 0.20);
+    ctx.lineWidth = Math.max(0.55, 0.7 * devicePixelRatio);
+    ctx.beginPath();
+    for (let sample = 0; sample <= 20; sample++) {
+      const progress = sample / 20;
+      const point = tunnelPoint(center, width, height, progress, angle + progress * twist, twist);
+      if (sample === 0) ctx.moveTo(point.x, point.y);
+      else ctx.lineTo(point.x, point.y);
+    }
+    ctx.stroke();
+  }
+  ctx.setLineDash([]);
+
+  for (let packet = 0; packet < packetCount; packet++) {
+    const laneIndex = laneCount > 0 ? packet % laneCount : packet;
+    const baseAngle = (laneIndex / Math.max(1, laneCount || packetCount)) * Math.PI * 2;
+    const progress = (packet / Math.max(1, packetCount) + phase * 1.7 + seededUnit(seed + packet * 3.9) * 0.05) % 1;
+    const angle = baseAngle + twist * (1 - progress) + seededUnit(seed + packet * 5.1) * 0.08;
+    const point = tunnelPoint(center, width, height, progress, angle, twist);
+    const tailProgress = clamp(progress - 0.045, 0, 1);
+    const tail = tunnelPoint(center, width, height, tailProgress, angle, twist);
+    const packetTone = packet % 5 === 0 ? accentTone : tone;
+    const alpha = 0.16 + point.radius * 0.76;
+    const radius = (1.2 + point.radius * 4.2 + seededUnit(seed + packet) * 1.5) * devicePixelRatio;
+    ctx.shadowColor = toneColor(packetTone, 0.82);
+    ctx.shadowBlur = (7 + point.radius * 12) * devicePixelRatio;
+    ctx.strokeStyle = toneColor(packetTone, alpha * 0.42);
+    ctx.lineWidth = Math.max(0.6, radius * 0.45);
+    ctx.beginPath();
+    ctx.moveTo(tail.x, tail.y);
+    ctx.lineTo(point.x, point.y);
+    ctx.stroke();
+    ctx.fillStyle = toneColor(packetTone, alpha);
+    ctx.beginPath();
+    ctx.arc(point.x, point.y, radius, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.shadowBlur = 18 * devicePixelRatio;
+  ctx.strokeStyle = toneColor("white", 0.34);
+  ctx.lineWidth = Math.max(0.8, 0.9 * devicePixelRatio);
+  ctx.beginPath();
+  ctx.arc(center.x, center.y, Math.max(2, Math.min(width, height) * 0.025), 0, Math.PI * 2);
+  ctx.stroke();
+
+  if (props.label) {
+    ctx.font = `${11.5 * devicePixelRatio}px ui-monospace, monospace`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = toneColor("white", 0.78);
+    ctx.shadowBlur = 6 * devicePixelRatio;
+    ctx.fillText(String(props.label).slice(0, 24), center.x, center.y - height * 0.51);
+  }
+
   ctx.restore();
 }
 

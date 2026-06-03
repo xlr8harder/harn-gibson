@@ -34,6 +34,9 @@
       {"path": "primitives.gallery-scope.kind", "equals": "signal_scope"},
       {"path": "primitives.gallery-scope.props.blips.1.label", "equals": "ICE"},
       {"path": "primitives.gallery-scope.props.waveforms.0.label", "equals": "CPU"},
+      {"path": "primitives.gallery-tunnel.kind", "equals": "tunnel_grid"},
+      {"path": "primitives.gallery-tunnel.props.rings", "equals": 14},
+      {"path": "primitives.gallery-tunnel.props.packets", "equals": 44},
       {"path": "primitives.gallery-city.kind", "equals": "city_block"},
       {"path": "primitives.gallery-city.props.cameraPath.keyframes.1.scale", "equals": 1.04},
       {"path": "primitives.gallery-trace.kind", "equals": "trace_route"},
@@ -77,7 +80,7 @@
             "phase": "lifecycle",
             "eventType": "primitive_gallery",
             "title": "Primitive gallery",
-            "summary": "mesh, signal scope, vector paths, vector symbols, city blocks, graphs, ribbons, glyphs, data rain, particles, stream panel"
+            "summary": "mesh, signal scope, tunnel grid, vector paths, vector symbols, city blocks, graphs, ribbons, glyphs, data rain, particles, stream panel"
           }
         },
         {
@@ -176,6 +179,32 @@
                 [4, 5, 6, 7],
                 [1, 5, 6, 2]
               ]
+            }
+          }
+        },
+        {
+          "op": "upsert",
+          "primitive": {
+            "id": "gallery-tunnel",
+            "kind": "tunnel_grid",
+            "region": "stage",
+            "props": {
+              "label": "DATA CORRIDOR",
+              "position": {"x": 0.50, "y": 0.53},
+              "size": {"w": 0.82, "h": 0.72},
+              "rings": 14,
+              "spokes": 18,
+              "lanes": 9,
+              "packets": 44,
+              "speed": 0.82,
+              "twist": 0.54,
+              "depth": 1.25,
+              "direction": "inward",
+              "tone": "cyan",
+              "accentTone": "magenta",
+              "opacity": 0.68,
+              "seed": 611,
+              "blend": "screen"
             }
           }
         },

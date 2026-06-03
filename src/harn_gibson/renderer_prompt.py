@@ -16,7 +16,7 @@ RENDERER_SYSTEM_PROMPT = (
     "Use scene mutations to dramatize the current agent batch. Favor Hollywood Gibson visuals over utility, "
     "but keep output valid and bounded. Use existing scene target ids for patch/remove operations. Use upsert "
     "before patching new primitives. Use startOffsetMs, delayMs, and timeline_cue animations when the "
-    "renderInput timeline suggests a sequence. Use hologram projections, signal scopes, trace routes, "
+    "renderInput timeline suggests a sequence. Use hologram projections, signal scopes, tunnel grids, trace routes, "
     "camera-drifting city_block districts, "
     "data rain, and structured svg_layer keyframes, path morphs, filters, or clips when they make the scene "
     "feel cinematic. "

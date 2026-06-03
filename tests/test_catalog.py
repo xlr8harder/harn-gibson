@@ -39,6 +39,7 @@ def test_default_visual_catalog_has_generic_and_cinematic_building_blocks() -> N
         "mesh",
         "hologram",
         "signal_scope",
+        "tunnel_grid",
         "svg_layer",
         "data_rain",
         "particle_field",
@@ -112,6 +113,12 @@ def test_default_visual_catalog_has_generic_and_cinematic_building_blocks() -> N
     assert signal_scope is not None
     assert {"mode", "rings", "spokes", "sweep", "blips", "waveforms", "label"} <= set(signal_scope.props)
     assert {"gibson", "cinematic", "motion", "telemetry"} <= set(signal_scope.tags)
+    tunnel_grid = catalog.entry("tunnel_grid")
+    assert tunnel_grid is not None
+    assert {"rings", "spokes", "lanes", "packets", "speed", "twist", "direction", "label"} <= set(
+        tunnel_grid.props
+    )
+    assert {"gibson", "cinematic", "motion", "3d"} <= set(tunnel_grid.tags)
     trace_route = catalog.entry("trace_route")
     assert trace_route is not None
     assert {"hops", "links", "focusHopId", "packets", "speed", "label"} <= set(trace_route.props)
