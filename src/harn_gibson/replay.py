@@ -852,6 +852,117 @@ def write_replay_renderer_chunks(path: str | Path, result: ReplayResult, *, chun
     )
 
 
+def replay_renderer_chunks_review_html(payload: Mapping[str, Any]) -> str:
+    chunks = payload.get("chunks")
+    rendered_chunks = [chunk for chunk in chunks if isinstance(chunk, Mapping)] if isinstance(chunks, list) else []
+    title = str(payload.get("replayName") or "replay renderer chunks")
+    schema = escape(str(payload.get("schema", "")))
+    chunk_count = escape(str(payload.get("chunkCount", len(rendered_chunks))))
+    context_count = escape(str(payload.get("contextCount", 0)))
+    chunk_size = escape(str(payload.get("chunkSize", "")))
+    cards = "\n".join(_renderer_chunk_review_card(chunk) for chunk in rendered_chunks)
+    if not cards:
+        cards = '    <section class="empty">No renderer chunks were captured for this replay.</section>'
+    embedded_chunks = _html_script_json(rendered_chunks)
+    meta_text = f"{chunk_count} chunks &middot; {context_count} contexts &middot; chunk size {chunk_size}"
+    return f"""<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{escape(title)} renderer chunk review</title>
+  <style>
+    :root {{ color-scheme: dark; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }}
+    body {{ margin: 0; background: #020608; color: #d9fff7; }}
+    header {{
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      padding: 18px 22px;
+      background: rgba(2, 6, 8, 0.94);
+      border-bottom: 1px solid rgba(35, 255, 214, 0.30);
+    }}
+    h1 {{ margin: 0 0 6px; font-size: 22px; letter-spacing: 0; overflow-wrap: anywhere; }}
+    .meta {{ color: #7ee8d0; font-size: 13px; }}
+    main {{
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+      gap: 18px;
+      padding: 20px;
+    }}
+    article {{
+      display: grid;
+      gap: 13px;
+      border: 1px solid rgba(35, 255, 214, 0.28);
+      background: rgba(5, 16, 19, 0.88);
+      padding: 16px;
+    }}
+    h2 {{ margin: 0; color: #ffcf63; font-size: 15px; letter-spacing: 0; overflow-wrap: anywhere; }}
+    .summary {{
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 8px;
+      color: #b8fff3;
+      font-size: 12px;
+    }}
+    code {{ color: #ffcf63; }}
+    .badge-set {{ display: grid; gap: 5px; }}
+    .badge-label {{ color: #7ee8d0; font-size: 11px; text-transform: uppercase; }}
+    .badge-row {{ display: flex; flex-wrap: wrap; gap: 6px; }}
+    .badge {{
+      border: 1px solid rgba(35, 255, 214, 0.28);
+      background: rgba(2, 8, 10, 0.92);
+      color: #d9fff7;
+      padding: 4px 7px;
+      font-size: 11px;
+    }}
+    .prompt-preview {{
+      display: grid;
+      gap: 8px;
+      border-top: 1px solid rgba(35, 255, 214, 0.16);
+      padding-top: 12px;
+    }}
+    .prompt-preview strong {{ color: #7ee8d0; font-size: 11px; text-transform: uppercase; }}
+    pre {{
+      margin: 0;
+      max-height: 260px;
+      overflow: auto;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      color: #d9fff7;
+      font-size: 11px;
+      line-height: 1.42;
+    }}
+    .empty {{
+      border: 1px solid rgba(255, 207, 99, 0.30);
+      padding: 18px;
+      color: #ffcf63;
+      background: rgba(6, 12, 14, 0.86);
+    }}
+  </style>
+</head>
+<body>
+  <header>
+    <h1>{escape(title)} renderer chunk review</h1>
+    <div class="meta">{meta_text} &middot; schema {schema}</div>
+  </header>
+  <main>
+{cards}
+  </main>
+  <script>
+    window.__gibsonRendererChunks = {embedded_chunks};
+  </script>
+</body>
+</html>
+"""
+
+
+def write_replay_renderer_chunks_review_html(path: str | Path, payload: Mapping[str, Any]) -> None:
+    review_path = Path(path)
+    review_path.parent.mkdir(parents=True, exist_ok=True)
+    review_path.write_text(replay_renderer_chunks_review_html(payload), encoding="utf-8")
+
+
 def replay_render_intents_from_result(result: ReplayResult) -> dict[str, Any]:
     intents = _render_intents_from_scene_metadata(result.scene.metadata)
     return {
@@ -1492,6 +1603,7 @@ def write_replay_review_bundle(
         "rendererContexts": "renderer-contexts.json",
         "rendererPrompts": "renderer-prompts.json",
         "rendererChunks": "renderer-chunks.json",
+        "rendererChunkReview": "renderer-chunks.html",
         "rendererPromptReview": "renderer-prompts.html",
         "renderIntents": "render-intents.json",
         "renderIntentReview": "render-intents.html",
@@ -1503,7 +1615,9 @@ def write_replay_review_bundle(
     write_replay_timeline(bundle_path / artifacts["timeline"], result)
     write_replay_renderer_contexts(bundle_path / artifacts["rendererContexts"], result)
     write_replay_renderer_prompts(bundle_path / artifacts["rendererPrompts"], result)
+    renderer_chunks = replay_renderer_chunks_from_result(result, chunk_size=render_chunk_size)
     write_replay_renderer_chunks(bundle_path / artifacts["rendererChunks"], result, chunk_size=render_chunk_size)
+    write_replay_renderer_chunks_review_html(bundle_path / artifacts["rendererChunkReview"], renderer_chunks)
     write_replay_renderer_prompts_review_html(
         bundle_path / artifacts["rendererPromptReview"],
         replay_renderer_prompts_from_result(result),
@@ -1549,6 +1663,7 @@ def _replay_review_artifacts(value: Any) -> tuple[tuple[str, str], ...]:
     labels = {
         "frameReview": "Timeline Frame Review",
         "renderIntentReview": "Render Intent Review",
+        "rendererChunkReview": "Renderer Chunk Review",
         "rendererPromptReview": "Renderer Prompt Review",
         "rendererChunks": "Renderer Chunks JSON",
         "scene": "Final Scene JSON",
@@ -1744,6 +1859,57 @@ def _renderer_prompt_message_card(message: Mapping[str, Any]) -> str:
     return f"""      <section class="message">
         <div class="role">{role}</div>
         <pre>{content}</pre>
+      </section>"""
+
+
+def _renderer_chunk_review_card(chunk: Mapping[str, Any]) -> str:
+    index = escape(str(chunk.get("index", "")))
+    context_range = f"{escape(str(chunk.get('contextStart', '')))}..{escape(str(chunk.get('contextEnd', '')))}"
+    timeline = chunk.get("timeline") if isinstance(chunk.get("timeline"), Mapping) else {}
+    timeline_text = (
+        f"{escape(str(timeline.get('startMs', 0)))}ms -> "
+        f"{escape(str(timeline.get('endMs', 0)))}ms "
+        f"({escape(str(timeline.get('durationMs', 0)))}ms)"
+    )
+    event_types = _badge_row(chunk.get("eventTypes"), "event")
+    routes = _badge_row(chunk.get("routes"), "route")
+    modes = _badge_row(chunk.get("modes"), "mode")
+    display_styles = _badge_row(chunk.get("displayStyles"), "style")
+    prompt_preview = _renderer_chunk_prompt_preview(chunk)
+    return f"""    <article>
+      <h2>chunk #{index} / contexts <code>{context_range}</code></h2>
+      <div class="summary">
+        <span>contexts <code>{escape(str(chunk.get("contextCount", 0)))}</code></span>
+        <span>prompts <code>{escape(str(chunk.get("promptCount", 0)))}</code></span>
+        <span>requests <code>{escape(str(chunk.get("requestCount", 0)))}</code></span>
+        <span>timeline <code>{timeline_text}</code></span>
+        <span>prompt chars <code>{escape(str(chunk.get("messageChars", 0)))}</code></span>
+        <span>context chars <code>{escape(str(chunk.get("contextChars", 0)))}</code></span>
+      </div>
+      <div class="badge-set"><span class="badge-label">modes</span><div class="badge-row">{modes}</div></div>
+      <div class="badge-set"><span class="badge-label">styles</span><div class="badge-row">{display_styles}</div></div>
+      <div class="badge-set"><span class="badge-label">events</span><div class="badge-row">{event_types}</div></div>
+      <div class="badge-set"><span class="badge-label">routes</span><div class="badge-row">{routes}</div></div>
+{prompt_preview}
+    </article>"""
+
+
+def _renderer_chunk_prompt_preview(chunk: Mapping[str, Any]) -> str:
+    prompts = chunk.get("prompts")
+    prompt_items = [prompt for prompt in prompts if isinstance(prompt, Mapping)] if isinstance(prompts, list) else []
+    if not prompt_items:
+        return ""
+    first_prompt = prompt_items[0]
+    messages = first_prompt.get("messages")
+    rendered_messages = (
+        [message for message in messages if isinstance(message, Mapping)] if isinstance(messages, list) else []
+    )
+    user_message = next((message for message in rendered_messages if message.get("role") == "user"), None)
+    content = str(user_message.get("content") if isinstance(user_message, Mapping) else "")
+    preview = content[:1800] + ("..." if len(content) > 1800 else "")
+    return f"""      <section class="prompt-preview">
+        <strong>first prompt user message</strong>
+        <pre>{escape(preview)}</pre>
       </section>"""
 
 

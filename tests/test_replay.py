@@ -44,6 +44,7 @@ from harn_gibson.replay import (
     replay_data_from_event_log,
     replay_frame_screenshot_manifest,
     replay_renderer_chunks_from_result,
+    replay_renderer_chunks_review_html,
     replay_renderer_contexts_from_result,
     replay_renderer_prompts_from_result,
     replay_renderer_prompts_review_html,
@@ -54,6 +55,7 @@ from harn_gibson.replay import (
     write_replay_render_intents,
     write_replay_render_intents_review_html,
     write_replay_renderer_chunks,
+    write_replay_renderer_chunks_review_html,
     write_replay_renderer_contexts,
     write_replay_renderer_prompts,
     write_replay_renderer_prompts_review_html,
@@ -216,7 +218,10 @@ def test_replay_event_steps_file_io_and_writers(tmp_path: Path, monkeypatch: pyt
     )
     chunks = replay_renderer_chunks_from_result(multi_context_result, chunk_size=2)
     write_replay_renderer_chunks(chunks_path, multi_context_result, chunk_size=1)
+    chunks_review_path = tmp_path / "out" / "renderer-chunks.html"
+    write_replay_renderer_chunks_review_html(chunks_review_path, chunks)
     chunk_file = json.loads(chunks_path.read_text(encoding="utf-8"))
+    chunks_review = chunks_review_path.read_text(encoding="utf-8")
 
     assert chunks["schema"] == "harn-gibson.replay-renderer-chunks.v1"
     assert chunks["contextCount"] == 2
@@ -234,6 +239,49 @@ def test_replay_event_steps_file_io_and_writers(tmp_path: Path, monkeypatch: pyt
     assert chunks["chunks"][0]["messageChars"] > chunks["chunks"][0]["contextChars"]
     assert chunk_file["chunkCount"] == 2
     assert chunk_file["chunks"][1]["contextStart"] == 1
+    assert "chunked context replay renderer chunk review" in chunks_review
+    assert "window.__gibsonRendererChunks" in chunks_review
+    assert "first prompt user message" in chunks_review
+    assert "tool_call" in chunks_review
+    assert "<\\/script>" in replay_renderer_chunks_review_html(
+        {
+            "replayName": "</script>",
+            "schema": "test",
+            "chunkSize": 1,
+            "contextCount": 1,
+            "chunks": [
+                {
+                    "index": 0,
+                    "contextStart": 0,
+                    "contextEnd": 0,
+                    "eventTypes": ["</script>"],
+                    "routes": ["renderer_agent"],
+                    "modes": ["rolling"],
+                    "displayStyles": ["gibson"],
+                    "prompts": [{"messages": [{"role": "user", "content": "</script>"}]}],
+                }
+            ],
+        }
+    )
+    no_prompt_preview = replay_renderer_chunks_review_html(
+        {
+            "replayName": "no prompt",
+            "schema": "test",
+            "chunks": [
+                {
+                    "index": 0,
+                    "contextStart": 0,
+                    "contextEnd": 0,
+                    "prompts": [],
+                }
+            ],
+        }
+    )
+    assert "chunk #0" in no_prompt_preview
+    assert "first prompt user message" not in no_prompt_preview
+    assert "No renderer chunks" in replay_renderer_chunks_review_html(
+        {"replayName": "empty", "schema": "test", "chunks": []}
+    )
     assert replay_renderer_chunks_from_result(result)["chunks"] == []
     with pytest.raises(ValueError, match="render chunk size"):
         replay_renderer_chunks_from_result(context_result, chunk_size=0)
@@ -380,16 +428,19 @@ def test_replay_event_steps_file_io_and_writers(tmp_path: Path, monkeypatch: pyt
     assert bundle_manifest["screenshotCount"] == 2
     assert bundle_manifest["artifacts"]["frameReview"] == "frames/index.html"
     assert bundle_manifest["artifacts"]["rendererChunks"] == "renderer-chunks.json"
+    assert bundle_manifest["artifacts"]["rendererChunkReview"] == "renderer-chunks.html"
     assert bundle_manifest["artifacts"]["rendererPromptReview"] == "renderer-prompts.html"
     assert bundle_manifest_file == bundle_manifest
     assert json.loads((bundle_path / "renderer-contexts.json").read_text(encoding="utf-8"))["contextCount"] == 1
     assert json.loads((bundle_path / "renderer-prompts.json").read_text(encoding="utf-8"))["promptCount"] == 1
     assert json.loads((bundle_path / "renderer-chunks.json").read_text(encoding="utf-8"))["chunkCount"] == 1
+    assert "renderer chunk review" in (bundle_path / "renderer-chunks.html").read_text(encoding="utf-8")
     assert json.loads((bundle_path / "render-intents.json").read_text(encoding="utf-8"))["intentCount"] == 2
     assert json.loads((bundle_path / "frames" / "manifest.json").read_text(encoding="utf-8"))["screenshotCount"] == 2
     assert "renderer prompt review" in (bundle_path / "renderer-prompts.html").read_text(encoding="utf-8")
     assert "event replay replay review" in bundle_index
     assert 'href="frames/index.html"' in bundle_index
+    assert "Renderer Chunk Review" in bundle_index
     assert "Renderer Prompt Review" in bundle_index
     assert "window.__gibsonReplayReview" in bundle_index
     assert "<\\/script>" in replay_review_bundle_index_html(

@@ -114,6 +114,7 @@ uv run harn-gibson replay examples/replays/stream-and-diagnostic.json \
   --output-render-prompts test-artifacts/replays/renderer-prompts.json \
   --output-render-chunks test-artifacts/replays/renderer-chunks.json \
   --render-chunk-size 4 \
+  --render-chunk-review test-artifacts/replays/renderer-chunks.html \
   --render-prompt-review test-artifacts/replays/renderer-prompts.html \
   --output-render-intents test-artifacts/replays/render-intents.json \
   --render-intent-review test-artifacts/replays/render-intents.html \
@@ -126,13 +127,13 @@ uv run harn-gibson replay examples/replays/stream-and-diagnostic.json \
 
 Screenshot result metadata includes `canvasMetrics` with canvas dimensions, sampled pixel count, luminance total, lit-pixel count, lit ratio, maximum channel total, and a `nonblank` boolean. This makes replay screenshot artifacts reviewable in CI output even before a human opens the PNG.
 
-`--review-dir` is the fastest historical-session review path. It captures renderer contexts and per-step frames automatically, renders timeline screenshots under `frames/`, and writes `scene.json`, `result.json`, `timeline.json`, `renderer-contexts.json`, `renderer-prompts.json`, `renderer-chunks.json`, `renderer-prompts.html`, `render-intents.json`, `render-intents.html`, `frames/index.html`, `frames/manifest.json`, `manifest.json`, and a top-level `index.html` overview. Use the lower-level flags below when CI only needs one artifact family.
+`--review-dir` is the fastest historical-session review path. It captures renderer contexts and per-step frames automatically, renders timeline screenshots under `frames/`, and writes `scene.json`, `result.json`, `timeline.json`, `renderer-contexts.json`, `renderer-prompts.json`, `renderer-chunks.json`, `renderer-chunks.html`, `renderer-prompts.html`, `render-intents.json`, `render-intents.html`, `frames/index.html`, `frames/manifest.json`, `manifest.json`, and a top-level `index.html` overview. Use the lower-level flags below when CI only needs one artifact family.
 
 `--output-render-contexts` records each `harn-gibson.renderer-context.v1` payload that replay sent to a renderer. Stream-buffer, debug-only, direct-scene, and saved-render-plan steps do not invent renderer contexts; the artifact is an exact review aid for model-renderer prompt inputs, compaction cadence, repo topology, touched-file extraction, and render-input batching.
 
 `--output-render-prompts` writes `harn-gibson.replay-renderer-prompts.v1`, a provider-neutral system/user message artifact built from the captured renderer contexts. `--render-prompt-review` writes a standalone HTML page that shows those messages, event types, routes, timing, and prompt sizes before any live model adapter exists. This lets prompt shape, context size, and safety instructions be reviewed offline from the same replay fixture used for scene screenshots.
 
-`--output-render-chunks` writes `harn-gibson.replay-renderer-chunks.v1`, grouping captured renderer contexts and their exact prompt artifacts into feedable batches. Use `--render-chunk-size N` to control how many renderer contexts are included per chunk. Each chunk records context indexes, modes, display styles, event types, routes, request counts, a covered timeline, estimated prompt/context characters, the original contexts, and the provider-neutral prompts. This is meant for historical-session renderer experiments where a full session should be replayed to a model in pieces.
+`--output-render-chunks` writes `harn-gibson.replay-renderer-chunks.v1`, grouping captured renderer contexts and their exact prompt artifacts into feedable batches. Use `--render-chunk-size N` to control how many renderer contexts are included per chunk. Each chunk records context indexes, modes, display styles, event types, routes, request counts, a covered timeline, estimated prompt/context characters, the original contexts, and the provider-neutral prompts. `--render-chunk-review` writes a standalone HTML page over the same payload so historical-session batches can be inspected without opening the full JSON. This is meant for renderer experiments where a full session should be replayed to a model in pieces.
 
 `--output-render-intents` writes `harn-gibson.replay-render-intents.v1`, a compact artifact extracted from `scene.metadata.renderIntents`. It preserves exact render-intent timelines, renderer names, requested intents, event types, routes, effects, targets, mutation counts, and plan metadata. `--render-intent-review` writes a standalone HTML page over the same payload, which is useful when reviewing whether a renderer planned a coherent sequence before looking at screenshots or final scene JSON.
 

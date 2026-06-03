@@ -50,6 +50,7 @@ def build_parser() -> argparse.ArgumentParser:
     replay.add_argument("--output-render-prompts", default=None, help="write renderer prompt message JSON")
     replay.add_argument("--output-render-chunks", default=None, help="write chunked renderer context/prompt JSON")
     replay.add_argument("--render-chunk-size", type=int, default=4, help="renderer contexts per replay chunk")
+    replay.add_argument("--render-chunk-review", default=None, help="write a renderer chunk review HTML page")
     replay.add_argument("--render-prompt-review", default=None, help="write a renderer prompt review HTML page")
     replay.add_argument("--output-render-intents", default=None, help="write recorded renderer intent JSON")
     replay.add_argument("--render-intent-review", default=None, help="write a renderer intent review HTML page")
@@ -257,6 +258,7 @@ def run(argv: Sequence[str] | None = None) -> int:
             capture_replay_frame_screenshots,
             replay_frame_screenshot_manifest,
             replay_render_intents_from_result,
+            replay_renderer_chunks_from_result,
             replay_renderer_prompts_from_result,
             run_replay_file,
             write_replay_frame_review_html,
@@ -264,6 +266,7 @@ def run(argv: Sequence[str] | None = None) -> int:
             write_replay_render_intents,
             write_replay_render_intents_review_html,
             write_replay_renderer_chunks,
+            write_replay_renderer_chunks_review_html,
             write_replay_renderer_contexts,
             write_replay_renderer_prompts,
             write_replay_renderer_prompts_review_html,
@@ -284,6 +287,7 @@ def run(argv: Sequence[str] | None = None) -> int:
                         args.output_render_contexts
                         or args.output_render_prompts
                         or args.output_render_chunks
+                        or args.render_chunk_review
                         or args.render_prompt_review
                         or args.review_dir
                     ),
@@ -304,6 +308,11 @@ def run(argv: Sequence[str] | None = None) -> int:
                 write_replay_renderer_prompts(args.output_render_prompts, result)
             if args.output_render_chunks:
                 write_replay_renderer_chunks(args.output_render_chunks, result, chunk_size=args.render_chunk_size)
+            if args.render_chunk_review:
+                write_replay_renderer_chunks_review_html(
+                    args.render_chunk_review,
+                    replay_renderer_chunks_from_result(result, chunk_size=args.render_chunk_size),
+                )
             if args.render_prompt_review:
                 write_replay_renderer_prompts_review_html(
                     args.render_prompt_review,
