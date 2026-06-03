@@ -7,39 +7,12 @@ from dataclasses import dataclass, field
 from typing import Any, Literal
 
 from harn_gibson.events import EventPhase, GibsonEvent
-from harn_gibson.rendering import RenderRequest
+from harn_gibson.rendering import RenderInputBatch, RenderRequest, TimelineWindow
 from harn_gibson.scene import SceneAnimation, SceneMutation, ScenePrimitive, default_mutations_for_event
 
 RouteKind = Literal["renderer_agent", "direct_scene", "stream_buffer", "debug_only", "drop"]
 RuleRouteKind = Literal["renderer_agent", "direct_scene", "debug_only", "drop"]
 RendererFallbackRoute = Literal["direct_scene", "debug_only", "drop"]
-
-
-@dataclass(frozen=True, slots=True)
-class TimelineWindow:
-    start_ms: int
-    end_ms: int
-
-    @classmethod
-    def from_events(cls, events: Sequence[GibsonEvent]) -> TimelineWindow:
-        if not events:
-            return cls(0, 0)
-        timestamps = [event.timestamp_ms for event in events]
-        return cls(min(timestamps), max(timestamps))
-
-    @property
-    def duration_ms(self) -> int:
-        return max(0, self.end_ms - self.start_ms)
-
-    def offset_for(self, event: GibsonEvent) -> int:
-        return max(0, event.timestamp_ms - self.start_ms)
-
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "startMs": self.start_ms,
-            "endMs": self.end_ms,
-            "durationMs": self.duration_ms,
-        }
 
 
 @dataclass(frozen=True, slots=True)
@@ -201,45 +174,6 @@ class RendererEventInterest:
         if self.metadata:
             payload["metadata"] = self.metadata
         return payload
-
-
-@dataclass(frozen=True, slots=True)
-class RenderInputBatch:
-    requests: tuple[RenderRequest, ...]
-    timeline: TimelineWindow
-    route: RouteKind = "renderer_agent"
-    metadata: dict[str, Any] = field(default_factory=dict)
-
-    @classmethod
-    def from_requests(
-        cls,
-        requests: Sequence[RenderRequest],
-        *,
-        route: RouteKind = "renderer_agent",
-        metadata: Mapping[str, Any] | None = None,
-    ) -> RenderInputBatch:
-        window = TimelineWindow.from_events([request.event for request in requests])
-        adjusted = tuple(
-            RenderRequest(
-                event=request.event,
-                decisions=request.decisions,
-                route=request.route,
-                timeline_offset_ms=window.offset_for(request.event),
-                coalesced_count=request.coalesced_count,
-                metadata=request.metadata,
-            )
-            for request in requests
-        )
-        return cls(adjusted, window, route, dict(metadata or {}))
-
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "schema": "harn-gibson.render-input.v1",
-            "route": self.route,
-            "timeline": self.timeline.to_dict(),
-            "requests": [request.to_dict() for request in self.requests],
-            "metadata": self.metadata,
-        }
 
 
 @dataclass(frozen=True, slots=True)

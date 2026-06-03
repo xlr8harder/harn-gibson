@@ -5,7 +5,7 @@ from __future__ import annotations
 import queue
 import threading
 import time
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Literal, Protocol
 
@@ -38,6 +38,81 @@ class RenderRequest:
         if self.metadata:
             payload["metadata"] = self.metadata
         return payload
+
+
+@dataclass(frozen=True, slots=True)
+class TimelineWindow:
+    start_ms: int
+    end_ms: int
+
+    @classmethod
+    def from_events(cls, events: Sequence[GibsonEvent]) -> TimelineWindow:
+        if not events:
+            return cls(0, 0)
+        timestamps = [event.timestamp_ms for event in events]
+        return cls(min(timestamps), max(timestamps))
+
+    @property
+    def duration_ms(self) -> int:
+        return max(0, self.end_ms - self.start_ms)
+
+    def offset_for(self, event: GibsonEvent) -> int:
+        return max(0, event.timestamp_ms - self.start_ms)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "startMs": self.start_ms,
+            "endMs": self.end_ms,
+            "durationMs": self.duration_ms,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class RenderInputBatch:
+    requests: tuple[RenderRequest, ...]
+    timeline: TimelineWindow
+    route: str = "renderer_agent"
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+    @classmethod
+    def from_requests(
+        cls,
+        requests: Sequence[RenderRequest],
+        *,
+        route: str = "renderer_agent",
+        metadata: Mapping[str, Any] | None = None,
+    ) -> RenderInputBatch:
+        window = TimelineWindow.from_events([request.event for request in requests])
+        size = len(requests)
+        adjusted = tuple(
+            RenderRequest(
+                event=request.event,
+                decisions=request.decisions,
+                route=request.route,
+                timeline_offset_ms=window.offset_for(request.event),
+                coalesced_count=max(request.coalesced_count, size),
+                metadata={
+                    **request.metadata,
+                    "renderBatch": {
+                        "index": index,
+                        "size": size,
+                        "route": route,
+                        "timeline": window.to_dict(),
+                    },
+                },
+            )
+            for index, request in enumerate(requests)
+        )
+        return cls(adjusted, window, route, dict(metadata or {}))
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "schema": "harn-gibson.render-input.v1",
+            "route": self.route,
+            "timeline": self.timeline.to_dict(),
+            "requests": [request.to_dict() for request in self.requests],
+            "metadata": self.metadata,
+        }
 
 
 @dataclass(frozen=True, slots=True)
@@ -215,7 +290,8 @@ class RenderPipeline:
         if not requests:
             return []
         with self._lock:
-            plan = self.renderer.render(requests, self.scene.state)
+            batch = RenderInputBatch.from_requests(requests, route=requests[-1].route)
+            plan = self.renderer.render(batch.requests, self.scene.state)
             return self._apply_plan(plan)
 
     def _apply_plan(self, plan: RenderPlan) -> list[dict[str, Any]]:
@@ -239,13 +315,16 @@ def render_update_payload(
     scene: SceneState,
 ) -> dict[str, Any]:
     update = scene_update_payload(request.event, step.mutations, scene)
+    render_input = RenderInputBatch.from_requests(plan.requests, route=request.route)
     update["renderPlan"] = {
         "stepIndex": step_index,
         "stepCount": len(plan.steps),
         "batchSize": len(plan.requests),
+        "timeline": render_input.timeline.to_dict(),
         "metadata": plan.metadata,
     }
     update["events"] = [current.event.to_dict() for current in plan.requests]
+    update["renderInput"] = render_input.to_dict()
     update["renderRequests"] = [current.to_dict() for current in plan.requests]
     if request.decisions:
         update["decisions"] = list(request.decisions)

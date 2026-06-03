@@ -125,7 +125,46 @@ def test_pipeline_async_batch_collection_and_worker_loop() -> None:
 
     assert len(updates) == 2
     assert updates[0]["renderPlan"]["batchSize"] == 2
+    assert updates[0]["renderPlan"]["timeline"] == {"startMs": 10, "endMs": 20, "durationMs": 10}
+    assert updates[0]["renderInput"]["timeline"] == {"startMs": 10, "endMs": 20, "durationMs": 10}
+    assert updates[0]["renderInput"]["requests"][0]["coalescedCount"] == 2
+    assert updates[0]["renderInput"]["requests"][1]["timelineOffsetMs"] == 10
+    assert updates[0]["renderRequests"][0]["metadata"]["renderBatch"]["size"] == 2
     assert updates[1]["event"]["eventType"] == "tool_call"
+
+
+def test_pipeline_passes_timed_batch_to_renderer() -> None:
+    captured: list[RenderRequest] = []
+
+    class CapturingRenderer:
+        def render(self, requests: tuple[RenderRequest, ...], _scene: object) -> RenderPlan:
+            captured.extend(requests)
+            return RenderPlan(
+                tuple(requests),
+                (RenderStep((SceneMutation("append_log", entry={"captured": True}),), event_index=1),),
+                {"renderer": "capture"},
+            )
+
+    pipeline = RenderPipeline(
+        scene=SceneEngine(),
+        buffer=EventBuffer(),
+        renderer=CapturingRenderer(),
+        mode="blocking",
+    )
+
+    updates = pipeline._render_and_publish((RenderRequest(event(1)), RenderRequest(event(4))))
+
+    assert captured[0].timeline_offset_ms == 0
+    assert captured[1].timeline_offset_ms == 30
+    assert captured[0].coalesced_count == 2
+    assert captured[1].metadata["renderBatch"] == {
+        "index": 1,
+        "size": 2,
+        "route": "renderer_agent",
+        "timeline": {"startMs": 10, "endMs": 40, "durationMs": 30},
+    }
+    assert updates[0]["renderInput"]["timeline"] == {"startMs": 10, "endMs": 40, "durationMs": 30}
+    assert updates[0]["event"]["sequence"] == 4
 
 
 def test_pipeline_async_worker_continues_until_stop_sentinel() -> None:

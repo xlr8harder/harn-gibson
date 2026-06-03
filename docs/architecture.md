@@ -58,6 +58,8 @@ In blocking mode, the server builds and applies a render plan before responding 
 
 In async mode, the server accepts the event immediately and a background worker batches queued events before rendering. This avoids slowing harn, but updates may arrive later and the renderer agent must handle multiple input events per plan.
 
+Immediately before renderer execution, the pipeline normalizes the queued requests into a render-input batch. That gives each request a timeline offset, coalesced count, and batch metadata, and the same render-input envelope is included on published scene updates for replay/debug inspection.
+
 The deterministic renderer returns one render step per event today. A model-backed renderer should return the same `RenderPlan` shape and may include multiple delayed steps for sequential effects.
 
 ## Hook Phases
