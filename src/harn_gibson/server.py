@@ -1280,6 +1280,7 @@ function drawSceneAnimation(animation, scene, w, h, now, progress) {
   else if (animation.kind === "timeline_cue") drawTimelineCueAnimation(animation, scene, w, h, progress);
   else if (animation.kind === "scan") drawScanAnimation(animation, w, h, progress);
   else if (animation.kind === "glitch") drawGlitchAnimation(animation, scene, w, h, now, progress);
+  else if (animation.kind === "breach_wave") drawBreachWaveAnimation(animation, scene, w, h, now, progress);
   else if (animation.kind === "flythrough") drawFlythroughAnimation(animation, w, h, progress);
   else if (animation.kind === "extrude") drawExtrudeAnimation(animation, scene, w, h, progress);
   else if (animation.kind === "hold") drawHoldAnimation(animation, scene, w, h, progress);
@@ -1493,6 +1494,111 @@ function drawGlitchAnimation(animation, scene, w, h, now, progress) {
     ctx.strokeStyle = toneColor(index % 2 ? "magenta" : "cyan", alpha);
     ctx.strokeRect(x - width * 0.5, y, width, 3 * devicePixelRatio);
   }
+  ctx.restore();
+}
+
+function drawBreachWaveAnimation(animation, scene, w, h, now, progress) {
+  const props = animation.props || {};
+  const anchor = props.position ? normalizedPoint(props.position, w, h) : animationAnchor(animation, scene, w, h);
+  const tone = animationTone(animation);
+  const accentTone = props.accentTone || props.accent || "white";
+  const intensity = clamp(finiteNumber(props.intensity, 0.86), 0.05, 2);
+  const ringCount = Math.max(1, Math.min(12, Math.floor(finiteNumber(props.rings, 5))));
+  const shardCount = Math.max(0, Math.min(80, Math.floor(finiteNumber(props.shards, 28))));
+  const seed = finiteNumber(props.seed, 0);
+  const wave = Math.sin(progress * Math.PI);
+  const maxRadius = Math.hypot(w, h) * clamp(finiteNumber(props.radius, 0.58), 0.08, 1.4);
+
+  if (typeof window !== "undefined") {
+    window.__gibsonBreachWaveState = window.__gibsonBreachWaveState || {};
+    window.__gibsonBreachWaveState[animation.id] = {
+      targetId: animation.targetId,
+      ringCount,
+      shardCount,
+      tone,
+      accentTone,
+      hasLabel: Boolean(props.label),
+      progress: vectorRounded(progress),
+    };
+  }
+
+  ctx.save();
+  ctx.globalCompositeOperation = props.blend === "source-over" ? "source-over" : "screen";
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+
+  const flashAlpha = wave * 0.075 * intensity;
+  if (flashAlpha > 0) {
+    const gradient = ctx.createRadialGradient(anchor.x, anchor.y, 0, anchor.x, anchor.y, maxRadius * 0.78);
+    gradient.addColorStop(0, toneColor(accentTone, flashAlpha * 1.6));
+    gradient.addColorStop(0.42, toneColor(tone, flashAlpha));
+    gradient.addColorStop(1, toneColor(tone, 0));
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, w, h);
+  }
+
+  ctx.shadowBlur = 22 * devicePixelRatio * intensity;
+  for (let ring = 0; ring < ringCount; ring++) {
+    const offset = ring / ringCount;
+    const ringProgress = (progress + offset * 0.36) % 1;
+    const alpha = Math.pow(1 - ringProgress, 1.35) * (0.52 + offset * 0.18) * intensity;
+    const radius = (0.035 + ringProgress * 0.82) * maxRadius;
+    const ringTone = ring % 2 ? accentTone : tone;
+    ctx.shadowColor = toneColor(ringTone, alpha * 0.82);
+    ctx.strokeStyle = toneColor(ringTone, alpha);
+    ctx.lineWidth = Math.max(0.8, (1.1 + offset * 2.6) * devicePixelRatio);
+    ctx.setLineDash([
+      (18 + ring * 3) * devicePixelRatio,
+      (10 + ring * 2) * devicePixelRatio,
+    ]);
+    ctx.lineDashOffset = -now * 0.035 * (1 + offset);
+    ctx.beginPath();
+    ctx.arc(anchor.x, anchor.y, radius, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  ctx.setLineDash([]);
+
+  for (let shard = 0; shard < shardCount; shard++) {
+    const shardSeed = seed + shard * 9.73;
+    const angle = seededUnit(shardSeed) * Math.PI * 2 + progress * 0.55;
+    const distance = maxRadius * (0.08 + ((progress + seededUnit(shardSeed + 4.1) * 0.52) % 1) * 0.72);
+    const length = maxRadius * (0.018 + seededUnit(shardSeed + 2.3) * 0.045) * intensity;
+    const x = anchor.x + Math.cos(angle) * distance;
+    const y = anchor.y + Math.sin(angle) * distance * 0.68;
+    const alpha = Math.max(0, 1 - distance / maxRadius) * (0.26 + wave * 0.46);
+    const shardTone = shard % 4 === 0 ? accentTone : tone;
+    ctx.shadowColor = toneColor(shardTone, alpha);
+    ctx.strokeStyle = toneColor(shardTone, alpha);
+    ctx.lineWidth = Math.max(0.7, (0.8 + seededUnit(shardSeed + 8.2) * 1.4) * devicePixelRatio);
+    ctx.beginPath();
+    ctx.moveTo(x - Math.cos(angle) * length, y - Math.sin(angle) * length * 0.68);
+    ctx.lineTo(x + Math.cos(angle) * length, y + Math.sin(angle) * length * 0.68);
+    ctx.stroke();
+  }
+
+  const sliceCount = Math.max(0, Math.min(12, Math.floor(finiteNumber(props.slices, 5))));
+  for (let slice = 0; slice < sliceCount; slice++) {
+    const y = (seededUnit(seed + slice * 5.1 + Math.floor(now / 140)) * h + progress * h * 0.18) % h;
+    const height = (2 + seededUnit(seed + slice * 7.6) * 7) * devicePixelRatio;
+    const alpha = wave * (0.10 + seededUnit(seed + slice * 3.4) * 0.18) * intensity;
+    const gradient = ctx.createLinearGradient(0, y, w, y);
+    gradient.addColorStop(0, toneColor(accentTone, 0));
+    gradient.addColorStop(0.5, toneColor(slice % 2 ? accentTone : tone, alpha));
+    gradient.addColorStop(1, toneColor(tone, 0));
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, y, w, height);
+  }
+
+  if (props.label) {
+    ctx.font = `${13 * devicePixelRatio}px ui-monospace, monospace`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.shadowColor = toneColor(accentTone, 0.85);
+    ctx.shadowBlur = 12 * devicePixelRatio;
+    ctx.fillStyle = toneColor("white", 0.66 + wave * 0.28);
+    ctx.fillText(String(props.label).slice(0, 26), anchor.x, anchor.y - Math.min(w, h) * 0.16);
+  }
+
   ctx.restore();
 }
 

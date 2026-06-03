@@ -300,6 +300,13 @@ def default_visual_catalog() -> VisualCatalog:
                 ("cinematic", "timed"),
             ),
             CatalogEntry(
+                "breach_wave",
+                "effect",
+                "Expanding cinematic breach overlay with rings, shards, scan flashes, and optional label.",
+                ("targetId", "durationMs", "tone", "accentTone", "intensity", "rings", "shards", "label", "position"),
+                ("gibson", "cinematic", "motion", "timed"),
+            ),
+            CatalogEntry(
                 "scan",
                 "effect",
                 "Sweep a beam, line, frustum, or grid over a target.",

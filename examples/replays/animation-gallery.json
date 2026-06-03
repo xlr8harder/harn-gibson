@@ -17,6 +17,8 @@
       {"path": "animations.gallery-cues.props.cues.2.label", "equals": "BREACH"},
       {"path": "animations.gallery-scan.kind", "equals": "scan"},
       {"path": "animations.gallery-glitch.kind", "equals": "glitch"},
+      {"path": "animations.gallery-breach.kind", "equals": "breach_wave"},
+      {"path": "animations.gallery-breach.props.label", "equals": "ICE BREACH"},
       {"path": "animations.gallery-fly.kind", "equals": "flythrough"},
       {"path": "animations.gallery-extrude.kind", "equals": "extrude"},
       {"path": "animations.gallery-hold.kind", "equals": "hold"}
@@ -50,7 +52,7 @@
             "phase": "lifecycle",
             "eventType": "animation_gallery",
             "title": "Animation gallery",
-            "summary": "persistent pulses, packets, timeline cues, scans, glitch, flythrough, extrusion, and hold brackets"
+            "summary": "persistent pulses, packets, timeline cues, scans, glitch, breach waves, flythrough, extrusion, and hold brackets"
           }
         },
         {
@@ -240,6 +242,28 @@
             "durationMs": 1900,
             "loop": true,
             "props": {"phase": "after", "tone": "magenta", "amount": 0.9, "seed": 962}
+          }
+        },
+        {
+          "op": "start_animation",
+          "animation": {
+            "id": "gallery-breach",
+            "targetId": "animation-vector",
+            "kind": "breach_wave",
+            "startedAtMs": 9670,
+            "durationMs": 5400,
+            "loop": true,
+            "props": {
+              "phase": "after",
+              "tone": "magenta",
+              "accentTone": "white",
+              "intensity": 0.92,
+              "rings": 5,
+              "shards": 34,
+              "slices": 6,
+              "label": "ICE BREACH",
+              "seed": 963
+            }
           }
         },
         {

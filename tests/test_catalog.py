@@ -48,6 +48,7 @@ def test_default_visual_catalog_has_generic_and_cinematic_building_blocks() -> N
     } <= primitive_ids
     assert {
         "glitch",
+        "breach_wave",
         "flythrough",
         "packet_burst",
         "timeline_cue",
@@ -123,6 +124,10 @@ def test_default_visual_catalog_has_generic_and_cinematic_building_blocks() -> N
     assert trace_route is not None
     assert {"hops", "links", "focusHopId", "packets", "speed", "label"} <= set(trace_route.props)
     assert {"gibson", "network", "motion", "map"} <= set(trace_route.tags)
+    breach_wave = catalog.entry("breach_wave")
+    assert breach_wave is not None
+    assert {"targetId", "intensity", "rings", "shards", "label", "position"} <= set(breach_wave.props)
+    assert {"gibson", "cinematic", "motion", "timed"} <= set(breach_wave.tags)
     timeline_cue = catalog.entry("timeline_cue")
     assert timeline_cue is not None
     assert {"targetId", "cues", "durationMs", "label"} <= set(timeline_cue.props)
