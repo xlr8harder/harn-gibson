@@ -226,6 +226,7 @@
           "primitive:signal_scope",
           "primitive:trace_route",
           "primitive:city_block",
+          "primitive:hologram",
           "primitive:svg_layer",
           "animation:timeline_cue",
           "animation:camera_path",
@@ -246,7 +247,7 @@
           "renderer": "gibson-dogfood-showcase",
           "touchedFileCount": 4
         },
-        "mutationCount": 15,
+        "mutationCount": 16,
         "renderer": "gibson-dogfood-showcase",
         "requestCount": 1,
         "routes": [
@@ -261,6 +262,7 @@
           "dogfood-scope",
           "dogfood-route",
           "dogfood-city",
+          "dogfood-hologram",
           "dogfood-sigil",
           "scan-grid"
         ],
@@ -278,6 +280,7 @@
             "primitive:signal_scope",
             "primitive:trace_route",
             "primitive:city_block",
+            "primitive:hologram",
             "primitive:svg_layer",
             "animation:timeline_cue",
             "animation:camera_path",
@@ -297,7 +300,7 @@
             "renderer": "gibson-dogfood-showcase",
             "touchedFileCount": 0
           },
-          "mutationCount": 14,
+          "mutationCount": 15,
           "renderer": "gibson-dogfood-showcase",
           "requestCount": 1,
           "routes": [
@@ -312,6 +315,7 @@
             "dogfood-scope",
             "dogfood-route",
             "dogfood-city",
+            "dogfood-hologram",
             "dogfood-sigil",
             "scan-grid"
           ],
@@ -328,6 +332,7 @@
             "primitive:signal_scope",
             "primitive:trace_route",
             "primitive:city_block",
+            "primitive:hologram",
             "primitive:svg_layer",
             "animation:timeline_cue",
             "animation:camera_path",
@@ -347,7 +352,7 @@
             "renderer": "gibson-dogfood-showcase",
             "touchedFileCount": 0
           },
-          "mutationCount": 14,
+          "mutationCount": 15,
           "renderer": "gibson-dogfood-showcase",
           "requestCount": 1,
           "routes": [
@@ -362,6 +367,7 @@
             "dogfood-scope",
             "dogfood-route",
             "dogfood-city",
+            "dogfood-hologram",
             "dogfood-sigil",
             "scan-grid"
           ],
@@ -378,6 +384,7 @@
             "primitive:signal_scope",
             "primitive:trace_route",
             "primitive:city_block",
+            "primitive:hologram",
             "primitive:svg_layer",
             "animation:timeline_cue",
             "animation:camera_path",
@@ -398,7 +405,7 @@
             "renderer": "gibson-dogfood-showcase",
             "touchedFileCount": 0
           },
-          "mutationCount": 15,
+          "mutationCount": 16,
           "renderer": "gibson-dogfood-showcase",
           "requestCount": 1,
           "routes": [
@@ -413,6 +420,7 @@
             "dogfood-scope",
             "dogfood-route",
             "dogfood-city",
+            "dogfood-hologram",
             "dogfood-sigil",
             "scan-grid"
           ],
@@ -429,6 +437,7 @@
             "primitive:signal_scope",
             "primitive:trace_route",
             "primitive:city_block",
+            "primitive:hologram",
             "primitive:svg_layer",
             "animation:timeline_cue",
             "animation:camera_path",
@@ -448,7 +457,7 @@
             "renderer": "gibson-dogfood-showcase",
             "touchedFileCount": 4
           },
-          "mutationCount": 14,
+          "mutationCount": 15,
           "renderer": "gibson-dogfood-showcase",
           "requestCount": 1,
           "routes": [
@@ -463,6 +472,7 @@
             "dogfood-scope",
             "dogfood-route",
             "dogfood-city",
+            "dogfood-hologram",
             "dogfood-sigil",
             "scan-grid"
           ],
@@ -479,6 +489,7 @@
             "primitive:signal_scope",
             "primitive:trace_route",
             "primitive:city_block",
+            "primitive:hologram",
             "primitive:svg_layer",
             "animation:timeline_cue",
             "animation:camera_path",
@@ -499,7 +510,7 @@
             "renderer": "gibson-dogfood-showcase",
             "touchedFileCount": 1
           },
-          "mutationCount": 15,
+          "mutationCount": 16,
           "renderer": "gibson-dogfood-showcase",
           "requestCount": 1,
           "routes": [
@@ -514,6 +525,7 @@
             "dogfood-scope",
             "dogfood-route",
             "dogfood-city",
+            "dogfood-hologram",
             "dogfood-sigil",
             "scan-grid"
           ],
@@ -530,6 +542,7 @@
             "primitive:signal_scope",
             "primitive:trace_route",
             "primitive:city_block",
+            "primitive:hologram",
             "primitive:svg_layer",
             "animation:timeline_cue",
             "animation:camera_path",
@@ -549,7 +562,7 @@
             "renderer": "gibson-dogfood-showcase",
             "touchedFileCount": 2
           },
-          "mutationCount": 14,
+          "mutationCount": 15,
           "renderer": "gibson-dogfood-showcase",
           "requestCount": 1,
           "routes": [
@@ -564,6 +577,7 @@
             "dogfood-scope",
             "dogfood-route",
             "dogfood-city",
+            "dogfood-hologram",
             "dogfood-sigil",
             "scan-grid"
           ],
@@ -580,6 +594,7 @@
             "primitive:signal_scope",
             "primitive:trace_route",
             "primitive:city_block",
+            "primitive:hologram",
             "primitive:svg_layer",
             "animation:timeline_cue",
             "animation:camera_path",
@@ -600,7 +615,7 @@
             "renderer": "gibson-dogfood-showcase",
             "touchedFileCount": 4
           },
-          "mutationCount": 15,
+          "mutationCount": 16,
           "renderer": "gibson-dogfood-showcase",
           "requestCount": 1,
           "routes": [
@@ -615,6 +630,7 @@
             "dogfood-scope",
             "dogfood-route",
             "dogfood-city",
+            "dogfood-hologram",
             "dogfood-sigil",
             "scan-grid"
           ],
@@ -737,6 +753,30 @@
             "DOGFOOD CITY",
             "4 touched"
           ],
+          "tone": "magenta"
+        },
+        "region": "stage"
+      },
+      "dogfood-hologram": {
+        "children": [],
+        "id": "dogfood-hologram",
+        "kind": "hologram",
+        "props": {
+          "accentTone": "white",
+          "beams": 13,
+          "label": "TINY-PROJECT",
+          "motes": 54,
+          "opacity": 0.84,
+          "panels": 8,
+          "position": {
+            "x": 0.24,
+            "y": 0.34
+          },
+          "rings": 8,
+          "scale": 0.17,
+          "scan": true,
+          "seed": 87,
+          "spin": 0.48,
           "tone": "magenta"
         },
         "region": "stage"

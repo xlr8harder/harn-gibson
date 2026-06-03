@@ -670,6 +670,7 @@ def test_dogfood_showcase_renderer_returns_valid_event_reactive_plan(tmp_path: P
         "dogfood-scope": "signal_scope",
         "dogfood-route": "trace_route",
         "dogfood-city": "city_block",
+        "dogfood-hologram": "hologram",
         "dogfood-sigil": "svg_layer",
     }
     assert animation_kinds["dogfood-camera-path"] == "camera_path"
@@ -681,6 +682,7 @@ def test_dogfood_showcase_renderer_returns_valid_event_reactive_plan(tmp_path: P
     assert scene.state.primitives["dogfood-city"].props["blocks"][1]["lines"] == 1
     assert scene.state.primitives["dogfood-city"].props["blocks"][1]["h"] == 0.271
     assert scene.state.primitives["dogfood-route"].props["focusHopId"] == "target-0"
+    assert scene.state.primitives["dogfood-hologram"].props["rings"] == 6
     assert scene.state.animations["dogfood-camera-path"].props["keyframes"][1]["scale"] == 1.038
 
 

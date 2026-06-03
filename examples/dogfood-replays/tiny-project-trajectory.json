@@ -26,6 +26,10 @@
         "equals": "target-0"
       },
       {
+        "path": "primitives.dogfood-hologram.kind",
+        "equals": "hologram"
+      },
+      {
         "path": "primitives.dogfood-sigil.kind",
         "equals": "svg_layer"
       },

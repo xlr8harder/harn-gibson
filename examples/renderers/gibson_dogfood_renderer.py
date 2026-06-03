@@ -21,6 +21,8 @@ def main() -> None:
     summary = _clip(_text(event.get("summary"), event_type), 110)
     timeline = _dict(_dict(context.get("renderInput")).get("timeline"))
     duration_ms = _clamp(_int(timeline.get("durationMs"), 0), 4200, 9800)
+    project = _dict(context.get("project"))
+    project_name = _text(project.get("name"), "project")
     touched = _touched_files(context)
     entries = _repo_entries(context)
 
@@ -45,6 +47,7 @@ def main() -> None:
         _upsert_scope(event_type, phase, tone, accent, sequence, touched),
         _upsert_route(event_type, phase, tone, accent, sequence, touched),
         _upsert_city(entries, touched, event_type, tone, accent, sequence),
+        _upsert_hologram(project_name, event_type, tone, accent, sequence, touched, entries),
         _upsert_sigil(event_type, summary, tone, accent, sequence, touched),
         _timeline_cue_animation(event_type, phase, sequence, timestamp_ms, duration_ms, tone, accent, touched),
         _camera_path_animation(sequence, timestamp_ms, duration_ms),
@@ -325,6 +328,40 @@ def _upsert_city(
                         {"at": 1, "x": 0.006, "y": 0.008, "scale": 1.01},
                     ],
                 },
+            },
+        },
+    }
+
+
+def _upsert_hologram(
+    project_name: str,
+    event_type: str,
+    tone: str,
+    accent: str,
+    sequence: int,
+    touched: list[dict[str, Any]],
+    entries: list[dict[str, Any]],
+) -> dict[str, Any]:
+    return {
+        "op": "upsert",
+        "primitive": {
+            "id": "dogfood-hologram",
+            "kind": "hologram",
+            "region": "stage",
+            "props": {
+                "label": _clip(project_name.upper().replace("_", "-"), 18),
+                "position": {"x": 0.24, "y": 0.34},
+                "scale": round(0.15 + min(0.05, len(entries) * 0.005), 3),
+                "tone": tone,
+                "accentTone": accent,
+                "opacity": 0.84,
+                "rings": 4 + min(5, len(entries)),
+                "beams": 5 + min(10, len(touched) * 2),
+                "panels": 3 + min(7, len(touched) + sequence % 3),
+                "motes": 22 + min(42, len(entries) * 3 + len(touched) * 5),
+                "scan": True,
+                "spin": 0.48 if sequence % 2 else -0.42,
+                "seed": sequence + len(touched) * 17 + len(entries) * 3,
             },
         },
     }
