@@ -611,6 +611,8 @@ def test_cli_parser_and_run(monkeypatch: Any, capsys: Any) -> None:
             "scene.json",
             "--output-result",
             "result.json",
+            "--output-timeline",
+            "timeline.json",
             "--screenshot",
             "scene.png",
             "--screenshot-width",
@@ -625,6 +627,7 @@ def test_cli_parser_and_run(monkeypatch: Any, capsys: Any) -> None:
     assert parsed_replay.path == "fixture.json"
     assert parsed_replay.output_scene == "scene.json"
     assert parsed_replay.output_result == "result.json"
+    assert parsed_replay.output_timeline == "timeline.json"
     assert parsed_replay.screenshot == "scene.png"
     assert parsed_replay.screenshot_width == 800
     assert parsed_replay.screenshot_height == 600
@@ -682,6 +685,7 @@ def test_cli_replay_writes_outputs(tmp_path: Any, capsys: Any) -> None:
     replay_path = tmp_path / "replay.json"
     scene_path = tmp_path / "scene.json"
     result_path = tmp_path / "result.json"
+    timeline_path = tmp_path / "timeline.json"
     event = {
         "sequence": 1,
         "timestampMs": 10,
@@ -703,6 +707,8 @@ def test_cli_replay_writes_outputs(tmp_path: Any, capsys: Any) -> None:
                 str(scene_path),
                 "--output-result",
                 str(result_path),
+                "--output-timeline",
+                str(timeline_path),
                 "--style",
                 "mainframe",
             ]
@@ -713,7 +719,12 @@ def test_cli_replay_writes_outputs(tmp_path: Any, capsys: Any) -> None:
     scene = json.loads(scene_path.read_text(encoding="utf-8"))
     assert scene["revision"] == 1
     assert scene["metadata"]["displayStyle"] == "mainframe"
-    assert json.loads(result_path.read_text(encoding="utf-8"))["steps"][0]["updates"] == 1
+    result = json.loads(result_path.read_text(encoding="utf-8"))
+    timeline = json.loads(timeline_path.read_text(encoding="utf-8"))
+    assert result["steps"][0]["updates"] == 1
+    assert result["frames"][0]["scene"]["metadata"]["displayStyle"] == "mainframe"
+    assert timeline["frameCount"] == 1
+    assert timeline["frames"][0]["step"]["sceneRevision"] == 1
     assert capsys.readouterr().out.strip() == "replayed 1 steps; scene revision 1"
 
 

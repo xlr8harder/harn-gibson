@@ -8,8 +8,10 @@ import pytest
 from harn_gibson import (
     BrowserScreenshotResult,
     ReplayExpectationError,
+    ReplayFrame,
     ReplayResult,
     ReplayStepResult,
+    replay_timeline_from_result,
     run_replay_data,
     run_replay_file,
 )
@@ -33,6 +35,7 @@ from harn_gibson.replay import (
     run_replay_suite,
     write_replay_baseline,
     write_replay_result,
+    write_replay_timeline,
     write_scene,
 )
 from harn_gibson.scene import SceneMutation
@@ -90,6 +93,7 @@ def test_replay_event_steps_file_io_and_writers(tmp_path: Path) -> None:
     assert result.name == "event replay"
     assert result.metadata == {"fixture": True}
     assert result.expectations == ()
+    assert result.frames == ()
     assert result.steps[0].to_dict() == {
         "index": 0,
         "kind": "event",
@@ -107,6 +111,23 @@ def test_replay_event_steps_file_io_and_writers(tmp_path: Path) -> None:
 
     assert json.loads(scene_path.read_text(encoding="utf-8"))["revision"] == 2
     assert json.loads(result_path.read_text(encoding="utf-8"))["name"] == "event replay"
+    assert "frames" not in json.loads(result_path.read_text(encoding="utf-8"))
+
+    framed = run_replay_file(path, capture_frames=True)
+    timeline_path = tmp_path / "out" / "timeline.json"
+    write_replay_timeline(timeline_path, framed)
+    timeline = json.loads(timeline_path.read_text(encoding="utf-8"))
+
+    assert isinstance(framed.frames[0], ReplayFrame)
+    assert framed.frames[0].step == framed.steps[0]
+    assert framed.frames[0].scene["revision"] == 1
+    assert framed.frames[1].scene["primitives"]["assistant-stream"]["props"]["text"] == "loading"
+    assert framed.to_dict()["frames"][1]["step"]["route"] == "stream_buffer"
+    assert replay_timeline_from_result(framed)["frameCount"] == 2
+    assert timeline["schema"] == "harn-gibson.replay-timeline.v1"
+    assert timeline["replayName"] == "event replay"
+    assert timeline["stepCount"] == 2
+    assert timeline["frames"][0]["scene"]["schema"] == "harn-gibson.scene.v1"
 
 
 def test_replay_data_from_event_log(tmp_path: Path) -> None:

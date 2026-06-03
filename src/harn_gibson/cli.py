@@ -44,6 +44,7 @@ def build_parser() -> argparse.ArgumentParser:
     replay.add_argument("path", help="path to replay JSON")
     replay.add_argument("--output-scene", default=None, help="write final scene JSON to this path")
     replay.add_argument("--output-result", default=None, help="write full replay result JSON to this path")
+    replay.add_argument("--output-timeline", default=None, help="write per-step replay frame timeline JSON")
     replay.add_argument("--screenshot", default=None, help="write a browser screenshot of the final replay scene")
     replay.add_argument("--screenshot-width", type=int, default=1280, help="screenshot viewport width")
     replay.add_argument("--screenshot-height", type=int, default=900, help="screenshot viewport height")
@@ -181,12 +182,18 @@ def run(argv: Sequence[str] | None = None) -> int:
         print(result.message)
         return 0 if result.available else 1
     if args.command == "replay":
-        from harn_gibson.replay import ReplayExpectationError, run_replay_file, write_replay_result, write_scene
+        from harn_gibson.replay import (
+            ReplayExpectationError,
+            run_replay_file,
+            write_replay_result,
+            write_replay_timeline,
+            write_scene,
+        )
         from harn_gibson.server import GibsonServerState
 
         replay_state = GibsonServerState(style_pack=style_pack_from_name(args.style))
         try:
-            result = run_replay_file(args.path, replay_state)
+            result = run_replay_file(args.path, replay_state, capture_frames=bool(args.output_timeline))
         except ReplayExpectationError as error:
             for failure in error.failures:
                 print(f"replay expectation failed: {failure.message}", file=sys.stderr)
@@ -195,6 +202,8 @@ def run(argv: Sequence[str] | None = None) -> int:
             write_scene(args.output_scene, result.scene)
         if args.output_result:
             write_replay_result(args.output_result, result)
+        if args.output_timeline:
+            write_replay_timeline(args.output_timeline, result)
         if args.screenshot:
             from harn_gibson.browser_capture import capture_scene_screenshot
 

@@ -43,6 +43,20 @@ class ReplayStepResult:
 
 
 @dataclass(frozen=True, slots=True)
+class ReplayFrame:
+    index: int
+    step: ReplayStepResult
+    scene: dict[str, Any]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "index": self.index,
+            "step": self.step.to_dict(),
+            "scene": self.scene,
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class ReplayExpectationResult:
     path: str
     op: ReplayExpectationOp
@@ -161,9 +175,10 @@ class ReplayResult:
     scene: SceneState
     metadata: dict[str, Any] = field(default_factory=dict)
     expectations: tuple[ReplayExpectationResult, ...] = ()
+    frames: tuple[ReplayFrame, ...] = ()
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        payload = {
             "schema": "harn-gibson.replay-result.v1",
             "replaySchema": self.schema,
             "name": self.name,
@@ -172,10 +187,18 @@ class ReplayResult:
             "metadata": self.metadata,
             "expectations": [expectation.to_dict() for expectation in self.expectations],
         }
+        if self.frames:
+            payload["frames"] = [frame.to_dict() for frame in self.frames]
+        return payload
 
 
-def run_replay_file(path: str | Path, state: GibsonServerState | None = None) -> ReplayResult:
-    return run_replay_data(load_replay_file(path), state)
+def run_replay_file(
+    path: str | Path,
+    state: GibsonServerState | None = None,
+    *,
+    capture_frames: bool = False,
+) -> ReplayResult:
+    return run_replay_data(load_replay_file(path), state, capture_frames=capture_frames)
 
 
 def run_replay_suite(
@@ -358,7 +381,12 @@ def replay_baseline_scene(scene: SceneState) -> dict[str, Any]:
     return payload
 
 
-def run_replay_data(data: Mapping[str, Any], state: GibsonServerState | None = None) -> ReplayResult:
+def run_replay_data(
+    data: Mapping[str, Any],
+    state: GibsonServerState | None = None,
+    *,
+    capture_frames: bool = False,
+) -> ReplayResult:
     replay_state = state or GibsonServerState()
     schema = str(data.get("schema") or "harn-gibson.replay.v1")
     name = str(data.get("name") or "unnamed replay")
@@ -367,10 +395,20 @@ def run_replay_data(data: Mapping[str, Any], state: GibsonServerState | None = N
         raise ValueError("replay must contain a steps list")
 
     results: list[ReplayStepResult] = []
+    frames: list[ReplayFrame] = []
     for index, step in enumerate(steps):
         if not isinstance(step, Mapping):
             raise ValueError(f"replay step {index} must be an object")
-        results.append(_run_step(index, step, replay_state))
+        result = _run_step(index, step, replay_state)
+        results.append(result)
+        if capture_frames:
+            frames.append(
+                ReplayFrame(
+                    index=index,
+                    step=result,
+                    scene=deepcopy(replay_state.scene.state.to_dict()),
+                )
+            )
     expectations = evaluate_replay_expectations(replay_state.scene.state, data.get("expect"))
     failures = tuple(expectation for expectation in expectations if not expectation.passed)
     if failures:
@@ -382,6 +420,7 @@ def run_replay_data(data: Mapping[str, Any], state: GibsonServerState | None = N
         scene=replay_state.scene.state,
         metadata=dict(data.get("metadata") or {}),
         expectations=expectations,
+        frames=tuple(frames),
     )
 
 
@@ -665,6 +704,24 @@ def write_replay_result(path: str | Path, result: ReplayResult) -> None:
     result_path.write_text(json.dumps(result.to_dict(), indent=2) + "\n", encoding="utf-8")
 
 
+def replay_timeline_from_result(result: ReplayResult) -> dict[str, Any]:
+    return {
+        "schema": "harn-gibson.replay-timeline.v1",
+        "replayName": result.name,
+        "replaySchema": result.schema,
+        "stepCount": len(result.steps),
+        "frameCount": len(result.frames),
+        "frames": [frame.to_dict() for frame in result.frames],
+        "metadata": result.metadata,
+    }
+
+
+def write_replay_timeline(path: str | Path, result: ReplayResult) -> None:
+    timeline_path = Path(path)
+    timeline_path.parent.mkdir(parents=True, exist_ok=True)
+    timeline_path.write_text(json.dumps(replay_timeline_from_result(result), indent=2) + "\n", encoding="utf-8")
+
+
 def _baseline_mismatch_error(expected_scene: Mapping[str, Any], actual_scene: Mapping[str, Any]) -> str:
     expected = json.dumps(expected_scene, indent=2, sort_keys=True).splitlines()
     actual = json.dumps(actual_scene, indent=2, sort_keys=True).splitlines()
@@ -720,6 +777,7 @@ __all__ = [
     "ReplayExpectationError",
     "ReplayExpectationOp",
     "ReplayExpectationResult",
+    "ReplayFrame",
     "ReplayResult",
     "ReplayStepKind",
     "ReplayStepResult",
@@ -735,10 +793,12 @@ __all__ = [
     "replay_data_from_event_log",
     "replay_baseline_from_result",
     "replay_baseline_scene",
+    "replay_timeline_from_result",
     "run_replay_data",
     "run_replay_file",
     "run_replay_suite",
     "write_replay_result",
+    "write_replay_timeline",
     "write_replay_baseline",
     "write_scene",
 ]
