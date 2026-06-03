@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sys
 import threading
 import time
 from pathlib import Path
@@ -7,6 +8,14 @@ from pathlib import Path
 import pytest
 
 from harn_gibson.events import GibsonEvent
+from harn_gibson.external_renderer import (
+    ExternalRenderer,
+    external_renderer_from_env,
+    external_renderer_payload,
+    parse_renderer_command,
+    render_plan_from_external_response,
+    renderer_timeout_seconds_from_env,
+)
 from harn_gibson.rendering import (
     DeterministicSceneRenderer,
     RendererContext,
@@ -80,6 +89,192 @@ def test_deterministic_renderer_creates_one_step_per_request() -> None:
     assert plan.steps[0].event_index == 0
     assert plan.steps[1].event_index == 1
     assert plan.steps[0].mutations[0].target_id == "status"
+
+
+def test_external_renderer_command_env_and_response_parser() -> None:
+    request = RenderRequest(event(1, "tool_call"))
+    response = {
+        "plan": {
+            "steps": [
+                {
+                    "eventIndex": 0,
+                    "delayMs": 5,
+                    "startOffsetMs": 2,
+                    "mutations": [{"op": "patch", "targetId": "status", "props": {"text": "external"}}],
+                }
+            ],
+            "metadata": {"intent": "external patch"},
+        }
+    }
+
+    plan = render_plan_from_external_response(response, (request,), renderer_id="fixture-renderer")
+    renderer_metadata_plan = render_plan_from_external_response(
+        {"steps": [{"mutations": []}], "metadata": {"renderer": "named-renderer"}},
+        (request,),
+    )
+
+    assert plan.requests == (request,)
+    assert plan.metadata == {"intent": "external patch", "renderer": "fixture-renderer"}
+    assert plan.steps[0].delay_ms == 5
+    assert plan.steps[0].start_offset_ms == 2
+    assert plan.steps[0].mutations[0].target_id == "status"
+    assert renderer_metadata_plan.metadata == {"renderer": "named-renderer"}
+    assert renderer_metadata_plan.steps[0].event_index is None
+    assert parse_renderer_command('["python", "renderer.py"]') == ("python", "renderer.py")
+    assert parse_renderer_command("python renderer.py") == ("python", "renderer.py")
+    assert renderer_timeout_seconds_from_env(None) == 30.0
+    assert renderer_timeout_seconds_from_env("") == 30.0
+    assert renderer_timeout_seconds_from_env("2500") == 2.5
+    assert external_renderer_from_env(None) is None
+    assert external_renderer_from_env('["python", "renderer.py"]', "100").command == ("python", "renderer.py")
+    with pytest.raises(ValueError, match="cannot be empty"):
+        ExternalRenderer(())
+
+    for command_value, message in (
+        ("", "cannot be empty"),
+        ('""', "cannot be empty"),
+        ("[", "JSON must be an array"),
+        ("[]", "non-empty array"),
+        ("[1]", "non-empty strings"),
+    ):
+        with pytest.raises(ValueError, match=message):
+            parse_renderer_command(command_value)
+    for timeout_value in ("nope", "0"):
+        with pytest.raises(ValueError, match="positive number"):
+            renderer_timeout_seconds_from_env(timeout_value)
+    for bad_response, message in (
+        ([], "JSON object"),
+        ({}, "steps list"),
+        ({"steps": [[]]}, "step 0"),
+        ({"steps": [{"mutations": {}}]}, "mutations must be a list"),
+        ({"steps": [{"mutations": [None]}]}, "mutation must be an object"),
+    ):
+        with pytest.raises(ValueError, match=message):
+            render_plan_from_external_response(bad_response, (request,))
+
+
+def test_external_renderer_subprocess_receives_context_and_returns_plan(tmp_path: Path) -> None:
+    script = tmp_path / "renderer.py"
+    script.write_text(
+        """
+import json
+import sys
+
+payload = json.load(sys.stdin)
+request = payload["requests"][-1]["event"]
+assert payload["schema"] == "harn-gibson.external-renderer-request.v1"
+assert payload["context"]["schema"] == "harn-gibson.renderer-context.v1"
+assert payload["scene"]["schema"] == "harn-gibson.scene.v1"
+json.dump(
+    {
+        "metadata": {"intent": "external renderer patch"},
+        "steps": [
+            {
+                "eventIndex": 0,
+                "mutations": [
+                    {
+                        "op": "patch",
+                        "targetId": "status",
+                        "props": {
+                            "text": "external:" + request["eventType"],
+                            "phase": "lifecycle",
+                            "tone": "cyan",
+                        },
+                    }
+                ],
+            }
+        ],
+    },
+    sys.stdout,
+)
+""".lstrip(),
+        encoding="utf-8",
+    )
+    renderer = ExternalRenderer((sys.executable, str(script)), timeout_seconds=2, renderer_id="fixture-external")
+    pipeline = RenderPipeline(scene=SceneEngine(), buffer=EventBuffer(), renderer=renderer)
+
+    result = pipeline.submit(RenderRequest(event(3, "tool_call")))
+    direct_plan = renderer.render((RenderRequest(event(4, "browser_input")),), SceneEngine().state)
+    payload = external_renderer_payload(
+        (RenderRequest(event(5)),),
+        SceneEngine().state,
+        RendererContext("rolling", {}, {}, {}, {}),
+    )
+
+    assert result.scene_revision == 1
+    assert result.updates[0]["renderPlan"]["metadata"] == {
+        "intent": "external renderer patch",
+        "renderer": "fixture-external",
+    }
+    assert pipeline.scene.state.primitives["status"].props["text"] == "external:tool_call"
+    assert direct_plan.steps[0].mutations[0].props["text"] == "external:browser_input"
+    assert payload["schema"] == "harn-gibson.external-renderer-request.v1"
+    assert payload["requests"][0]["event"]["eventType"] == "input"
+
+
+def test_external_renderer_failures_become_trace_state(tmp_path: Path) -> None:
+    failing = tmp_path / "failing_renderer.py"
+    failing.write_text(
+        "import sys\nsys.stderr.write('renderer exploded ' + 'x' * 5000)\nsys.exit(7)\n",
+        encoding="utf-8",
+    )
+    stdout_only = tmp_path / "stdout_renderer.py"
+    stdout_only.write_text(
+        "import sys\nsys.stdout.write('stdout-only failure')\nsys.exit(8)\n",
+        encoding="utf-8",
+    )
+    invalid_json = tmp_path / "invalid_renderer.py"
+    invalid_json.write_text("print('not json')\n", encoding="utf-8")
+    scene = SceneEngine()
+    context = RendererContext("compaction", {}, {}, scene.state.to_dict(), {})
+    request = RenderRequest(event(6, "tool_result"))
+    renderer = ExternalRenderer((sys.executable, str(failing)), timeout_seconds=2, renderer_id="fixture-external")
+
+    class EmptyFallback:
+        def render_with_context(
+            self,
+            requests: tuple[RenderRequest, ...],
+            _scene: object,
+            _context: RendererContext,
+        ) -> RenderPlan:
+            return RenderPlan(requests, (), {"renderer": "empty"})
+
+    result = RenderPipeline(scene=scene, buffer=EventBuffer(), renderer=renderer).submit(request)
+    empty_fallback_plan = ExternalRenderer(
+        (sys.executable, str(failing)),
+        timeout_seconds=2,
+        renderer_id="fixture-external",
+        fallback=EmptyFallback(),  # type: ignore[arg-type]
+    ).render_with_context((request,), scene.state, context)
+    stdout_plan = ExternalRenderer(
+        (sys.executable, str(stdout_only)),
+        timeout_seconds=2,
+        renderer_id="fixture-external",
+    ).render_with_context((request,), scene.state, context)
+    invalid_plan = ExternalRenderer(
+        (sys.executable, str(invalid_json)),
+        timeout_seconds=2,
+        renderer_id="fixture-external",
+    ).render_with_context((request,), scene.state, context)
+    empty_plan = renderer.render_with_context((), scene.state, context)
+
+    trace = scene.state.primitives["trace-log"].props["text"][0]
+    assert result.scene_revision == 1
+    assert scene.state.primitives["gibson-city"].kind == "city_block"
+    assert scene.state.primitives["status"].props["text"] == "renderer:error"
+    assert trace["eventType"] == "renderer_error"
+    assert "exited with code 7" in trace["message"]
+    assert "renderer exploded" in trace["details"]
+    assert len(trace["details"]) == 4000
+    assert trace["details"].endswith("...")
+    assert empty_fallback_plan.steps[0].event_index == 0
+    assert empty_fallback_plan.steps[0].mutations[-1].target_id == "trace-log"
+    assert result.updates[0]["renderIntent"]["renderer"] == "fixture-external"
+    assert result.updates[0]["renderIntent"]["metadata"]["fallbackRenderer"] == "deterministic"
+    assert "stdout-only failure" in stdout_plan.metadata["rendererError"]["details"]
+    assert invalid_plan.metadata["rendererError"]["message"].startswith("external renderer failed")
+    assert "not json" in invalid_plan.metadata["rendererError"]["message"]
+    assert empty_plan.steps == ()
 
 
 def test_deterministic_renderer_adds_repo_graph_from_context(tmp_path: Path) -> None:

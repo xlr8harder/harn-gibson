@@ -12,7 +12,7 @@ The current display agent is deterministic. The later LLM-driven visualization l
 
 `harn` is included as a development dependency so `uv run harn-gibson dogfood` works from this checkout. The display server and extension modules do not import `harn` or `harn-tui`; the dogfood launcher is the only place that shells out to the harn CLI. A future packaging split should keep the web relay installable without harn's terminal UI stack.
 
-There is no model-backed renderer agent yet. Events pass through a routing layer before rendering: normal events become renderer requests, streaming assistant deltas update a local `text_stream` primitive, and debug-only events can bypass renderer execution. The deterministic fallback emits browser-rendered `city_block`, `node_graph`, `ribbon`, `glyph_layer`, and `particle_field` primitives, including a bounded repo map when renderer context includes topology or touched-file data. The browser renderer also supports low-level `mesh` and constrained `svg_layer` vector primitives for renderer plans and gallery fixtures. The display server exposes `/catalog`, a generic primitive/effect catalog for future renderer prompts.
+There is no model-backed renderer agent yet. Events pass through a routing layer before rendering: normal events become renderer requests, streaming assistant deltas update a local `text_stream` primitive, and debug-only events can bypass renderer execution. The deterministic fallback emits browser-rendered `city_block`, `node_graph`, `ribbon`, `glyph_layer`, and `particle_field` primitives, including a bounded repo map when renderer context includes topology or touched-file data. The browser renderer also supports low-level `mesh` and constrained `svg_layer` vector primitives for renderer plans and gallery fixtures. Dogfood runs can opt into an external renderer command that receives renderer context on stdin and returns render-plan JSON on stdout. The display server exposes `/catalog`, a generic primitive/effect catalog for future renderer prompts.
 
 Renderer implementations can stay simple with `render(requests, scene)`, or opt into `render_with_context(requests, scene, context)` to receive compact project metadata, scene state, catalog entries, recent agent context, and recent visualization history. See [docs/renderer-agent.md](docs/renderer-agent.md) for the context and compaction contract.
 
@@ -98,6 +98,16 @@ Specific event types can be forced to renderer, direct scene, debug-only, or dro
 ```bash
 HARN_GIBSON_ROUTE_RULES='[{"eventType":"runtime_error","route":"debug_only"},{"eventType":"model_select","route":"drop"}]'
 ```
+
+To dogfood the renderer-agent process boundary without a live model call, point the server at an external renderer command. The command receives `harn-gibson.external-renderer-request.v1` JSON on stdin and returns a render plan with `steps` on stdout:
+
+```bash
+HARN_GIBSON_RENDERER_COMMAND='uv run python examples/renderers/gibson_echo_renderer.py' \
+HARN_GIBSON_RENDERER_TIMEOUT_MS=10000 \
+uv run harn-gibson dogfood
+```
+
+Renderer command failures are fail-open: the deterministic renderer still updates the scene, and the failure is added to the debug trace surface.
 
 For offline inspection, write normalized events to JSONL:
 

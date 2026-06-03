@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import sys
 import threading
 import urllib.error
 import urllib.request
@@ -12,6 +13,7 @@ from harn_gibson import (
     BrowserScreenshotResult,
     EventRouter,
     EventRouteRule,
+    ExternalRenderer,
     RendererEventInterest,
     RenderPlan,
     RenderRequest,
@@ -477,10 +479,20 @@ def test_async_state_accepts_without_immediate_scene_update() -> None:
 
 def test_build_state_from_env() -> None:
     state = build_state_from_env({"HARN_GIBSON_RENDER_MODE": "async", "HARN_GIBSON_RENDER_BATCH_MS": "5"})
+    renderer_state = build_state_from_env(
+        {
+            "HARN_GIBSON_RENDERER_COMMAND": json.dumps([sys.executable, "-c", "print('{}')"]),
+            "HARN_GIBSON_RENDERER_TIMEOUT_MS": "250",
+        }
+    )
 
     assert state.pipeline.mode == "async"
     assert state.pipeline.batch_window_ms == 5
+    assert isinstance(renderer_state.renderer, ExternalRenderer)
+    assert renderer_state.renderer.command == (sys.executable, "-c", "print('{}')")
+    assert renderer_state.renderer.timeout_seconds == 0.25
     state.pipeline.stop()
+    renderer_state.pipeline.stop()
 
 
 def test_renderer_interest_from_env_and_build_state() -> None:

@@ -2,7 +2,7 @@
 
 The renderer agent is the model-driven version of the current deterministic renderer. It receives harn events, current scene state, and recent visualization context, then returns a `RenderPlan`.
 
-There is no model-backed renderer agent in the current implementation. The server uses the deterministic renderer while we harden the event, scene, and browser fixtures.
+There is no model-backed renderer agent in the current implementation. The server uses the deterministic renderer by default while we harden the event, scene, and browser fixtures. Dogfood runs can also use an external renderer command as a process-backed adapter for future model calls.
 
 ## Render Plan Contract
 
@@ -45,6 +45,46 @@ The renderer can answer with steps that use delays and start offsets to make the
 Each step can include multiple scene mutations. Multiple steps let the renderer queue effects in sequence, for example: flash a node, add a trace line, then settle the status panel.
 
 Every applied plan is summarized as `harn-gibson.render-intent.v1` and stored in `scene.metadata.renderIntents`. The intent summary includes renderer name, human intent, event types, routes, timeline, effects, targets, and original plan metadata. Published scene updates also include the current `renderIntent`, which makes replay/debug inspection independent of renderer implementation details.
+
+## External Renderer Command
+
+Set `HARN_GIBSON_RENDERER_COMMAND` to run a renderer as a subprocess. The command is parsed as a shell-style command string, or as a JSON array of argv strings when the value starts with `[`. `HARN_GIBSON_RENDERER_TIMEOUT_MS` controls the per-render timeout.
+
+```bash
+HARN_GIBSON_RENDERER_COMMAND='uv run python examples/renderers/gibson_echo_renderer.py' \
+HARN_GIBSON_RENDERER_TIMEOUT_MS=10000 \
+uv run harn-gibson dogfood
+```
+
+The command receives one JSON object on stdin:
+
+```json
+{
+  "schema": "harn-gibson.external-renderer-request.v1",
+  "requests": [{"event": {"eventType": "tool_call"}}],
+  "scene": {"schema": "harn-gibson.scene.v1"},
+  "context": {"schema": "harn-gibson.renderer-context.v1"}
+}
+```
+
+The command returns a render plan on stdout. Live requests from harn remain authoritative; the adapter binds returned steps to the current request batch and ignores model-supplied request objects.
+
+```json
+{
+  "schema": "harn-gibson.render-plan.v1",
+  "metadata": {"renderer": "example", "intent": "pulse current tool"},
+  "steps": [
+    {
+      "eventIndex": 0,
+      "mutations": [
+        {"op": "patch", "targetId": "status", "props": {"text": "external:tool_call"}}
+      ]
+    }
+  ]
+}
+```
+
+If the command exits nonzero, times out, or writes invalid JSON, harn-gibson applies the deterministic fallback and patches the renderer failure into the trace/debug scene state. That keeps harn progress fail-open while making renderer-agent problems visible in the browser.
 
 ## Blocking Vs Async
 

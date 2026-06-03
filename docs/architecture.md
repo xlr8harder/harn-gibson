@@ -64,7 +64,7 @@ Each applied render plan also records a bounded render-intent history in scene m
 
 The pipeline also builds a `RendererContext` for renderers that opt into `render_with_context`. The context alternates between full compaction payloads and rolling summaries, combining project metadata, bounded repo topology, touched-file summaries, catalog entries, current scene state, recent agent context, render intents, and recent visualization history without requiring a full transcript on each renderer turn.
 
-The deterministic renderer returns one render step per event today. A model-backed renderer should return the same `RenderPlan` shape and may include multiple delayed steps for sequential effects.
+The deterministic renderer returns one render step per event today. An external renderer command can also receive the same context as JSON on stdin and return render-plan JSON on stdout. That process adapter is the first dogfoodable renderer-agent boundary; command failures are converted into visible trace/debug scene state while the deterministic renderer keeps harn progress fail-open. A model-backed renderer should return the same `RenderPlan` shape and may include multiple delayed steps for sequential effects.
 
 ## Hook Phases
 

@@ -3,6 +3,14 @@
 from harn_gibson.browser_capture import BrowserScreenshotResult, capture_scene_screenshot
 from harn_gibson.catalog import CatalogEntry, VisualCatalog, default_visual_catalog
 from harn_gibson.events import EventPhase, GibsonEvent, phase_for_event, summarize_event, to_jsonable
+from harn_gibson.external_renderer import (
+    ExternalRenderer,
+    external_renderer_from_env,
+    external_renderer_payload,
+    parse_renderer_command,
+    render_plan_from_external_response,
+    renderer_timeout_seconds_from_env,
+)
 from harn_gibson.hooks import HookDecision, HookDispatcher, load_hook_module, result_for_harn
 from harn_gibson.rendering import (
     ContextualSceneRenderer,
@@ -64,6 +72,7 @@ __all__ = [
     "ContextualSceneRenderer",
     "EventPhase",
     "EventRouteRule",
+    "ExternalRenderer",
     "GibsonEvent",
     "HookDecision",
     "HookDispatcher",
@@ -102,14 +111,19 @@ __all__ = [
     "discover_replay_files",
     "evaluate_replay_expectations",
     "event_route_rules_from_value",
+    "external_renderer_from_env",
+    "external_renderer_payload",
     "initial_scene",
     "load_hook_module",
+    "parse_renderer_command",
     "phase_for_event",
     "result_for_harn",
     "renderer_event_interest_from_renderer",
     "renderer_event_interest_from_value",
+    "renderer_timeout_seconds_from_env",
     "replay_baseline_from_result",
     "replay_baseline_scene",
+    "render_plan_from_external_response",
     "render_intent_from_plan",
     "replay_data_from_event_log",
     "run_replay_data",
