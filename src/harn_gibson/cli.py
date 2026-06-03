@@ -66,6 +66,12 @@ def build_parser() -> argparse.ArgumentParser:
         default=DOGFOOD_CAPTURE_RENDERER_TIMEOUT_MS,
         help="external renderer timeout in milliseconds",
     )
+    capture.add_argument(
+        "--split-every",
+        type=int,
+        default=None,
+        help="print a split replay-review command with at most this many events per fixture",
+    )
     capture.add_argument("harn_args", nargs=argparse.REMAINDER, help="arguments forwarded to harn after --")
 
     auth = subcommands.add_parser("import-codex-auth", help="copy Codex OAuth tokens into harn auth storage")
@@ -318,7 +324,11 @@ def run_dogfood_capture(
     event_log: str | None = None,
     renderer_command: str | None = None,
     renderer_timeout_ms: str = DOGFOOD_CAPTURE_RENDERER_TIMEOUT_MS,
+    split_every: int | None = None,
 ) -> int:
+    if split_every is not None and split_every <= 0:
+        print("--split-every must be positive", file=sys.stderr)
+        return 2
     event_log_path = Path(event_log) if event_log is not None else _default_capture_event_log_path()
     event_log_path.parent.mkdir(parents=True, exist_ok=True)
     capture_renderer_command = renderer_command if renderer_command is not None else _default_dogfood_renderer_command()
@@ -342,7 +352,14 @@ def run_dogfood_capture(
     )
     print(
         "build a replay review from this capture with:\n"
-        f"  {_capture_replay_command(event_log_path, capture_renderer_command, str(renderer_timeout_ms), style)}",
+        "  "
+        + _capture_replay_command(
+            event_log_path,
+            capture_renderer_command,
+            str(renderer_timeout_ms),
+            style,
+            split_every,
+        ),
         file=sys.stderr,
     )
     return exit_code
@@ -362,8 +379,10 @@ def _capture_replay_command(
     renderer_command: str,
     renderer_timeout_ms: str,
     style: str | None,
+    split_every: int | None,
 ) -> str:
     fixture_output = event_log_path.with_suffix(".replay.json")
+    split_output_dir = event_log_path.with_suffix(".replays")
     review_dir = event_log_path.with_name(f"{event_log_path.stem}-review")
     command = [
         "uv",
@@ -371,17 +390,23 @@ def _capture_replay_command(
         "harn-gibson",
         "event-log-to-replay",
         str(event_log_path),
-        "--output",
-        str(fixture_output),
-        "--visual-fixture",
-        "--redact-sensitive",
-        "--review-dir",
-        str(review_dir),
-        "--renderer-command",
-        renderer_command,
-        "--renderer-timeout-ms",
-        renderer_timeout_ms,
     ]
+    if split_every is None:
+        command.extend(["--output", str(fixture_output)])
+    else:
+        command.extend(["--output-dir", str(split_output_dir), "--split-every", str(split_every)])
+    command.extend(
+        [
+            "--visual-fixture",
+            "--redact-sensitive",
+            "--review-dir",
+            str(review_dir),
+            "--renderer-command",
+            renderer_command,
+            "--renderer-timeout-ms",
+            renderer_timeout_ms,
+        ]
+    )
     if style is not None:
         command.extend(["--style", style])
     return " ".join(shlex.quote(part) for part in command)
@@ -709,6 +734,7 @@ def run(argv: Sequence[str] | None = None) -> int:
             event_log=args.event_log,
             renderer_command=args.renderer_command,
             renderer_timeout_ms=args.renderer_timeout_ms,
+            split_every=args.split_every,
         )
     if args.command in {None, "serve"}:
         from harn_gibson.server import run_server

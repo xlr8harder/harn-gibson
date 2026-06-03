@@ -631,6 +631,8 @@ def test_cli_parser_and_run(monkeypatch: Any, capsys: Any) -> None:
             "python renderer.py",
             "--renderer-timeout-ms",
             "1234",
+            "--split-every",
+            "200",
             "--",
             "-p",
             "capture",
@@ -642,6 +644,7 @@ def test_cli_parser_and_run(monkeypatch: Any, capsys: Any) -> None:
     assert parsed_capture.event_log == "events.jsonl"
     assert parsed_capture.renderer_command == "python renderer.py"
     assert parsed_capture.renderer_timeout_ms == "1234"
+    assert parsed_capture.split_every == 200
     assert parsed_capture.harn_args == ["--", "-p", "capture"]
     parsed_auth = parser.parse_args(["import-codex-auth", "--codex-auth", "codex.json", "--harn-auth", "harn.json"])
     assert parsed_auth.command == "import-codex-auth"
@@ -2159,6 +2162,50 @@ def test_cli_dogfood_capture_sets_env_and_replay_hint(
     assert f"--review-dir {event_log.with_name('events-review')}" in stderr
     assert "--renderer-command 'python renderer.py'" in stderr
     assert "--renderer-timeout-ms 1234 --style mainframe" in stderr
+
+
+def test_cli_dogfood_capture_split_hint(
+    monkeypatch: Any,
+    tmp_path: Path,
+    capsys: Any,
+) -> None:
+    dogfood_calls: list[dict[str, Any]] = []
+    event_log = tmp_path / "long-events.jsonl"
+
+    def fake_run_dogfood(**kwargs: Any) -> int:
+        dogfood_calls.append(kwargs)
+        return 0
+
+    monkeypatch.setattr(cli, "run_dogfood", fake_run_dogfood)
+
+    assert (
+        cli.run(
+            [
+                "dogfood-capture",
+                "--event-log",
+                str(event_log),
+                "--renderer-command",
+                "python renderer.py",
+                "--renderer-timeout-ms",
+                "1234",
+                "--split-every",
+                "200",
+                "--no-browser",
+                "--no-codex-auth-import",
+                "--no-hold-on-error",
+            ]
+        )
+        == 0
+    )
+    assert dogfood_calls[0]["env_overrides"]["HARN_GIBSON_EVENT_LOG"] == str(event_log)
+    stderr = capsys.readouterr().err
+    assert f"--output-dir {event_log.with_suffix('.replays')}" in stderr
+    assert "--split-every 200" in stderr
+    assert f"--review-dir {event_log.with_name('long-events-review')}" in stderr
+    assert f"--output {event_log.with_suffix('.replay.json')}" not in stderr
+
+    assert cli.run_dogfood_capture(split_every=0, launch_browser=False, codex_auth_import=False) == 2
+    assert "--split-every must be positive" in capsys.readouterr().err
 
 
 def test_cli_dogfood_capture_defaults_to_ignored_timestamped_log(monkeypatch: Any, capsys: Any) -> None:

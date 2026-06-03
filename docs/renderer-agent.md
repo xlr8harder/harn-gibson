@@ -59,10 +59,10 @@ uv run harn-gibson dogfood --style neon-noir
 For longer live sessions that should become replay fixtures, prefer the capture wrapper:
 
 ```bash
-uv run harn-gibson dogfood-capture --style neon-noir -- -p "bootstrap a tiny project here"
+uv run harn-gibson dogfood-capture --style neon-noir --split-every 200 -- -p "bootstrap a tiny project here"
 ```
 
-It sets the showcase renderer, records normalized JSONL under ignored artifacts by default, and prints the matching `event-log-to-replay --review-dir ...` command when harn exits.
+It sets the showcase renderer, records normalized JSONL under ignored artifacts by default, and prints the matching split `event-log-to-replay --review-dir ...` command when harn exits.
 
 For 15-20 minute captures, use `event-log-to-replay --split-every N --output-dir DIR --review-dir REVIEW` instead of one large fixture. It writes the split fixture directory and immediately builds a suite overview plus per-chunk frame players, renderer contexts, prompts, renderer chunks, render intents, final scenes, and result JSON. `replay-dir DIR --review-dir ...` can rerun that same review later.
 

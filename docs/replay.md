@@ -41,7 +41,7 @@ For live trajectory capture, use the dogfood capture wrapper:
 uv run harn-gibson dogfood-capture -- -p "bootstrap a tiny project here"
 ```
 
-It launches the display with `examples/renderers/gibson_dogfood_renderer.py`, writes normalized event payloads as JSONL under ignored `test-artifacts/captures/` by default, and prints the exact conversion command for that capture. Pass `--event-log path/to/session.jsonl` for a stable path. Captures can contain prompts, tool output, file paths, diagnostics, and tracebacks, so keep the raw JSONL out of committed fixtures. `event-log-to-replay` redacts common token, key, password, and credential values by default before writing replay JSON; use `--no-redact-sensitive` only for private local debugging.
+It launches the display with `examples/renderers/gibson_dogfood_renderer.py`, writes normalized event payloads as JSONL under ignored `test-artifacts/captures/` by default, and prints the exact conversion command for that capture. Pass `--event-log path/to/session.jsonl` for a stable path. For longer sessions, pass `--split-every N` to make the printed follow-up command use split fixture conversion and suite review. Captures can contain prompts, tool output, file paths, diagnostics, and tracebacks, so keep the raw JSONL out of committed fixtures. `event-log-to-replay` redacts common token, key, password, and credential values by default before writing replay JSON; use `--no-redact-sensitive` only for private local debugging.
 
 When `HARN_GIBSON_EVENT_LOG` is set directly, the harn extension writes the same normalized event payloads as JSONL. Convert a captured log into a replay fixture with:
 

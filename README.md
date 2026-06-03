@@ -123,6 +123,12 @@ For longer capture sessions, use the capture wrapper. It launches dogfood with t
 uv run harn-gibson dogfood-capture -- -p "bootstrap a tiny project here"
 ```
 
+For 15-20 minute captures, ask the wrapper to print the split-review follow-up directly:
+
+```bash
+uv run harn-gibson dogfood-capture --split-every 200 -- -p "bootstrap a tiny project here"
+```
+
 Pass `--event-log path/to/session.jsonl` if you want a stable capture path. JSONL captures can contain prompts, tool output, file paths, and diagnostics, so keep the raw logs under ignored artifact paths. The follow-up `event-log-to-replay` conversion redacts common token, key, password, and credential values by default before writing replay fixtures; use `--no-redact-sensitive` only for private local debugging.
 
 Use `examples/renderers/gibson_echo_renderer.py` when you want the smallest possible external-renderer contract example.
