@@ -13,7 +13,7 @@ from typing import Any, Literal
 
 from harn_gibson.events import GibsonEvent, diagnostic_event
 from harn_gibson.rendering import RenderPlan, RenderRequest, RenderStep, RenderSubmitResult
-from harn_gibson.scene import SceneMutation, SceneState, mutation_from_mapping
+from harn_gibson.scene import SceneMutation, SceneState, mutation_from_mapping, scene_state_from_mapping
 from harn_gibson.server import GibsonServerState, event_from_payload, submit_event_to_renderer
 from harn_gibson.styles import style_pack_from_name
 
@@ -53,6 +53,20 @@ class ReplayFrame:
             "index": self.index,
             "step": self.step.to_dict(),
             "scene": self.scene,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class ReplayFrameScreenshot:
+    index: int
+    step: ReplayStepResult
+    screenshot: dict[str, Any]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "index": self.index,
+            "step": self.step.to_dict(),
+            "screenshot": self.screenshot,
         }
 
 
@@ -722,6 +736,63 @@ def write_replay_timeline(path: str | Path, result: ReplayResult) -> None:
     timeline_path.write_text(json.dumps(replay_timeline_from_result(result), indent=2) + "\n", encoding="utf-8")
 
 
+def capture_replay_frame_screenshots(
+    result: ReplayResult,
+    output_dir: str | Path,
+    *,
+    width: int = 1280,
+    height: int = 900,
+) -> tuple[ReplayFrameScreenshot, ...]:
+    from harn_gibson.browser_capture import capture_scene_screenshot
+
+    output_root = Path(output_dir)
+    output_root.mkdir(parents=True, exist_ok=True)
+    captures: list[ReplayFrameScreenshot] = []
+    for frame in result.frames:
+        state = GibsonServerState()
+        state.scene.state = scene_state_from_mapping(frame.scene)
+        try:
+            screenshot = capture_scene_screenshot(
+                state,
+                output_root / f"frame-{frame.index:04d}.png",
+                width=width,
+                height=height,
+            )
+        finally:
+            state.pipeline.stop()
+        captures.append(ReplayFrameScreenshot(frame.index, frame.step, screenshot.to_dict()))
+    return tuple(captures)
+
+
+def replay_frame_screenshot_manifest(
+    result: ReplayResult,
+    screenshots: Iterable[ReplayFrameScreenshot],
+) -> dict[str, Any]:
+    rendered_screenshots = tuple(screenshots)
+    return {
+        "schema": "harn-gibson.replay-frame-screenshots.v1",
+        "replayName": result.name,
+        "replaySchema": result.schema,
+        "frameCount": len(result.frames),
+        "screenshotCount": len(rendered_screenshots),
+        "frames": [screenshot.to_dict() for screenshot in rendered_screenshots],
+        "metadata": result.metadata,
+    }
+
+
+def write_replay_frame_screenshot_manifest(
+    path: str | Path,
+    result: ReplayResult,
+    screenshots: Iterable[ReplayFrameScreenshot],
+) -> None:
+    manifest_path = Path(path)
+    manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    manifest_path.write_text(
+        json.dumps(replay_frame_screenshot_manifest(result, screenshots), indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+
 def _baseline_mismatch_error(expected_scene: Mapping[str, Any], actual_scene: Mapping[str, Any]) -> str:
     expected = json.dumps(expected_scene, indent=2, sort_keys=True).splitlines()
     actual = json.dumps(actual_scene, indent=2, sort_keys=True).splitlines()
@@ -778,10 +849,12 @@ __all__ = [
     "ReplayExpectationOp",
     "ReplayExpectationResult",
     "ReplayFrame",
+    "ReplayFrameScreenshot",
     "ReplayResult",
     "ReplayStepKind",
     "ReplayStepResult",
     "ReplaySuiteResult",
+    "capture_replay_frame_screenshots",
     "discover_replay_files",
     "compare_replay_baseline",
     "evaluate_replay_expectations",
@@ -793,11 +866,13 @@ __all__ = [
     "replay_data_from_event_log",
     "replay_baseline_from_result",
     "replay_baseline_scene",
+    "replay_frame_screenshot_manifest",
     "replay_timeline_from_result",
     "run_replay_data",
     "run_replay_file",
     "run_replay_suite",
     "write_replay_result",
+    "write_replay_frame_screenshot_manifest",
     "write_replay_timeline",
     "write_replay_baseline",
     "write_scene",

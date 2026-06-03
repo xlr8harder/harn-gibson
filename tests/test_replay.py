@@ -9,6 +9,7 @@ from harn_gibson import (
     BrowserScreenshotResult,
     ReplayExpectationError,
     ReplayFrame,
+    ReplayFrameScreenshot,
     ReplayResult,
     ReplayStepResult,
     replay_timeline_from_result,
@@ -21,6 +22,7 @@ from harn_gibson.replay import (
     ReplayExpectationResult,
     ReplayFileResult,
     ReplaySuiteResult,
+    capture_replay_frame_screenshots,
     compare_replay_baseline,
     discover_replay_files,
     evaluate_replay_expectations,
@@ -32,8 +34,10 @@ from harn_gibson.replay import (
     replay_baseline_from_result,
     replay_baseline_scene,
     replay_data_from_event_log,
+    replay_frame_screenshot_manifest,
     run_replay_suite,
     write_replay_baseline,
+    write_replay_frame_screenshot_manifest,
     write_replay_result,
     write_replay_timeline,
     write_scene,
@@ -54,7 +58,7 @@ def event_payload(
     return GibsonEvent.from_raw(raw, sequence, source="unit", timestamp_ms=1000 + sequence).to_dict()
 
 
-def test_replay_event_steps_file_io_and_writers(tmp_path: Path) -> None:
+def test_replay_event_steps_file_io_and_writers(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     path = tmp_path / "replay.json"
     path.write_text(
         json.dumps(
@@ -128,6 +132,34 @@ def test_replay_event_steps_file_io_and_writers(tmp_path: Path) -> None:
     assert timeline["replayName"] == "event replay"
     assert timeline["stepCount"] == 2
     assert timeline["frames"][0]["scene"]["schema"] == "harn-gibson.scene.v1"
+
+    captures: list[tuple[int, Path, int, int]] = []
+
+    def fake_capture(state: GibsonServerState, path: str | Path, *, width: int, height: int) -> BrowserScreenshotResult:
+        captures.append((state.scene.state.revision, Path(path), width, height))
+        return BrowserScreenshotResult(
+            Path(path),
+            "http://127.0.0.1:1",
+            state.scene.state.revision,
+            width,
+            height,
+            {"nonblank": True},
+        )
+
+    monkeypatch.setattr("harn_gibson.browser_capture.capture_scene_screenshot", fake_capture)
+    frame_screenshots = capture_replay_frame_screenshots(framed, tmp_path / "frames", width=640, height=480)
+    manifest_path = tmp_path / "frames" / "manifest.json"
+    write_replay_frame_screenshot_manifest(manifest_path, framed, frame_screenshots)
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+
+    assert isinstance(frame_screenshots[0], ReplayFrameScreenshot)
+    assert captures == [
+        (1, tmp_path / "frames" / "frame-0000.png", 640, 480),
+        (2, tmp_path / "frames" / "frame-0001.png", 640, 480),
+    ]
+    assert replay_frame_screenshot_manifest(framed, frame_screenshots)["screenshotCount"] == 2
+    assert manifest["schema"] == "harn-gibson.replay-frame-screenshots.v1"
+    assert manifest["frames"][1]["screenshot"]["canvasMetrics"] == {"nonblank": True}
 
 
 def test_replay_data_from_event_log(tmp_path: Path) -> None:

@@ -18,6 +18,7 @@ from harn_gibson import (
     RenderPlan,
     RenderRequest,
     RenderStep,
+    ReplayFrameScreenshot,
     SceneMutation,
     cli,
 )
@@ -613,6 +614,8 @@ def test_cli_parser_and_run(monkeypatch: Any, capsys: Any) -> None:
             "result.json",
             "--output-timeline",
             "timeline.json",
+            "--timeline-screenshot-dir",
+            "frames",
             "--screenshot",
             "scene.png",
             "--screenshot-width",
@@ -628,6 +631,7 @@ def test_cli_parser_and_run(monkeypatch: Any, capsys: Any) -> None:
     assert parsed_replay.output_scene == "scene.json"
     assert parsed_replay.output_result == "result.json"
     assert parsed_replay.output_timeline == "timeline.json"
+    assert parsed_replay.timeline_screenshot_dir == "frames"
     assert parsed_replay.screenshot == "scene.png"
     assert parsed_replay.screenshot_width == 800
     assert parsed_replay.screenshot_height == 600
@@ -755,6 +759,73 @@ def test_cli_replay_without_outputs(tmp_path: Any, capsys: Any) -> None:
 
     assert cli.run(["replay", str(replay_path)]) == 0
     assert capsys.readouterr().out.strip() == "replayed 1 steps; scene revision 1"
+
+
+def test_cli_replay_captures_timeline_screenshots(tmp_path: Any, monkeypatch: Any, capsys: Any) -> None:
+    replay_path = tmp_path / "replay.json"
+    screenshot_dir = tmp_path / "frames"
+    calls: list[tuple[int, Path, int, int]] = []
+    replay_path.write_text(
+        json.dumps(
+            {
+                "steps": [
+                    {
+                        "type": "event",
+                        "event": {
+                            "sequence": 1,
+                            "timestampMs": 10,
+                            "source": "test",
+                            "eventType": "message_update",
+                            "phase": "during",
+                            "title": "Stream update",
+                            "summary": "assistant stream {delta}",
+                            "payload": {"type": "message_update", "assistantMessageEvent": {"delta": "ok"}},
+                        },
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    def fake_capture_frames(result: Any, output_dir: str | Path, *, width: int, height: int) -> tuple[Any, ...]:
+        calls.append((len(result.frames), Path(output_dir), width, height))
+        screenshot = BrowserScreenshotResult(
+            Path(output_dir) / "frame-0000.png",
+            "http://127.0.0.1:1",
+            result.frames[0].scene["revision"],
+            width,
+            height,
+            {"nonblank": True},
+        )
+        return (ReplayFrameScreenshot(0, result.steps[0], screenshot.to_dict()),)
+
+    monkeypatch.setattr("harn_gibson.replay.capture_replay_frame_screenshots", fake_capture_frames)
+
+    assert (
+        cli.run(
+            [
+                "replay",
+                str(replay_path),
+                "--timeline-screenshot-dir",
+                str(screenshot_dir),
+                "--screenshot-width",
+                "640",
+                "--screenshot-height",
+                "480",
+            ]
+        )
+        == 0
+    )
+
+    manifest = json.loads((screenshot_dir / "manifest.json").read_text(encoding="utf-8"))
+    assert calls == [(1, screenshot_dir, 640, 480)]
+    assert manifest["screenshotCount"] == 1
+    assert manifest["frames"][0]["screenshot"]["path"] == str(screenshot_dir / "frame-0000.png")
+    assert capsys.readouterr().out.splitlines() == [
+        f"captured replay timeline screenshots: {screenshot_dir} (1 frames)",
+        "replayed 1 steps; scene revision 1",
+    ]
 
 
 def test_cli_replay_captures_screenshot(tmp_path: Any, monkeypatch: Any, capsys: Any) -> None:

@@ -13,6 +13,7 @@ from harn_gibson.scene import (
     default_mutations_for_event,
     initial_scene,
     mutation_from_mapping,
+    scene_state_from_mapping,
     scene_update_payload,
 )
 
@@ -43,6 +44,46 @@ def test_scene_primitive_animation_mutation_and_state_to_dict() -> None:
     assert state.to_dict()["schema"] == "harn-gibson.scene.v1"
     assert state.to_dict()["metadata"] == {}
     assert "status" in state.primitives
+
+
+def test_scene_state_from_mapping_round_trips_scene_payload() -> None:
+    payload = {
+        "revision": 7,
+        "primitives": {
+            "node": {
+                "id": "node",
+                "kind": "panel",
+                "region": "stage",
+                "props": {"text": "ready"},
+                "children": ["leaf"],
+            },
+            "bad": "ignored",
+        },
+        "animations": {
+            "anim": {
+                "id": "anim",
+                "targetId": "node",
+                "kind": "pulse",
+                "startedAtMs": 10,
+                "durationMs": 20,
+                "loop": True,
+                "props": {"tone": "cyan"},
+            },
+            "bad": None,
+        },
+        "log": [{"eventType": "x"}, "ignored"],
+        "metadata": {"displayStyle": "mainframe"},
+    }
+
+    state = scene_state_from_mapping(payload)
+    empty = scene_state_from_mapping({"revision": "", "primitives": [], "animations": [], "log": {}, "metadata": []})
+
+    assert state.revision == 7
+    assert state.primitives["node"] == ScenePrimitive("node", "panel", "stage", {"text": "ready"}, ("leaf",))
+    assert state.animations["anim"] == SceneAnimation("anim", "node", "pulse", 10, 20, True, {"tone": "cyan"})
+    assert state.log == [{"eventType": "x"}]
+    assert state.metadata == {"displayStyle": "mainframe"}
+    assert empty == SceneState()
 
 
 def test_scene_engine_records_bounded_render_intents() -> None:

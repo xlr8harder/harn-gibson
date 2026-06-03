@@ -30,6 +30,8 @@ uv run harn-gibson replay examples/replays/renderer-plan.json \
   --screenshot test-artifacts/replays/renderer-scene.png
 ```
 
+For historical-session review, `harn-gibson replay --timeline-screenshot-dir ...` renders each captured replay keyframe through the same browser path and writes a manifest with canvas metrics per frame.
+
 The integration test verifies:
 
 - the display shell renders in desktop and mobile viewports;

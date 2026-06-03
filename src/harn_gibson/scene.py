@@ -253,6 +253,40 @@ def mutation_from_mapping(value: Mapping[str, Any]) -> SceneMutation:
     )
 
 
+def scene_state_from_mapping(value: Mapping[str, Any]) -> SceneState:
+    primitives_value = value.get("primitives")
+    animations_value = value.get("animations")
+    log_value = value.get("log")
+    metadata_value = value.get("metadata")
+    primitives = (
+        {
+            primitive.id: primitive
+            for primitive in (
+                _primitive_from_mapping(item) for item in primitives_value.values() if isinstance(item, Mapping)
+            )
+        }
+        if isinstance(primitives_value, Mapping)
+        else {}
+    )
+    animations = (
+        {
+            animation.id: animation
+            for animation in (
+                _animation_from_mapping(item) for item in animations_value.values() if isinstance(item, Mapping)
+            )
+        }
+        if isinstance(animations_value, Mapping)
+        else {}
+    )
+    return SceneState(
+        revision=int(value.get("revision") or 0),
+        primitives=primitives,
+        animations=animations,
+        log=[dict(item) for item in log_value if isinstance(item, Mapping)] if isinstance(log_value, list) else [],
+        metadata=dict(metadata_value) if isinstance(metadata_value, Mapping) else {},
+    )
+
+
 def default_mutations_for_event(event: GibsonEvent, decisions: Iterable[Mapping[str, Any]] = ()) -> list[SceneMutation]:
     rendered_decisions = list(decisions)
     tone = _tone_for_phase(event.phase)

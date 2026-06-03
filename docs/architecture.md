@@ -52,7 +52,7 @@ The scene layer includes a replay harness that accepts recorded harn events, bro
 
 Replay works on both sides of the renderer boundary. Agent-side replay feeds historical harn events through routing, coalescing, and a renderer to generate a visualization. Renderer-side replay applies saved render plans or raw scene mutations against scene state. Those modes also support a later "full session visualization" workflow where a historical session is rendered all at once or in timed chunks.
 
-When replay is asked for a timeline, it captures a full scene keyframe after each replay step. These keyframes are not used for canonical baselines by default; they are a review and future-renderer input format for chunking historical sessions, comparing visual continuity across steps, or generating later screenshot/video tooling.
+When replay is asked for a timeline, it captures a full scene keyframe after each replay step. These keyframes are not used for canonical baselines by default; they are a review and future-renderer input format for chunking historical sessions, comparing visual continuity across steps, or generating later screenshot/video tooling. The same keyframes can be rendered back through the browser display as a deterministic screenshot sequence with per-frame canvas metrics.
 
 ## Render Pipeline
 

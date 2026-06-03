@@ -11,6 +11,7 @@ import threading
 import time
 import webbrowser
 from collections.abc import Sequence
+from pathlib import Path
 
 from harn_gibson.auth import import_codex_auth
 from harn_gibson.extension import extension_path
@@ -45,6 +46,11 @@ def build_parser() -> argparse.ArgumentParser:
     replay.add_argument("--output-scene", default=None, help="write final scene JSON to this path")
     replay.add_argument("--output-result", default=None, help="write full replay result JSON to this path")
     replay.add_argument("--output-timeline", default=None, help="write per-step replay frame timeline JSON")
+    replay.add_argument(
+        "--timeline-screenshot-dir",
+        default=None,
+        help="write one browser screenshot per timeline frame",
+    )
     replay.add_argument("--screenshot", default=None, help="write a browser screenshot of the final replay scene")
     replay.add_argument("--screenshot-width", type=int, default=1280, help="screenshot viewport width")
     replay.add_argument("--screenshot-height", type=int, default=900, help="screenshot viewport height")
@@ -184,7 +190,9 @@ def run(argv: Sequence[str] | None = None) -> int:
     if args.command == "replay":
         from harn_gibson.replay import (
             ReplayExpectationError,
+            capture_replay_frame_screenshots,
             run_replay_file,
+            write_replay_frame_screenshot_manifest,
             write_replay_result,
             write_replay_timeline,
             write_scene,
@@ -193,7 +201,11 @@ def run(argv: Sequence[str] | None = None) -> int:
 
         replay_state = GibsonServerState(style_pack=style_pack_from_name(args.style))
         try:
-            result = run_replay_file(args.path, replay_state, capture_frames=bool(args.output_timeline))
+            result = run_replay_file(
+                args.path,
+                replay_state,
+                capture_frames=bool(args.output_timeline or args.timeline_screenshot_dir),
+            )
         except ReplayExpectationError as error:
             for failure in error.failures:
                 print(f"replay expectation failed: {failure.message}", file=sys.stderr)
@@ -204,6 +216,19 @@ def run(argv: Sequence[str] | None = None) -> int:
             write_replay_result(args.output_result, result)
         if args.output_timeline:
             write_replay_timeline(args.output_timeline, result)
+        if args.timeline_screenshot_dir:
+            screenshots = capture_replay_frame_screenshots(
+                result,
+                args.timeline_screenshot_dir,
+                width=args.screenshot_width,
+                height=args.screenshot_height,
+            )
+            write_replay_frame_screenshot_manifest(
+                Path(args.timeline_screenshot_dir) / "manifest.json",
+                result,
+                screenshots,
+            )
+            print(f"captured replay timeline screenshots: {args.timeline_screenshot_dir} ({len(screenshots)} frames)")
         if args.screenshot:
             from harn_gibson.browser_capture import capture_scene_screenshot
 
@@ -219,8 +244,6 @@ def run(argv: Sequence[str] | None = None) -> int:
         )
         return 0
     if args.command == "replay-dir":
-        from pathlib import Path
-
         from harn_gibson.replay import run_replay_suite
 
         if args.update_baselines and args.baseline_dir is None:
@@ -252,8 +275,6 @@ def run(argv: Sequence[str] | None = None) -> int:
         print(f"replayed {result.total} replay files; {result.failed} failed")
         return 0 if result.ok else 1
     if args.command == "event-log-to-replay":
-        from pathlib import Path
-
         from harn_gibson.replay import replay_data_from_event_log
 
         fixture = replay_data_from_event_log(args.path, name=args.name)
