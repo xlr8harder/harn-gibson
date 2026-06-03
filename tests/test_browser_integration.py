@@ -231,9 +231,13 @@ def test_browser_display_renders_vector_symbols_and_data_rain() -> None:
                 page = browser.new_page(viewport={"width": 960, "height": 700})
                 page.goto(base, wait_until="domcontentloaded")
                 page.wait_for_function("window.__gibsonVectorState?.['gallery-vector']?.symbolCount === 6")
+                page.wait_for_function("window.__gibsonVectorAnimationState?.['gallery-vector']?.keyframeCount === 6")
                 page.wait_for_function("window.__gibsonDataRainState?.['gallery-rain']?.visibleColumns > 0")
                 vector_state = page.evaluate(
                     """() => window.__gibsonVectorState["gallery-vector"]"""
+                )
+                vector_animation_state = page.evaluate(
+                    """() => window.__gibsonVectorAnimationState["gallery-vector"]"""
                 )
                 data_rain_state = page.evaluate(
                     """() => window.__gibsonDataRainState["gallery-rain"]"""
@@ -257,8 +261,13 @@ def test_browser_display_renders_vector_symbols_and_data_rain() -> None:
                     "polylineCount": 1,
                     "polygonCount": 1,
                     "groupCount": 1,
+                    "keyframeCount": 6,
                     "ignoredMarkup": True,
                 }
+                assert vector_animation_state["keyframeCount"] == 6
+                assert 0 <= vector_animation_state["progress"] <= 1
+                assert vector_animation_state["scale"] > 0
+                assert 0 <= vector_animation_state["opacity"] <= 1
                 assert data_rain_state == {
                     "columns": 42,
                     "direction": "down",

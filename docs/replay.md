@@ -69,7 +69,7 @@ Use `--style gibson`, `--style neon-noir`, or `--style mainframe` to render repl
 
 Replay baselines are canonical final-scene snapshots. They compare the visual state that renderers leave behind, including primitives, animations, event logs, and render-intent history. Absolute render-intent start/end timestamps are normalized out of baselines; duration, effects, targets, routes, and metadata remain comparable.
 
-The checked-in fixtures include `primitive-gallery.json` and `animation-gallery.json`, which are browser-review fixtures for the generic primitive/effect set rather than captured harn sessions. The primitive gallery includes structured `svg_layer` paths, rects, lines, polylines, polygons, grouped transforms, gradients, traces, curated vector symbols, and a `data_rain` glyph curtain, so it is the quickest fixture for reviewing explicit vector or cinematic primitive rendering changes.
+The checked-in fixtures include `primitive-gallery.json` and `animation-gallery.json`, which are browser-review fixtures for the generic primitive/effect set rather than captured harn sessions. The primitive gallery includes structured `svg_layer` paths, rects, lines, polylines, polygons, grouped transforms, numeric transform keyframes, gradients, traces, curated vector symbols, and a `data_rain` glyph curtain, so it is the quickest fixture for reviewing explicit vector or cinematic primitive rendering changes.
 
 Update baselines after intentionally changing visual output:
 

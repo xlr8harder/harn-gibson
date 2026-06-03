@@ -15,6 +15,8 @@
       {"path": "primitives.gallery-vector.props.polylines.0.points.2.0", "equals": 45},
       {"path": "primitives.gallery-vector.props.polygons.0.fill", "equals": "magenta"},
       {"path": "primitives.gallery-vector.props.groups.0.labels.0.text", "equals": "CORE"},
+      {"path": "primitives.gallery-vector.props.keyframes.1.scale", "equals": 1.08},
+      {"path": "primitives.gallery-vector.props.groups.0.keyframes.2.rotation", "equals": -0.12},
       {"path": "primitives.gallery-vector.props.traces.0.count", "equals": 9},
       {"path": "primitives.gallery-vector.props.symbols.0.kind", "equals": "globe"},
       {"path": "primitives.gallery-vector.props.symbols.1.kind", "equals": "filesystem_gate"},
@@ -117,6 +119,14 @@
               "spin": 0.08,
               "glow": 6,
               "blend": "screen",
+              "durationMs": 5200,
+              "loop": true,
+              "yoyo": true,
+              "keyframes": [
+                {"at": 0, "x": -4, "y": 2, "scale": 0.96, "rotation": -0.08, "opacity": 0.78},
+                {"at": 0.48, "x": 5, "y": -4, "scale": 1.08, "rotation": 0.12, "opacity": 1},
+                {"at": 1, "x": 1, "y": 3, "scale": 1, "rotation": 0.02, "opacity": 0.86}
+              ],
               "rawSvg": "<script>alert('ignored')</script>",
               "gradients": [
                 {
@@ -304,6 +314,13 @@
                   "rotation": 0.72,
                   "spin": -0.05,
                   "scale": 0.42,
+                  "durationMs": 2800,
+                  "loop": true,
+                  "keyframes": [
+                    {"at": 0, "scale": 0.9, "rotation": -0.1, "opacity": 0.74},
+                    {"at": 0.5, "scale": 1.2, "rotation": 0.18, "opacity": 1},
+                    {"at": 1, "scale": 0.96, "rotation": -0.12, "opacity": 0.82}
+                  ],
                   "tone": "amber",
                   "rects": [
                     {"x": -18, "y": -10, "w": 36, "h": 20, "rx": 2, "fill": "amber", "fillAlpha": 0.1}

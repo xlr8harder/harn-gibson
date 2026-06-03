@@ -1635,6 +1635,95 @@ function vectorNumber(value, fallback, min = -10000, max = 10000) {
   return clamp(numeric, min, max);
 }
 
+function vectorRounded(value) {
+  return Math.round(Number(value || 0) * 1000) / 1000;
+}
+
+function vectorAnimationConfig(source) {
+  const animation = source?.animation && typeof source.animation === "object" ? source.animation : {};
+  return {
+    durationMs: Math.max(1, vectorNumber(source?.durationMs ?? animation.durationMs, 4000, 1, 120000)),
+    delayMs: vectorNumber(source?.delayMs ?? animation.delayMs, 0, -120000, 120000),
+    loop: source?.loop ?? animation.loop ?? true,
+    yoyo: Boolean(source?.yoyo ?? animation.yoyo ?? false),
+  };
+}
+
+function vectorKeyframeProgress(source, now) {
+  const config = vectorAnimationConfig(source);
+  const elapsed = now - config.delayMs;
+  if (elapsed <= 0) return 0;
+  if (config.loop === false) return clamp(elapsed / config.durationMs, 0, 1);
+  const cycle = Math.floor(elapsed / config.durationMs);
+  let progress = (elapsed % config.durationMs) / config.durationMs;
+  if (config.yoyo && cycle % 2 === 1) progress = 1 - progress;
+  return clamp(progress, 0, 1);
+}
+
+function vectorKeyframeOffset(frame, index, count, durationMs) {
+  const direct = Number(frame.at ?? frame.offset ?? frame.progress);
+  if (Number.isFinite(direct)) return clamp(direct, 0, 1);
+  const timeMs = Number(frame.timeMs ?? frame.ms);
+  if (Number.isFinite(timeMs)) return clamp(timeMs / durationMs, 0, 1);
+  return count <= 1 ? 0 : index / (count - 1);
+}
+
+function vectorKeyframes(source) {
+  const rawFrames = Array.isArray(source?.keyframes) ? source.keyframes : [];
+  if (!rawFrames.length) return [];
+  const config = vectorAnimationConfig(source);
+  return rawFrames
+    .filter((frame) => frame && typeof frame === "object")
+    .map((frame, index) => ({
+      ...frame,
+      at: vectorKeyframeOffset(frame, index, rawFrames.length, config.durationMs),
+    }))
+    .sort((left, right) => left.at - right.at);
+}
+
+function vectorKeyframeNumber(frame, key) {
+  const transform = frame?.transform && typeof frame.transform === "object" ? frame.transform : {};
+  const numeric = Number(frame?.[key] ?? transform[key]);
+  return Number.isFinite(numeric) ? numeric : null;
+}
+
+function vectorKeyframeLerp(left, right, key, fallback, progress) {
+  const start = vectorKeyframeNumber(left, key);
+  const end = vectorKeyframeNumber(right, key);
+  if (start === null && end === null) return fallback;
+  if (start === null) return end;
+  if (end === null) return start;
+  return start + (end - start) * progress;
+}
+
+function vectorKeyframeTransform(source, now) {
+  const frames = vectorKeyframes(source);
+  if (!frames.length) {
+    return {x: 0, y: 0, scale: 1, rotation: 0, opacity: 1, progress: 0, keyframeCount: 0};
+  }
+  const progress = vectorKeyframeProgress(source, now);
+  let left = frames[0];
+  let right = frames[frames.length - 1];
+  for (let index = 1; index < frames.length; index++) {
+    if (progress <= frames[index].at) {
+      left = frames[index - 1];
+      right = frames[index];
+      break;
+    }
+  }
+  const span = Math.max(0.0001, right.at - left.at);
+  const localProgress = clamp((progress - left.at) / span, 0, 1);
+  return {
+    x: vectorKeyframeLerp(left, right, "x", 0, localProgress),
+    y: vectorKeyframeLerp(left, right, "y", 0, localProgress),
+    scale: Math.max(0.01, vectorKeyframeLerp(left, right, "scale", 1, localProgress)),
+    rotation: vectorKeyframeLerp(left, right, "rotation", 0, localProgress),
+    opacity: clamp(vectorKeyframeLerp(left, right, "opacity", 1, localProgress), 0, 1),
+    progress,
+    keyframeCount: frames.length,
+  };
+}
+
 function polylineSegments(points) {
   const segments = [];
   let total = 0;
@@ -2321,6 +2410,9 @@ function vectorLayerStats(source, depth = 0) {
     polylineCount: Array.isArray(source.polylines) ? source.polylines.length : 0,
     polygonCount: Array.isArray(source.polygons) ? source.polygons.length : 0,
     groupCount: groups.length,
+    keyframeCount: Array.isArray(source.keyframes)
+      ? source.keyframes.filter((frame) => frame && typeof frame === "object").length
+      : 0,
     ignoredMarkup: typeof source.rawSvg === "string" || typeof source.markup === "string",
   };
   for (const group of groups) {
@@ -2337,6 +2429,7 @@ function vectorLayerStats(source, depth = 0) {
     base.polylineCount += child.polylineCount;
     base.polygonCount += child.polygonCount;
     base.groupCount += child.groupCount;
+    base.keyframeCount += child.keyframeCount;
     base.ignoredMarkup = base.ignoredMarkup || child.ignoredMarkup;
   }
   return base;
@@ -2355,11 +2448,15 @@ function drawSvgGroups(groups, props, now, depth = 0) {
       gradients: Array.isArray(group.gradients) ? group.gradients : props.gradients,
     };
     const scale = vectorNumber(group.scale, 1, 0.01, 100);
+    const animation = vectorKeyframeTransform(group, now);
     ctx.save();
-    ctx.globalAlpha *= clamp(Number(group.opacity ?? 1), 0, 1);
-    ctx.translate(vectorNumber(group.x ?? translate.x, 0), vectorNumber(group.y ?? translate.y, 0));
-    ctx.rotate(Number(group.rotation || 0) + Number(group.spin || 0) * now * 0.00025);
-    ctx.scale(scale, scale);
+    ctx.globalAlpha *= clamp(Number(group.opacity ?? 1), 0, 1) * animation.opacity;
+    ctx.translate(
+      vectorNumber(group.x ?? translate.x, 0) + animation.x,
+      vectorNumber(group.y ?? translate.y, 0) + animation.y,
+    );
+    ctx.rotate(Number(group.rotation || 0) + Number(group.spin || 0) * now * 0.00025 + animation.rotation);
+    ctx.scale(scale * animation.scale, scale * animation.scale);
     drawSvgContent(group, localProps, now, depth + 1);
     ctx.restore();
   }
@@ -2395,9 +2492,20 @@ function drawSvgLayer(primitive, w, h, now) {
   const hasVectors = stats.pathCount || stats.circleCount || stats.traceCount || stats.symbolCount
     || stats.labelCount || stats.rectCount || stats.lineCount || stats.polylineCount || stats.polygonCount;
   if (!hasVectors) return;
+  const animation = vectorKeyframeTransform(props, now);
   if (typeof window !== "undefined") {
     window.__gibsonVectorState = window.__gibsonVectorState || {};
     window.__gibsonVectorState[primitive.id] = stats;
+    window.__gibsonVectorAnimationState = window.__gibsonVectorAnimationState || {};
+    window.__gibsonVectorAnimationState[primitive.id] = {
+      keyframeCount: stats.keyframeCount,
+      progress: vectorRounded(animation.progress),
+      x: vectorRounded(animation.x),
+      y: vectorRounded(animation.y),
+      scale: vectorRounded(animation.scale),
+      rotation: vectorRounded(animation.rotation),
+      opacity: vectorRounded(animation.opacity),
+    };
   }
   const box = vectorViewBox(props.viewBox);
   const position = normalizedPoint(props.position || {x: 0.5, y: 0.45}, w, h);
@@ -2405,9 +2513,11 @@ function drawSvgLayer(primitive, w, h, now) {
   const unit = fit / Math.max(box.width, box.height);
   const rotation = Number(props.rotation || 0) + Number(props.spin || 0) * now * 0.00025;
   ctx.save();
+  ctx.globalAlpha *= animation.opacity;
   ctx.translate(position.x, position.y);
-  ctx.rotate(rotation);
-  ctx.scale(unit, unit);
+  ctx.rotate(rotation + animation.rotation);
+  ctx.scale(unit * animation.scale, unit * animation.scale);
+  ctx.translate(animation.x, animation.y);
   ctx.translate(-(box.x + box.width * 0.5), -(box.y + box.height * 0.5));
   ctx.globalCompositeOperation = props.blend === "screen" ? "screen" : "source-over";
   drawSvgContent(props, props, now);

@@ -16,9 +16,10 @@ RENDERER_SYSTEM_PROMPT = (
     "Use scene mutations to dramatize the current agent batch. Favor Hollywood Gibson visuals over utility, "
     "but keep output valid and bounded. Use existing scene target ids for patch/remove operations. Use upsert "
     "before patching new primitives. Use startOffsetMs and delayMs when the renderInput timeline suggests a "
-    "sequence. Use only structured svg_layer data; never emit raw SVG markup, HTML, scripts, event handlers, "
-    "foreignObject, or external references. If unsure, produce a small safe plan with status/log updates plus "
-    "one visible primitive or animation.\n\n"
+    "sequence. Use structured svg_layer keyframes for vector drift, scale, rotation, and opacity when that makes "
+    "the scene feel cinematic. Use only structured svg_layer data; never emit raw SVG markup, HTML, scripts, "
+    "event handlers, foreignObject, or external references. If unsure, produce a small safe plan with status/log "
+    "updates plus one visible primitive or animation.\n\n"
     "Return JSON only. Do not include markdown, commentary, or model-visible reasoning."
 )
 

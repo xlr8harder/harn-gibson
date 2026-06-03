@@ -527,6 +527,7 @@
               "y": 72
             }
           ],
+          "durationMs": 5200,
           "glow": 6,
           "gradients": [
             {
@@ -561,6 +562,27 @@
           ],
           "groups": [
             {
+              "durationMs": 2800,
+              "keyframes": [
+                {
+                  "at": 0,
+                  "opacity": 0.74,
+                  "rotation": -0.1,
+                  "scale": 0.9
+                },
+                {
+                  "at": 0.5,
+                  "opacity": 1,
+                  "rotation": 0.18,
+                  "scale": 1.2
+                },
+                {
+                  "at": 1,
+                  "opacity": 0.82,
+                  "rotation": -0.12,
+                  "scale": 0.96
+                }
+              ],
               "labels": [
                 {
                   "size": 7,
@@ -580,6 +602,7 @@
                   "y2": 0
                 }
               ],
+              "loop": true,
               "rects": [
                 {
                   "fill": "amber",
@@ -597,6 +620,32 @@
               "tone": "amber",
               "x": 50,
               "y": 50
+            }
+          ],
+          "keyframes": [
+            {
+              "at": 0,
+              "opacity": 0.78,
+              "rotation": -0.08,
+              "scale": 0.96,
+              "x": -4,
+              "y": 2
+            },
+            {
+              "at": 0.48,
+              "opacity": 1,
+              "rotation": 0.12,
+              "scale": 1.08,
+              "x": 5,
+              "y": -4
+            },
+            {
+              "at": 1,
+              "opacity": 0.86,
+              "rotation": 0.02,
+              "scale": 1,
+              "x": 1,
+              "y": 3
             }
           ],
           "label": "vector",
@@ -629,6 +678,7 @@
               "width": 0.75
             }
           ],
+          "loop": true,
           "paths": [
             {
               "d": "M50 4 L92 28 L92 72 L50 96 L8 72 L8 28 Z",
@@ -853,7 +903,8 @@
             0,
             100,
             100
-          ]
+          ],
+          "yoyo": true
         },
         "region": "stage"
       },
