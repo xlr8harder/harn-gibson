@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sys
 import threading
 import time
@@ -27,6 +28,7 @@ from harn_gibson.rendering import (
     RenderRequest,
     RenderStep,
     RenderSubmitResult,
+    _repo_file_line_count,
     coerce_batch_window_ms,
     coerce_render_mode,
     coerce_render_timing_mode,
@@ -676,6 +678,8 @@ def test_dogfood_showcase_renderer_returns_valid_event_reactive_plan(tmp_path: P
     assert animation_kinds["dogfood-city-extrude"] == "extrude"
     scene.apply(mutations)
     assert scene.state.primitives["dogfood-city"].props["blocks"][1]["path"] == "docs"
+    assert scene.state.primitives["dogfood-city"].props["blocks"][1]["lines"] == 1
+    assert scene.state.primitives["dogfood-city"].props["blocks"][1]["h"] == 0.271
     assert scene.state.primitives["dogfood-route"].props["focusHopId"] == "target-0"
     assert scene.state.animations["dogfood-camera-path"].props["keyframes"][1]["scale"] == 1.038
 
@@ -749,12 +753,9 @@ def test_deterministic_renderer_adds_repo_graph_from_context(tmp_path: Path) -> 
     repo_root = tmp_path / "repo"
     for directory in (repo_root / "src" / "harn_gibson", repo_root / "docs"):
         directory.mkdir(parents=True)
-    for path in (
-        repo_root / "README.md",
-        repo_root / "src" / "harn_gibson" / "rendering.py",
-        repo_root / "docs" / "renderer-agent.md",
-    ):
-        path.write_text("x", encoding="utf-8")
+    (repo_root / "README.md").write_text("heading", encoding="utf-8")
+    (repo_root / "src" / "harn_gibson" / "rendering.py").write_text("a\nb\nc\nd\ne\n", encoding="utf-8")
+    (repo_root / "docs" / "renderer-agent.md").write_text("title\nbody\n", encoding="utf-8")
     (repo_root / "README-link.md").symlink_to("README.md")
     context_event = GibsonEvent.from_raw(
         {
@@ -817,10 +818,14 @@ def test_deterministic_renderer_adds_repo_graph_from_context(tmp_path: Path) -> 
     assert city_blocks["repo-city-root"]["label"] == "repo"
     assert city_blocks["repo-city-src"]["dirs"] == 1
     assert city_blocks["repo-city-src"]["touched"] == 1
-    assert city_blocks["repo-city-src"]["h"] == 0.255
+    assert city_blocks["repo-city-src"]["lines"] == 5
+    assert city_blocks["repo-city-src"]["h"] == 0.28
     assert city_blocks["repo-city-src-harn_gibson"]["tone"] == "magenta"
+    assert city_blocks["repo-city-src-harn_gibson"]["lines"] == 5
     assert city_blocks["repo-city-docs-renderer-agent-md"]["files"] == 1
+    assert city_blocks["repo-city-docs-renderer-agent-md"]["lines"] == 2
     assert city_blocks["repo-city-README-link-md"]["tone"] == "amber"
+    assert city_blocks["repo-city-README-link-md"]["lines"] == 0
     assert repo_city.props["cameraPath"]["keyframes"][1]["scale"] == 1.043
     assert repo_city.props["cameraPath"]["durationMs"] == 7600
     assert touch_field is not None
@@ -915,6 +920,43 @@ def test_deterministic_renderer_adds_repo_graph_from_context(tmp_path: Path) -> 
     )
     assert unknown_city.props["focusBlockId"] == "repo-city-root"
 
+    boolean_count_context = RendererContext(
+        "compaction",
+        {
+            "repoTopology": {
+                "rootName": "bad-counts",
+                "entries": [
+                    {
+                        "path": "bools",
+                        "kind": "dir",
+                        "visibleFileCount": True,
+                        "visibleDirCount": False,
+                        "visibleLineCount": True,
+                        "children": [{"path": "bools/file.py", "kind": "file", "lineCount": True}],
+                    }
+                ],
+            },
+            "touchedFiles": {"files": []},
+        },
+        {},
+        {},
+        {},
+    )
+    boolean_count_plan = DeterministicSceneRenderer().render_with_context(
+        (RenderRequest(event(12)),),
+        scene.state,
+        boolean_count_context,
+    )
+    boolean_count_city = next(
+        mutation.primitive
+        for mutation in boolean_count_plan.steps[0].mutations
+        if mutation.primitive and mutation.primitive.id == "repo-city"
+    )
+    boolean_block = next(block for block in boolean_count_city.props["blocks"] if block["path"] == "bools")
+    assert boolean_block["files"] == 1
+    assert boolean_block["dirs"] == 1
+    assert boolean_block["lines"] == 0
+
 
 def test_renderer_context_builder_compaction_rolling_and_history(tmp_path: Path) -> None:
     repo_root = tmp_path / "repo"
@@ -931,6 +973,7 @@ def test_renderer_context_builder_compaction_rolling_and_history(tmp_path: Path)
         repo_root / "pyproject.toml",
         repo_root / "docs" / "renderer-agent.md",
         repo_root / "src" / "harn_gibson" / "rendering.py",
+        repo_root / "src" / "harn_gibson" / "__init__.py",
         repo_root / "tests" / "test_rendering.py",
         repo_root / ".harn" / "settings.json",
         repo_root / "auth.json",
@@ -1048,12 +1091,32 @@ def test_renderer_context_builder_compaction_rolling_and_history(tmp_path: Path)
     }
     empty_entry = next(entry for entry in compaction.project["repoTopology"]["entries"] if entry["path"] == "empty")
     assert "children" not in empty_entry
+    assert empty_entry["visibleFileCount"] == 0
+    assert empty_entry["visibleDirCount"] == 0
+    assert empty_entry["visibleLineCount"] == 0
     src_entry = next(entry for entry in compaction.project["repoTopology"]["entries"] if entry["path"] == "src")
-    assert src_entry["children"] == [{"path": "src/harn_gibson", "name": "harn_gibson", "kind": "dir"}]
+    assert src_entry["visibleFileCount"] == 0
+    assert src_entry["visibleDirCount"] == 1
+    assert src_entry["visibleLineCount"] == 0
+    assert src_entry["children"] == [
+        {
+            "path": "src/harn_gibson",
+            "name": "harn_gibson",
+            "kind": "dir",
+            "visibleFileCount": 1,
+            "visibleDirCount": 0,
+            "visibleLineCount": 1,
+            "summaryTruncated": True,
+        }
+    ]
     link_entry = next(
         entry for entry in compaction.project["repoTopology"]["entries"] if entry["path"] == "README-link.md"
     )
     assert link_entry["kind"] == "symlink"
+    readme_entry = next(
+        entry for entry in compaction.project["repoTopology"]["entries"] if entry["path"] == "README.md"
+    )
+    assert readme_entry["lineCount"] == 1
     assert "auth.json" not in {entry["path"] for entry in compaction.project["repoTopology"]["entries"]}
     assert compaction.project["touchedFiles"] == {
         "schema": "harn-gibson.touched-files.v1",
@@ -1165,6 +1228,39 @@ def test_renderer_context_builder_compaction_rolling_and_history(tmp_path: Path)
             "metadata": {"renderer": "second"},
         },
     )
+
+
+def test_renderer_context_repo_topology_counts_lines_without_contents(tmp_path: Path) -> None:
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    (repo_root / "binary.bin").write_bytes(b"a\x00b")
+    (repo_root / "empty.txt").write_text("", encoding="utf-8")
+    (repo_root / "large.txt").write_bytes(b"x" * 256_001)
+    (repo_root / "newline.py").write_text("a\nb\n", encoding="utf-8")
+    (repo_root / "plain.md").write_text("one", encoding="utf-8")
+    (repo_root / "plain-link.md").symlink_to("plain.md")
+    (repo_root / "links").mkdir()
+    (repo_root / "links" / "target.txt").write_text("first\nsecond\n", encoding="utf-8")
+    (repo_root / "links" / "target-link.txt").symlink_to("target.txt")
+
+    context = RendererContextBuilder(RendererContextConfig(project_root=str(repo_root))).build(
+        RenderInputBatch.from_requests((RenderRequest(event(11)),)),
+        SceneEngine().state,
+        pipeline_catalog(),
+    )
+    entries = {entry["path"]: entry for entry in context.project["repoTopology"]["entries"]}
+
+    assert entries["empty.txt"]["lineCount"] == 0
+    assert entries["newline.py"]["lineCount"] == 2
+    assert entries["plain.md"]["lineCount"] == 1
+    assert entries["binary.bin"]["lineCount"] is None
+    assert entries["large.txt"]["lineCount"] is None
+    assert entries["plain-link.md"]["kind"] == "symlink"
+    assert "lineCount" not in entries["plain-link.md"]
+    assert entries["links"]["visibleFileCount"] == 2
+    assert entries["links"]["visibleLineCount"] == 2
+    assert _repo_file_line_count(repo_root / "plain-link.md") is None
+    assert "one" not in json.dumps(context.project["repoTopology"])
 
 
 def test_renderer_context_repo_topology_handles_unavailable_root_and_duplicate_touches(tmp_path: Path) -> None:

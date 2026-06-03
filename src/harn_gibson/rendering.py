@@ -2075,6 +2075,7 @@ def _repo_city_props(
         touched_count = _repo_touch_count(path, touched_paths)
         file_count = _repo_visible_file_count(entry, children)
         dir_count = _repo_visible_dir_count(entry, children)
+        line_count = _repo_visible_line_count(entry, children)
         block_id = _repo_city_block_id(path)
         x = round(0.08 + (index % 5) * 0.082, 3)
         y = round(0.68 - (index // 5) * 0.10, 3)
@@ -2086,12 +2087,13 @@ def _repo_city_props(
                 "y": y,
                 "w": 0.058,
                 "d": 0.066,
-                "h": _repo_city_height(file_count, dir_count, touched_count),
+                "h": _repo_city_height(file_count, dir_count, touched_count, line_count),
                 "tone": "magenta" if touched_count else _repo_entry_tone(str(entry.get("kind") or "")),
                 "label": _repo_node_label(path),
                 "kind": str(entry.get("kind") or "entry"),
                 "files": file_count,
                 "dirs": dir_count,
+                "lines": line_count,
                 "touched": touched_count,
             }
         )
@@ -2150,6 +2152,9 @@ def _repo_child_city_blocks(
     for index, child in enumerate(children):
         path = str(child.get("path") or f"{parent_path}/child-{index}")
         touched_count = _repo_touch_count(path, touched_paths)
+        file_count = 1 if child.get("kind") in {"file", "symlink"} else _repo_entry_int(child.get("visibleFileCount"))
+        dir_count = 1 if child.get("kind") == "dir" else 0
+        line_count = _repo_entry_line_count(child)
         block_id = _repo_city_block_id(path)
         block_paths.append((path, block_id))
         blocks.append(
@@ -2160,12 +2165,13 @@ def _repo_child_city_blocks(
                 "y": round(parent_y + 0.035 + (index // 2) * 0.028, 3),
                 "w": 0.024,
                 "d": 0.030,
-                "h": round(0.075 + min(0.10, len(path) * 0.002) + touched_count * 0.055, 3),
+                "h": _repo_child_city_height(path, touched_count, line_count),
                 "tone": "magenta" if touched_count else _repo_entry_tone(str(child.get("kind") or "")),
                 "label": _repo_node_label(path),
                 "kind": str(child.get("kind") or "entry"),
-                "files": 1 if child.get("kind") in {"file", "symlink"} else 0,
-                "dirs": 1 if child.get("kind") == "dir" else 0,
+                "files": file_count,
+                "dirs": dir_count,
+                "lines": line_count,
                 "touched": touched_count,
             }
         )
@@ -2175,18 +2181,46 @@ def _repo_child_city_blocks(
 def _repo_visible_file_count(entry: Mapping[str, Any], children: Sequence[Mapping[str, Any]]) -> int:
     if entry.get("kind") in {"file", "symlink"}:
         return 1
+    file_count = _repo_entry_int(entry.get("visibleFileCount"))
+    if file_count:
+        return file_count
     return sum(1 for child in children if child.get("kind") in {"file", "symlink"})
 
 
 def _repo_visible_dir_count(entry: Mapping[str, Any], children: Sequence[Mapping[str, Any]]) -> int:
     if entry.get("kind") == "dir":
-        return max(1, sum(1 for child in children if child.get("kind") == "dir"))
+        return max(1, _repo_entry_int(entry.get("visibleDirCount")))
     return 0
 
 
-def _repo_city_height(file_count: int, dir_count: int, touched_count: int) -> float:
+def _repo_visible_line_count(entry: Mapping[str, Any], children: Sequence[Mapping[str, Any]]) -> int:
+    line_count = _repo_entry_line_count(entry)
+    if line_count:
+        return line_count
+    return sum(_repo_entry_line_count(child) for child in children)
+
+
+def _repo_entry_line_count(entry: Mapping[str, Any]) -> int:
+    line_count = _repo_entry_int(entry.get("lineCount"))
+    if line_count:
+        return line_count
+    return _repo_entry_int(entry.get("visibleLineCount"))
+
+
+def _repo_entry_int(value: Any) -> int:
+    return value if type(value) is int and value >= 0 else 0
+
+
+def _repo_city_height(file_count: int, dir_count: int, touched_count: int, line_count: int) -> float:
     visible_units = max(1, file_count + dir_count)
-    return round(0.12 + min(0.46, visible_units * 0.055) + min(0.24, touched_count * 0.08), 3)
+    line_boost = min(0.24, line_count * 0.006)
+    return round(0.12 + min(0.36, visible_units * 0.050) + line_boost + min(0.24, touched_count * 0.08), 3)
+
+
+def _repo_child_city_height(path: str, touched_count: int, line_count: int) -> float:
+    path_boost = min(0.10, len(path) * 0.002)
+    line_boost = min(0.16, line_count * 0.005)
+    return round(0.075 + path_boost + line_boost + touched_count * 0.055, 3)
 
 
 def _repo_touch_count(path: str, touched_paths: Sequence[str]) -> int:
@@ -2267,6 +2301,7 @@ _PATH_KEYS = {
 }
 _COMMAND_KEYS = {"cmd", "command", "shellCommand"}
 _COMMAND_PATH_PATTERN = re.compile(r"(?<![A-Za-z0-9_./-])(?:\.{0,2}/)?[A-Za-z0-9_.@+-]+(?:/[A-Za-z0-9_.@+-]+)+")
+_MAX_REPO_LINE_COUNT_BYTES = 256_000
 
 
 def _repo_topology_context(config: RendererContextConfig) -> dict[str, Any]:
@@ -2314,12 +2349,20 @@ def _repo_entry(path: Path, root: Path, config: RendererContextConfig) -> dict[s
     entry: dict[str, Any] = {"path": _relative_repo_path(path, root), "name": path.name, "kind": kind}
     if kind == "file" and path.suffix:
         entry["extension"] = path.suffix
+    if kind == "file":
+        entry["lineCount"] = _repo_file_line_count(path)
     if kind == "dir":
         children, truncated = _repo_child_entries(path, root, config)
+        file_count, dir_count, line_count, summary_truncated = _repo_directory_visible_counts(path, config)
+        entry["visibleFileCount"] = file_count
+        entry["visibleDirCount"] = dir_count
+        entry["visibleLineCount"] = line_count
         if children:
             entry["children"] = children
         if truncated:
             entry["childrenTruncated"] = True
+        if summary_truncated:
+            entry["summaryTruncated"] = True
     return entry
 
 
@@ -2333,11 +2376,58 @@ def _repo_child_entries(path: Path, root: Path, config: RendererContextConfig) -
         if len(children) >= max_children:
             truncated = True
             break
-        child_entry = {"path": _relative_repo_path(child, root), "name": child.name, "kind": _repo_path_kind(child)}
-        if child_entry["kind"] == "file" and child.suffix:
+        child_kind = _repo_path_kind(child)
+        child_entry = {"path": _relative_repo_path(child, root), "name": child.name, "kind": child_kind}
+        if child_kind == "file" and child.suffix:
             child_entry["extension"] = child.suffix
+        if child_kind == "file":
+            child_entry["lineCount"] = _repo_file_line_count(child)
+        if child_kind == "dir":
+            file_count, dir_count, line_count, summary_truncated = _repo_directory_visible_counts(child, config)
+            child_entry["visibleFileCount"] = file_count
+            child_entry["visibleDirCount"] = dir_count
+            child_entry["visibleLineCount"] = line_count
+            if summary_truncated:
+                child_entry["summaryTruncated"] = True
         children.append(child_entry)
     return children, truncated
+
+
+def _repo_directory_visible_counts(path: Path, config: RendererContextConfig) -> tuple[int, int, int, bool]:
+    max_children = max(0, config.max_repo_children_per_dir)
+    file_count = 0
+    dir_count = 0
+    line_count = 0
+    visited = 0
+    truncated = False
+    for child in sorted(path.iterdir(), key=_repo_sort_key):
+        if _skip_repo_path(child.name):
+            continue
+        if visited >= max_children:
+            truncated = True
+            break
+        visited += 1
+        child_kind = _repo_path_kind(child)
+        if child_kind == "dir":
+            dir_count += 1
+            continue
+        file_count += 1
+        if child_kind == "file":
+            line_count += _repo_file_line_count(child) or 0
+    return file_count, dir_count, line_count, truncated
+
+
+def _repo_file_line_count(path: Path) -> int | None:
+    if path.is_symlink():
+        return None
+    if path.stat().st_size > _MAX_REPO_LINE_COUNT_BYTES:
+        return None
+    data = path.read_bytes()
+    if b"\x00" in data:
+        return None
+    if not data:
+        return 0
+    return data.count(b"\n") + (0 if data.endswith(b"\n") else 1)
 
 
 def _relative_repo_path(path: Path, root: Path) -> str:

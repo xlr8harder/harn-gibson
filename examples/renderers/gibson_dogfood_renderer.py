@@ -276,8 +276,13 @@ def _upsert_city(
     for index, entry in enumerate(entries[:8]):
         path = _text(entry.get("path") or entry.get("name"), f"entry-{index}")
         children = _list(entry.get("children"))
+        line_count = _entry_line_count(entry)
         touched_count = sum(
             1 for touched_path in touched_paths if touched_path == path or touched_path.startswith(f"{path}/")
+        )
+        height = round(
+            0.16 + min(0.34, len(children) * 0.026 + min(0.18, line_count * 0.005) + touched_count * 0.08),
+            3,
         )
         blocks.append(
             {
@@ -287,10 +292,11 @@ def _upsert_city(
                 "y": round(0.69 - (index // 4) * 0.12, 3),
                 "w": 0.058,
                 "d": 0.070,
-                "h": round(0.16 + min(0.34, len(children) * 0.026 + touched_count * 0.08), 3),
+                "h": height,
                 "tone": "magenta" if touched_count else _entry_tone(_text(entry.get("kind"), "dir"), tone, accent),
                 "label": _path_label(path),
                 "touched": touched_count,
+                "lines": line_count,
             }
         )
     if len(blocks) == 1:
@@ -636,6 +642,14 @@ def _entry_tone(kind: str, tone: str, accent: str) -> str:
     if kind == "symlink":
         return "amber"
     return tone if kind == "dir" else accent
+
+
+def _entry_line_count(entry: dict[str, Any]) -> int:
+    for key in ("lineCount", "visibleLineCount"):
+        value = entry.get(key)
+        if type(value) is int and value >= 0:
+            return value
+    return 0
 
 
 def _path_label(path: str) -> str:
