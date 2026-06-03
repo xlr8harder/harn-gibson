@@ -9,6 +9,8 @@ from typing import Any
 
 import pytest
 
+from harn_gibson.browser_capture import capture_scene_screenshot
+from harn_gibson.replay import run_replay_file
 from harn_gibson.server import GibsonServerState, create_server
 
 playwright = pytest.importorskip("playwright.sync_api")
@@ -16,6 +18,8 @@ Error = playwright.Error
 expect = playwright.expect
 sync_playwright = playwright.sync_playwright
 
+ROOT = Path(__file__).resolve().parents[1]
+EXAMPLE_REPLAYS = ROOT / "examples" / "replays"
 SCREENSHOT_DIR = Path("test-artifacts/screenshots")
 
 
@@ -147,3 +151,26 @@ def test_browser_display_renders_events_debug_and_input_queue() -> None:
         state.pipeline.stop()
         server.shutdown()
         server.server_close()
+
+
+@pytest.mark.parametrize(
+    ("fixture_name", "screenshot_name"),
+    [
+        ("stream-and-diagnostic.json", "replay-stream-and-diagnostic.png"),
+        ("renderer-plan.json", "replay-renderer-plan.png"),
+    ],
+)
+def test_checked_in_replay_fixtures_render_browser_screenshots(fixture_name: str, screenshot_name: str) -> None:
+    state = GibsonServerState()
+    SCREENSHOT_DIR.mkdir(parents=True, exist_ok=True)
+    output = SCREENSHOT_DIR / screenshot_name
+    try:
+        result = run_replay_file(EXAMPLE_REPLAYS / fixture_name, state)
+        try:
+            screenshot = capture_scene_screenshot(state, output, width=1280, height=900, wait_ms=120)
+        except Error as exc:
+            pytest.skip(f"Chromium is not installed for Playwright: {exc}")
+        assert screenshot.scene_revision == result.scene.revision
+        assert_screenshot(output)
+    finally:
+        state.pipeline.stop()

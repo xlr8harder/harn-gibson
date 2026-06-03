@@ -36,3 +36,4 @@ The integration test verifies:
 - posting a harn-style event mutates the scene;
 - the debug drawer toggles;
 - the browser input composer enqueues a message and `/input/next` drains it.
+- the checked-in agent-side and renderer-side replay fixtures render through the browser screenshot path.
