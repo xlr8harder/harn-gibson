@@ -725,11 +725,28 @@ def test_replay_suite_review_bundle_fallbacks(tmp_path: Path, monkeypatch: pytes
 
 def test_replay_data_from_event_log(tmp_path: Path) -> None:
     path = tmp_path / "events.jsonl"
+    openai_key = "sk-" + ("a" * 24)
+    provider_key = "OPENAI_" + "API_KEY"
+    access_token = "access-" + ("b" * 16)
+    bearer_token = "Bear" + "er " + ("c" * 24)
+    github_token = "ghp_" + ("d" * 24)
     path.write_text(
         "\n".join(
             [
                 "",
-                json.dumps(event_payload(1, "tool_call", {"toolName": "bash"})),
+                json.dumps(
+                    event_payload(
+                        1,
+                        "tool_call",
+                        {
+                            "toolName": "bash",
+                            "env": f"{provider_key}={openai_key}",
+                            "stdout": f"remote {github_token}",
+                            "headers": {"Authorization": bearer_token},
+                            "nested": [{"access_token": access_token}, {"password": "open-sesame"}],
+                        },
+                    )
+                ),
                 json.dumps(event_payload(2, "message_update", {"assistantMessageEvent": {"delta": "ok"}})),
             ]
         )
@@ -745,16 +762,29 @@ def test_replay_data_from_event_log(tmp_path: Path) -> None:
         screenshot_lit_min=0.03,
         screenshot_max_channel_min=80,
     )
+    raw_fixture = replay_data_from_event_log(path, redact_sensitive=False)
     result = run_replay_data(fixture)
 
     assert fixture["schema"] == "harn-gibson.replay.v1"
     assert fixture["name"] == "event log: events.jsonl"
-    assert fixture["metadata"] == {"sourceEventLog": path.as_posix(), "eventCount": 2}
+    assert fixture["metadata"] == {
+        "sourceEventLog": path.as_posix(),
+        "eventCount": 2,
+        "redaction": {"enabled": True, "count": 5},
+    }
     assert fixture["steps"][0]["type"] == "event"
+    redacted_payload = fixture["steps"][0]["event"]["payload"]
+    assert redacted_payload["env"] == f"{provider_key}=[redacted]"
+    assert redacted_payload["stdout"] == "remote [redacted]"
+    assert redacted_payload["headers"]["Authorization"] == "[redacted]"
+    assert redacted_payload["nested"] == [{"access_token": "[redacted]"}, {"password": "[redacted]"}]
+    assert raw_fixture["metadata"]["redaction"] == {"enabled": False, "count": 0}
+    assert raw_fixture["steps"][0]["event"]["payload"]["env"] == f"{provider_key}={openai_key}"
     assert result.name == "event log: events.jsonl"
     assert result.steps[0].kind == "event"
     assert visual_fixture["name"] == "captured visual"
     assert visual_fixture["metadata"]["visualFixture"] is True
+    assert visual_fixture["metadata"]["redaction"] == {"enabled": True, "count": 5}
     assert visual_fixture["metadata"]["captureSummary"] == {
         "durationMs": 1,
         "eventTypeCounts": {"message_update": 1, "tool_call": 1},
@@ -778,6 +808,7 @@ def test_replay_data_from_event_log(tmp_path: Path) -> None:
     sparse = tmp_path / "sparse.jsonl"
     sparse.write_text(json.dumps({"eventType": "", "phase": None, "source": 7, "payload": {}}) + "\n", encoding="utf-8")
     sparse_fixture = replay_data_from_event_log(sparse, visual_fixture=True)
+    assert sparse_fixture["metadata"]["redaction"] == {"enabled": True, "count": 0}
     assert sparse_fixture["metadata"]["captureSummary"] == {
         "eventTypeCounts": {},
         "eventTypes": [],
@@ -795,6 +826,7 @@ def test_replay_data_from_event_log(tmp_path: Path) -> None:
 
 def test_split_replay_data_from_event_log(tmp_path: Path) -> None:
     path = tmp_path / "events.jsonl"
+    github_token = "ghp_" + ("d" * 24)
     path.write_text(
         "\n".join(
             json.dumps(event_payload(index, "tool_call", {"toolName": f"tool-{index}"})) for index in range(1, 6)
@@ -824,6 +856,7 @@ def test_split_replay_data_from_event_log(tmp_path: Path) -> None:
         "eventsPerFixture": 2,
         "chunkCount": 3,
         "visualFixture": True,
+        "redaction": {"enabled": True, "count": 0},
         "captureSummary": {
             "durationMs": 4,
             "eventTypeCounts": {"tool_call": 5},
@@ -876,6 +909,7 @@ def test_split_replay_data_from_event_log(tmp_path: Path) -> None:
             },
         ],
     }
+    assert fixtures[0]["metadata"]["redaction"] == {"enabled": True, "count": 0}
     assert fixtures[0]["metadata"]["eventLogChunk"] == {
         "chunkIndex": 1,
         "chunkCount": 3,
@@ -899,6 +933,7 @@ def test_split_replay_data_from_event_log(tmp_path: Path) -> None:
     assert empty_fixtures[0]["steps"] == []
     assert empty_fixtures[0]["metadata"]["eventLogChunk"]["endEventOffset"] is None
     assert empty_manifest["chunkCount"] == 1
+    assert empty_manifest["redaction"] == {"enabled": True, "count": 0}
 
     sparse = tmp_path / "sparse-split.jsonl"
     sparse.write_text(json.dumps({"eventType": "tool_call", "phase": "before", "source": "unit"}) + "\n", "utf-8")
@@ -917,6 +952,26 @@ def test_split_replay_data_from_event_log(tmp_path: Path) -> None:
         "startEventOffset": 0,
         "endEventOffset": 0,
     }
+
+    redaction_path = tmp_path / "redacted-split.jsonl"
+    redaction_key = "secret"
+    redaction_path.write_text(
+        "\n".join(
+            [
+                json.dumps(event_payload(1, "tool_call", {"toolName": "bash", redaction_key: "alpha"})),
+                json.dumps(event_payload(2, "tool_call", {"toolName": "bash", "stdout": github_token})),
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    redacted_fixtures, redacted_manifest = split_replay_data_from_event_log(
+        redaction_path,
+        events_per_fixture=1,
+    )
+    assert redacted_manifest["redaction"] == {"enabled": True, "count": 2}
+    assert redacted_fixtures[0]["metadata"]["redaction"] == {"enabled": True, "count": 1}
+    assert redacted_fixtures[1]["metadata"]["redaction"] == {"enabled": True, "count": 1}
 
     with pytest.raises(ValueError, match="events_per_fixture must be positive"):
         split_replay_data_from_event_log(path, events_per_fixture=0)

@@ -777,6 +777,7 @@ def test_cli_parser_and_run(monkeypatch: Any, capsys: Any) -> None:
             "--split-every",
             "50",
             "--visual-fixture",
+            "--no-redact-sensitive",
             "--screenshot-lit-min",
             "0.03",
             "--screenshot-max-channel-min",
@@ -797,6 +798,7 @@ def test_cli_parser_and_run(monkeypatch: Any, capsys: Any) -> None:
     assert parsed_event_log.render_chunk_size == 2
     assert parsed_event_log.split_every == 50
     assert parsed_event_log.visual_fixture is True
+    assert parsed_event_log.redact_sensitive is False
     assert parsed_event_log.screenshot_lit_min == 0.03
     assert parsed_event_log.screenshot_max_channel_min == 80
     assert cli.run(["extension-path"]) == 0
@@ -1679,6 +1681,7 @@ def test_cli_event_log_to_replay_writes_and_prints(tmp_path: Any, capsys: Any) -
     written = json.loads(output.read_text(encoding="utf-8"))
     assert written["name"] == "captured dogfood"
     assert written["metadata"]["eventCount"] == 1
+    assert written["metadata"]["redaction"] == {"enabled": True, "count": 0}
     assert written["metadata"]["visualFixture"] is True
     assert written["metadata"]["captureSummary"]["eventTypes"] == ["message_update"]
     assert written["screenshotExpect"]["checks"] == [
@@ -1741,11 +1744,13 @@ def test_cli_event_log_to_replay_writes_split_chunks(tmp_path: Any, capsys: Any)
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     assert first["name"] == "captured dogfood chunk 1/2"
     assert first["metadata"]["eventLogChunk"]["endEventOffset"] == 1
+    assert first["metadata"]["redaction"] == {"enabled": True, "count": 0}
     assert first["metadata"]["visualFixture"] is True
     assert len(first["steps"]) == 2
     assert second["metadata"]["eventLogChunk"]["startEventOffset"] == 2
     assert len(second["steps"]) == 1
     assert manifest["schema"] == "harn-gibson.event-log-split.v1"
+    assert manifest["redaction"] == {"enabled": True, "count": 0}
     assert manifest["captureSummary"]["eventTypeCounts"] == {"tool_call": 3}
     assert [entry["path"] for entry in manifest["fixtures"]] == [
         "captured-dogfood-0001.json",
@@ -2081,6 +2086,7 @@ def test_cli_dogfood_capture_sets_env_and_replay_hint(
     assert "harn-gibson capture renderer: python renderer.py" in stderr
     assert "uv run harn-gibson event-log-to-replay" in stderr
     assert f"--output {event_log.with_suffix('.replay.json')}" in stderr
+    assert "--redact-sensitive" in stderr
     assert f"--review-dir {event_log.with_name('events-review')}" in stderr
     assert "--renderer-command 'python renderer.py'" in stderr
     assert "--renderer-timeout-ms 1234 --style mainframe" in stderr

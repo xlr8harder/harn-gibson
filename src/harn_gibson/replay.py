@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from copy import deepcopy
 from dataclasses import dataclass, field
@@ -23,6 +24,41 @@ from harn_gibson.styles import style_pack_from_name
 ReplayStepKind = Literal["event", "raw_event", "render_plan", "mutations"]
 ReplayExpectationOp = Literal["equals", "contains", "exists", "min", "max"]
 MISSING = object()
+SENSITIVE_REDACTION = "[redacted]"
+_SENSITIVE_EVENT_KEYS = frozenset(
+    {
+        "access_token",
+        "api_key",
+        "apikey",
+        "auth_token",
+        "authorization",
+        "client_secret",
+        "cookie",
+        "credential",
+        "credentials",
+        "id_token",
+        "password",
+        "private_key",
+        "refresh_token",
+        "secret",
+        "set_cookie",
+        "token",
+        "tokens",
+    }
+)
+_SENSITIVE_TEXT_PATTERNS = (
+    (
+        re.compile(
+            r"(?i)\b(([A-Z0-9_]*TOKEN|[A-Z0-9_]*SECRET|PASSWORD|PASSWD|API[_-]?KEY|"
+            r"[A-Z0-9_]*API[_-]?KEY)\s*[:=]\s*)[^\s,'\"}]{4,}"
+        ),
+        rf"\1{SENSITIVE_REDACTION}",
+    ),
+    (re.compile(r"(?i)\b(Bearer)\s+[A-Za-z0-9._~+/=-]{8,}"), rf"\1 {SENSITIVE_REDACTION}"),
+    (re.compile(r"\bsk-(?:proj-)?[A-Za-z0-9_-]{16,}\b"), SENSITIVE_REDACTION),
+    (re.compile(r"\bgithub_pat_[A-Za-z0-9_]{16,}\b"), SENSITIVE_REDACTION),
+    (re.compile(r"\bgh[opsu]_[A-Za-z0-9_]{16,}\b"), SENSITIVE_REDACTION),
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -374,9 +410,11 @@ def replay_data_from_event_log(
     visual_fixture: bool = False,
     screenshot_lit_min: float = 0.02,
     screenshot_max_channel_min: int = 60,
+    redact_sensitive: bool = True,
 ) -> dict[str, Any]:
     event_log_path = Path(path)
     events = _read_event_log_events(event_log_path)
+    events, redaction_count, _ = _event_log_events_for_fixture(events, redact_sensitive=redact_sensitive)
     return _replay_data_from_events(
         event_log_path,
         events,
@@ -384,6 +422,8 @@ def replay_data_from_event_log(
         visual_fixture=visual_fixture,
         screenshot_lit_min=screenshot_lit_min,
         screenshot_max_channel_min=screenshot_max_channel_min,
+        redact_sensitive=redact_sensitive,
+        redaction_count=redaction_count,
     )
 
 
@@ -395,11 +435,16 @@ def split_replay_data_from_event_log(
     visual_fixture: bool = False,
     screenshot_lit_min: float = 0.02,
     screenshot_max_channel_min: int = 60,
+    redact_sensitive: bool = True,
 ) -> tuple[tuple[dict[str, Any], ...], dict[str, Any]]:
     if events_per_fixture <= 0:
         raise ValueError("events_per_fixture must be positive")
     event_log_path = Path(path)
-    events = _read_event_log_events(event_log_path)
+    raw_events = _read_event_log_events(event_log_path)
+    events, redaction_count, event_redaction_counts = _event_log_events_for_fixture(
+        raw_events,
+        redact_sensitive=redact_sensitive,
+    )
     chunks = _event_chunks(events, events_per_fixture)
     chunk_count = len(chunks)
     base_name = name if name is not None else f"event log: {event_log_path.name}"
@@ -426,6 +471,8 @@ def split_replay_data_from_event_log(
             screenshot_lit_min=screenshot_lit_min,
             screenshot_max_channel_min=screenshot_max_channel_min,
             metadata=chunk_metadata,
+            redact_sensitive=redact_sensitive,
+            redaction_count=sum(event_redaction_counts[start_offset : start_offset + len(chunk_events)]),
         )
         fixtures.append(fixture)
         entry: dict[str, Any] = {
@@ -449,6 +496,7 @@ def split_replay_data_from_event_log(
         "eventsPerFixture": events_per_fixture,
         "chunkCount": chunk_count,
         "visualFixture": visual_fixture,
+        "redaction": {"enabled": redact_sensitive, "count": redaction_count},
         "captureSummary": _event_log_capture_summary(events),
         "fixtures": fixture_entries,
     }
@@ -473,6 +521,72 @@ def _read_event_log_events(event_log_path: Path) -> list[dict[str, Any]]:
     return events
 
 
+def _event_log_events_for_fixture(
+    events: Sequence[dict[str, Any]],
+    *,
+    redact_sensitive: bool,
+) -> tuple[list[dict[str, Any]], int, tuple[int, ...]]:
+    if not redact_sensitive:
+        return [dict(event) for event in events], 0, tuple(0 for _ in events)
+    redacted: list[dict[str, Any]] = []
+    event_redaction_counts: list[int] = []
+    redaction_count = 0
+    for event in events:
+        redacted_event, event_redaction_count = _redact_sensitive_event_data(event)
+        redacted.append(redacted_event)
+        event_redaction_counts.append(event_redaction_count)
+        redaction_count += event_redaction_count
+    return redacted, redaction_count, tuple(event_redaction_counts)
+
+
+def _redact_sensitive_event_data(value: Any) -> tuple[Any, int]:
+    if isinstance(value, Mapping):
+        return _redact_sensitive_event_mapping(value)
+    if isinstance(value, list):
+        return _redact_sensitive_event_list(value)
+    if isinstance(value, str):
+        return _redact_sensitive_event_text(value)
+    return value, 0
+
+
+def _redact_sensitive_event_mapping(value: Mapping[str, Any]) -> tuple[dict[str, Any], int]:
+    redacted: dict[str, Any] = {}
+    redaction_count = 0
+    for key, child in value.items():
+        if _is_sensitive_event_key(key):
+            redacted[key] = SENSITIVE_REDACTION
+            redaction_count += 1
+        else:
+            redacted_child, child_redaction_count = _redact_sensitive_event_data(child)
+            redacted[key] = redacted_child
+            redaction_count += child_redaction_count
+    return redacted, redaction_count
+
+
+def _redact_sensitive_event_list(value: Sequence[Any]) -> tuple[list[Any], int]:
+    redacted: list[Any] = []
+    redaction_count = 0
+    for child in value:
+        redacted_child, child_redaction_count = _redact_sensitive_event_data(child)
+        redacted.append(redacted_child)
+        redaction_count += child_redaction_count
+    return redacted, redaction_count
+
+
+def _redact_sensitive_event_text(value: str) -> tuple[str, int]:
+    redacted = value
+    redaction_count = 0
+    for pattern, replacement in _SENSITIVE_TEXT_PATTERNS:
+        redacted, count = pattern.subn(replacement, redacted)
+        redaction_count += count
+    return redacted, redaction_count
+
+
+def _is_sensitive_event_key(key: Any) -> bool:
+    normalized = str(key).strip().lower().replace("-", "_")
+    return normalized in _SENSITIVE_EVENT_KEYS
+
+
 def _replay_data_from_events(
     event_log_path: Path,
     events: Sequence[dict[str, Any]],
@@ -482,6 +596,8 @@ def _replay_data_from_events(
     screenshot_lit_min: float,
     screenshot_max_channel_min: int,
     metadata: Mapping[str, Any] | None = None,
+    redact_sensitive: bool,
+    redaction_count: int,
 ) -> dict[str, Any]:
     steps: list[dict[str, Any]] = []
     for event in events:
@@ -489,6 +605,7 @@ def _replay_data_from_events(
     fixture_metadata: dict[str, Any] = {
         "sourceEventLog": event_log_path.as_posix(),
         "eventCount": len(steps),
+        "redaction": {"enabled": redact_sensitive, "count": redaction_count},
     }
     if metadata is not None:
         fixture_metadata.update(dict(metadata))

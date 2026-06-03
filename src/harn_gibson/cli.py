@@ -139,6 +139,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="include capture summary metadata and default screenshot expectations",
     )
     event_log.add_argument(
+        "--redact-sensitive",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="redact common token, key, password, and credential values in converted replay fixtures",
+    )
+    event_log.add_argument(
         "--screenshot-lit-min",
         type=float,
         default=0.02,
@@ -368,6 +374,7 @@ def _capture_replay_command(
         "--output",
         str(fixture_output),
         "--visual-fixture",
+        "--redact-sensitive",
         "--review-dir",
         str(review_dir),
         "--renderer-command",
@@ -605,6 +612,7 @@ def run(argv: Sequence[str] | None = None) -> int:
                 visual_fixture=args.visual_fixture,
                 screenshot_lit_min=args.screenshot_lit_min,
                 screenshot_max_channel_min=args.screenshot_max_channel_min,
+                redact_sensitive=args.redact_sensitive,
             )
             output_dir = Path(args.output_dir)
             output_dir.mkdir(parents=True, exist_ok=True)
@@ -630,6 +638,7 @@ def run(argv: Sequence[str] | None = None) -> int:
             visual_fixture=args.visual_fixture,
             screenshot_lit_min=args.screenshot_lit_min,
             screenshot_max_channel_min=args.screenshot_max_channel_min,
+            redact_sensitive=args.redact_sensitive,
         )
         text = json.dumps(fixture, indent=2) + "\n"
         if args.output:

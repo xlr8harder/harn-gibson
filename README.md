@@ -123,7 +123,7 @@ For longer capture sessions, use the capture wrapper. It launches dogfood with t
 uv run harn-gibson dogfood-capture -- -p "bootstrap a tiny project here"
 ```
 
-Pass `--event-log path/to/session.jsonl` if you want a stable capture path. JSONL captures can contain prompts, tool output, file paths, and diagnostics, so keep them under ignored artifact paths unless you have intentionally scrubbed them.
+Pass `--event-log path/to/session.jsonl` if you want a stable capture path. JSONL captures can contain prompts, tool output, file paths, and diagnostics, so keep the raw logs under ignored artifact paths. The follow-up `event-log-to-replay` conversion redacts common token, key, password, and credential values by default before writing replay fixtures; use `--no-redact-sensitive` only for private local debugging.
 
 Use `examples/renderers/gibson_echo_renderer.py` when you want the smallest possible external-renderer contract example.
 
@@ -171,7 +171,7 @@ uv run harn-gibson event-log-to-replay .harn-gibson.jsonl \
   --renderer-command 'uv run python examples/renderers/gibson_dogfood_renderer.py'
 ```
 
-`--visual-fixture` adds capture-summary metadata plus conservative screenshot expectations, so the converted trajectory can be run through `replay-dir --screenshot-dir` as a visual regression input. `--review-dir` replays the converted log immediately, captures per-step browser frames, renderer contexts, prompts, chunks, render intents, and writes an HTML review bundle.
+`--visual-fixture` adds capture-summary metadata plus conservative screenshot expectations, so the converted trajectory can be run through `replay-dir --screenshot-dir` as a visual regression input. Conversion records redaction metadata with an enabled flag and replacement count. `--review-dir` replays the converted log immediately, captures per-step browser frames, renderer contexts, prompts, chunks, render intents, and writes an HTML review bundle.
 
 For long captures, split the event log into a replay fixture directory:
 
