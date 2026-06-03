@@ -1,0 +1,291 @@
+"""Persistent scene state and mutation primitives for harn-gibson."""
+
+from __future__ import annotations
+
+from collections.abc import Iterable, Mapping
+from dataclasses import dataclass, field
+from typing import Any, Literal
+
+from harn_gibson.events import GibsonEvent
+
+SceneOp = Literal[
+    "upsert",
+    "patch",
+    "remove",
+    "append_log",
+    "start_animation",
+    "stop_animation",
+    "reset_scene",
+]
+
+
+@dataclass(frozen=True, slots=True)
+class ScenePrimitive:
+    id: str
+    kind: str
+    region: str
+    props: dict[str, Any] = field(default_factory=dict)
+    children: tuple[str, ...] = ()
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "kind": self.kind,
+            "region": self.region,
+            "props": self.props,
+            "children": list(self.children),
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class SceneAnimation:
+    id: str
+    target_id: str
+    kind: str
+    started_at_ms: int
+    duration_ms: int
+    loop: bool = False
+    props: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "targetId": self.target_id,
+            "kind": self.kind,
+            "startedAtMs": self.started_at_ms,
+            "durationMs": self.duration_ms,
+            "loop": self.loop,
+            "props": self.props,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class SceneMutation:
+    op: SceneOp
+    target_id: str | None = None
+    primitive: ScenePrimitive | None = None
+    props: dict[str, Any] = field(default_factory=dict)
+    animation: SceneAnimation | None = None
+    entry: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        payload: dict[str, Any] = {"op": self.op}
+        if self.target_id is not None:
+            payload["targetId"] = self.target_id
+        if self.primitive is not None:
+            payload["primitive"] = self.primitive.to_dict()
+        if self.props:
+            payload["props"] = self.props
+        if self.animation is not None:
+            payload["animation"] = self.animation.to_dict()
+        if self.entry:
+            payload["entry"] = self.entry
+        return payload
+
+
+@dataclass(slots=True)
+class SceneState:
+    revision: int = 0
+    primitives: dict[str, ScenePrimitive] = field(default_factory=dict)
+    animations: dict[str, SceneAnimation] = field(default_factory=dict)
+    log: list[dict[str, Any]] = field(default_factory=list)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "schema": "harn-gibson.scene.v1",
+            "revision": self.revision,
+            "primitives": {key: primitive.to_dict() for key, primitive in self.primitives.items()},
+            "animations": {key: animation.to_dict() for key, animation in self.animations.items()},
+            "log": list(self.log),
+        }
+
+
+class SceneEngine:
+    """Applies scene mutations to persistent scene state."""
+
+    def __init__(self, state: SceneState | None = None, *, max_log_entries: int = 120) -> None:
+        self.state = state or initial_scene()
+        self.max_log_entries = max_log_entries
+
+    def apply(self, mutations: Iterable[SceneMutation | Mapping[str, Any]]) -> SceneState:
+        applied = False
+        for mutation in mutations:
+            self._apply(mutation_from_mapping(mutation) if isinstance(mutation, Mapping) else mutation)
+            applied = True
+        if applied:
+            self.state.revision += 1
+        return self.state
+
+    def _apply(self, mutation: SceneMutation) -> None:
+        if mutation.op == "reset_scene":
+            self.state = initial_scene()
+            return
+        if mutation.op == "upsert":
+            primitive = _require(mutation.primitive, "upsert requires primitive")
+            self.state.primitives[primitive.id] = primitive
+            return
+        if mutation.op == "patch":
+            target_id = _require(mutation.target_id, "patch requires target_id")
+            current = _require(self.state.primitives.get(target_id), f"unknown primitive: {target_id}")
+            self.state.primitives[target_id] = ScenePrimitive(
+                id=current.id,
+                kind=current.kind,
+                region=current.region,
+                props={**current.props, **mutation.props},
+                children=current.children,
+            )
+            return
+        if mutation.op == "remove":
+            target_id = _require(mutation.target_id, "remove requires target_id")
+            self.state.primitives.pop(target_id, None)
+            self.state.animations = {
+                key: animation for key, animation in self.state.animations.items() if animation.target_id != target_id
+            }
+            return
+        if mutation.op == "append_log":
+            self.state.log.append(dict(mutation.entry))
+            if len(self.state.log) > self.max_log_entries:
+                del self.state.log[: len(self.state.log) - self.max_log_entries]
+            return
+        if mutation.op == "start_animation":
+            animation = _require(mutation.animation, "start_animation requires animation")
+            self.state.animations[animation.id] = animation
+            return
+        if mutation.op == "stop_animation":
+            target_id = _require(mutation.target_id, "stop_animation requires target_id")
+            self.state.animations.pop(target_id, None)
+            return
+        raise ValueError(f"unsupported scene mutation op: {mutation.op}")
+
+
+def initial_scene() -> SceneState:
+    state = SceneState()
+    for primitive in (
+        ScenePrimitive(
+            id="stage",
+            kind="viewport",
+            region="root",
+            props={"theme": "gibson", "title": "GIBSON LINK"},
+            children=("status", "event-feed", "decision-log", "scan-grid"),
+        ),
+        ScenePrimitive(id="status", kind="status", region="mast", props={"text": "awaiting signal", "phase": "idle"}),
+        ScenePrimitive(id="event-feed", kind="feed", region="side", props={"maxItems": 80}),
+        ScenePrimitive(id="decision-log", kind="code", region="side", props={"language": "json", "text": "[]"}),
+        ScenePrimitive(id="scan-grid", kind="grid", region="stage", props={"intensity": 0.2}),
+    ):
+        state.primitives[primitive.id] = primitive
+    return state
+
+
+def mutation_from_mapping(value: Mapping[str, Any]) -> SceneMutation:
+    op = value.get("op")
+    if op not in {
+        "upsert",
+        "patch",
+        "remove",
+        "append_log",
+        "start_animation",
+        "stop_animation",
+        "reset_scene",
+    }:
+        raise ValueError(f"unsupported scene mutation op: {op}")
+    return SceneMutation(
+        op=op,
+        target_id=_optional_str(value.get("targetId", value.get("target_id"))),
+        primitive=_primitive_from_mapping(value["primitive"]) if isinstance(value.get("primitive"), Mapping) else None,
+        props=dict(value.get("props") or {}),
+        animation=_animation_from_mapping(value["animation"]) if isinstance(value.get("animation"), Mapping) else None,
+        entry=dict(value.get("entry") or {}),
+    )
+
+
+def default_mutations_for_event(event: GibsonEvent, decisions: Iterable[Mapping[str, Any]] = ()) -> list[SceneMutation]:
+    rendered_decisions = list(decisions)
+    tone = _tone_for_phase(event.phase)
+    return [
+        SceneMutation(
+            op="patch",
+            target_id="status",
+            props={"text": f"{event.phase}:{event.event_type}", "phase": event.phase, "tone": tone},
+        ),
+        SceneMutation(
+            op="append_log",
+            entry={
+                "sequence": event.sequence,
+                "phase": event.phase,
+                "eventType": event.event_type,
+                "title": event.title,
+                "summary": event.summary,
+            },
+        ),
+        SceneMutation(
+            op="patch",
+            target_id="decision-log",
+            props={"text": rendered_decisions},
+        ),
+        SceneMutation(
+            op="start_animation",
+            animation=SceneAnimation(
+                id=f"pulse-{event.sequence}",
+                target_id="scan-grid",
+                kind="phase-pulse",
+                started_at_ms=event.timestamp_ms,
+                duration_ms=1600,
+                props={"phase": event.phase, "tone": tone, "sequence": event.sequence},
+            ),
+        ),
+    ]
+
+
+def scene_update_payload(
+    event: GibsonEvent,
+    mutations: Iterable[SceneMutation],
+    scene: SceneState,
+) -> dict[str, Any]:
+    return {
+        "schema": "harn-gibson.scene-update.v1",
+        "event": event.to_dict(),
+        "mutations": [mutation.to_dict() for mutation in mutations],
+        "scene": scene.to_dict(),
+    }
+
+
+def _primitive_from_mapping(value: Mapping[str, Any]) -> ScenePrimitive:
+    return ScenePrimitive(
+        id=str(value["id"]),
+        kind=str(value["kind"]),
+        region=str(value["region"]),
+        props=dict(value.get("props") or {}),
+        children=tuple(str(child) for child in value.get("children", ())),
+    )
+
+
+def _animation_from_mapping(value: Mapping[str, Any]) -> SceneAnimation:
+    return SceneAnimation(
+        id=str(value["id"]),
+        target_id=str(value.get("targetId", value.get("target_id"))),
+        kind=str(value["kind"]),
+        started_at_ms=int(value.get("startedAtMs", value.get("started_at_ms", 0))),
+        duration_ms=int(value.get("durationMs", value.get("duration_ms", 0))),
+        loop=bool(value.get("loop", False)),
+        props=dict(value.get("props") or {}),
+    )
+
+
+def _tone_for_phase(phase: str) -> str:
+    return {
+        "before": "green",
+        "during": "cyan",
+        "after": "magenta",
+        "lifecycle": "amber",
+    }.get(phase, "green")
+
+
+def _optional_str(value: Any) -> str | None:
+    return value if isinstance(value, str) else None
+
+
+def _require[T](value: T | None, message: str) -> T:
+    if value is None:
+        raise ValueError(message)
+    return value
