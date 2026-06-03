@@ -353,7 +353,7 @@ def discover_replay_files(path: str | Path) -> tuple[Path, ...]:
         return (root,)
     if not root.is_dir():
         raise FileNotFoundError(f"replay path not found: {root}")
-    files = tuple(sorted(item for item in root.rglob("*.json") if item.is_file()))
+    files = tuple(sorted(item for item in root.rglob("*.json") if item.is_file() and item.name != "manifest.json"))
     if not files:
         raise ValueError(f"no replay JSON files found under {root}")
     return files
@@ -376,7 +376,90 @@ def replay_data_from_event_log(
     screenshot_max_channel_min: int = 60,
 ) -> dict[str, Any]:
     event_log_path = Path(path)
-    steps: list[dict[str, Any]] = []
+    events = _read_event_log_events(event_log_path)
+    return _replay_data_from_events(
+        event_log_path,
+        events,
+        name=name if name is not None else f"event log: {event_log_path.name}",
+        visual_fixture=visual_fixture,
+        screenshot_lit_min=screenshot_lit_min,
+        screenshot_max_channel_min=screenshot_max_channel_min,
+    )
+
+
+def split_replay_data_from_event_log(
+    path: str | Path,
+    *,
+    events_per_fixture: int,
+    name: str | None = None,
+    visual_fixture: bool = False,
+    screenshot_lit_min: float = 0.02,
+    screenshot_max_channel_min: int = 60,
+) -> tuple[tuple[dict[str, Any], ...], dict[str, Any]]:
+    if events_per_fixture <= 0:
+        raise ValueError("events_per_fixture must be positive")
+    event_log_path = Path(path)
+    events = _read_event_log_events(event_log_path)
+    chunks = _event_chunks(events, events_per_fixture)
+    chunk_count = len(chunks)
+    base_name = name if name is not None else f"event log: {event_log_path.name}"
+    fixtures: list[dict[str, Any]] = []
+    fixture_entries: list[dict[str, Any]] = []
+    for index, chunk_events in enumerate(chunks, start=1):
+        start_offset = (index - 1) * events_per_fixture
+        end_offset = start_offset + len(chunk_events) - 1 if chunk_events else None
+        chunk_metadata = {
+            "eventLogChunk": {
+                "chunkIndex": index,
+                "chunkCount": chunk_count,
+                "eventsPerFixture": events_per_fixture,
+                "startEventOffset": start_offset,
+                "endEventOffset": end_offset,
+                "totalEventCount": len(events),
+            }
+        }
+        fixture = _replay_data_from_events(
+            event_log_path,
+            chunk_events,
+            name=f"{base_name} chunk {index}/{chunk_count}",
+            visual_fixture=visual_fixture,
+            screenshot_lit_min=screenshot_lit_min,
+            screenshot_max_channel_min=screenshot_max_channel_min,
+            metadata=chunk_metadata,
+        )
+        fixtures.append(fixture)
+        entry: dict[str, Any] = {
+            "path": _split_replay_fixture_filename(base_name, index),
+            "chunkIndex": index,
+            "eventCount": len(chunk_events),
+            "startEventOffset": start_offset,
+            "endEventOffset": end_offset,
+        }
+        summary = fixture.get("metadata", {}).get("captureSummary")
+        if isinstance(summary, Mapping):
+            for key in ("firstSequence", "lastSequence", "firstTimestampMs", "lastTimestampMs", "durationMs"):
+                if key in summary:
+                    entry[key] = summary[key]
+        fixture_entries.append(entry)
+    manifest: dict[str, Any] = {
+        "schema": "harn-gibson.event-log-split.v1",
+        "name": base_name,
+        "sourceEventLog": event_log_path.as_posix(),
+        "eventCount": len(events),
+        "eventsPerFixture": events_per_fixture,
+        "chunkCount": chunk_count,
+        "visualFixture": visual_fixture,
+        "captureSummary": _event_log_capture_summary(events),
+        "fixtures": fixture_entries,
+    }
+    return tuple(fixtures), manifest
+
+
+def split_replay_fixture_filename(name: str, index: int) -> str:
+    return _split_replay_fixture_filename(name, index)
+
+
+def _read_event_log_events(event_log_path: Path) -> list[dict[str, Any]]:
     events: list[dict[str, Any]] = []
     with event_log_path.open(encoding="utf-8") as handle:
         for line_number, line in enumerate(handle, start=1):
@@ -387,18 +470,35 @@ def replay_data_from_event_log(
             if not isinstance(event, dict):
                 raise ValueError(f"event log line {line_number} must contain a JSON object")
             events.append(event)
-            steps.append({"type": "event", "event": event})
-    metadata: dict[str, Any] = {
+    return events
+
+
+def _replay_data_from_events(
+    event_log_path: Path,
+    events: Sequence[dict[str, Any]],
+    *,
+    name: str,
+    visual_fixture: bool,
+    screenshot_lit_min: float,
+    screenshot_max_channel_min: int,
+    metadata: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    steps: list[dict[str, Any]] = []
+    for event in events:
+        steps.append({"type": "event", "event": event})
+    fixture_metadata: dict[str, Any] = {
         "sourceEventLog": event_log_path.as_posix(),
         "eventCount": len(steps),
     }
+    if metadata is not None:
+        fixture_metadata.update(dict(metadata))
     if visual_fixture:
-        metadata["visualFixture"] = True
-        metadata["captureSummary"] = _event_log_capture_summary(events)
+        fixture_metadata["visualFixture"] = True
+        fixture_metadata["captureSummary"] = _event_log_capture_summary(events)
     fixture: dict[str, Any] = {
         "schema": "harn-gibson.replay.v1",
-        "name": name if name is not None else f"event log: {event_log_path.name}",
-        "metadata": metadata,
+        "name": name,
+        "metadata": fixture_metadata,
         "steps": steps,
     }
     if visual_fixture:
@@ -410,6 +510,30 @@ def replay_data_from_event_log(
             ],
         }
     return fixture
+
+
+def _event_chunks(events: Sequence[dict[str, Any]], size: int) -> tuple[tuple[dict[str, Any], ...], ...]:
+    if not events:
+        return ((),)
+    return tuple(tuple(events[index : index + size]) for index in range(0, len(events), size))
+
+
+def _split_replay_fixture_filename(name: str, index: int) -> str:
+    return f"{_slugify_filename(name)}-{index:04d}.json"
+
+
+def _slugify_filename(value: str) -> str:
+    slug_chars: list[str] = []
+    previous_dash = False
+    for character in value.lower():
+        if character.isalnum():
+            slug_chars.append(character)
+            previous_dash = False
+        elif not previous_dash:
+            slug_chars.append("-")
+            previous_dash = True
+    slug = "".join(slug_chars).strip("-")
+    return slug or "event-log"
 
 
 def _event_log_capture_summary(events: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
@@ -2244,6 +2368,8 @@ __all__ = [
     "run_replay_data",
     "run_replay_file",
     "run_replay_suite",
+    "split_replay_data_from_event_log",
+    "split_replay_fixture_filename",
     "write_replay_result",
     "write_replay_frame_screenshot_manifest",
     "write_replay_frame_review_html",

@@ -56,6 +56,25 @@ uv run harn-gibson event-log-to-replay .harn-gibson.jsonl \
 
 Without `--output`, the fixture JSON is printed to stdout. The generated fixture uses `event` steps so hook decisions and renderer routing are replayed through the same path as live display events. `--visual-fixture` adds capture-summary metadata plus `screenshotExpect` checks for nonblank browser output, `canvasMetrics.litRatio >= 0.02`, and `canvasMetrics.maxChannelTotal >= 60`; use `--screenshot-lit-min` and `--screenshot-max-channel-min` to tune those thresholds for a specific long capture. `--review-dir` immediately replays the converted log, captures frame screenshots, renderer contexts, provider-neutral prompts, renderer chunks, render intents, and writes the same HTML review bundle as `harn-gibson replay --review-dir`. The bundle manifest and overview page promote capture duration, event types, phases, and sources when capture-summary metadata is present, which makes longer dogfood trajectories easier to compare at a glance.
 
+Long captures can be split into smaller replay fixtures:
+
+```bash
+uv run harn-gibson event-log-to-replay .harn-gibson.jsonl \
+  --output-dir test-artifacts/replays/captured-session-split \
+  --split-every 200 \
+  --name "captured dogfood session" \
+  --visual-fixture
+```
+
+Split mode writes `manifest.json` plus numbered replay fixtures such as `captured-dogfood-session-0001.json`. Each fixture has `metadata.eventLogChunk` with the chunk index, total chunk count, event offsets, and total capture size; each visual fixture also carries chunk-level capture-summary metadata and screenshot expectations. The split manifest has schema `harn-gibson.event-log-split.v1`, the full capture summary, and the relative fixture filenames. `--split-every` requires `--output-dir` and does not combine with `--output` or `--review-dir`; use `replay-dir` on the generated directory to render screenshots:
+
+```bash
+uv run harn-gibson replay-dir test-artifacts/replays/captured-session-split \
+  --screenshot-dir test-artifacts/replays/captured-session-split-screenshots
+```
+
+`replay-dir` skips `manifest.json` metadata files, so split fixture directories can be replayed directly.
+
 ## Expectations
 
 `expect.sceneRevision` is shorthand for `{"path": "revision", "equals": N}`. `expect.checks` paths are dot-separated paths into the final `SceneState.to_dict()` payload. Numeric path segments index arrays.
@@ -103,7 +122,7 @@ uv run harn-gibson replay-dir examples/replays \
 
 The model command receives `harn-gibson.model-renderer-request.v1`; the external command receives `harn-gibson.external-renderer-request.v1`. Returned plans still go through the same validation, diagnostics, fail-open fallback, and final-scene expectation checks as live dogfood rendering.
 
-The hard-coded `gibson_dogfood_renderer.py` is meant for live harn use before the renderer-agent backend is good enough. A useful future fixture workflow is to run `uv run harn-gibson dogfood-capture`, ask harn to spend 15-20 minutes bootstrapping a tiny project in a bare directory, then convert that event trajectory into replay fixtures and browser screenshots. Several such trajectories should become regression inputs for event coalescing, renderer timing, touched-file visualization, and visual continuity.
+The hard-coded `gibson_dogfood_renderer.py` is meant for live harn use before the renderer-agent backend is good enough. A useful future fixture workflow is to run `uv run harn-gibson dogfood-capture`, ask harn to spend 15-20 minutes bootstrapping a tiny project in a bare directory, then convert that event trajectory into a split replay directory and browser screenshots. Several such trajectories should become regression inputs for event coalescing, renderer timing, touched-file visualization, and visual continuity.
 
 ## Baseline Review
 

@@ -50,6 +50,8 @@ from harn_gibson.replay import (
     replay_renderer_prompts_from_result,
     replay_renderer_prompts_review_html,
     run_replay_suite,
+    split_replay_data_from_event_log,
+    split_replay_fixture_filename,
     write_replay_baseline,
     write_replay_frame_review_html,
     write_replay_frame_screenshot_manifest,
@@ -590,6 +592,135 @@ def test_replay_data_from_event_log(tmp_path: Path) -> None:
         replay_data_from_event_log(bad)
 
 
+def test_split_replay_data_from_event_log(tmp_path: Path) -> None:
+    path = tmp_path / "events.jsonl"
+    path.write_text(
+        "\n".join(
+            json.dumps(event_payload(index, "tool_call", {"toolName": f"tool-{index}"})) for index in range(1, 6)
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    fixtures, manifest = split_replay_data_from_event_log(
+        path,
+        events_per_fixture=2,
+        name="Captured Dogfood!",
+        visual_fixture=True,
+        screenshot_lit_min=0.05,
+        screenshot_max_channel_min=120,
+    )
+    result = run_replay_data(fixtures[0])
+
+    assert len(fixtures) == 3
+    assert result.name == "Captured Dogfood! chunk 1/3"
+    assert split_replay_fixture_filename("Captured Dogfood!", 2) == "captured-dogfood-0002.json"
+    assert manifest == {
+        "schema": "harn-gibson.event-log-split.v1",
+        "name": "Captured Dogfood!",
+        "sourceEventLog": path.as_posix(),
+        "eventCount": 5,
+        "eventsPerFixture": 2,
+        "chunkCount": 3,
+        "visualFixture": True,
+        "captureSummary": {
+            "durationMs": 4,
+            "eventTypeCounts": {"tool_call": 5},
+            "eventTypes": ["tool_call"],
+            "firstSequence": 1,
+            "firstTimestampMs": 1001,
+            "lastSequence": 5,
+            "lastTimestampMs": 1005,
+            "phaseCounts": {"before": 5},
+            "phases": ["before"],
+            "sourceCounts": {"unit": 5},
+            "sources": ["unit"],
+        },
+        "fixtures": [
+            {
+                "path": "captured-dogfood-0001.json",
+                "chunkIndex": 1,
+                "eventCount": 2,
+                "startEventOffset": 0,
+                "endEventOffset": 1,
+                "firstSequence": 1,
+                "lastSequence": 2,
+                "firstTimestampMs": 1001,
+                "lastTimestampMs": 1002,
+                "durationMs": 1,
+            },
+            {
+                "path": "captured-dogfood-0002.json",
+                "chunkIndex": 2,
+                "eventCount": 2,
+                "startEventOffset": 2,
+                "endEventOffset": 3,
+                "firstSequence": 3,
+                "lastSequence": 4,
+                "firstTimestampMs": 1003,
+                "lastTimestampMs": 1004,
+                "durationMs": 1,
+            },
+            {
+                "path": "captured-dogfood-0003.json",
+                "chunkIndex": 3,
+                "eventCount": 1,
+                "startEventOffset": 4,
+                "endEventOffset": 4,
+                "firstSequence": 5,
+                "lastSequence": 5,
+                "firstTimestampMs": 1005,
+                "lastTimestampMs": 1005,
+                "durationMs": 0,
+            },
+        ],
+    }
+    assert fixtures[0]["metadata"]["eventLogChunk"] == {
+        "chunkIndex": 1,
+        "chunkCount": 3,
+        "eventsPerFixture": 2,
+        "startEventOffset": 0,
+        "endEventOffset": 1,
+        "totalEventCount": 5,
+    }
+    assert len(fixtures[0]["steps"]) == 2
+    assert len(fixtures[2]["steps"]) == 1
+    assert fixtures[2]["metadata"]["captureSummary"]["firstSequence"] == 5
+    assert fixtures[0]["screenshotExpect"]["checks"] == [
+        {"path": "canvasMetrics.litRatio", "min": 0.05},
+        {"path": "canvasMetrics.maxChannelTotal", "min": 120},
+    ]
+
+    empty = tmp_path / "empty.jsonl"
+    empty.write_text("", encoding="utf-8")
+    empty_fixtures, empty_manifest = split_replay_data_from_event_log(empty, events_per_fixture=10)
+    assert len(empty_fixtures) == 1
+    assert empty_fixtures[0]["steps"] == []
+    assert empty_fixtures[0]["metadata"]["eventLogChunk"]["endEventOffset"] is None
+    assert empty_manifest["chunkCount"] == 1
+
+    sparse = tmp_path / "sparse-split.jsonl"
+    sparse.write_text(json.dumps({"eventType": "tool_call", "phase": "before", "source": "unit"}) + "\n", "utf-8")
+    sparse_fixtures, sparse_manifest = split_replay_data_from_event_log(
+        sparse,
+        events_per_fixture=10,
+        name="!!!",
+        visual_fixture=True,
+    )
+    assert split_replay_fixture_filename("!!!", 1) == "event-log-0001.json"
+    assert sparse_fixtures[0]["metadata"]["captureSummary"]["eventTypes"] == ["tool_call"]
+    assert sparse_manifest["fixtures"][0] == {
+        "path": "event-log-0001.json",
+        "chunkIndex": 1,
+        "eventCount": 1,
+        "startEventOffset": 0,
+        "endEventOffset": 0,
+    }
+
+    with pytest.raises(ValueError, match="events_per_fixture must be positive"):
+        split_replay_data_from_event_log(path, events_per_fixture=0)
+
+
 def test_replay_baseline_write_compare_and_validation(tmp_path: Path) -> None:
     result = run_replay_data(
         {
@@ -887,6 +1018,7 @@ def test_replay_suite_discovers_runs_and_serializes(tmp_path: Path) -> None:
     first = fixture_dir / "first.json"
     second = nested / "second.json"
     ignored = nested / "ignored.txt"
+    manifest = fixture_dir / "manifest.json"
     event = event_payload(1, "message_update", {"assistantMessageEvent": {"delta": "ok"}})
     first.write_text(
         json.dumps({"steps": [{"type": "event", "event": event}], "expect": {"sceneRevision": 1}}),
@@ -902,6 +1034,7 @@ def test_replay_suite_discovers_runs_and_serializes(tmp_path: Path) -> None:
         "utf-8",
     )
     ignored.write_text("not json", "utf-8")
+    manifest.write_text(json.dumps({"schema": "harn-gibson.event-log-split.v1"}), "utf-8")
 
     assert [path.name for path in discover_replay_files(fixture_dir)] == ["first.json", "second.json"]
     assert discover_replay_files(first) == (first,)

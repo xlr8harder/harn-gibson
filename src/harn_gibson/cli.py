@@ -118,12 +118,19 @@ def build_parser() -> argparse.ArgumentParser:
     )
     event_log.add_argument("path", help="path to a normalized harn-gibson JSONL event log")
     event_log.add_argument("--output", "-o", default=None, help="write replay fixture JSON to this path")
+    event_log.add_argument("--output-dir", default=None, help="write split replay fixtures to this directory")
     event_log.add_argument("--name", default=None, help="fixture name; defaults to the event log filename")
     event_log.add_argument("--review-dir", default=None, help="write a complete replay review bundle for this log")
     event_log.add_argument("--screenshot-width", type=int, default=1280, help="review screenshot viewport width")
     event_log.add_argument("--screenshot-height", type=int, default=900, help="review screenshot viewport height")
     event_log.add_argument("--style", choices=style_pack_ids(), default=None, help="display style pack for review")
     event_log.add_argument("--render-chunk-size", type=int, default=4, help="renderer contexts per review chunk")
+    event_log.add_argument(
+        "--split-every",
+        type=int,
+        default=None,
+        help="split an event log into replay fixtures with at most this many events each",
+    )
     event_log.add_argument(
         "--visual-fixture",
         action="store_true",
@@ -553,8 +560,52 @@ def run(argv: Sequence[str] | None = None) -> int:
             capture_replay_frame_screenshots,
             replay_data_from_event_log,
             run_replay_data,
+            split_replay_data_from_event_log,
+            split_replay_fixture_filename,
             write_replay_review_bundle,
         )
+
+        if args.split_every is not None:
+            if args.split_every <= 0:
+                print("--split-every must be positive", file=sys.stderr)
+                return 2
+            if args.output_dir is None:
+                print("--split-every requires --output-dir", file=sys.stderr)
+                return 2
+            if args.output is not None:
+                print("--split-every cannot be used with --output", file=sys.stderr)
+                return 2
+            if args.review_dir is not None:
+                print(
+                    "--split-every cannot be used with --review-dir; use replay-dir on --output-dir instead",
+                    file=sys.stderr,
+                )
+                return 2
+            fixtures, manifest = split_replay_data_from_event_log(
+                args.path,
+                events_per_fixture=args.split_every,
+                name=args.name,
+                visual_fixture=args.visual_fixture,
+                screenshot_lit_min=args.screenshot_lit_min,
+                screenshot_max_channel_min=args.screenshot_max_channel_min,
+            )
+            output_dir = Path(args.output_dir)
+            output_dir.mkdir(parents=True, exist_ok=True)
+            base_name = str(manifest["name"])
+            for index, fixture in enumerate(fixtures, start=1):
+                fixture_path = output_dir / split_replay_fixture_filename(base_name, index)
+                fixture_path.write_text(json.dumps(fixture, indent=2) + "\n", encoding="utf-8")
+                print(f"wrote replay fixture chunk: {fixture_path} ({len(fixture['steps'])} events)")
+            manifest_path = output_dir / "manifest.json"
+            manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+            print(
+                f"wrote event-log split manifest: {manifest_path} "
+                f"({manifest['chunkCount']} chunks, {manifest['eventCount']} events)"
+            )
+            return 0
+        if args.output_dir is not None:
+            print("--output-dir requires --split-every", file=sys.stderr)
+            return 2
 
         fixture = replay_data_from_event_log(
             args.path,

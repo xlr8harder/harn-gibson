@@ -173,6 +173,20 @@ uv run harn-gibson event-log-to-replay .harn-gibson.jsonl \
 
 `--visual-fixture` adds capture-summary metadata plus conservative screenshot expectations, so the converted trajectory can be run through `replay-dir --screenshot-dir` as a visual regression input. `--review-dir` replays the converted log immediately, captures per-step browser frames, renderer contexts, prompts, chunks, render intents, and writes an HTML review bundle.
 
+For long captures, split the event log into a replay fixture directory:
+
+```bash
+uv run harn-gibson event-log-to-replay .harn-gibson.jsonl \
+  --output-dir test-artifacts/replays/captured-session-split \
+  --split-every 200 \
+  --visual-fixture
+
+uv run harn-gibson replay-dir test-artifacts/replays/captured-session-split \
+  --screenshot-dir test-artifacts/replays/captured-session-split-screenshots
+```
+
+Split conversion writes one fixture per chunk plus `manifest.json`. `replay-dir` skips that manifest and replays the chunk fixtures directly.
+
 Replay fixtures can drive the same scene pipeline without a live harn process:
 
 ```bash

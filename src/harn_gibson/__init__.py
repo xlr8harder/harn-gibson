@@ -86,6 +86,8 @@ from harn_gibson.replay import (
     run_replay_data,
     run_replay_file,
     run_replay_suite,
+    split_replay_data_from_event_log,
+    split_replay_fixture_filename,
 )
 from harn_gibson.routing import (
     EventRouter,
@@ -222,6 +224,8 @@ __all__ = [
     "run_replay_suite",
     "scene_update_payload",
     "scene_state_from_mapping",
+    "split_replay_data_from_event_log",
+    "split_replay_fixture_filename",
     "step_schedule",
     "step_schedule_payload",
     "style_pack_by_id",

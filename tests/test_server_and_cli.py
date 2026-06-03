@@ -750,6 +750,8 @@ def test_cli_parser_and_run(monkeypatch: Any, capsys: Any) -> None:
             "events.jsonl",
             "--output",
             "fixture.json",
+            "--output-dir",
+            "split-fixtures",
             "--name",
             "captured",
             "--review-dir",
@@ -766,6 +768,8 @@ def test_cli_parser_and_run(monkeypatch: Any, capsys: Any) -> None:
             "2000",
             "--render-chunk-size",
             "2",
+            "--split-every",
+            "50",
             "--visual-fixture",
             "--screenshot-lit-min",
             "0.03",
@@ -776,6 +780,7 @@ def test_cli_parser_and_run(monkeypatch: Any, capsys: Any) -> None:
     assert parsed_event_log.command == "event-log-to-replay"
     assert parsed_event_log.path == "events.jsonl"
     assert parsed_event_log.output == "fixture.json"
+    assert parsed_event_log.output_dir == "split-fixtures"
     assert parsed_event_log.name == "captured"
     assert parsed_event_log.review_dir == "review"
     assert parsed_event_log.screenshot_width == 640
@@ -784,6 +789,7 @@ def test_cli_parser_and_run(monkeypatch: Any, capsys: Any) -> None:
     assert parsed_event_log.renderer_command == "python renderer.py"
     assert parsed_event_log.renderer_timeout_ms == "2000"
     assert parsed_event_log.render_chunk_size == 2
+    assert parsed_event_log.split_every == 50
     assert parsed_event_log.visual_fixture is True
     assert parsed_event_log.screenshot_lit_min == 0.03
     assert parsed_event_log.screenshot_max_channel_min == 80
@@ -1598,6 +1604,111 @@ def test_cli_event_log_to_replay_writes_and_prints(tmp_path: Any, capsys: Any) -
     printed = json.loads(capsys.readouterr().out)
     assert printed["name"] == "event log: events.jsonl"
     assert printed["steps"][0]["type"] == "event"
+
+
+def test_cli_event_log_to_replay_writes_split_chunks(tmp_path: Any, capsys: Any) -> None:
+    event_log = tmp_path / "events.jsonl"
+    output_dir = tmp_path / "split"
+    events = [
+        {
+            "sequence": index,
+            "timestampMs": 10 + index,
+            "source": "test",
+            "eventType": "tool_call",
+            "phase": "before",
+            "title": "Tool preflight",
+            "summary": "bash starting",
+            "payload": {"type": "tool_call", "toolName": "bash"},
+        }
+        for index in range(1, 4)
+    ]
+    event_log.write_text("\n".join(json.dumps(event) for event in events) + "\n", encoding="utf-8")
+
+    assert (
+        cli.run(
+            [
+                "event-log-to-replay",
+                str(event_log),
+                "--output-dir",
+                str(output_dir),
+                "--split-every",
+                "2",
+                "--name",
+                "captured dogfood",
+                "--visual-fixture",
+            ]
+        )
+        == 0
+    )
+
+    first_path = output_dir / "captured-dogfood-0001.json"
+    second_path = output_dir / "captured-dogfood-0002.json"
+    manifest_path = output_dir / "manifest.json"
+    assert capsys.readouterr().out.splitlines() == [
+        f"wrote replay fixture chunk: {first_path} (2 events)",
+        f"wrote replay fixture chunk: {second_path} (1 events)",
+        f"wrote event-log split manifest: {manifest_path} (2 chunks, 3 events)",
+    ]
+    first = json.loads(first_path.read_text(encoding="utf-8"))
+    second = json.loads(second_path.read_text(encoding="utf-8"))
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert first["name"] == "captured dogfood chunk 1/2"
+    assert first["metadata"]["eventLogChunk"]["endEventOffset"] == 1
+    assert first["metadata"]["visualFixture"] is True
+    assert len(first["steps"]) == 2
+    assert second["metadata"]["eventLogChunk"]["startEventOffset"] == 2
+    assert len(second["steps"]) == 1
+    assert manifest["schema"] == "harn-gibson.event-log-split.v1"
+    assert manifest["captureSummary"]["eventTypeCounts"] == {"tool_call": 3}
+    assert [entry["path"] for entry in manifest["fixtures"]] == [
+        "captured-dogfood-0001.json",
+        "captured-dogfood-0002.json",
+    ]
+
+
+def test_cli_event_log_to_replay_split_argument_errors(tmp_path: Any, capsys: Any) -> None:
+    event_log = tmp_path / "events.jsonl"
+    event_log.write_text("{}\n", encoding="utf-8")
+    output_dir = tmp_path / "split"
+
+    assert cli.run(["event-log-to-replay", str(event_log), "--split-every", "0", "--output-dir", str(output_dir)]) == 2
+    assert "--split-every must be positive" in capsys.readouterr().err
+    assert cli.run(["event-log-to-replay", str(event_log), "--split-every", "2"]) == 2
+    assert "--split-every requires --output-dir" in capsys.readouterr().err
+    assert (
+        cli.run(
+            [
+                "event-log-to-replay",
+                str(event_log),
+                "--split-every",
+                "2",
+                "--output-dir",
+                str(output_dir),
+                "--output",
+                str(tmp_path / "fixture.json"),
+            ]
+        )
+        == 2
+    )
+    assert "--split-every cannot be used with --output" in capsys.readouterr().err
+    assert (
+        cli.run(
+            [
+                "event-log-to-replay",
+                str(event_log),
+                "--split-every",
+                "2",
+                "--output-dir",
+                str(output_dir),
+                "--review-dir",
+                str(tmp_path / "review"),
+            ]
+        )
+        == 2
+    )
+    assert "--split-every cannot be used with --review-dir" in capsys.readouterr().err
+    assert cli.run(["event-log-to-replay", str(event_log), "--output-dir", str(output_dir)]) == 2
+    assert "--output-dir requires --split-every" in capsys.readouterr().err
 
 
 def test_cli_event_log_to_replay_writes_review_bundle(
