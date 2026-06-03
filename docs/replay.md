@@ -41,10 +41,12 @@ When `HARN_GIBSON_EVENT_LOG` is set, the harn extension writes normalized event 
 uv run harn-gibson event-log-to-replay .harn-gibson.jsonl \
   --output examples/replays/captured-session.json \
   --name "captured dogfood session" \
-  --visual-fixture
+  --visual-fixture \
+  --review-dir test-artifacts/replays/captured-session-review \
+  --renderer-command 'uv run python examples/renderers/gibson_dogfood_renderer.py'
 ```
 
-Without `--output`, the fixture JSON is printed to stdout. The generated fixture uses `event` steps so hook decisions and renderer routing are replayed through the same path as live display events. `--visual-fixture` adds capture-summary metadata plus `screenshotExpect` checks for nonblank browser output, `canvasMetrics.litRatio >= 0.02`, and `canvasMetrics.maxChannelTotal >= 60`; use `--screenshot-lit-min` and `--screenshot-max-channel-min` to tune those thresholds for a specific long capture.
+Without `--output`, the fixture JSON is printed to stdout. The generated fixture uses `event` steps so hook decisions and renderer routing are replayed through the same path as live display events. `--visual-fixture` adds capture-summary metadata plus `screenshotExpect` checks for nonblank browser output, `canvasMetrics.litRatio >= 0.02`, and `canvasMetrics.maxChannelTotal >= 60`; use `--screenshot-lit-min` and `--screenshot-max-channel-min` to tune those thresholds for a specific long capture. `--review-dir` immediately replays the converted log, captures frame screenshots, renderer contexts, provider-neutral prompts, renderer chunks, render intents, and writes the same HTML review bundle as `harn-gibson replay --review-dir`.
 
 ## Expectations
 

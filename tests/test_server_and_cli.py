@@ -728,6 +728,20 @@ def test_cli_parser_and_run(monkeypatch: Any, capsys: Any) -> None:
             "fixture.json",
             "--name",
             "captured",
+            "--review-dir",
+            "review",
+            "--screenshot-width",
+            "640",
+            "--screenshot-height",
+            "480",
+            "--style",
+            "mainframe",
+            "--renderer-command",
+            "python renderer.py",
+            "--renderer-timeout-ms",
+            "2000",
+            "--render-chunk-size",
+            "2",
             "--visual-fixture",
             "--screenshot-lit-min",
             "0.03",
@@ -739,6 +753,13 @@ def test_cli_parser_and_run(monkeypatch: Any, capsys: Any) -> None:
     assert parsed_event_log.path == "events.jsonl"
     assert parsed_event_log.output == "fixture.json"
     assert parsed_event_log.name == "captured"
+    assert parsed_event_log.review_dir == "review"
+    assert parsed_event_log.screenshot_width == 640
+    assert parsed_event_log.screenshot_height == 480
+    assert parsed_event_log.style == "mainframe"
+    assert parsed_event_log.renderer_command == "python renderer.py"
+    assert parsed_event_log.renderer_timeout_ms == "2000"
+    assert parsed_event_log.render_chunk_size == 2
     assert parsed_event_log.visual_fixture is True
     assert parsed_event_log.screenshot_lit_min == 0.03
     assert parsed_event_log.screenshot_max_channel_min == 80
@@ -1553,6 +1574,86 @@ def test_cli_event_log_to_replay_writes_and_prints(tmp_path: Any, capsys: Any) -
     printed = json.loads(capsys.readouterr().out)
     assert printed["name"] == "event log: events.jsonl"
     assert printed["steps"][0]["type"] == "event"
+
+
+def test_cli_event_log_to_replay_writes_review_bundle(
+    tmp_path: Any,
+    monkeypatch: Any,
+    capsys: Any,
+) -> None:
+    event_log = tmp_path / "events.jsonl"
+    output = tmp_path / "fixtures" / "captured.json"
+    review_dir = tmp_path / "review"
+    calls: list[tuple[int, int, Path, int, int]] = []
+    event_log.write_text(
+        json.dumps(
+            {
+                "sequence": 1,
+                "timestampMs": 10,
+                "source": "test",
+                "eventType": "tool_call",
+                "phase": "before",
+                "title": "Tool preflight",
+                "summary": "bash starting",
+                "payload": {"type": "tool_call", "toolName": "bash"},
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    def fake_capture_frames(result: Any, output_dir: str | Path, *, width: int, height: int) -> tuple[Any, ...]:
+        calls.append((len(result.frames), len(result.renderer_contexts), Path(output_dir), width, height))
+        screenshot = BrowserScreenshotResult(
+            Path(output_dir) / "frame-0000.png",
+            "http://127.0.0.1:1",
+            result.frames[0].scene["revision"],
+            width,
+            height,
+            {"nonblank": True},
+        )
+        return (ReplayFrameScreenshot(0, result.steps[0], screenshot.to_dict()),)
+
+    monkeypatch.setattr("harn_gibson.replay.capture_replay_frame_screenshots", fake_capture_frames)
+
+    assert (
+        cli.run(
+            [
+                "event-log-to-replay",
+                str(event_log),
+                "--output",
+                str(output),
+                "--name",
+                "captured dogfood",
+                "--review-dir",
+                str(review_dir),
+                "--visual-fixture",
+                "--screenshot-width",
+                "640",
+                "--screenshot-height",
+                "480",
+                "--render-chunk-size",
+                "2",
+            ]
+        )
+        == 0
+    )
+
+    manifest = json.loads((review_dir / "manifest.json").read_text(encoding="utf-8"))
+    result = json.loads((review_dir / "result.json").read_text(encoding="utf-8"))
+    frame_manifest = json.loads((review_dir / "frames" / "manifest.json").read_text(encoding="utf-8"))
+    assert calls == [(1, 1, review_dir / "frames", 640, 480)]
+    assert manifest["replayName"] == "captured dogfood"
+    assert manifest["renderChunkSize"] == 2
+    assert manifest["screenshotCount"] == 1
+    assert result["metadata"]["captureSummary"]["eventTypes"] == ["tool_call"]
+    assert result["metadata"]["visualFixture"] is True
+    assert frame_manifest["screenshotCount"] == 1
+    assert (review_dir / "index.html").exists()
+    assert capsys.readouterr().out.splitlines() == [
+        f"wrote replay fixture: {output} (1 events)",
+        f"wrote event-log review bundle: {review_dir} (1 frames)",
+    ]
 
 
 def test_cli_dogfood_launches_display_browser_and_harn(monkeypatch: Any, capsys: Any) -> None:

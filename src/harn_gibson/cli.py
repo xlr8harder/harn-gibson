@@ -88,6 +88,11 @@ def build_parser() -> argparse.ArgumentParser:
     event_log.add_argument("path", help="path to a normalized harn-gibson JSONL event log")
     event_log.add_argument("--output", "-o", default=None, help="write replay fixture JSON to this path")
     event_log.add_argument("--name", default=None, help="fixture name; defaults to the event log filename")
+    event_log.add_argument("--review-dir", default=None, help="write a complete replay review bundle for this log")
+    event_log.add_argument("--screenshot-width", type=int, default=1280, help="review screenshot viewport width")
+    event_log.add_argument("--screenshot-height", type=int, default=900, help="review screenshot viewport height")
+    event_log.add_argument("--style", choices=style_pack_ids(), default=None, help="display style pack for review")
+    event_log.add_argument("--render-chunk-size", type=int, default=4, help="renderer contexts per review chunk")
     event_log.add_argument(
         "--visual-fixture",
         action="store_true",
@@ -105,6 +110,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=60,
         help="minimum screenshot canvas maxChannelTotal for --visual-fixture",
     )
+    _add_replay_renderer_arguments(event_log)
 
     subcommands.add_parser("extension-path", help="print the harn extension file path")
     return parser
@@ -428,7 +434,12 @@ def run(argv: Sequence[str] | None = None) -> int:
         print(f"replayed {result.total} replay files; {result.failed} failed")
         return 0 if result.ok else 1
     if args.command == "event-log-to-replay":
-        from harn_gibson.replay import replay_data_from_event_log
+        from harn_gibson.replay import (
+            capture_replay_frame_screenshots,
+            replay_data_from_event_log,
+            run_replay_data,
+            write_replay_review_bundle,
+        )
 
         fixture = replay_data_from_event_log(
             args.path,
@@ -444,6 +455,30 @@ def run(argv: Sequence[str] | None = None) -> int:
             print(f"wrote replay fixture: {args.output} ({len(fixture['steps'])} events)")
         else:
             print(text, end="")
+        if args.review_dir:
+            replay_state = _replay_state_from_args(args)
+            try:
+                result = run_replay_data(
+                    fixture,
+                    replay_state,
+                    capture_frames=True,
+                    capture_renderer_contexts=True,
+                )
+                screenshots = capture_replay_frame_screenshots(
+                    result,
+                    Path(args.review_dir) / "frames",
+                    width=args.screenshot_width,
+                    height=args.screenshot_height,
+                )
+                write_replay_review_bundle(
+                    args.review_dir,
+                    result,
+                    screenshots,
+                    render_chunk_size=args.render_chunk_size,
+                )
+                print(f"wrote event-log review bundle: {args.review_dir} ({len(screenshots)} frames)")
+            finally:
+                replay_state.pipeline.stop()
         return 0
     if args.command == "dogfood":
         return run_dogfood(
