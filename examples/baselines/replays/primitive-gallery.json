@@ -25,7 +25,7 @@
         "eventType": "primitive_gallery",
         "phase": "lifecycle",
         "sequence": 900,
-        "summary": "mesh, vector paths, city blocks, graphs, ribbons, glyphs, particles, stream panel",
+        "summary": "mesh, vector paths, vector symbols, city blocks, graphs, ribbons, glyphs, particles, stream panel",
         "title": "Primitive gallery"
       }
     ],
@@ -569,6 +569,40 @@
           },
           "scale": 0.16,
           "spin": 0.08,
+          "symbols": [
+            {
+              "accentTone": "magenta",
+              "kind": "globe",
+              "label": "NET",
+              "packets": 8,
+              "r": 15,
+              "speed": 0.0014,
+              "tone": "cyan",
+              "x": 26,
+              "y": 25
+            },
+            {
+              "accentTone": "green",
+              "depth": 7,
+              "h": 28,
+              "kind": "filesystem_gate",
+              "label": "FS",
+              "scanSpeed": 0.00034,
+              "tone": "amber",
+              "w": 22,
+              "x": 72,
+              "y": 32
+            },
+            {
+              "accentTone": "white",
+              "kind": "reticle",
+              "r": 12,
+              "speed": 0.006,
+              "tone": "green",
+              "x": 50,
+              "y": 73
+            }
+          ],
           "tone": "amber",
           "traces": [
             {

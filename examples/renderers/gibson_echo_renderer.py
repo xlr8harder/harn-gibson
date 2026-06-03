@@ -70,6 +70,18 @@ def main() -> None:
                                         "speed": 0.016,
                                     },
                                 ],
+                                "symbols": [
+                                    {
+                                        "kind": "globe",
+                                        "x": 50,
+                                        "y": 45,
+                                        "r": 18,
+                                        "tone": tone,
+                                        "accentTone": "magenta",
+                                        "packets": 6,
+                                        "label": "EXT",
+                                    }
+                                ],
                                 "labels": [{"text": text[:12], "x": 50, "y": 54, "tone": "white", "size": 6.8}],
                             },
                         },

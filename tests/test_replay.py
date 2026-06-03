@@ -224,11 +224,13 @@ def test_checked_in_replay_fixtures_cover_agent_and_renderer_sides() -> None:
     assert renderer_result.scene.primitives["decision-log"].props["text"][0]["renderer"] == "fixture"
 
     assert [step.kind for step in gallery_result.steps] == ["mutations"]
-    assert len(gallery_result.expectations) == 12
+    assert len(gallery_result.expectations) == 14
     assert gallery_result.scene.primitives["gallery-mesh"].kind == "mesh"
     assert gallery_result.scene.primitives["gallery-vector"].kind == "svg_layer"
     assert gallery_result.scene.primitives["gallery-vector"].props["gradients"][0]["id"] == "ice-gradient"
     assert gallery_result.scene.primitives["gallery-vector"].props["traces"][0]["count"] == 9
+    assert gallery_result.scene.primitives["gallery-vector"].props["symbols"][0]["kind"] == "globe"
+    assert gallery_result.scene.primitives["gallery-vector"].props["symbols"][1]["kind"] == "filesystem_gate"
     assert gallery_result.scene.primitives["gallery-city"].kind == "city_block"
     assert gallery_result.scene.primitives["assistant-stream"].props["title"] == "CATALOG STREAM"
 

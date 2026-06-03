@@ -40,5 +40,7 @@ def test_default_visual_catalog_has_generic_and_cinematic_building_blocks() -> N
     assert "gibson" in catalog.entry("city_block").tags  # type: ignore[union-attr]
     svg_layer = catalog.entry("svg_layer")
     assert svg_layer is not None
-    assert {"gradients", "traces"} <= set(svg_layer.props)
+    assert {"gradients", "traces", "symbols"} <= set(svg_layer.props)
+    assert svg_layer.metadata["curatedSymbols"] == ("globe", "filesystem_gate", "reticle")
     assert "path_trace_particles" in svg_layer.metadata["animation"]
+    assert "symbol_orbit" in svg_layer.metadata["animation"]

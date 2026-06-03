@@ -1782,14 +1782,247 @@ function drawSvgLabels(labels, props) {
   ctx.restore();
 }
 
+function vectorSymbolNumber(value, fallback, min, max) {
+  const numeric = Number(value ?? fallback);
+  if (!Number.isFinite(numeric)) return fallback;
+  return clamp(numeric, min, max);
+}
+
+function vectorSymbolPoint(symbol, defaultX = 50, defaultY = 50) {
+  return {
+    x: vectorSymbolNumber(symbol?.x, defaultX, -10000, 10000),
+    y: vectorSymbolNumber(symbol?.y, defaultY, -10000, 10000),
+  };
+}
+
+function rotatedEllipsePoint(cx, cy, rx, ry, rotation, theta) {
+  const cosRotation = Math.cos(rotation);
+  const sinRotation = Math.sin(rotation);
+  const localX = Math.cos(theta) * rx;
+  const localY = Math.sin(theta) * ry;
+  return {
+    x: cx + localX * cosRotation - localY * sinRotation,
+    y: cy + localX * sinRotation + localY * cosRotation,
+  };
+}
+
+function drawSvgSymbolGlobe(symbol, props, now) {
+  const center = vectorSymbolPoint(symbol);
+  const radius = vectorSymbolNumber(symbol.r ?? symbol.radius, 24, 2, 600);
+  const tone = symbol.tone || props.tone || "cyan";
+  const accentTone = symbol.accentTone || symbol.accent || "magenta";
+  const speed = Number(symbol.speed ?? 0.0012);
+  const phase = now * speed + Number(symbol.offset || 0);
+  const alpha = clamp(Number(symbol.alpha ?? 0.86), 0, 1);
+  const meridians = Math.max(2, Math.min(8, Number(symbol.meridians || 5)));
+  const packets = Math.max(0, Math.min(24, Number(symbol.packets || 7)));
+  ctx.save();
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.shadowColor = toneColor(tone, alpha);
+  ctx.shadowBlur = Number(symbol.glow ?? props.glow ?? 6);
+  ctx.lineWidth = Math.max(0.35, Number(symbol.strokeWidth || 0.85));
+  ctx.strokeStyle = toneColor(tone, alpha * 0.82);
+  ctx.beginPath();
+  ctx.arc(center.x, center.y, radius, 0, Math.PI * 2);
+  ctx.stroke();
+  for (const scale of [0.34, 0.58]) {
+    ctx.strokeStyle = toneColor(tone, alpha * (0.22 + scale * 0.22));
+    ctx.beginPath();
+    ctx.ellipse(center.x, center.y, radius, radius * scale, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.ellipse(center.x, center.y, radius, radius * scale, Math.PI, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  for (let index = 0; index < meridians; index++) {
+    const orbit = phase + (index / meridians) * Math.PI;
+    const width = Math.max(radius * 0.08, Math.abs(Math.cos(orbit)) * radius);
+    ctx.strokeStyle = toneColor(index % 2 ? accentTone : tone, alpha * 0.42);
+    ctx.beginPath();
+    ctx.ellipse(center.x, center.y, width, radius, 0, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  if (symbol.orbit !== false) {
+    const orbitRotation = phase * 0.62;
+    const orbitRx = radius * 1.42;
+    const orbitRy = radius * 0.38;
+    ctx.lineWidth = Math.max(0.25, Number(symbol.orbitWidth || 0.55));
+    ctx.strokeStyle = toneColor(accentTone, alpha * 0.52);
+    ctx.beginPath();
+    ctx.ellipse(center.x, center.y, orbitRx, orbitRy, orbitRotation, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.fillStyle = toneColor("white", alpha * 0.88);
+    for (let index = 0; index < packets; index++) {
+      const point = rotatedEllipsePoint(
+        center.x,
+        center.y,
+        orbitRx,
+        orbitRy,
+        orbitRotation,
+        phase * 2.3 + (index / Math.max(1, packets)) * Math.PI * 2,
+      );
+      ctx.beginPath();
+      ctx.arc(point.x, point.y, radius * (0.035 + (index % 3) * 0.01), 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  if (symbol.label) {
+    ctx.font = `${Math.max(3, Number(symbol.labelSize || radius * 0.22))}px ui-monospace, monospace`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = toneColor("white", alpha * 0.78);
+    ctx.fillText(String(symbol.label).slice(0, 16), center.x, center.y);
+  }
+  ctx.restore();
+}
+
+function drawSvgSymbolFilesystemGate(symbol, props, now) {
+  const center = vectorSymbolPoint(symbol);
+  const width = vectorSymbolNumber(symbol.w ?? symbol.width, 34, 4, 800);
+  const height = vectorSymbolNumber(symbol.h ?? symbol.height, 42, 4, 800);
+  const depth = vectorSymbolNumber(symbol.depth, Math.min(width, height) * 0.26, 0, 400);
+  const tone = symbol.tone || props.tone || "amber";
+  const accentTone = symbol.accentTone || "green";
+  const alpha = clamp(Number(symbol.alpha ?? 0.86), 0, 1);
+  const left = center.x - width * 0.5;
+  const top = center.y - height * 0.5;
+  const backLeft = left + depth;
+  const backTop = top - depth;
+  const scanProgress = (now * Number(symbol.scanSpeed ?? 0.00022) + Number(symbol.offset || 0)) % 1;
+  ctx.save();
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.shadowColor = toneColor(tone, alpha);
+  ctx.shadowBlur = Number(symbol.glow ?? props.glow ?? 7);
+  ctx.lineWidth = Math.max(0.45, Number(symbol.strokeWidth || 0.9));
+  ctx.strokeStyle = toneColor(tone, alpha * 0.38);
+  ctx.strokeRect(backLeft, backTop, width, height);
+  ctx.strokeStyle = toneColor(tone, alpha * 0.62);
+  ctx.strokeRect(left, top, width, height);
+  const corners = [
+    [left, top, backLeft, backTop],
+    [left + width, top, backLeft + width, backTop],
+    [left, top + height, backLeft, backTop + height],
+    [left + width, top + height, backLeft + width, backTop + height],
+  ];
+  for (const corner of corners) {
+    ctx.beginPath();
+    ctx.moveTo(corner[0], corner[1]);
+    ctx.lineTo(corner[2], corner[3]);
+    ctx.stroke();
+  }
+  const lanes = Math.max(2, Math.min(7, Number(symbol.lanes || 4)));
+  ctx.strokeStyle = toneColor(tone, alpha * 0.28);
+  for (let lane = 1; lane < lanes; lane++) {
+    const x = left + (lane / lanes) * width;
+    ctx.beginPath();
+    ctx.moveTo(x, top);
+    ctx.lineTo(x + depth, backTop);
+    ctx.moveTo(x, top + height);
+    ctx.lineTo(x + depth, backTop + height);
+    ctx.stroke();
+  }
+  ctx.strokeStyle = toneColor(accentTone, alpha * 0.54);
+  for (let row = 1; row < 4; row++) {
+    const y = top + (row / 4) * height;
+    ctx.beginPath();
+    ctx.moveTo(left, y);
+    ctx.lineTo(left + width, y);
+    ctx.stroke();
+  }
+  if (symbol.scan !== false) {
+    const y = top + scanProgress * height;
+    ctx.strokeStyle = toneColor("white", alpha * 0.86);
+    ctx.fillStyle = toneColor(accentTone, alpha * 0.12);
+    ctx.fillRect(left, y - height * 0.045, width, height * 0.09);
+    ctx.beginPath();
+    ctx.moveTo(left - depth * 0.2, y);
+    ctx.lineTo(left + width + depth * 0.2, y);
+    ctx.stroke();
+  }
+  if (symbol.label) {
+    ctx.font = `${Math.max(3, Number(symbol.labelSize || height * 0.12))}px ui-monospace, monospace`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "top";
+    ctx.fillStyle = toneColor("white", alpha * 0.72);
+    ctx.fillText(String(symbol.label).slice(0, 16), center.x + depth * 0.5, top + height + 2);
+  }
+  ctx.restore();
+}
+
+function drawSvgSymbolReticle(symbol, props, now) {
+  const center = vectorSymbolPoint(symbol);
+  const radius = vectorSymbolNumber(symbol.r ?? symbol.radius, 18, 2, 500);
+  const tone = symbol.tone || props.tone || "green";
+  const accentTone = symbol.accentTone || "white";
+  const speed = Number(symbol.speed ?? 0.004);
+  const pulse = symbol.pulse === false ? 1 : 1 + Math.sin(now * speed + Number(symbol.offset || 0)) * 0.08;
+  const alpha = clamp(Number(symbol.alpha ?? 0.82), 0, 1);
+  ctx.save();
+  ctx.lineCap = "round";
+  ctx.shadowColor = toneColor(tone, alpha);
+  ctx.shadowBlur = Number(symbol.glow ?? props.glow ?? 5);
+  ctx.lineWidth = Math.max(0.4, Number(symbol.strokeWidth || 0.85));
+  for (let index = 0; index < 3; index++) {
+    const ringRadius = radius * pulse * (0.52 + index * 0.26);
+    ctx.strokeStyle = toneColor(index === 1 ? accentTone : tone, alpha * (0.46 - index * 0.08));
+    ctx.beginPath();
+    ctx.arc(center.x, center.y, ringRadius, 0.16 * Math.PI, 0.84 * Math.PI);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(center.x, center.y, ringRadius, 1.16 * Math.PI, 1.84 * Math.PI);
+    ctx.stroke();
+  }
+  const spoke = radius * 1.05 * pulse;
+  ctx.strokeStyle = toneColor(tone, alpha * 0.62);
+  ctx.beginPath();
+  ctx.moveTo(center.x - spoke, center.y);
+  ctx.lineTo(center.x - radius * 0.24, center.y);
+  ctx.moveTo(center.x + radius * 0.24, center.y);
+  ctx.lineTo(center.x + spoke, center.y);
+  ctx.moveTo(center.x, center.y - spoke);
+  ctx.lineTo(center.x, center.y - radius * 0.24);
+  ctx.moveTo(center.x, center.y + radius * 0.24);
+  ctx.lineTo(center.x, center.y + spoke);
+  ctx.stroke();
+  ctx.fillStyle = toneColor(accentTone, alpha * 0.86);
+  ctx.beginPath();
+  ctx.arc(center.x, center.y, Math.max(0.9, radius * 0.06), 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawSvgSymbols(symbols, props, now) {
+  for (const symbol of symbols) {
+    const safeSymbol = symbol && typeof symbol === "object" ? symbol : {};
+    const kind = String(safeSymbol.kind || safeSymbol.type || "reticle");
+    if (kind === "globe" || kind === "spinning_globe") drawSvgSymbolGlobe(safeSymbol, props, now);
+    else if (kind === "filesystem_gate" || kind === "gate") drawSvgSymbolFilesystemGate(safeSymbol, props, now);
+    else if (kind === "reticle" || kind === "target") drawSvgSymbolReticle(safeSymbol, props, now);
+  }
+}
+
 function drawSvgLayer(primitive, w, h, now) {
   if (typeof Path2D === "undefined") return;
   const props = primitive.props || {};
   const paths = Array.isArray(props.paths) ? props.paths : [];
   const circles = Array.isArray(props.circles) ? props.circles : [];
   const traces = Array.isArray(props.traces) ? props.traces : [];
+  const symbols = Array.isArray(props.symbols) ? props.symbols : [];
   const labels = Array.isArray(props.labels) ? props.labels : [];
-  if (!paths.length && !circles.length && !traces.length && !labels.length) return;
+  if (!paths.length && !circles.length && !traces.length && !symbols.length && !labels.length) return;
+  if (typeof window !== "undefined") {
+    window.__gibsonVectorState = window.__gibsonVectorState || {};
+    window.__gibsonVectorState[primitive.id] = {
+      pathCount: paths.length,
+      circleCount: circles.length,
+      traceCount: traces.length,
+      symbolCount: symbols.length,
+      symbolKinds: symbols.map((symbol) => String(symbol?.kind || symbol?.type || "reticle")),
+      labelCount: labels.length,
+    };
+  }
   const box = vectorViewBox(props.viewBox);
   const position = normalizedPoint(props.position || {x: 0.5, y: 0.45}, w, h);
   const fit = Math.max(24 * devicePixelRatio, Number(props.scale || 0.22) * Math.min(w, h));
@@ -1804,6 +2037,7 @@ function drawSvgLayer(primitive, w, h, now) {
   for (const pathSpec of paths) drawSvgPath(pathSpec, props, now);
   drawSvgCircles(circles, props, now);
   drawSvgTraces(traces, props, now);
+  drawSvgSymbols(symbols, props, now);
   drawSvgLabels(labels, props);
   ctx.restore();
 }

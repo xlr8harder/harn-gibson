@@ -83,11 +83,26 @@ def default_visual_catalog() -> VisualCatalog:
             CatalogEntry(
                 "svg_layer",
                 "primitive",
-                "Constrained SVG-style vector path layer for symbols, schematics, decals, and animated traces.",
-                ("viewBox", "paths", "circles", "labels", "gradients", "traces", "position", "scale", "tone"),
+                "Constrained SVG-style vector layer for symbols, schematics, decals, and animated traces.",
+                (
+                    "viewBox",
+                    "paths",
+                    "circles",
+                    "labels",
+                    "gradients",
+                    "traces",
+                    "symbols",
+                    "position",
+                    "scale",
+                    "tone",
+                ),
                 ("generic", "vector", "cinematic"),
                 {
-                    "safety": "path-data-only; no raw markup, scripts, event handlers, foreignObject, or external refs",
+                    "safety": (
+                        "structured vector data only; no raw markup, scripts, event handlers, foreignObject, "
+                        "or external refs"
+                    ),
+                    "curatedSymbols": ("globe", "filesystem_gate", "reticle"),
                     "animation": (
                         "stroke_reveal",
                         "dash_motion",
@@ -95,6 +110,8 @@ def default_visual_catalog() -> VisualCatalog:
                         "spin",
                         "gradient_paint",
                         "path_trace_particles",
+                        "symbol_orbit",
+                        "symbol_scan",
                     ),
                 },
             ),
