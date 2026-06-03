@@ -32,8 +32,15 @@ uv run harn-gibson serve --host 127.0.0.1 --port 8765
 In another terminal, run harn with the extension:
 
 ```bash
-HARN_GIBSON_ENDPOINT=http://127.0.0.1:8765/events \
-harn -e "$(uv run harn-gibson extension-path)"
+harn
+```
+
+Run that from the repo root. Project-local `.harn/settings.json` selects the Codex provider/model and points harn at `.harn/extensions/gibson.py`; that shim adds `src/` to `sys.path` and loads the real `harn_gibson.extension` module. Because the shim lives in `.harn/extensions/`, `/reload` can reload it during development.
+
+For an isolated quick test that ignores other discovered extensions:
+
+```bash
+harn --no-extensions -e .harn/extensions/gibson.py
 ```
 
 The browser page can be used as the primary input surface. Submitted text is queued on the display server at `/input`; the harn extension polls `/input/next` and forwards messages via `harn.sendUserMessage`.
@@ -58,7 +65,7 @@ For offline inspection, write normalized events to JSONL:
 
 ```bash
 HARN_GIBSON_EVENT_LOG=.harn-gibson.jsonl \
-harn -e "$(uv run harn-gibson extension-path)"
+harn --no-extensions -e .harn/extensions/gibson.py
 ```
 
 ## Browser Tests

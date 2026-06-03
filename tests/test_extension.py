@@ -15,6 +15,7 @@ from harn_gibson.extension import (
     _poll_interval_from_env,
     build_dispatcher_from_env,
     build_input_endpoint_from_env,
+    default,
     extension_factory,
     extension_path,
     fetch_browser_input,
@@ -107,6 +108,7 @@ def test_extension_factory_registers_every_event(monkeypatch: Any) -> None:
     extension_factory(harn)
 
     assert set(harn.handlers) == set(HARN_EVENTS)
+    assert default is extension_factory
     handler = harn.handlers["input"]
     result = asyncio.run(handler({"type": "input", "text": "hi", "source": "interactive"}, FakeCtx(None)))  # type: ignore[operator]
     assert result is None

@@ -118,6 +118,9 @@ def extension_factory(harn: Any) -> None:
         harn.on(event_type, _handler_for(relay, poller))
 
 
+default = extension_factory
+
+
 def build_dispatcher_from_env(environ: Mapping[str, str] | None = None) -> HookDispatcher:
     env = os.environ if environ is None else environ
     dispatcher = HookDispatcher()

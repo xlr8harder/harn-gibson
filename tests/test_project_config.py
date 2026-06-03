@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib.util
 import json
 from pathlib import Path
 from typing import Any
@@ -10,13 +11,27 @@ SENSITIVE_TOKENS = ("api_key", "apikey", "token", "secret", "password", "credent
 def test_project_harn_settings_select_codex_and_extension() -> None:
     root = Path(__file__).resolve().parents[1]
     settings = json.loads((root / ".harn/settings.json").read_text(encoding="utf-8"))
+    extension_paths = settings["extensions"]
 
     assert settings["defaultProvider"] == "openai-codex"
     assert settings["defaultModel"] == "gpt-5.5"
     assert settings["defaultThinkingLevel"] == "high"
-    assert settings["extensions"] == ["src/harn_gibson/extension.py"]
-    assert (root / settings["extensions"][0]).exists()
+    assert extension_paths == ["extensions/gibson.py"]
+    assert (root / ".harn" / extension_paths[0]).exists()
     assert find_sensitive_keys(settings) == []
+
+
+def test_project_extension_shim_exports_harn_default_entrypoint() -> None:
+    root = Path(__file__).resolve().parents[1]
+    path = root / ".harn/extensions/gibson.py"
+    spec = importlib.util.spec_from_file_location("harn_gibson_project_extension", path)
+
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    assert module.default.__name__ == "extension_factory"
 
 
 def find_sensitive_keys(value: Any, prefix: str = "") -> list[str]:

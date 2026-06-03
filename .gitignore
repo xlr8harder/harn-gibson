@@ -14,7 +14,10 @@ test-artifacts/
 .env.*
 .harn/*
 !.harn/settings.json
+!.harn/extensions/
+!.harn/extensions/*.py
 .harn/**/sessions/
 .harn/**/cache/
 .harn/**/*.log
 .harn/**/*.jsonl
+.harn/**/__pycache__/
