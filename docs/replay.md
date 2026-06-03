@@ -15,6 +15,13 @@ Replay fixtures use `harn-gibson.replay.v1`. They can replay either side of the 
       {"path": "animations.pulse-1", "exists": true}
     ]
   },
+  "screenshotExpect": {
+    "nonblank": true,
+    "checks": [
+      {"path": "canvasMetrics.litRatio", "min": 0.02},
+      {"path": "canvasMetrics.maxChannelTotal", "min": 60}
+    ]
+  },
   "steps": []
 }
 ```
@@ -47,8 +54,12 @@ Supported operations:
 - `equals`: exact value equality at the path.
 - `contains`: list contains an item, string contains a substring, or object contains the expected partial object.
 - `exists`: path existence matches the boolean value.
+- `min`: numeric value at the path is greater than or equal to the expected number.
+- `max`: numeric value at the path is less than or equal to the expected number.
 
 `harn-gibson replay` exits with status `1` when expectations fail and prints each failed check to stderr. Successful expectation results are also included in `--output-result`.
+
+When browser screenshots are captured, `screenshotExpect` applies the same check format to screenshot metadata instead of scene state. It is evaluated only by screenshot-producing paths such as `replay-dir --screenshot-dir`; ordinary replay runs still work without launching a browser. The `nonblank` shorthand checks `canvasMetrics.nonblank`.
 
 ## Batch Verification
 
@@ -61,7 +72,7 @@ uv run harn-gibson replay-dir examples/replays \
   --screenshot-dir test-artifacts/replays/screenshots
 ```
 
-The command exits with status `1` if any fixture fails to load, replay, satisfy expectations, match its requested baseline, or render its requested browser screenshot. Browser screenshots also sample the `#grid` canvas and fail if it is blank. The suite result JSON uses `harn-gibson.replay-suite-result.v1` and records per-file step counts, scene revisions, expectation counts, baseline metadata, screenshot metadata, canvas metrics, and failures.
+The command exits with status `1` if any fixture fails to load, replay, satisfy expectations, match its requested baseline, render its requested browser screenshot, or satisfy screenshot expectations. Browser screenshots also sample the `#grid` canvas and fail if it is blank. The suite result JSON uses `harn-gibson.replay-suite-result.v1` and records per-file step counts, scene revisions, expectation counts, screenshot expectation counts, baseline metadata, screenshot metadata, canvas metrics, and failures.
 
 Use `--style gibson`, `--style neon-noir`, or `--style mainframe` to render replay scenes through a specific style pack. Styled runs put the style pack in scene metadata and browser screenshots, so use a matching baseline directory if the style affects expected final scene state.
 
@@ -125,7 +136,7 @@ uv run harn-gibson replay examples/replays/stream-and-diagnostic.json \
   --style neon-noir
 ```
 
-Screenshot result metadata includes `canvasMetrics` with canvas dimensions, sampled pixel count, luminance total, lit-pixel count, lit ratio, maximum channel total, and a `nonblank` boolean. This makes replay screenshot artifacts reviewable in CI output even before a human opens the PNG.
+Screenshot result metadata includes `canvasMetrics` with canvas dimensions, sampled pixel count, luminance total, lit-pixel count, lit ratio, maximum channel total, and a `nonblank` boolean. This makes replay screenshot artifacts reviewable in CI output even before a human opens the PNG. Checked-in fixtures use conservative `screenshotExpect` thresholds so browser rendering can fail fast if a fixture becomes blank or severely underlit.
 
 `--review-dir` is the fastest historical-session review path. It captures renderer contexts and per-step frames automatically, renders timeline screenshots under `frames/`, and writes `scene.json`, `result.json`, `timeline.json`, `renderer-contexts.json`, `renderer-prompts.json`, `renderer-chunks.json`, `renderer-chunks.html`, `renderer-prompts.html`, `render-intents.json`, `render-intents.html`, `frames/index.html`, `frames/manifest.json`, `manifest.json`, and a top-level `index.html` overview. Use the lower-level flags below when CI only needs one artifact family.
 

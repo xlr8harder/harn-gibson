@@ -21,7 +21,7 @@ from harn_gibson.server import GibsonServerState, event_from_payload, submit_eve
 from harn_gibson.styles import style_pack_from_name
 
 ReplayStepKind = Literal["event", "raw_event", "render_plan", "mutations"]
-ReplayExpectationOp = Literal["equals", "contains", "exists"]
+ReplayExpectationOp = Literal["equals", "contains", "exists", "min", "max"]
 MISSING = object()
 
 
@@ -145,6 +145,8 @@ class ReplayFileResult:
     expectations: int = 0
     error: str = ""
     expectation_failures: tuple[ReplayExpectationResult, ...] = ()
+    screenshot_expectations: int = 0
+    screenshot_expectation_failures: tuple[ReplayExpectationResult, ...] = ()
     screenshot: dict[str, Any] | None = None
     baseline: ReplayBaselineResult | None = None
 
@@ -161,6 +163,12 @@ class ReplayFileResult:
             payload["error"] = self.error
         if self.expectation_failures:
             payload["expectationFailures"] = [failure.to_dict() for failure in self.expectation_failures]
+        if self.screenshot_expectations:
+            payload["screenshotExpectations"] = self.screenshot_expectations
+        if self.screenshot_expectation_failures:
+            payload["screenshotExpectationFailures"] = [
+                failure.to_dict() for failure in self.screenshot_expectation_failures
+            ]
         if self.screenshot is not None:
             payload["screenshot"] = self.screenshot
         if self.baseline is not None:
@@ -262,9 +270,12 @@ def run_replay_suite(
         state = state_factory() if state_factory is not None else GibsonServerState(style_pack=style_pack)
         result: ReplayResult | None = None
         baseline = None
+        screenshot = None
+        screenshot_expectations: tuple[ReplayExpectationResult, ...] = ()
+        screenshot_failures: tuple[ReplayExpectationResult, ...] = ()
         try:
-            result = run_replay_file(replay_file, state)
-            screenshot = None
+            replay_data = load_replay_file(replay_file)
+            result = run_replay_data(replay_data, state)
             if screenshot_root is not None:
                 screenshot = _capture_suite_screenshot(
                     root,
@@ -273,6 +284,13 @@ def run_replay_suite(
                     state,
                     width=screenshot_width,
                     height=screenshot_height,
+                )
+                screenshot_expectations = evaluate_screenshot_expectations(
+                    screenshot,
+                    replay_data.get("screenshotExpect"),
+                )
+                screenshot_failures = tuple(
+                    expectation for expectation in screenshot_expectations if not expectation.passed
                 )
             if baseline_root is not None:
                 baseline_path = _suite_baseline_path(root, replay_file, baseline_root)
@@ -304,7 +322,12 @@ def run_replay_suite(
                 )
             )
         else:
-            ok = baseline is None or baseline.ok
+            ok = (baseline is None or baseline.ok) and not screenshot_failures
+            error = ""
+            if baseline is not None and not baseline.ok:
+                error = baseline.error
+            elif screenshot_failures:
+                error = _screenshot_expectation_error(screenshot_failures)
             results.append(
                 ReplayFileResult(
                     path=_suite_path(root, replay_file),
@@ -312,7 +335,9 @@ def run_replay_suite(
                     steps=len(result.steps),
                     scene_revision=result.scene.revision,
                     expectations=len(result.expectations),
-                    error="" if ok else baseline.error,
+                    error=error,
+                    screenshot_expectations=len(screenshot_expectations),
+                    screenshot_expectation_failures=screenshot_failures,
                     screenshot=screenshot,
                     baseline=baseline,
                 )
@@ -498,6 +523,27 @@ def evaluate_replay_expectations(scene: SceneState, value: Any) -> tuple[ReplayE
     return tuple(checks)
 
 
+def evaluate_screenshot_expectations(
+    screenshot: Mapping[str, Any],
+    value: Any,
+) -> tuple[ReplayExpectationResult, ...]:
+    if value is None:
+        return ()
+    if not isinstance(value, Mapping):
+        raise ValueError("replay screenshotExpect must be an object")
+    checks: list[ReplayExpectationResult] = []
+    if "nonblank" in value:
+        checks.append(_evaluate_expectation(screenshot, "canvasMetrics.nonblank", "equals", value["nonblank"]))
+    checks_value = value.get("checks", [])
+    if not isinstance(checks_value, list):
+        raise ValueError("replay screenshotExpect checks must be a list")
+    for index, check in enumerate(checks_value):
+        if not isinstance(check, Mapping):
+            raise ValueError(f"replay screenshotExpect check {index} must be an object")
+        checks.append(_expectation_from_mapping(screenshot, check, index))
+    return tuple(checks)
+
+
 def _run_step(index: int, step: Mapping[str, Any], state: GibsonServerState) -> ReplayStepResult:
     kind = step.get("type", step.get("kind"))
     if kind == "event":
@@ -519,7 +565,7 @@ def _expectation_from_mapping(
     path = check.get("path")
     if not isinstance(path, str) or not path:
         raise ValueError(f"replay expect check {index} must include path")
-    ops = [op for op in ("equals", "contains", "exists") if op in check]
+    ops = [op for op in ("equals", "contains", "exists", "min", "max") if op in check]
     if len(ops) != 1:
         raise ValueError(f"replay expect check {index} must include exactly one operation")
     op = ops[0]
@@ -537,6 +583,20 @@ def _evaluate_expectation(
         passed = actual is not MISSING and actual == expected
     elif op == "contains":
         passed = actual is not MISSING and _contains(actual, expected)
+    elif op == "min":
+        passed = (
+            actual is not MISSING
+            and _is_replay_number(actual)
+            and _is_replay_number(expected)
+            and actual >= expected
+        )
+    elif op == "max":
+        passed = (
+            actual is not MISSING
+            and _is_replay_number(actual)
+            and _is_replay_number(expected)
+            and actual <= expected
+        )
     else:
         passed = (actual is not MISSING) is bool(expected)
     return ReplayExpectationResult(
@@ -566,6 +626,10 @@ def _value_at_path(value: Any, path: str) -> Any:
     return current
 
 
+def _is_replay_number(value: Any) -> bool:
+    return isinstance(value, int | float) and not isinstance(value, bool)
+
+
 def _contains(actual: Any, expected: Any) -> bool:
     if isinstance(actual, list):
         return any(_matches(item, expected) for item in actual)
@@ -592,6 +656,11 @@ def _mapping_contains(actual: Mapping[str, Any], expected: Mapping[str, Any]) ->
 def _expectation_message(path: str, op: ReplayExpectationOp, expected: Any, actual: Any) -> str:
     actual_text = "<missing>" if actual is MISSING else repr(actual)
     return f"{path} expected to {op} {expected!r}, got {actual_text}"
+
+
+def _screenshot_expectation_error(failures: tuple[ReplayExpectationResult, ...]) -> str:
+    details = "; ".join(failure.message for failure in failures)
+    return f"replay screenshot expectations failed: {details}"
 
 
 def _suite_path(root: Path, path: Path) -> str:
@@ -2067,6 +2136,7 @@ __all__ = [
     "discover_replay_files",
     "compare_replay_baseline",
     "evaluate_replay_expectations",
+    "evaluate_screenshot_expectations",
     "load_replay_file",
     "mutations_from_value",
     "render_plan_from_mapping",

@@ -14,7 +14,7 @@ Run all tests:
 uv run pytest
 ```
 
-Screenshots from the browser integration test are written under `test-artifacts/screenshots/`. Replay screenshot capture also records canvas metrics and rejects blank canvas output by default.
+Screenshots from the browser integration test are written under `test-artifacts/screenshots/`. Replay screenshot capture also records canvas metrics, rejects blank canvas output by default, and can apply fixture-level `screenshotExpect` checks against those metrics.
 
 Replay fixtures can also render their final scene through the browser display. The browser integration suite renders the checked-in replay fixtures, verifies nonblank canvas metrics, checks non-default style packs, and inspects the `hologram` projection state, `trace_route` packet state, `svg_layer` structured vector render state, sampled vector keyframe state, vector filter/clip effect state, plus `data_rain` glyph-curtain state used by the primitive gallery:
 
@@ -39,5 +39,5 @@ The integration test verifies:
 - the debug drawer toggles;
 - the browser input composer enqueues a message and `/input/next` drains it.
 - a non-default style pack reaches scene metadata, CSS variables, and browser runtime state.
-- the checked-in agent-side and renderer-side replay fixtures render through the browser screenshot path with nonblank canvas metrics.
+- the checked-in agent-side and renderer-side replay fixtures render through the browser screenshot path with nonblank canvas metrics and fixture-level screenshot metric expectations.
 - the generated replay frame review page can switch active frames in headless Chromium.

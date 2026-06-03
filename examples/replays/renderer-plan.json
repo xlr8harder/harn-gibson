@@ -27,6 +27,13 @@
       }
     ]
   },
+  "screenshotExpect": {
+    "nonblank": true,
+    "checks": [
+      {"path": "canvasMetrics.litRatio", "min": 0.02},
+      {"path": "canvasMetrics.maxChannelTotal", "min": 60}
+    ]
+  },
   "steps": [
     {
       "type": "render_plan",

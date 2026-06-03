@@ -34,6 +34,7 @@ from harn_gibson.replay import (
     compare_replay_baseline,
     discover_replay_files,
     evaluate_replay_expectations,
+    evaluate_screenshot_expectations,
     load_replay_file,
     mutations_from_value,
     render_plan_from_mapping,
@@ -864,7 +865,20 @@ def test_replay_suite_captures_screenshots(tmp_path: Path, monkeypatch: pytest.M
     event = event_payload(1, "message_update", {"assistantMessageEvent": {"delta": "ok"}})
     for replay_file in (first, second):
         replay_file.write_text(
-            json.dumps({"steps": [{"type": "event", "event": event}], "expect": {"sceneRevision": 1}}),
+            json.dumps(
+                {
+                    "steps": [{"type": "event", "event": event}],
+                    "expect": {"sceneRevision": 1},
+                    "screenshotExpect": {
+                        "nonblank": True,
+                        "checks": [
+                            {"path": "canvasMetrics.litRatio", "min": 0.05},
+                            {"path": "canvasMetrics.maxChannelTotal", "max": 600},
+                            {"path": "canvasMetrics.sampledPixels", "exists": True},
+                        ],
+                    },
+                }
+            ),
             "utf-8",
         )
     captures: list[tuple[str, int, int, int]] = []
@@ -878,7 +892,19 @@ def test_replay_suite_captures_screenshots(tmp_path: Path, monkeypatch: pytest.M
         except ValueError:
             label = output.name
         captures.append((label, state.scene.state.revision, width, height))
-        return BrowserScreenshotResult(output, "http://127.0.0.1:1", state.scene.state.revision, width, height)
+        return BrowserScreenshotResult(
+            output,
+            "http://127.0.0.1:1",
+            state.scene.state.revision,
+            width,
+            height,
+            {
+                "nonblank": True,
+                "litRatio": 0.12,
+                "maxChannelTotal": 255,
+                "sampledPixels": 100,
+            },
+        )
 
     monkeypatch.setattr("harn_gibson.browser_capture.capture_scene_screenshot", fake_capture)
 
@@ -895,12 +921,85 @@ def test_replay_suite_captures_screenshots(tmp_path: Path, monkeypatch: pytest.M
         "sceneRevision": 1,
         "width": 640,
         "height": 480,
+        "canvasMetrics": {
+            "nonblank": True,
+            "litRatio": 0.12,
+            "maxChannelTotal": 255,
+            "sampledPixels": 100,
+        },
     }
+    assert suite.files[0].screenshot_expectations == 4
+    assert suite.to_dict()["files"][0]["screenshotExpectations"] == 4
     assert suite.to_dict()["files"][1]["screenshot"]["path"] == str(screenshot_dir / "nested" / "second.png")
     assert (screenshot_dir / "nested" / "second.png").read_bytes() == b"fake screenshot"
 
     single = run_replay_suite(first, screenshot_dir=tmp_path / "single-screenshot")
     assert single.files[0].screenshot["path"] == str(tmp_path / "single-screenshot" / "first.png")
+
+
+def test_replay_suite_checks_screenshot_expectations(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    replay_path = tmp_path / "fixture.json"
+    event = event_payload(1, "message_update", {"assistantMessageEvent": {"delta": "ok"}})
+    replay_path.write_text(
+        json.dumps(
+            {
+                "steps": [{"type": "event", "event": event}],
+                "screenshotExpect": {
+                    "checks": [
+                        {"path": "canvasMetrics.nonblank", "equals": True},
+                        {"path": "canvasMetrics.litRatio", "min": 0.5},
+                        {"path": "canvasMetrics.maxChannelTotal", "max": 100},
+                    ],
+                },
+            }
+        ),
+        "utf-8",
+    )
+
+    def fake_capture(state: GibsonServerState, path: str | Path, *, width: int, height: int) -> BrowserScreenshotResult:
+        return BrowserScreenshotResult(
+            Path(path),
+            "http://127.0.0.1:1",
+            state.scene.state.revision,
+            width,
+            height,
+            {"nonblank": True, "litRatio": 0.02, "maxChannelTotal": 240},
+        )
+
+    monkeypatch.setattr("harn_gibson.browser_capture.capture_scene_screenshot", fake_capture)
+
+    suite = run_replay_suite(replay_path, screenshot_dir=tmp_path / "screenshots")
+
+    assert suite.ok is False
+    assert suite.files[0].screenshot_expectations == 3
+    assert [failure.path for failure in suite.files[0].screenshot_expectation_failures] == [
+        "canvasMetrics.litRatio",
+        "canvasMetrics.maxChannelTotal",
+    ]
+    assert suite.files[0].error.startswith("replay screenshot expectations failed:")
+    assert suite.files[0].screenshot is not None
+    payload = suite.to_dict()["files"][0]
+    assert payload["screenshotExpectations"] == 3
+    assert payload["screenshotExpectationFailures"][0]["op"] == "min"
+
+    direct = evaluate_screenshot_expectations(
+        {"canvasMetrics": {"litRatio": 0.2, "nonblank": True}},
+        {
+            "nonblank": True,
+            "checks": [
+                {"path": "canvasMetrics.litRatio", "max": 0.3},
+                {"path": "canvasMetrics.missing", "exists": False},
+            ],
+        },
+    )
+    assert [result.passed for result in direct] == [True, True, True]
+
+    with pytest.raises(ValueError, match="replay screenshotExpect must be an object"):
+        evaluate_screenshot_expectations({}, [])
+    with pytest.raises(ValueError, match="replay screenshotExpect checks must be a list"):
+        evaluate_screenshot_expectations({}, {"checks": "bad"})
+    with pytest.raises(ValueError, match="replay screenshotExpect check 0 must be an object"):
+        evaluate_screenshot_expectations({}, {"checks": ["bad"]})
 
 
 def test_replay_suite_updates_checks_and_fails_baselines(tmp_path: Path) -> None:
