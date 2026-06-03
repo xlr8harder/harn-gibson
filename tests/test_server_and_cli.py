@@ -8,7 +8,7 @@ from http.server import ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 
-from harn_gibson import BrowserScreenshotResult, cli
+from harn_gibson import BrowserScreenshotResult, EventRouter, EventRouteRule, cli
 from harn_gibson.server import (
     BrowserInputQueue,
     GibsonServerState,
@@ -243,6 +243,53 @@ def test_empty_stream_update_routes_debug_only_without_scene_mutation() -> None:
     assert state.router.stream_snapshot() == {}
     assert result.updates[0]["renderPlan"]["metadata"]["route"]["route"] == "debug_only"
     assert result.updates[0]["renderRequests"][0]["route"] == "debug_only"
+
+
+def test_direct_scene_route_rule_bypasses_renderer_and_updates_scene() -> None:
+    state = GibsonServerState(router=EventRouter(route_rules=(EventRouteRule("tool_result", "direct_scene", "local"),)))
+    payload = {
+        "sequence": 13,
+        "timestampMs": 1300,
+        "source": "unit",
+        "eventType": "tool_result",
+        "phase": "after",
+        "title": "Tool result",
+        "summary": "bash completed: ok",
+        "payload": {"type": "tool_result", "toolName": "bash"},
+        "decisions": [{"content": "ok"}],
+    }
+
+    result = submit_event_to_renderer(payload, state)
+    update = result.updates[0]
+
+    assert result.scene_revision == 1
+    assert state.scene.state.primitives["status"].props["text"] == "after:tool_result"
+    assert update["renderPlan"]["metadata"]["route"]["route"] == "direct_scene"
+    assert update["renderRequests"][0]["route"] == "direct_scene"
+    assert state.buffer.snapshot() == [update]
+
+
+def test_drop_route_rule_accepts_without_scene_update() -> None:
+    state = GibsonServerState(router=EventRouter(route_rules=(EventRouteRule("model_select", "drop", "sampled"),)))
+    payload = {
+        "sequence": 14,
+        "timestampMs": 1400,
+        "source": "unit",
+        "eventType": "model_select",
+        "phase": "lifecycle",
+        "title": "Model select",
+        "summary": "model selected",
+        "payload": {"type": "model_select", "model": {"provider": "openai", "id": "test"}},
+    }
+
+    result = submit_event_to_renderer(payload, state)
+    accepted = apply_event_to_scene(payload, state)
+
+    assert result.updates == ()
+    assert result.scene_revision is None
+    assert state.scene.state.revision == 0
+    assert state.buffer.snapshot() == []
+    assert accepted == {"ok": True, "renderMode": "blocking", "sceneRevision": 0}
 
 
 def test_event_from_payload_validation() -> None:

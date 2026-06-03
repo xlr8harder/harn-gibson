@@ -13,7 +13,14 @@ from harn_gibson.rendering import (
     RenderSubmitResult,
 )
 from harn_gibson.replay import ReplayResult, ReplayStepResult, run_replay_data, run_replay_file
-from harn_gibson.routing import EventRouter, RenderInputBatch, RouteDecision, StreamBinding, TimelineWindow
+from harn_gibson.routing import (
+    EventRouter,
+    EventRouteRule,
+    RenderInputBatch,
+    RouteDecision,
+    StreamBinding,
+    TimelineWindow,
+)
 from harn_gibson.scene import (
     SceneAnimation,
     SceneEngine,
@@ -29,6 +36,7 @@ __all__ = [
     "CatalogEntry",
     "BrowserScreenshotResult",
     "EventPhase",
+    "EventRouteRule",
     "GibsonEvent",
     "HookDecision",
     "HookDispatcher",

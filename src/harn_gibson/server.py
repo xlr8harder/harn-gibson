@@ -400,6 +400,8 @@ def format_sse(payload: dict[str, Any]) -> str:
 def submit_event_to_renderer(payload: dict[str, Any], state: GibsonServerState) -> RenderSubmitResult:
     event = event_from_payload(payload)
     route = state.router.route(event, decisions_from_payload(payload))
+    if route.dropped:
+        return RenderSubmitResult(mode=state.pipeline.mode, queued=state.pipeline.pending_count())
     if not route.uses_renderer:
         return state.pipeline.apply_direct(
             route.request,

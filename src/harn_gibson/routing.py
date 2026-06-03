@@ -8,9 +8,10 @@ from typing import Any, Literal
 
 from harn_gibson.events import GibsonEvent
 from harn_gibson.rendering import RenderRequest
-from harn_gibson.scene import SceneAnimation, SceneMutation, ScenePrimitive
+from harn_gibson.scene import SceneAnimation, SceneMutation, ScenePrimitive, default_mutations_for_event
 
 RouteKind = Literal["renderer_agent", "direct_scene", "stream_buffer", "debug_only", "drop"]
+RuleRouteKind = Literal["renderer_agent", "direct_scene", "debug_only", "drop"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -118,6 +119,24 @@ class RouteDecision:
 
 
 @dataclass(frozen=True, slots=True)
+class EventRouteRule:
+    event_type: str
+    route: RuleRouteKind
+    reason: str
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "eventType": self.event_type,
+            "route": self.route,
+            "reason": self.reason,
+        }
+        if self.metadata:
+            payload["metadata"] = self.metadata
+        return payload
+
+
+@dataclass(frozen=True, slots=True)
 class RenderInputBatch:
     requests: tuple[RenderRequest, ...]
     timeline: TimelineWindow
@@ -167,16 +186,28 @@ class RouteResult:
     def uses_renderer(self) -> bool:
         return self.decision.renderer_visible and self.decision.route == "renderer_agent"
 
+    @property
+    def dropped(self) -> bool:
+        return self.decision.route == "drop"
+
 
 class EventRouter:
     """Routes events to renderer-agent requests or local scene updates."""
 
-    def __init__(self, stream_bindings: Sequence[StreamBinding] | None = None) -> None:
+    def __init__(
+        self,
+        stream_bindings: Sequence[StreamBinding] | None = None,
+        route_rules: Sequence[EventRouteRule] | None = None,
+    ) -> None:
         bindings = stream_bindings or default_stream_bindings()
         self.stream_bindings = {binding.event_type: binding for binding in bindings}
+        self.route_rules = {rule.event_type: rule for rule in route_rules or ()}
         self.stream_buffers: dict[str, StreamBuffer] = {}
 
     def route(self, event: GibsonEvent, decisions: Sequence[dict[str, Any]] = ()) -> RouteResult:
+        rule = self.route_rules.get(event.event_type)
+        if rule is not None:
+            return self._rule_result(event, decisions, rule)
         binding = self.stream_bindings.get(event.event_type)
         if binding is not None:
             text = stream_text_for_event(event)
@@ -201,6 +232,62 @@ class EventRouter:
         request = RenderRequest(event, tuple(decisions), metadata={"route": decision.to_dict()})
         batch = RenderInputBatch.from_requests((request,), metadata={"route": decision.to_dict()})
         return RouteResult(decision, batch.requests[0], batch)
+
+    def _rule_result(
+        self,
+        event: GibsonEvent,
+        decisions: Sequence[dict[str, Any]],
+        rule: EventRouteRule,
+    ) -> RouteResult:
+        if rule.route == "renderer_agent":
+            return self._renderer_result(event, decisions, rule.reason)
+        metadata = {"rule": rule.to_dict()}
+        if rule.route == "direct_scene":
+            return self._direct_result(
+                event,
+                decisions,
+                RouteDecision(
+                    route="direct_scene",
+                    reason=rule.reason,
+                    renderer_visible=False,
+                    metadata=metadata,
+                ),
+                tuple(default_mutations_for_event(event, decisions)),
+            )
+        if rule.route == "debug_only":
+            return self._direct_result(
+                event,
+                decisions,
+                RouteDecision(
+                    route="debug_only",
+                    reason=rule.reason,
+                    renderer_visible=False,
+                    metadata=metadata,
+                ),
+                (),
+            )
+        return self._direct_result(
+            event,
+            decisions,
+            RouteDecision(
+                route="drop",
+                reason=rule.reason,
+                renderer_visible=False,
+                metadata=metadata,
+            ),
+            (),
+        )
+
+    def _direct_result(
+        self,
+        event: GibsonEvent,
+        decisions: Sequence[dict[str, Any]],
+        decision: RouteDecision,
+        mutations: tuple[SceneMutation, ...],
+    ) -> RouteResult:
+        request = RenderRequest(event, tuple(decisions), route=decision.route, metadata={"route": decision.to_dict()})
+        batch = RenderInputBatch.from_requests((request,), route=decision.route, metadata={"route": decision.to_dict()})
+        return RouteResult(decision, batch.requests[0], batch, mutations)
 
     def _debug_result(
         self,
@@ -327,11 +414,13 @@ def _clip_stream_text(text: str, limit: int) -> str:
 
 
 __all__ = [
+    "EventRouteRule",
     "EventRouter",
     "RenderInputBatch",
     "RouteDecision",
     "RouteKind",
     "RouteResult",
+    "RuleRouteKind",
     "StreamBinding",
     "StreamBuffer",
     "TimelineWindow",

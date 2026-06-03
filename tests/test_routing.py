@@ -4,6 +4,7 @@ from harn_gibson.events import GibsonEvent
 from harn_gibson.rendering import RenderRequest
 from harn_gibson.routing import (
     EventRouter,
+    EventRouteRule,
     RenderInputBatch,
     RouteDecision,
     StreamBinding,
@@ -35,6 +36,7 @@ def test_timeline_window_and_render_input_batch() -> None:
 def test_stream_binding_route_decision_and_defaults_to_dict() -> None:
     binding = StreamBinding("message_update", "main", "target", "Main stream", flush_ms=50)
     decision = RouteDecision("stream_buffer", "local append", False, "main", "target", {"binding": binding.to_dict()})
+    rule = EventRouteRule("tool_result", "direct_scene", "local result handling", {"sample": True})
 
     assert default_stream_bindings()[0].event_type == "message_update"
     assert binding.to_dict()["flushMs"] == 50
@@ -45,6 +47,12 @@ def test_stream_binding_route_decision_and_defaults_to_dict() -> None:
         "streamId": "main",
         "targetId": "target",
         "metadata": {"binding": binding.to_dict()},
+    }
+    assert rule.to_dict() == {
+        "eventType": "tool_result",
+        "route": "direct_scene",
+        "reason": "local result handling",
+        "metadata": {"sample": True},
     }
 
 
@@ -57,6 +65,36 @@ def test_event_router_routes_non_stream_events_to_renderer() -> None:
     assert result.request.decisions == ({"block": False},)
     assert result.request.metadata["route"]["reason"] == "default renderer route"
     assert result.batch.to_dict()["route"] == "renderer_agent"
+
+
+def test_event_router_route_rules_cover_renderer_direct_debug_and_drop() -> None:
+    router = EventRouter(
+        route_rules=(
+            EventRouteRule("tool_result", "direct_scene", "local result render"),
+            EventRouteRule("session_tree", "debug_only", "debug snapshot"),
+            EventRouteRule("model_select", "drop", "sampled out"),
+            EventRouteRule("tool_call", "renderer_agent", "force renderer"),
+        )
+    )
+
+    direct = router.route(event(1, "tool_result", {"toolName": "bash"}), [{"reviewed": True}])
+    debug = router.route(event(2, "session_tree"))
+    dropped = router.route(event(3, "model_select"))
+    renderer = router.route(event(4, "tool_call"))
+
+    assert direct.uses_renderer is False
+    assert direct.dropped is False
+    assert direct.decision.route == "direct_scene"
+    assert direct.request.route == "direct_scene"
+    assert direct.batch.route == "direct_scene"
+    assert direct.direct_mutations[0].target_id == "status"
+    assert direct.request.metadata["route"]["metadata"]["rule"]["route"] == "direct_scene"
+    assert debug.decision.route == "debug_only"
+    assert debug.direct_mutations == ()
+    assert dropped.dropped is True
+    assert dropped.batch.to_dict()["route"] == "drop"
+    assert renderer.uses_renderer is True
+    assert renderer.decision.reason == "force renderer"
 
 
 def test_event_router_routes_text_streams_to_local_buffer() -> None:
