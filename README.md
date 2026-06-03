@@ -10,6 +10,8 @@
 
 The current display agent is deterministic. The later LLM-driven visualization layer can consume the same event stream and emit scene mutations without changing the harn integration.
 
+`harn` is included as a development dependency so `uv run harn-gibson dogfood` works from this checkout. The display server and extension modules do not import `harn` or `harn-tui`; the dogfood launcher is the only place that shells out to the harn CLI. A future packaging split should keep the web relay installable without harn's terminal UI stack.
+
 ## Development
 
 ```bash
@@ -23,27 +25,37 @@ Install `harn` separately when you want to run against a live agent.
 
 ## Run The Display
 
-Start the graphical display server:
+For normal dogfooding, run one command from the repo root:
+
+```bash
+uv run harn-gibson dogfood
+```
+
+This starts the graphical display server, opens the browser, and launches `harn` with the display endpoint wired into the extension environment. Project-local `.harn/settings.json` selects the Codex provider/model and points harn at `.harn/extensions/gibson.py`; that shim adds `src/` to `sys.path` and loads the real `harn_gibson.extension` module.
+
+`dogfood` chooses a free local port by default, so it can run even if a manual display server is already using `8765`. Pass `--port 8765` if you want a fixed port.
+
+Forward arguments to harn after `--`:
+
+```bash
+uv run harn-gibson dogfood -- -p "summarize this repo"
+```
+
+Use a specific harn executable with `--harn-bin`:
+
+```bash
+uv run harn-gibson dogfood --harn-bin /path/to/harn
+```
+
+Lower-level manual mode is still available. Start the graphical display server:
 
 ```bash
 uv run harn-gibson serve --host 127.0.0.1 --port 8765
 ```
 
-In another terminal, run harn with the extension:
+Then run `harn` from the repo root in another terminal. Because the project shim lives in `.harn/extensions/`, `/reload` can reload it during development.
 
-```bash
-harn
-```
-
-Run that from the repo root. Project-local `.harn/settings.json` selects the Codex provider/model and points harn at `.harn/extensions/gibson.py`; that shim adds `src/` to `sys.path` and loads the real `harn_gibson.extension` module. Because the shim lives in `.harn/extensions/`, `/reload` can reload it during development.
-
-For an isolated quick test that ignores other discovered extensions:
-
-```bash
-harn --no-extensions -e .harn/extensions/gibson.py
-```
-
-The browser page can be used as the primary input surface. Submitted text is queued on the display server at `/input`; the harn extension polls `/input/next` and forwards messages via `harn.sendUserMessage`.
+The browser page has a lightweight input composer for small follow-up or steering messages. Submitted text is queued on the display server at `/input`; the harn extension polls `/input/next` and forwards messages via `harn.sendUserMessage`.
 
 Delivery modes:
 

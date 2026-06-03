@@ -14,6 +14,7 @@ harn-gibson = "harn_gibson.cli:main"
 
 [dependency-groups]
 dev = [
+    "harn==0.1.6",
     "playwright>=1.60.0",
     "pytest>=9.0.3",
     "pytest-cov>=7.0.0",
@@ -30,6 +31,12 @@ packages = ["src/harn_gibson"]
 [tool.ruff]
 line-length = 120
 target-version = "py312"
+
+[tool.uv.exclude-newer-package]
+harn = "2026-06-03T00:00:00Z"
+harn-ai = "2026-06-03T00:00:00Z"
+harn-agent = "2026-06-03T00:00:00Z"
+harn-tui = "2026-06-03T00:00:00Z"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]

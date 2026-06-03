@@ -84,6 +84,7 @@ def test_browser_display_renders_events_debug_and_input_queue() -> None:
                 page.goto(base, wait_until="domcontentloaded")
                 expect(page.get_by_role("heading", name="GIBSON LINK")).to_be_visible()
                 expect(page.locator("#inputStatus")).to_have_text("ready")
+                expect(page.locator("#bridgeStatus")).to_have_text("harn bridge idle")
                 page.wait_for_timeout(120)
                 assert_canvas_nonblank(page)
 
@@ -118,13 +119,17 @@ def test_browser_display_renders_events_debug_and_input_queue() -> None:
 
                 page.locator("#promptInput").fill("scan perimeter")
                 page.get_by_role("button", name="SEND").click()
-                expect(page.locator("#inputStatus")).to_have_text("queued input-1")
+                expect(page.locator("#inputStatus")).to_have_text("1 input waiting for harn")
+                expect(page.locator("#bridgeStatus")).to_have_text("harn bridge waiting")
                 assert get_json(f"{base}/input/next") == {
                     "id": "input-1",
                     "sequence": 1,
                     "message": "scan perimeter",
                     "deliverAs": "followUp",
                 }
+                page.evaluate("refreshHealth()")
+                expect(page.locator("#inputStatus")).to_have_text("input-1 delivered to harn")
+                expect(page.locator("#bridgeStatus")).to_have_text("harn bridge linked")
 
                 page.locator("#debugClose").click()
                 assert page.locator("body").evaluate("body => body.classList.contains('debug-open')") is False

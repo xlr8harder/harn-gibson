@@ -11,7 +11,9 @@ Events are published to one or more sinks:
 - JSONL append-only log (`HARN_GIBSON_EVENT_LOG`);
 - in-memory server buffer for browser SSE clients.
 
-The graphical server does not own the harn session. It displays normalized events and keeps a browser input queue. The harn extension polls that queue and forwards messages into harn with `harn.sendUserMessage`, so the browser can be used as the primary interface while harn remains the session owner.
+The graphical server does not own the harn session. It displays normalized events and keeps a browser input queue. The harn extension polls that queue and forwards messages into harn with `harn.sendUserMessage`, so the browser can send lightweight follow-up or steering input while harn remains the primary session owner.
+
+The repository includes harn as a development dependency for one-command dogfooding, but the display server and extension modules are intentionally independent of harn's TUI implementation. A later package split can expose a web-only relay package and keep the harn CLI launcher as an optional integration layer.
 
 ## Browser Input
 
@@ -22,7 +24,7 @@ The display server exposes:
 
 `deliverAs="followUp"` is the default. In harn this runs immediately when idle and becomes a follow-up queue item while streaming. `deliverAs="steer"` sends steering input for the active run.
 
-The display applies a synthetic `browser_input` scene event as soon as input is accepted, so the primary display reacts before harn consumes the queued message.
+The display applies a synthetic `browser_input` scene event as soon as input is accepted, so the visual layer reacts before harn consumes the queued message.
 
 ## Scene Engine
 

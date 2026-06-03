@@ -34,6 +34,7 @@ class GibsonServerState:
     buffer: EventBuffer = field(default_factory=EventBuffer)
     scene: SceneEngine = field(default_factory=SceneEngine)
     inputs: BrowserInputQueue = field(default_factory=lambda: BrowserInputQueue())
+    input_bridge: HarnBridgeState = field(default_factory=lambda: HarnBridgeState())
     render_mode: RenderMode = "blocking"
     render_batch_window_ms: int = 40
     renderer: SceneRenderer = field(default_factory=DeterministicSceneRenderer)
@@ -98,6 +99,44 @@ class BrowserInputQueue:
         return self._items.qsize()
 
 
+@dataclass(slots=True)
+class HarnBridgeState:
+    connected_window_ms: int = 3000
+    poll_count: int = 0
+    delivered_inputs: int = 0
+    last_input_poll_ms: int | None = None
+    last_input_delivery_ms: int | None = None
+    _lock: threading.Lock = field(default_factory=threading.Lock)
+
+    def record_input_poll(self, *, delivered: bool, timestamp_ms: int | None = None) -> None:
+        current_ms = _now_ms() if timestamp_ms is None else timestamp_ms
+        with self._lock:
+            self.poll_count += 1
+            self.last_input_poll_ms = current_ms
+            if delivered:
+                self.delivered_inputs += 1
+                self.last_input_delivery_ms = current_ms
+
+    def snapshot(self, *, pending_inputs: int, timestamp_ms: int | None = None) -> dict[str, Any]:
+        current_ms = _now_ms() if timestamp_ms is None else timestamp_ms
+        with self._lock:
+            last_poll = self.last_input_poll_ms
+            last_delivery = self.last_input_delivery_ms
+            poll_count = self.poll_count
+            delivered_inputs = self.delivered_inputs
+        poll_age = None if last_poll is None else max(0, current_ms - last_poll)
+        return {
+            "pendingInputs": pending_inputs,
+            "inputPollerSeen": last_poll is not None,
+            "inputPollerConnected": poll_age is not None and poll_age <= self.connected_window_ms,
+            "lastInputPollMs": last_poll,
+            "lastInputPollAgeMs": poll_age,
+            "lastInputDeliveryMs": last_delivery,
+            "pollCount": poll_count,
+            "deliveredInputs": delivered_inputs,
+        }
+
+
 def create_server(
     host: str = "127.0.0.1",
     port: int = 8765,
@@ -141,22 +180,14 @@ def make_handler(state: GibsonServerState) -> type[BaseHTTPRequestHandler]:
                 self._write(HTTPStatus.OK, JS, "application/javascript; charset=utf-8")
                 return
             if self.path == "/healthz":
-                self._json(
-                    HTTPStatus.OK,
-                    {
-                        "ok": True,
-                        "events": len(state.buffer.snapshot()),
-                        "sceneRevision": state.scene.state.revision,
-                        "renderMode": state.pipeline.mode,
-                        "pendingRenderJobs": state.pipeline.pending_count(),
-                    },
-                )
+                self._json(HTTPStatus.OK, health_payload(state))
                 return
             if self.path == "/scene":
                 self._json(HTTPStatus.OK, state.scene.state.to_dict())
                 return
             if self.path == "/input/next":
                 item = state.inputs.pop()
+                state.input_bridge.record_input_poll(delivered=item is not None)
                 if item is None:
                     self._empty(HTTPStatus.NO_CONTENT)
                     return
@@ -202,6 +233,7 @@ def make_handler(state: GibsonServerState) -> type[BaseHTTPRequestHandler]:
                 {
                     "input": item.to_dict(),
                     "pendingInputs": state.inputs.pending_count(),
+                    "inputBridge": state.input_bridge.snapshot(pending_inputs=state.inputs.pending_count()),
                 }
             )
             self._json(
@@ -268,6 +300,17 @@ def enqueue_browser_input(payload: dict[str, Any], state: GibsonServerState) -> 
     return state.inputs.enqueue(message, deliver_as)
 
 
+def health_payload(state: GibsonServerState) -> dict[str, Any]:
+    return {
+        "ok": True,
+        "events": len(state.buffer.snapshot()),
+        "sceneRevision": state.scene.state.revision,
+        "renderMode": state.pipeline.mode,
+        "pendingRenderJobs": state.pipeline.pending_count(),
+        "inputBridge": state.input_bridge.snapshot(pending_inputs=state.inputs.pending_count()),
+    }
+
+
 def browser_input_event_payload(item: BrowserInput) -> dict[str, Any]:
     summary = f"gibson input queued: {_clip(item.message, 96)}"
     return {
@@ -287,6 +330,10 @@ def _clip(text: str, limit: int) -> str:
     if len(compact) <= limit:
         return compact
     return compact[: limit - 1] + "..."
+
+
+def _now_ms() -> int:
+    return int(time.time() * 1000)
 
 
 def format_sse(payload: dict[str, Any]) -> str:
@@ -348,6 +395,7 @@ HTML = """<!doctype html>
           </div>
           <div class="topbar">
             <button id="debugToggle" class="debug-toggle" type="button" aria-expanded="false">DEBUG</button>
+            <div id="bridgeStatus" class="status bridge-status">harn bridge idle</div>
             <div id="status" class="status">awaiting signal</div>
           </div>
         </div>
@@ -501,11 +549,19 @@ h1 {
   font-size: 12px;
 }
 .status {
+  min-width: 0;
   max-width: 220px;
   padding: 8px 10px;
   border: 1px solid rgba(255, 204, 102, 0.35);
   color: var(--amber);
   text-align: right;
+  overflow-wrap: anywhere;
+}
+.bridge-status {
+  color: var(--green);
+}
+.bridge-status.waiting {
+  color: var(--magenta);
 }
 .signal-copy {
   position: absolute;
@@ -679,7 +735,17 @@ body.debug-open .debug-panel {
   .shell { padding: 10px; }
   .stage { min-height: calc(100vh - 20px); }
   .mast { flex-direction: column; padding: 16px; }
-  .topbar { width: 100%; justify-content: space-between; }
+  .topbar {
+    width: 100%;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    align-items: stretch;
+  }
+  .topbar .status {
+    flex: 1 1 120px;
+    max-width: none;
+    text-align: left;
+  }
   .signal-copy {
     left: 16px;
     right: 16px;
@@ -701,6 +767,7 @@ const canvas = document.getElementById("grid");
 const ctx = canvas.getContext("2d");
 const feed = document.getElementById("feed");
 const statusEl = document.getElementById("status");
+const bridgeStatus = document.getElementById("bridgeStatus");
 const phaseEl = document.getElementById("phase");
 const eventEl = document.getElementById("eventType");
 const sequenceEl = document.getElementById("sequence");
@@ -714,6 +781,7 @@ const promptInput = document.getElementById("promptInput");
 const deliverAs = document.getElementById("deliverAs");
 const inputStatus = document.getElementById("inputStatus");
 const pulses = [];
+let lastQueuedInputId = null;
 
 debugToggle.addEventListener("click", () => {
   const expanded = document.body.classList.toggle("debug-open");
@@ -749,7 +817,8 @@ inputForm.addEventListener("submit", async (event) => {
     const payload = await response.json();
     if (!response.ok || !payload.ok) throw new Error(payload.error || "queue failed");
     promptInput.value = "";
-    inputStatus.textContent = `queued ${payload.input.id}`;
+    lastQueuedInputId = payload.input.id;
+    updateBridgeStatus(payload.inputBridge);
   } catch (error) {
     inputStatus.textContent = error instanceof Error ? error.message : "queue failed";
   }
@@ -863,6 +932,36 @@ function renderScene(scene) {
   }
 }
 
+function updateBridgeStatus(bridge) {
+  if (!bridge) return;
+  bridgeStatus.classList.toggle("waiting", bridge.pendingInputs > 0 && !bridge.inputPollerConnected);
+  if (bridge.inputPollerConnected) {
+    bridgeStatus.textContent = "harn bridge linked";
+  } else if (bridge.pendingInputs > 0) {
+    bridgeStatus.textContent = "harn bridge waiting";
+  } else {
+    bridgeStatus.textContent = "harn bridge idle";
+  }
+
+  if (bridge.pendingInputs > 0 && !bridge.inputPollerConnected) {
+    inputStatus.textContent = `${bridge.pendingInputs} input waiting for harn`;
+  } else if (bridge.pendingInputs > 0) {
+    inputStatus.textContent = `${bridge.pendingInputs} input queued`;
+  } else if (lastQueuedInputId && bridge.deliveredInputs > 0) {
+    inputStatus.textContent = `${lastQueuedInputId} delivered to harn`;
+  }
+}
+
+async function refreshHealth() {
+  try {
+    const response = await fetch("/healthz", {cache: "no-store"});
+    const payload = await response.json();
+    updateBridgeStatus(payload.inputBridge);
+  } catch {
+    bridgeStatus.textContent = "harn bridge unknown";
+  }
+}
+
 const source = new EventSource("/events");
 source.onopen = () => { statusEl.textContent = "listening"; };
 source.onerror = () => { statusEl.textContent = "reconnecting"; };
@@ -878,12 +977,16 @@ fetch("/scene")
   .then((response) => response.json())
   .then((scene) => renderScene(scene))
   .catch(() => { statusEl.textContent = "scene fetch failed"; });
+
+refreshHealth();
+setInterval(refreshHealth, 1000);
 """
 
 __all__ = [
     "BrowserInput",
     "BrowserInputQueue",
     "GibsonServerState",
+    "HarnBridgeState",
     "apply_event_to_scene",
     "build_state_from_env",
     "browser_input_event_payload",
@@ -891,6 +994,7 @@ __all__ = [
     "enqueue_browser_input",
     "event_from_payload",
     "format_sse",
+    "health_payload",
     "make_handler",
     "run_server",
     "submit_event_to_renderer",
