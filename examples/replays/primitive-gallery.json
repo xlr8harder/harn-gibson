@@ -24,6 +24,9 @@
       {"path": "primitives.gallery-vector.props.symbols.3.kind", "equals": "data_tunnel"},
       {"path": "primitives.gallery-vector.props.symbols.4.kind", "equals": "ice_wall"},
       {"path": "primitives.gallery-vector.props.symbols.5.kind", "equals": "mainframe_core"},
+      {"path": "primitives.gallery-vector.props.filters.0.kind", "equals": "chromatic_split"},
+      {"path": "primitives.gallery-vector.props.filters.1.kind", "equals": "scanline"},
+      {"path": "primitives.gallery-vector.props.clip.kind", "equals": "iris"},
       {"path": "primitives.gallery-hologram.kind", "equals": "hologram"},
       {"path": "primitives.gallery-hologram.props.rings", "equals": 6},
       {"path": "primitives.gallery-hologram.props.panels", "equals": 4},
@@ -151,6 +154,19 @@
               "durationMs": 5200,
               "loop": true,
               "yoyo": true,
+              "filters": [
+                {"kind": "chromatic_split", "intensity": 1.15, "offset": 1.8, "alpha": 0.9},
+                {"kind": "scanline", "spacing": 4.8, "speed": 0.018, "alpha": 0.78}
+              ],
+              "clip": {
+                "kind": "iris",
+                "x": 50,
+                "y": 50,
+                "radius": 74,
+                "durationMs": 3600,
+                "loop": true,
+                "yoyo": true
+              },
               "keyframes": [
                 {"at": 0, "x": -4, "y": 2, "scale": 0.96, "rotation": -0.08, "opacity": 0.78},
                 {"at": 0.48, "x": 5, "y": -4, "scale": 1.08, "rotation": 0.12, "opacity": 1},

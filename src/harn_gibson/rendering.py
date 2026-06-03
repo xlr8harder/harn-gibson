@@ -106,6 +106,41 @@ _SVG_SYMBOL_KINDS = frozenset(
         "tunnel",
     }
 )
+_SVG_FILTER_KINDS = frozenset(
+    {
+        "bloom",
+        "chromatic",
+        "chromatic_split",
+        "echo",
+        "ghost",
+        "glow",
+        "haze",
+        "rgb_split",
+        "scanline",
+        "scanlines",
+        "soft_glow",
+    }
+)
+_SVG_FILTER_NUMERIC_KEYS = frozenset({"alpha", "blur", "intensity", "offset", "spacing", "speed", "width", "x", "y"})
+_SVG_CLIP_KINDS = frozenset({"circle", "iris", "rect", "scan", "scanline", "wipe"})
+_SVG_CLIP_NUMERIC_KEYS = frozenset(
+    {
+        "alpha",
+        "delayMs",
+        "durationMs",
+        "h",
+        "height",
+        "progress",
+        "r",
+        "radius",
+        "size",
+        "speed",
+        "w",
+        "width",
+        "x",
+        "y",
+    }
+)
 _SVG_MAX_KEYFRAMES_PER_SOURCE = 64
 _SVG_KEYFRAME_NUMERIC_KEYS = frozenset(
     {
@@ -823,6 +858,7 @@ def _validate_svg_keyframe_source(
     path: str,
     depth: int,
 ) -> None:
+    _validate_svg_layer_effects(target_id, source, issues, step_index, mutation_index, path)
     _validate_svg_keyframe_playback(target_id, source, issues, step_index, mutation_index, path)
     animation = source.get("animation")
     if isinstance(animation, Mapping):
@@ -854,6 +890,196 @@ def _validate_svg_keyframe_source(
                 f"{path}.groups[{index}]",
                 depth + 1,
             )
+
+
+def _validate_svg_layer_effects(
+    target_id: str,
+    source: Mapping[str, Any],
+    issues: list[RenderPlanValidationIssue],
+    step_index: int,
+    mutation_index: int,
+    path: str,
+) -> None:
+    if "filter" in source:
+        _validate_svg_filter_spec(
+            target_id,
+            source["filter"],
+            issues,
+            step_index,
+            mutation_index,
+            f"{path}.filter",
+        )
+    if "filters" in source:
+        filters = source["filters"]
+        if not isinstance(filters, list):
+            issues.append(
+                RenderPlanValidationIssue(
+                    "warning",
+                    "invalid_svg_filters",
+                    "svg_layer filters should be a bounded list of preset names or objects",
+                    step_index=step_index,
+                    mutation_index=mutation_index,
+                    target_id=target_id,
+                    value=f"{path}.filters",
+                )
+            )
+        else:
+            for index, filter_spec in enumerate(filters[:16]):
+                _validate_svg_filter_spec(
+                    target_id,
+                    filter_spec,
+                    issues,
+                    step_index,
+                    mutation_index,
+                    f"{path}.filters[{index}]",
+                )
+    if "clip" in source:
+        _validate_svg_clip_spec(target_id, source["clip"], issues, step_index, mutation_index, f"{path}.clip")
+
+
+def _validate_svg_filter_spec(
+    target_id: str,
+    spec: Any,
+    issues: list[RenderPlanValidationIssue],
+    step_index: int,
+    mutation_index: int,
+    path: str,
+) -> None:
+    if isinstance(spec, str):
+        kind = spec
+    elif isinstance(spec, Mapping):
+        kind_value = spec.get("kind") or spec.get("type") or spec.get("preset")
+        if not isinstance(kind_value, str) or not kind_value:
+            issues.append(
+                RenderPlanValidationIssue(
+                    "warning",
+                    "invalid_svg_filter",
+                    "svg_layer filter presets should include a string kind/type/preset",
+                    step_index=step_index,
+                    mutation_index=mutation_index,
+                    target_id=target_id,
+                    value=path,
+                )
+            )
+            return
+        kind = kind_value
+        for key in sorted(_SVG_FILTER_NUMERIC_KEYS & set(spec)):
+            if not _is_finite_number(spec[key]):
+                issues.append(
+                    RenderPlanValidationIssue(
+                        "warning",
+                        "invalid_svg_filter_value",
+                        "svg_layer filter preset values should be finite JSON numbers",
+                        step_index=step_index,
+                        mutation_index=mutation_index,
+                        target_id=target_id,
+                        value=f"{path}.{key}",
+                    )
+                )
+    else:
+        issues.append(
+            RenderPlanValidationIssue(
+                "warning",
+                "invalid_svg_filter",
+                "svg_layer filter presets should be names or objects",
+                step_index=step_index,
+                mutation_index=mutation_index,
+                target_id=target_id,
+                value=path,
+            )
+        )
+        return
+    if kind not in _SVG_FILTER_KINDS:
+        issues.append(
+            RenderPlanValidationIssue(
+                "warning",
+                "unsupported_svg_filter",
+                "svg_layer filter preset is not in the bounded browser filter set",
+                step_index=step_index,
+                mutation_index=mutation_index,
+                target_id=target_id,
+                value=kind,
+            )
+        )
+
+
+def _validate_svg_clip_spec(
+    target_id: str,
+    spec: Any,
+    issues: list[RenderPlanValidationIssue],
+    step_index: int,
+    mutation_index: int,
+    path: str,
+) -> None:
+    if isinstance(spec, str):
+        kind = spec
+    elif isinstance(spec, Mapping):
+        kind_value = spec.get("kind") or spec.get("type") or spec.get("shape")
+        if not isinstance(kind_value, str) or not kind_value:
+            issues.append(
+                RenderPlanValidationIssue(
+                    "warning",
+                    "invalid_svg_clip",
+                    "svg_layer clip should include a string kind/type/shape",
+                    step_index=step_index,
+                    mutation_index=mutation_index,
+                    target_id=target_id,
+                    value=path,
+                )
+            )
+            return
+        kind = kind_value
+        for key in sorted(_SVG_CLIP_NUMERIC_KEYS & set(spec)):
+            if not _is_finite_number(spec[key]):
+                issues.append(
+                    RenderPlanValidationIssue(
+                        "warning",
+                        "invalid_svg_clip_value",
+                        "svg_layer clip values should be finite JSON numbers",
+                        step_index=step_index,
+                        mutation_index=mutation_index,
+                        target_id=target_id,
+                        value=f"{path}.{key}",
+                    )
+                )
+        for key in _SVG_KEYFRAME_PLAYBACK_BOOLEAN_KEYS:
+            if key in spec and not isinstance(spec[key], bool):
+                issues.append(
+                    RenderPlanValidationIssue(
+                        "warning",
+                        "invalid_svg_clip_boolean",
+                        "svg_layer clip playback flags should be booleans",
+                        step_index=step_index,
+                        mutation_index=mutation_index,
+                        target_id=target_id,
+                        value=f"{path}.{key}",
+                    )
+                )
+    else:
+        issues.append(
+            RenderPlanValidationIssue(
+                "warning",
+                "invalid_svg_clip",
+                "svg_layer clip should be a preset name or object",
+                step_index=step_index,
+                mutation_index=mutation_index,
+                target_id=target_id,
+                value=path,
+            )
+        )
+        return
+    if kind not in _SVG_CLIP_KINDS:
+        issues.append(
+            RenderPlanValidationIssue(
+                "warning",
+                "unsupported_svg_clip",
+                "svg_layer clip kind is not in the bounded browser clip set",
+                step_index=step_index,
+                mutation_index=mutation_index,
+                target_id=target_id,
+                value=kind,
+            )
+        )
 
 
 def _validate_svg_keyframe_playback(

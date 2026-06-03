@@ -232,6 +232,7 @@ def test_browser_display_renders_vector_symbols_and_data_rain() -> None:
                 page.goto(base, wait_until="domcontentloaded")
                 page.wait_for_function("window.__gibsonVectorState?.['gallery-vector']?.symbolCount === 6")
                 page.wait_for_function("window.__gibsonVectorAnimationState?.['gallery-vector']?.keyframeCount === 6")
+                page.wait_for_function("window.__gibsonVectorEffectState?.['gallery-vector']?.filterCount === 2")
                 page.wait_for_function("window.__gibsonHologramState?.['gallery-hologram']?.ringCount === 6")
                 page.wait_for_function("window.__gibsonDataRainState?.['gallery-rain']?.visibleColumns > 0")
                 page.wait_for_function("window.__gibsonTraceRouteState?.['gallery-trace']?.packetCount === 18")
@@ -240,6 +241,9 @@ def test_browser_display_renders_vector_symbols_and_data_rain() -> None:
                 )
                 vector_animation_state = page.evaluate(
                     """() => window.__gibsonVectorAnimationState["gallery-vector"]"""
+                )
+                vector_effect_state = page.evaluate(
+                    """() => window.__gibsonVectorEffectState["gallery-vector"]"""
                 )
                 hologram_state = page.evaluate(
                     """() => window.__gibsonHologramState["gallery-hologram"]"""
@@ -276,6 +280,11 @@ def test_browser_display_renders_vector_symbols_and_data_rain() -> None:
                 assert 0 <= vector_animation_state["progress"] <= 1
                 assert vector_animation_state["scale"] > 0
                 assert 0 <= vector_animation_state["opacity"] <= 1
+                assert vector_effect_state["filterCount"] == 2
+                assert vector_effect_state["filterKinds"] == ["chromatic_split", "scanline"]
+                assert vector_effect_state["clipKind"] == "iris"
+                assert vector_effect_state["clipActive"] is True
+                assert 0 <= vector_effect_state["clipProgress"] <= 1
                 assert hologram_state == {
                     "ringCount": 6,
                     "beamCount": 7,

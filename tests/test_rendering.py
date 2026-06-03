@@ -314,6 +314,11 @@ def test_render_plan_validation_covers_safe_and_missing_payload_branches() -> No
                                 "animation": {"durationMs": 1200, "loop": False},
                                 "durationMs": 2400,
                                 "loop": True,
+                                "filters": [
+                                    {"kind": "chromatic_split", "intensity": 1.1},
+                                    "scanline",
+                                ],
+                                "clip": {"kind": "iris", "durationMs": 1200, "loop": True},
                                 "symbols": [{"kind": "globe"}],
                                 "keyframes": [
                                     {"at": 0, "x": 0, "y": 0, "scale": 1, "rotation": 0, "opacity": 0.8},
@@ -416,6 +421,9 @@ def test_render_plan_validation_checks_svg_patch_keyframes() -> None:
                             "delayMs": "soon",
                             "loop": "forever",
                             "yoyo": 1,
+                            "filter": {"kind": "raw-css-filter", "intensity": "bright"},
+                            "filters": ["drop-shadow(url(https://example.invalid/x))", 42],
+                            "clip": {"kind": "scripted", "progress": "done", "loop": "forever"},
                             "keyframes": too_many_keyframes,
                             "groups": [
                                 {
@@ -436,6 +444,19 @@ def test_render_plan_validation_checks_svg_patch_keyframes() -> None:
                                     ],
                                 },
                                 {"keyframes": "bad"},
+                                {
+                                    "filter": {},
+                                    "filters": "glow",
+                                    "clip": {"progress": 0.4},
+                                },
+                                {
+                                    "filters": [{"preset": "bloom", "blur": 0.4}],
+                                    "clip": "wipe",
+                                },
+                                {
+                                    "filter": {"type": "glow", "alpha": 0.5},
+                                    "clip": 7,
+                                },
                                 "ignored-group",
                             ],
                         },
@@ -458,9 +479,17 @@ def test_render_plan_validation_checks_svg_patch_keyframes() -> None:
         "invalid_svg_keyframe_transform",
         "invalid_svg_keyframe_value",
         "invalid_svg_keyframes",
+        "invalid_svg_clip_boolean",
+        "invalid_svg_clip",
+        "invalid_svg_clip_value",
+        "invalid_svg_filter",
+        "invalid_svg_filter_value",
+        "invalid_svg_filters",
         "nonpositive_svg_keyframe_duration",
         "raw_svg_markup",
         "too_many_svg_keyframes",
+        "unsupported_svg_clip",
+        "unsupported_svg_filter",
         "unsupported_svg_keyframe_field",
     } <= codes
     assert render_plan_has_validation_errors(issues) is True

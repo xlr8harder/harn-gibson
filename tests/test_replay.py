@@ -598,7 +598,7 @@ def test_checked_in_replay_fixtures_cover_agent_and_renderer_sides() -> None:
     assert renderer_result.scene.primitives["decision-log"].props["text"][0]["renderer"] == "fixture"
 
     assert [step.kind for step in gallery_result.steps] == ["mutations"]
-    assert len(gallery_result.expectations) == 33
+    assert len(gallery_result.expectations) == 36
     assert gallery_result.scene.primitives["gallery-mesh"].kind == "mesh"
     assert gallery_result.scene.primitives["gallery-vector"].kind == "svg_layer"
     assert gallery_result.scene.primitives["gallery-vector"].props["gradients"][0]["id"] == "ice-gradient"
@@ -616,6 +616,9 @@ def test_checked_in_replay_fixtures_cover_agent_and_renderer_sides() -> None:
     assert gallery_result.scene.primitives["gallery-vector"].props["symbols"][3]["kind"] == "data_tunnel"
     assert gallery_result.scene.primitives["gallery-vector"].props["symbols"][4]["kind"] == "ice_wall"
     assert gallery_result.scene.primitives["gallery-vector"].props["symbols"][5]["kind"] == "mainframe_core"
+    assert gallery_result.scene.primitives["gallery-vector"].props["filters"][0]["kind"] == "chromatic_split"
+    assert gallery_result.scene.primitives["gallery-vector"].props["filters"][1]["kind"] == "scanline"
+    assert gallery_result.scene.primitives["gallery-vector"].props["clip"]["kind"] == "iris"
     assert gallery_result.scene.primitives["gallery-hologram"].kind == "hologram"
     assert gallery_result.scene.primitives["gallery-hologram"].props["rings"] == 6
     assert gallery_result.scene.primitives["gallery-hologram"].props["panels"] == 4

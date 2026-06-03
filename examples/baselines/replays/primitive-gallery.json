@@ -627,7 +627,30 @@
               "y": 72
             }
           ],
+          "clip": {
+            "durationMs": 3600,
+            "kind": "iris",
+            "loop": true,
+            "radius": 74,
+            "x": 50,
+            "y": 50,
+            "yoyo": true
+          },
           "durationMs": 5200,
+          "filters": [
+            {
+              "alpha": 0.9,
+              "intensity": 1.15,
+              "kind": "chromatic_split",
+              "offset": 1.8
+            },
+            {
+              "alpha": 0.78,
+              "kind": "scanline",
+              "spacing": 4.8,
+              "speed": 0.018
+            }
+          ],
           "glow": 6,
           "gradients": [
             {

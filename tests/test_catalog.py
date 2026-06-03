@@ -58,6 +58,8 @@ def test_default_visual_catalog_has_generic_and_cinematic_building_blocks() -> N
         "gradients",
         "traces",
         "symbols",
+        "filters",
+        "clip",
         "keyframes",
         "durationMs",
         "yoyo",
@@ -73,7 +75,18 @@ def test_default_visual_catalog_has_generic_and_cinematic_building_blocks() -> N
     assert "path_trace_particles" in svg_layer.metadata["animation"]
     assert "symbol_orbit" in svg_layer.metadata["animation"]
     assert "group_transform" in svg_layer.metadata["animation"]
+    assert "clip_reveal" in svg_layer.metadata["animation"]
+    assert "chromatic_split" in svg_layer.metadata["animation"]
     assert "keyframe_transform" in svg_layer.metadata["animation"]
+    assert svg_layer.metadata["filters"] == (
+        "glow",
+        "bloom",
+        "haze",
+        "chromatic_split",
+        "ghost",
+        "scanline",
+    )
+    assert svg_layer.metadata["clips"] == ("rect", "circle", "iris", "wipe", "scan")
     data_rain = catalog.entry("data_rain")
     assert data_rain is not None
     assert {"glyphs", "columns", "density", "speed", "direction", "bands", "glitch"} <= set(data_rain.props)

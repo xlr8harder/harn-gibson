@@ -1802,6 +1802,193 @@ function vectorAnimationConfig(source) {
   };
 }
 
+function vectorFilterKind(value) {
+  const raw = String(value || "").toLowerCase().replace(/-/g, "_");
+  if (raw === "rgb_split") return "chromatic_split";
+  if (raw === "chromatic") return "chromatic_split";
+  if (raw === "scanlines") return "scanline";
+  if (raw === "echo") return "ghost";
+  if (raw === "soft_glow") return "glow";
+  return raw;
+}
+
+function vectorFilterSpecs(source) {
+  const raw = [];
+  if (source?.filter !== undefined) raw.push(source.filter);
+  if (Array.isArray(source?.filters)) raw.push(...source.filters);
+  const specs = [];
+  for (const item of raw.slice(0, 16)) {
+    let kind = "";
+    let spec = {};
+    if (typeof item === "string") {
+      kind = vectorFilterKind(item);
+    } else if (item && typeof item === "object") {
+      spec = item;
+      kind = vectorFilterKind(item.kind || item.type || item.preset);
+    }
+    if (!["glow", "bloom", "haze", "chromatic_split", "ghost", "scanline"].includes(kind)) continue;
+    specs.push({
+      ...spec,
+      kind,
+      intensity: vectorNumber(spec.intensity, 1, 0, 4),
+      alpha: vectorNumber(spec.alpha, 1, 0, 1),
+      offset: vectorNumber(spec.offset, 1.7, -20, 20),
+    });
+  }
+  return specs;
+}
+
+function vectorFilterSpec(specs, kind) {
+  return specs.find((spec) => spec.kind === kind) || null;
+}
+
+function vectorClipKind(value) {
+  const raw = String(value || "").toLowerCase().replace(/-/g, "_");
+  if (raw === "scanline") return "scan";
+  return raw;
+}
+
+function vectorClipState(clip, box, now) {
+  if (!clip) return {active: false, kind: null, progress: 1};
+  const spec = typeof clip === "string" ? {kind: clip} : clip;
+  if (!spec || typeof spec !== "object") return {active: false, kind: null, progress: 1};
+  const kind = vectorClipKind(spec.kind || spec.type || spec.shape);
+  if (!["rect", "circle", "iris", "wipe", "scan"].includes(kind)) return {active: false, kind: null, progress: 1};
+  let progress = Number(spec.progress);
+  if (!Number.isFinite(progress)) {
+    progress = spec.reveal === false && kind !== "scan" ? 1 : vectorKeyframeProgress(spec, now);
+  }
+  return {
+    active: true,
+    kind,
+    progress: clamp(progress, 0, 1),
+    direction: String(spec.direction || spec.axis || "x").toLowerCase(),
+    reverse: Boolean(spec.reverse),
+    x: vectorNumber(spec.x, box.x + box.width * 0.5),
+    y: vectorNumber(spec.y, box.y + box.height * 0.5),
+    width: vectorNumber(spec.w ?? spec.width, box.width, 0, Math.max(1, box.width * 4)),
+    height: vectorNumber(spec.h ?? spec.height, box.height, 0, Math.max(1, box.height * 4)),
+    radius: vectorNumber(
+      spec.r ?? spec.radius,
+      Math.max(box.width, box.height) * 0.58,
+      0,
+      Math.max(box.width, box.height) * 4,
+    ),
+    size: vectorNumber(spec.size, Math.max(box.width, box.height) * 0.22, 0, Math.max(box.width, box.height) * 4),
+  };
+}
+
+function applyVectorClip(clip, box, now) {
+  const state = vectorClipState(clip, box, now);
+  if (!state.active) return state;
+  ctx.beginPath();
+  if (state.kind === "rect") {
+    ctx.rect(state.x - state.width * 0.5, state.y - state.height * 0.5, state.width, state.height);
+  } else if (state.kind === "circle" || state.kind === "iris") {
+    const radius = state.kind === "iris" ? state.radius * state.progress : state.radius;
+    ctx.arc(state.x, state.y, Math.max(0.01, radius), 0, Math.PI * 2);
+  } else if (state.kind === "wipe") {
+    const horizontal = state.direction !== "y" && state.direction !== "vertical";
+    const progress = state.reverse ? 1 - state.progress : state.progress;
+    if (horizontal) {
+      const width = box.width * progress;
+      const x = state.reverse ? box.x + box.width - width : box.x;
+      ctx.rect(x, box.y, width, box.height);
+    } else {
+      const height = box.height * progress;
+      const y = state.reverse ? box.y + box.height - height : box.y;
+      ctx.rect(box.x, y, box.width, height);
+    }
+  } else if (state.kind === "scan") {
+    const horizontal = state.direction !== "y" && state.direction !== "vertical";
+    if (horizontal) {
+      const x = box.x + box.width * state.progress;
+      ctx.rect(x - state.size * 0.5, box.y, state.size, box.height);
+    } else {
+      const y = box.y + box.height * state.progress;
+      ctx.rect(box.x, y - state.size * 0.5, box.width, state.size);
+    }
+  }
+  ctx.clip();
+  return state;
+}
+
+function vectorCanvasFilter(specs) {
+  const pieces = [];
+  const glow = vectorFilterSpec(specs, "glow");
+  const bloom = vectorFilterSpec(specs, "bloom");
+  const haze = vectorFilterSpec(specs, "haze");
+  if (glow) {
+    pieces.push(`brightness(${1 + glow.intensity * 0.14})`);
+    pieces.push(`contrast(${1 + glow.intensity * 0.08})`);
+  }
+  if (bloom) {
+    pieces.push(`blur(${vectorNumber(bloom.blur, bloom.intensity * 0.42, 0, 6)}px)`);
+    pieces.push(`brightness(${1 + bloom.intensity * 0.24})`);
+  }
+  if (haze) {
+    pieces.push(`blur(${vectorNumber(haze.blur, haze.intensity * 0.28, 0, 5)}px)`);
+    pieces.push(`opacity(${clamp(0.72 + haze.intensity * 0.12, 0.1, 1)})`);
+  }
+  return pieces.length ? pieces.join(" ") : "none";
+}
+
+function drawVectorScanlines(source, props, box, now, spec) {
+  const tone = spec.tone || props.accentTone || props.tone || "cyan";
+  const spacing = Math.max(1, vectorNumber(spec.spacing, 5, 1, 50));
+  const width = Math.max(0.15, vectorNumber(spec.width, 0.42, 0.1, 8));
+  const speed = vectorNumber(spec.speed, 0.018, -1, 1);
+  const offset = (now * speed + vectorNumber(spec.offset, 0, -10000, 10000)) % spacing;
+  ctx.save();
+  ctx.globalCompositeOperation = "screen";
+  ctx.globalAlpha *= clamp(0.12 * spec.intensity * spec.alpha, 0, 0.8);
+  ctx.lineWidth = width;
+  ctx.strokeStyle = toneColor(tone, 1);
+  for (let y = box.y - spacing + offset; y <= box.y + box.height + spacing; y += spacing) {
+    ctx.beginPath();
+    ctx.moveTo(box.x, y);
+    ctx.lineTo(box.x + box.width, y);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawVectorFilteredContent(source, props, box, now, drawBody) {
+  const specs = vectorFilterSpecs(source);
+  const chromatic = vectorFilterSpec(specs, "chromatic_split");
+  const ghost = vectorFilterSpec(specs, "ghost");
+  if (ghost) {
+    const offset = ghost.offset * ghost.intensity;
+    ctx.save();
+    ctx.globalAlpha *= clamp(0.24 * ghost.alpha * ghost.intensity, 0, 0.65);
+    ctx.globalCompositeOperation = "screen";
+    ctx.translate(offset, -offset * 0.72);
+    ctx.filter = `blur(${vectorNumber(ghost.blur, 0.45, 0, 4)}px)`;
+    drawBody();
+    ctx.restore();
+  }
+  if (chromatic) {
+    const offset = chromatic.offset * chromatic.intensity;
+    for (const pass of [
+      {x: -offset, y: offset * 0.18, tone: "magenta"},
+      {x: offset, y: -offset * 0.18, tone: "cyan"},
+    ]) {
+      ctx.save();
+      ctx.globalAlpha *= clamp(0.34 * chromatic.alpha * chromatic.intensity, 0, 0.7);
+      ctx.globalCompositeOperation = "screen";
+      ctx.translate(pass.x, pass.y);
+      drawBody({...props, tone: pass.tone});
+      ctx.restore();
+    }
+  }
+  ctx.save();
+  ctx.filter = vectorCanvasFilter(specs);
+  drawBody();
+  ctx.restore();
+  const scanline = vectorFilterSpec(specs, "scanline");
+  if (scanline) drawVectorScanlines(source, props, box, now, scanline);
+}
+
 function vectorKeyframeProgress(source, now) {
   const config = vectorAnimationConfig(source);
   const elapsed = now - config.delayMs;
@@ -2615,7 +2802,7 @@ function drawSvgGroups(groups, props, now, depth = 0) {
   }
 }
 
-function drawSvgContent(source, props, now, depth = 0) {
+function drawSvgContentBody(source, props, now, depth = 0) {
   const paths = Array.isArray(source.paths) ? source.paths : [];
   const rects = Array.isArray(source.rects) ? source.rects : [];
   const lines = Array.isArray(source.lines) ? source.lines : [];
@@ -2638,6 +2825,16 @@ function drawSvgContent(source, props, now, depth = 0) {
   drawSvgGroups(groups, props, now, depth);
 }
 
+function drawSvgContent(source, props, now, depth = 0) {
+  const box = vectorViewBox(source.viewBox || props.viewBox);
+  ctx.save();
+  applyVectorClip(source.clip, box, now);
+  drawVectorFilteredContent(source, props, box, now, (overrideProps = props) => {
+    drawSvgContentBody(source, overrideProps, now, depth);
+  });
+  ctx.restore();
+}
+
 function drawSvgLayer(primitive, w, h, now) {
   if (typeof Path2D === "undefined") return;
   const props = primitive.props || {};
@@ -2646,6 +2843,9 @@ function drawSvgLayer(primitive, w, h, now) {
     || stats.labelCount || stats.rectCount || stats.lineCount || stats.polylineCount || stats.polygonCount;
   if (!hasVectors) return;
   const animation = vectorKeyframeTransform(props, now);
+  const box = vectorViewBox(props.viewBox);
+  const filterSpecs = vectorFilterSpecs(props);
+  const clipState = vectorClipState(props.clip, box, now);
   if (typeof window !== "undefined") {
     window.__gibsonVectorState = window.__gibsonVectorState || {};
     window.__gibsonVectorState[primitive.id] = stats;
@@ -2659,8 +2859,15 @@ function drawSvgLayer(primitive, w, h, now) {
       rotation: vectorRounded(animation.rotation),
       opacity: vectorRounded(animation.opacity),
     };
+    window.__gibsonVectorEffectState = window.__gibsonVectorEffectState || {};
+    window.__gibsonVectorEffectState[primitive.id] = {
+      filterCount: filterSpecs.length,
+      filterKinds: filterSpecs.map((spec) => spec.kind),
+      clipKind: clipState.kind,
+      clipProgress: vectorRounded(clipState.progress),
+      clipActive: clipState.active,
+    };
   }
-  const box = vectorViewBox(props.viewBox);
   const position = normalizedPoint(props.position || {x: 0.5, y: 0.45}, w, h);
   const fit = Math.max(24 * devicePixelRatio, Number(props.scale || 0.22) * Math.min(w, h));
   const unit = fit / Math.max(box.width, box.height);
