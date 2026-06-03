@@ -84,11 +84,18 @@ def default_visual_catalog() -> VisualCatalog:
                 "svg_layer",
                 "primitive",
                 "Constrained SVG-style vector path layer for symbols, schematics, decals, and animated traces.",
-                ("viewBox", "paths", "circles", "labels", "position", "scale", "tone"),
+                ("viewBox", "paths", "circles", "labels", "gradients", "traces", "position", "scale", "tone"),
                 ("generic", "vector", "cinematic"),
                 {
                     "safety": "path-data-only; no raw markup, scripts, event handlers, foreignObject, or external refs",
-                    "animation": ("stroke_reveal", "dash_motion", "pulse", "spin"),
+                    "animation": (
+                        "stroke_reveal",
+                        "dash_motion",
+                        "pulse",
+                        "spin",
+                        "gradient_paint",
+                        "path_trace_particles",
+                    ),
                 },
             ),
             CatalogEntry(
@@ -162,6 +169,13 @@ def default_visual_catalog() -> VisualCatalog:
                 "Emit particles or glyphs along a route.",
                 ("sourceId", "targetId", "count", "durationMs"),
                 ("cinematic", "motion", "timed"),
+            ),
+            CatalogEntry(
+                "vector_trace",
+                "effect",
+                "Move glowing particles along declared vector-space points on an svg_layer.",
+                ("targetId", "points", "count", "speed", "tail", "tone"),
+                ("generic", "vector", "motion"),
             ),
             CatalogEntry(
                 "typewriter",

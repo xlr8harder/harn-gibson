@@ -302,6 +302,35 @@
               "y": 84
             }
           ],
+          "gradients": [
+            {
+              "center": {
+                "x": 50,
+                "y": 52
+              },
+              "id": "fx-gradient",
+              "innerRadius": 4,
+              "outerRadius": 58,
+              "stops": [
+                {
+                  "alpha": 0.95,
+                  "offset": 0,
+                  "tone": "white"
+                },
+                {
+                  "alpha": 0.78,
+                  "offset": 0.46,
+                  "tone": "cyan"
+                },
+                {
+                  "alpha": 0.72,
+                  "offset": 1,
+                  "tone": "magenta"
+                }
+              ],
+              "type": "radial"
+            }
+          ],
           "labels": [
             {
               "size": 8,
@@ -314,8 +343,9 @@
           "paths": [
             {
               "d": "M50 6 L88 30 L78 84 L22 84 L12 30 Z",
-              "fill": true,
+              "fill": "gradient:fx-gradient",
               "fillAlpha": 0.12,
+              "stroke": "gradient:fx-gradient",
               "tone": "cyan",
               "width": 1.6
             },
@@ -334,6 +364,44 @@
           "scale": 0.18,
           "spin": 0.04,
           "tone": "cyan",
+          "traces": [
+            {
+              "count": 11,
+              "direction": "reverse",
+              "gradient": "gradient:fx-gradient",
+              "points": [
+                {
+                  "x": 24,
+                  "y": 60
+                },
+                {
+                  "x": 36,
+                  "y": 22
+                },
+                {
+                  "x": 64,
+                  "y": 22
+                },
+                {
+                  "x": 76,
+                  "y": 60
+                },
+                {
+                  "x": 50,
+                  "y": 84
+                },
+                {
+                  "x": 24,
+                  "y": 60
+                }
+              ],
+              "radius": 1.1,
+              "speed": 0.00018,
+              "tail": 0.08,
+              "tone": "amber",
+              "width": 0.75
+            }
+          ],
           "viewBox": [
             0,
             0,

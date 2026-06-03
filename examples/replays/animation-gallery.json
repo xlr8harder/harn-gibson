@@ -8,6 +8,8 @@
     "sceneRevision": 1,
     "checks": [
       {"path": "primitives.animation-vector.kind", "equals": "svg_layer"},
+      {"path": "primitives.animation-vector.props.gradients.0.id", "equals": "fx-gradient"},
+      {"path": "primitives.animation-vector.props.traces.0.direction", "equals": "reverse"},
       {"path": "primitives.animation-city.kind", "equals": "city_block"},
       {"path": "animations.gallery-phase.kind", "equals": "phase-pulse"},
       {"path": "animations.gallery-packets.kind", "equals": "packet_burst"},
@@ -55,12 +57,27 @@
               "scale": 0.18,
               "spin": 0.04,
               "blend": "screen",
+              "gradients": [
+                {
+                  "id": "fx-gradient",
+                  "type": "radial",
+                  "center": {"x": 50, "y": 52},
+                  "innerRadius": 4,
+                  "outerRadius": 58,
+                  "stops": [
+                    {"offset": 0, "tone": "white", "alpha": 0.95},
+                    {"offset": 0.46, "tone": "cyan", "alpha": 0.78},
+                    {"offset": 1, "tone": "magenta", "alpha": 0.72}
+                  ]
+                }
+              ],
               "paths": [
                 {
                   "d": "M50 6 L88 30 L78 84 L22 84 L12 30 Z",
                   "tone": "cyan",
                   "width": 1.6,
-                  "fill": true,
+                  "stroke": "gradient:fx-gradient",
+                  "fill": "gradient:fx-gradient",
                   "fillAlpha": 0.12
                 },
                 {
@@ -75,6 +92,26 @@
                 {"x": 50, "y": 6, "r": 2.5, "tone": "white", "pulse": true},
                 {"x": 22, "y": 84, "r": 2.5, "tone": "amber", "pulse": true},
                 {"x": 78, "y": 84, "r": 2.5, "tone": "green", "pulse": true}
+              ],
+              "traces": [
+                {
+                  "points": [
+                    {"x": 24, "y": 60},
+                    {"x": 36, "y": 22},
+                    {"x": 64, "y": 22},
+                    {"x": 76, "y": 60},
+                    {"x": 50, "y": 84},
+                    {"x": 24, "y": 60}
+                  ],
+                  "gradient": "gradient:fx-gradient",
+                  "tone": "amber",
+                  "count": 11,
+                  "direction": "reverse",
+                  "speed": 0.00018,
+                  "tail": 0.08,
+                  "radius": 1.1,
+                  "width": 0.75
+                }
               ],
               "labels": [
                 {"text": "FX", "x": 50, "y": 56, "tone": "white", "size": 8}

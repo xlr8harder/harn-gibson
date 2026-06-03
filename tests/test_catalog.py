@@ -35,6 +35,10 @@ def test_default_visual_catalog_has_generic_and_cinematic_building_blocks() -> N
     effect_ids = {entry.id for entry in catalog.effects}
 
     assert {"text_stream", "mesh", "svg_layer", "particle_field", "city_block"} <= primitive_ids
-    assert {"glitch", "flythrough", "packet_burst", "hold"} <= effect_ids
+    assert {"glitch", "flythrough", "packet_burst", "vector_trace", "hold"} <= effect_ids
     assert catalog.entry("city_block") is not None
     assert "gibson" in catalog.entry("city_block").tags  # type: ignore[union-attr]
+    svg_layer = catalog.entry("svg_layer")
+    assert svg_layer is not None
+    assert {"gradients", "traces"} <= set(svg_layer.props)
+    assert "path_trace_particles" in svg_layer.metadata["animation"]

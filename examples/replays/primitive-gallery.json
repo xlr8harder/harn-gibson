@@ -9,6 +9,8 @@
     "checks": [
       {"path": "primitives.gallery-mesh.kind", "equals": "mesh"},
       {"path": "primitives.gallery-vector.kind", "equals": "svg_layer"},
+      {"path": "primitives.gallery-vector.props.gradients.0.id", "equals": "ice-gradient"},
+      {"path": "primitives.gallery-vector.props.traces.0.count", "equals": 9},
       {"path": "primitives.gallery-city.kind", "equals": "city_block"},
       {"path": "primitives.gallery-graph.kind", "equals": "node_graph"},
       {"path": "primitives.gallery-ribbon.kind", "equals": "ribbon"},
@@ -102,12 +104,26 @@
               "spin": 0.08,
               "glow": 6,
               "blend": "screen",
+              "gradients": [
+                {
+                  "id": "ice-gradient",
+                  "type": "linear",
+                  "from": {"x": 8, "y": 28},
+                  "to": {"x": 92, "y": 72},
+                  "stops": [
+                    {"offset": 0, "tone": "cyan", "alpha": 0.9},
+                    {"offset": 0.48, "tone": "white", "alpha": 0.75},
+                    {"offset": 1, "tone": "magenta", "alpha": 0.82}
+                  ]
+                }
+              ],
               "paths": [
                 {
                   "d": "M50 4 L92 28 L92 72 L50 96 L8 72 L8 28 Z",
                   "tone": "amber",
                   "width": 1.4,
-                  "fill": true,
+                  "stroke": "gradient:ice-gradient",
+                  "fill": "gradient:ice-gradient",
                   "fillAlpha": 0.14
                 },
                 {
@@ -129,6 +145,26 @@
                 {"x": 50, "y": 4, "r": 2.7, "tone": "white", "pulse": true, "ring": true},
                 {"x": 92, "y": 72, "r": 2.4, "tone": "cyan", "pulse": true},
                 {"x": 8, "y": 72, "r": 2.4, "tone": "magenta", "pulse": true}
+              ],
+              "traces": [
+                {
+                  "points": [
+                    {"x": 18, "y": 54},
+                    {"x": 30, "y": 18},
+                    {"x": 70, "y": 18},
+                    {"x": 82, "y": 54},
+                    {"x": 68, "y": 82},
+                    {"x": 32, "y": 82},
+                    {"x": 18, "y": 54}
+                  ],
+                  "gradient": "gradient:ice-gradient",
+                  "tone": "green",
+                  "count": 9,
+                  "speed": 0.00022,
+                  "tail": 0.07,
+                  "radius": 1.15,
+                  "width": 0.85
+                }
               ],
               "labels": [
                 {"text": "ICE", "x": 50, "y": 54, "tone": "white", "size": 7.5}

@@ -1497,6 +1497,95 @@ function vectorViewBox(value) {
   };
 }
 
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function vectorGradientPaint(value, gradients, fallbackTone, alpha) {
+  let gradientId = null;
+  if (typeof value === "string" && value.startsWith("gradient:")) {
+    gradientId = value.slice("gradient:".length);
+  } else if (value && typeof value === "object" && value.gradient) {
+    gradientId = String(value.gradient);
+  }
+  if (!gradientId) return null;
+  const spec = gradients.find((gradient) => gradient?.id === gradientId);
+  if (!spec) return null;
+  const stops = Array.isArray(spec.stops) ? spec.stops : [];
+  if (!stops.length) return null;
+  let gradient;
+  if (spec.type === "radial") {
+    const center = spec.center || {x: 50, y: 50};
+    const inner = Math.max(0, Number(spec.innerRadius || 0));
+    const outer = Math.max(inner + 0.1, Number(spec.outerRadius || 50));
+    gradient = ctx.createRadialGradient(
+      Number(center.x || 0),
+      Number(center.y || 0),
+      inner,
+      Number(center.x || 0),
+      Number(center.y || 0),
+      outer,
+    );
+  } else {
+    const from = spec.from || {x: 0, y: 0};
+    const to = spec.to || {x: 100, y: 100};
+    gradient = ctx.createLinearGradient(
+      Number(from.x || 0),
+      Number(from.y || 0),
+      Number(to.x || 100),
+      Number(to.y || 100),
+    );
+  }
+  const denominator = Math.max(1, stops.length - 1);
+  for (let index = 0; index < stops.length; index++) {
+    const stop = stops[index] || {};
+    const offset = clamp(Number(stop.offset ?? index / denominator), 0, 1);
+    const stopAlpha = clamp(Number(stop.alpha ?? 1) * alpha, 0, 1);
+    gradient.addColorStop(offset, toneColor(stop.tone || fallbackTone, stopAlpha));
+  }
+  return gradient;
+}
+
+function vectorPaint(value, gradients, fallbackTone, alpha) {
+  return vectorGradientPaint(value, gradients, fallbackTone, alpha)
+    || toneColor(value === true ? fallbackTone : value || fallbackTone, alpha);
+}
+
+function vectorPoint(value) {
+  if (Array.isArray(value)) return {x: Number(value[0] || 0), y: Number(value[1] || 0)};
+  return {x: Number(value?.x || 0), y: Number(value?.y || 0)};
+}
+
+function polylineSegments(points) {
+  const segments = [];
+  let total = 0;
+  for (let index = 1; index < points.length; index++) {
+    const a = points[index - 1];
+    const b = points[index];
+    const length = Math.hypot(b.x - a.x, b.y - a.y);
+    if (length <= 0) continue;
+    segments.push({a, b, length, start: total});
+    total += length;
+  }
+  return {segments, total};
+}
+
+function polylinePoint(path, progress) {
+  if (!path.segments.length) return null;
+  const distance = clamp(progress, 0, 1) * path.total;
+  for (const segment of path.segments) {
+    if (distance <= segment.start + segment.length) {
+      const local = clamp((distance - segment.start) / segment.length, 0, 1);
+      return {
+        x: segment.a.x + (segment.b.x - segment.a.x) * local,
+        y: segment.a.y + (segment.b.y - segment.a.y) * local,
+      };
+    }
+  }
+  const last = path.segments[path.segments.length - 1];
+  return {x: last.b.x, y: last.b.y};
+}
+
 function drawSvgPath(pathSpec, props, now) {
   const pathData = String(pathSpec?.d || "");
   if (!pathData) return;
@@ -1509,6 +1598,7 @@ function drawSvgPath(pathSpec, props, now) {
   const tone = pathSpec.tone || props.tone || "cyan";
   const alpha = Math.max(0, Math.min(1, Number(pathSpec.alpha ?? props.alpha ?? 0.86)));
   const width = Math.max(0.2, Number(pathSpec.width || 1.6));
+  const gradients = Array.isArray(props.gradients) ? props.gradients : [];
   ctx.save();
   ctx.lineJoin = "round";
   ctx.lineCap = "round";
@@ -1516,8 +1606,7 @@ function drawSvgPath(pathSpec, props, now) {
   ctx.shadowColor = toneColor(tone, Math.min(0.8, alpha));
   ctx.shadowBlur = Number(pathSpec.glow ?? props.glow ?? 5);
   if (pathSpec.fill && pathSpec.fill !== "none") {
-    const fillTone = pathSpec.fill === true ? tone : pathSpec.fill;
-    ctx.fillStyle = toneColor(fillTone, Number(pathSpec.fillAlpha ?? 0.12));
+    ctx.fillStyle = vectorPaint(pathSpec.fill, gradients, tone, Number(pathSpec.fillAlpha ?? 0.12));
     ctx.fill(path);
   }
   const dash = Array.isArray(pathSpec.dash) ? pathSpec.dash.map(Number).filter((value) => value > 0) : [];
@@ -1533,7 +1622,7 @@ function drawSvgPath(pathSpec, props, now) {
     ctx.lineDashOffset = Number(pathSpec.offset || 0) - now * speed;
   }
   if (pathSpec.stroke !== false) {
-    ctx.strokeStyle = toneColor(tone, alpha);
+    ctx.strokeStyle = vectorPaint(pathSpec.stroke || pathSpec.strokeGradient || tone, gradients, tone, alpha);
     ctx.stroke(path);
   }
   ctx.restore();
@@ -1563,6 +1652,62 @@ function drawSvgCircles(circles, props, now) {
   }
 }
 
+function drawSvgTraces(traces, props, now) {
+  const gradients = Array.isArray(props.gradients) ? props.gradients : [];
+  for (const trace of traces) {
+    const points = Array.isArray(trace.points) ? trace.points.map((point) => vectorPoint(point)) : [];
+    if (points.length < 2) continue;
+    const path = polylineSegments(points);
+    if (!path.total) continue;
+    const tone = trace.tone || props.tone || "cyan";
+    const alpha = clamp(Number(trace.alpha ?? 0.82), 0, 1);
+    const width = Math.max(0.2, Number(trace.width || 0.8));
+    const speed = Number(trace.speed || 0.00018);
+    const count = Math.max(1, Math.min(48, Number(trace.count || 7)));
+    const radius = Math.max(0.3, Number(trace.radius || 1.25));
+    const tail = clamp(Number(trace.tail ?? 0.055), 0, 0.4);
+    ctx.save();
+    ctx.globalCompositeOperation = trace.blend === "source-over" ? "source-over" : "screen";
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.shadowColor = toneColor(tone, alpha);
+    ctx.shadowBlur = Number(trace.glow ?? props.glow ?? 7);
+    if (trace.drawPath !== false) {
+      const dash = Array.isArray(trace.dash) ? trace.dash.map(Number).filter((value) => value > 0) : [6, 7];
+      ctx.setLineDash(dash);
+      ctx.lineDashOffset = -now * speed * 90 + Number(trace.offset || 0);
+      ctx.lineWidth = width;
+      ctx.strokeStyle = vectorPaint(trace.stroke || trace.gradient || tone, gradients, tone, alpha * 0.38);
+      ctx.beginPath();
+      ctx.moveTo(points[0].x, points[0].y);
+      for (const point of points.slice(1)) ctx.lineTo(point.x, point.y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    for (let index = 0; index < count; index++) {
+      const rawProgress = now * speed + Number(trace.offset || 0) + index / count;
+      const progress = trace.direction === "reverse" ? 1 - (rawProgress % 1) : rawProgress % 1;
+      const head = polylinePoint(path, progress);
+      if (!head) continue;
+      const tailPoint = tail > 0 ? polylinePoint(path, Math.max(0, progress - tail)) : null;
+      const particleAlpha = alpha * (0.58 + ((index % 3) * 0.13));
+      if (tailPoint && progress - tail >= 0) {
+        ctx.lineWidth = Math.max(0.3, width * 1.15);
+        ctx.strokeStyle = toneColor(tone, particleAlpha * 0.6);
+        ctx.beginPath();
+        ctx.moveTo(tailPoint.x, tailPoint.y);
+        ctx.lineTo(head.x, head.y);
+        ctx.stroke();
+      }
+      ctx.fillStyle = toneColor(index % 4 === 0 ? "white" : tone, particleAlpha);
+      ctx.beginPath();
+      ctx.arc(head.x, head.y, radius * (1 + (index % 3) * 0.18), 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+}
+
 function drawSvgLabels(labels, props) {
   ctx.save();
   ctx.textAlign = "center";
@@ -1584,8 +1729,9 @@ function drawSvgLayer(primitive, w, h, now) {
   const props = primitive.props || {};
   const paths = Array.isArray(props.paths) ? props.paths : [];
   const circles = Array.isArray(props.circles) ? props.circles : [];
+  const traces = Array.isArray(props.traces) ? props.traces : [];
   const labels = Array.isArray(props.labels) ? props.labels : [];
-  if (!paths.length && !circles.length && !labels.length) return;
+  if (!paths.length && !circles.length && !traces.length && !labels.length) return;
   const box = vectorViewBox(props.viewBox);
   const position = normalizedPoint(props.position || {x: 0.5, y: 0.45}, w, h);
   const fit = Math.max(24 * devicePixelRatio, Number(props.scale || 0.22) * Math.min(w, h));
@@ -1599,6 +1745,7 @@ function drawSvgLayer(primitive, w, h, now) {
   ctx.globalCompositeOperation = props.blend === "screen" ? "screen" : "source-over";
   for (const pathSpec of paths) drawSvgPath(pathSpec, props, now);
   drawSvgCircles(circles, props, now);
+  drawSvgTraces(traces, props, now);
   drawSvgLabels(labels, props);
   ctx.restore();
 }
