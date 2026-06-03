@@ -1,0 +1,160 @@
+{
+  "schema": "harn-gibson.replay.v1",
+  "name": "saved renderer plan",
+  "metadata": {
+    "purpose": "exercise renderer-side replay from a saved render plan"
+  },
+  "steps": [
+    {
+      "type": "render_plan",
+      "plan": {
+        "requests": [
+          {
+            "event": {
+              "schema": "harn-gibson.event.v1",
+              "sequence": 21,
+              "timestampMs": 2100,
+              "source": "harn",
+              "eventType": "tool_call",
+              "phase": "before",
+              "title": "Tool preflight",
+              "summary": "bash starting with {command}",
+              "payload": {
+                "type": "tool_call",
+                "toolName": "bash",
+                "input": {
+                  "command": "uv run pytest"
+                }
+              },
+              "recentContext": [
+                "renderer fixture should animate a command boundary"
+              ],
+              "visualizationContext": [
+                "saved plan owns visual continuity"
+              ]
+            },
+            "timelineOffsetMs": 0,
+            "metadata": {
+              "source": "saved-renderer-plan"
+            }
+          },
+          {
+            "event": {
+              "schema": "harn-gibson.event.v1",
+              "sequence": 22,
+              "timestampMs": 9100,
+              "source": "harn",
+              "eventType": "tool_result",
+              "phase": "after",
+              "title": "Tool result",
+              "summary": "bash completed: ok; 113 tests passed",
+              "payload": {
+                "type": "tool_result",
+                "toolName": "bash",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "113 passed, 100% coverage"
+                  }
+                ]
+              },
+              "recentContext": [],
+              "visualizationContext": []
+            },
+            "timelineOffsetMs": 7000,
+            "coalescedCount": 2,
+            "metadata": {
+              "source": "saved-renderer-plan"
+            }
+          }
+        ],
+        "steps": [
+          {
+            "eventIndex": 0,
+            "startOffsetMs": 0,
+            "mutations": [
+              {
+                "op": "patch",
+                "targetId": "status",
+                "props": {
+                  "text": "renderer:command ignition",
+                  "phase": "before",
+                  "tone": "green"
+                }
+              },
+              {
+                "op": "append_log",
+                "entry": {
+                  "sequence": 21,
+                  "phase": "before",
+                  "eventType": "renderer_plan",
+                  "title": "Renderer plan",
+                  "summary": "spinning up saved command effect"
+                }
+              },
+              {
+                "op": "start_animation",
+                "animation": {
+                  "id": "renderer-plan-command",
+                  "targetId": "scan-grid",
+                  "kind": "phase-pulse",
+                  "startedAtMs": 2100,
+                  "durationMs": 2400,
+                  "props": {
+                    "phase": "before",
+                    "tone": "green",
+                    "sequence": 21
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "eventIndex": 1,
+            "startOffsetMs": 7000,
+            "mutations": [
+              {
+                "op": "patch",
+                "targetId": "status",
+                "props": {
+                  "text": "renderer:coverage locked",
+                  "phase": "after",
+                  "tone": "magenta"
+                }
+              },
+              {
+                "op": "append_log",
+                "entry": {
+                  "sequence": 22,
+                  "phase": "after",
+                  "eventType": "renderer_plan",
+                  "title": "Renderer plan",
+                  "summary": "settled saved effect after tool completion"
+                }
+              },
+              {
+                "op": "patch",
+                "targetId": "decision-log",
+                "props": {
+                  "text": [
+                    {
+                      "renderer": "fixture",
+                      "intent": "prove saved render plans can replay without harn"
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        ],
+        "metadata": {
+          "renderer": "saved-fixture",
+          "route": {
+            "route": "saved_renderer_plan"
+          },
+          "intent": "visualize a precomputed command timeline"
+        }
+      }
+    }
+  ]
+}

@@ -11,6 +11,7 @@ from harn_gibson.routing import (
     StreamBinding,
     TimelineWindow,
     default_stream_bindings,
+    event_route_rules_from_value,
     renderer_event_interest_from_renderer,
     renderer_event_interest_from_value,
     stream_buffer_mutations,
@@ -120,6 +121,51 @@ def test_event_router_route_rules_cover_renderer_direct_debug_and_drop() -> None
     assert dropped.batch.to_dict()["route"] == "drop"
     assert renderer.uses_renderer is True
     assert renderer.decision.reason == "force renderer"
+
+
+def test_event_route_rule_mapping_and_validation() -> None:
+    first = EventRouteRule.from_mapping(
+        {
+            "eventType": "runtime_error",
+            "route": "debug_only",
+            "reason": "debug failures",
+            "metadata": {"source": "env"},
+        }
+    )
+    second = EventRouteRule.from_mapping({"event_type": "model_select", "route": "drop"})
+    direct = EventRouteRule("tool_result", "direct_scene", "local result")
+
+    assert first.to_dict() == {
+        "eventType": "runtime_error",
+        "route": "debug_only",
+        "reason": "debug failures",
+        "metadata": {"source": "env"},
+    }
+    assert second.reason == "drop route rule"
+    assert event_route_rules_from_value(None) == ()
+    assert event_route_rules_from_value([first.to_dict(), direct]) == (first, direct)
+
+    for value, message in (
+        ({"route": "drop"}, "eventType"),
+        ({"eventType": "tool_call", "route": "stream_buffer"}, "unsupported"),
+    ):
+        try:
+            EventRouteRule.from_mapping(value)
+        except ValueError as error:
+            assert message in str(error)
+        else:
+            raise AssertionError("expected ValueError")
+
+    for value, message in (
+        ("bad", "list"),
+        ([object()], "object"),
+    ):
+        try:
+            event_route_rules_from_value(value)
+        except ValueError as error:
+            assert message in str(error)
+        else:
+            raise AssertionError("expected ValueError")
 
 
 def test_event_router_uses_renderer_interest_after_streams_and_rules() -> None:

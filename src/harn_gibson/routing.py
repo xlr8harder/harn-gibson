@@ -126,6 +126,21 @@ class EventRouteRule:
     reason: str
     metadata: dict[str, Any] = field(default_factory=dict)
 
+    @classmethod
+    def from_mapping(cls, value: Mapping[str, Any]) -> EventRouteRule:
+        event_type = value.get("eventType", value.get("event_type"))
+        if not isinstance(event_type, str) or not event_type:
+            raise ValueError("event route rule must include eventType")
+        route = str(value.get("route") or "renderer_agent")
+        if route not in {"renderer_agent", "direct_scene", "debug_only", "drop"}:
+            raise ValueError(f"unsupported event route rule route: {route}")
+        return cls(
+            event_type=event_type,
+            route=route,  # type: ignore[arg-type]
+            reason=str(value.get("reason") or f"{route} route rule"),
+            metadata=dict(value.get("metadata") or {}),
+        )
+
     def to_dict(self) -> dict[str, Any]:
         payload: dict[str, Any] = {
             "eventType": self.event_type,
@@ -512,6 +527,22 @@ def renderer_event_interest_from_renderer(renderer: object) -> RendererEventInte
     raise ValueError("renderer event_interest must be RendererEventInterest, mapping, callable, or None")
 
 
+def event_route_rules_from_value(value: object) -> tuple[EventRouteRule, ...]:
+    if value is None:
+        return ()
+    if not isinstance(value, Sequence) or isinstance(value, str | bytes):
+        raise ValueError("event route rules value must be a list")
+    rules = []
+    for item in value:
+        if isinstance(item, EventRouteRule):
+            rules.append(item)
+        elif isinstance(item, Mapping):
+            rules.append(EventRouteRule.from_mapping(item))
+        else:
+            raise ValueError("event route rule must be an object")
+    return tuple(rules)
+
+
 def renderer_event_interest_from_value(value: object) -> RendererEventInterest | None:
     if value is None:
         return None
@@ -550,6 +581,7 @@ __all__ = [
     "StreamBuffer",
     "TimelineWindow",
     "default_stream_bindings",
+    "event_route_rules_from_value",
     "renderer_event_interest_from_renderer",
     "renderer_event_interest_from_value",
     "stream_buffer_mutations",

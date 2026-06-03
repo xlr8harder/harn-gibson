@@ -27,7 +27,9 @@ from harn_gibson.rendering import (
 )
 from harn_gibson.routing import (
     EventRouter,
+    EventRouteRule,
     RendererEventInterest,
+    event_route_rules_from_value,
     renderer_event_interest_from_renderer,
     renderer_event_interest_from_value,
 )
@@ -171,11 +173,26 @@ def run_server(host: str = "127.0.0.1", port: int = 8765) -> None:  # pragma: no
 
 def build_state_from_env(env: dict[str, str] | None = None) -> GibsonServerState:
     source = environ if env is None else env
+    renderer_interest = renderer_interest_from_env(source.get("HARN_GIBSON_RENDERER_INTEREST"))
     return GibsonServerState(
-        renderer_interest=renderer_interest_from_env(source.get("HARN_GIBSON_RENDERER_INTEREST")),
+        router=EventRouter(route_rules=route_rules_from_env(source.get("HARN_GIBSON_ROUTE_RULES"))),
+        renderer_interest=renderer_interest,
         render_mode=coerce_render_mode(source.get("HARN_GIBSON_RENDER_MODE")),
         render_batch_window_ms=coerce_batch_window_ms(source.get("HARN_GIBSON_RENDER_BATCH_MS")),
     )
+
+
+def route_rules_from_env(value: str | None) -> tuple[EventRouteRule, ...]:
+    if not value:
+        return ()
+    try:
+        payload = json.loads(value)
+    except json.JSONDecodeError as error:
+        raise ValueError("HARN_GIBSON_ROUTE_RULES must be a JSON list") from error
+    try:
+        return event_route_rules_from_value(payload)
+    except ValueError as error:
+        raise ValueError(f"HARN_GIBSON_ROUTE_RULES invalid: {error}") from error
 
 
 def renderer_interest_from_env(value: str | None) -> RendererEventInterest | None:
@@ -1162,6 +1179,7 @@ __all__ = [
     "make_handler",
     "publish_diagnostic_event",
     "renderer_interest_from_env",
+    "route_rules_from_env",
     "run_server",
     "submit_event_to_renderer",
 ]

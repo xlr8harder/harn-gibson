@@ -83,6 +83,17 @@ The same shape is accepted as JSON in `HARN_GIBSON_RENDERER_INTEREST` for dogfoo
 }
 ```
 
+Explicit route rules have higher precedence than renderer interest and are useful for keeping diagnostics or low-value lifecycle events local during dogfood runs:
+
+```json
+[
+  {"eventType": "runtime_error", "route": "debug_only", "reason": "keep diagnostics local"},
+  {"eventType": "model_select", "route": "drop", "reason": "sample model chatter"}
+]
+```
+
+The same list is accepted as JSON in `HARN_GIBSON_ROUTE_RULES`.
+
 ## Context Strategy
 
 The renderer agent should not receive a full new transcript on every event. Use a rolling context:

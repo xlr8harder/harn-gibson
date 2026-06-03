@@ -91,6 +91,12 @@ Renderer event interest can also be narrowed with JSON. Events outside the inter
 HARN_GIBSON_RENDERER_INTEREST='{"eventTypes":["tool_call","tool_result"],"fallbackRoute":"direct_scene"}'
 ```
 
+Specific event types can be forced to renderer, direct scene, debug-only, or drop routes:
+
+```bash
+HARN_GIBSON_ROUTE_RULES='[{"eventType":"runtime_error","route":"debug_only"},{"eventType":"model_select","route":"drop"}]'
+```
+
 For offline inspection, write normalized events to JSONL:
 
 ```bash
@@ -105,6 +111,11 @@ uv run harn-gibson replay examples/replays/stream-and-diagnostic.json \
   --output-scene test-artifacts/replays/scene.json \
   --output-result test-artifacts/replays/result.json \
   --screenshot test-artifacts/replays/scene.png
+
+uv run harn-gibson replay examples/replays/renderer-plan.json \
+  --output-scene test-artifacts/replays/renderer-scene.json \
+  --output-result test-artifacts/replays/renderer-result.json \
+  --screenshot test-artifacts/replays/renderer-scene.png
 ```
 
 ## Browser Tests

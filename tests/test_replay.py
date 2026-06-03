@@ -19,6 +19,9 @@ from harn_gibson.replay import (
 from harn_gibson.scene import SceneMutation
 from harn_gibson.server import GibsonServerState
 
+ROOT = Path(__file__).resolve().parents[1]
+EXAMPLE_REPLAYS = ROOT / "examples" / "replays"
+
 
 def event_payload(
     sequence: int = 1,
@@ -84,6 +87,22 @@ def test_replay_event_steps_file_io_and_writers(tmp_path: Path) -> None:
 
     assert json.loads(scene_path.read_text(encoding="utf-8"))["revision"] == 2
     assert json.loads(result_path.read_text(encoding="utf-8"))["name"] == "event replay"
+
+
+def test_checked_in_replay_fixtures_cover_agent_and_renderer_sides() -> None:
+    agent_result = run_replay_file(EXAMPLE_REPLAYS / "stream-and-diagnostic.json")
+    renderer_result = run_replay_file(EXAMPLE_REPLAYS / "renderer-plan.json")
+
+    assert [step.kind for step in agent_result.steps] == ["event", "event", "mutations"]
+    assert agent_result.steps[1].route == "stream_buffer"
+    assert agent_result.scene.primitives["assistant-stream"].props["text"] == "collecting event telemetry..."
+    assert agent_result.scene.primitives["trace-log"].props["text"][0]["eventType"] == "runtime_error"
+
+    assert [step.kind for step in renderer_result.steps] == ["render_plan"]
+    assert renderer_result.steps[0].route == "saved_renderer_plan"
+    assert renderer_result.steps[0].updates == 2
+    assert renderer_result.scene.primitives["status"].props["text"] == "renderer:coverage locked"
+    assert renderer_result.scene.primitives["decision-log"].props["text"][0]["renderer"] == "fixture"
 
 
 def test_replay_raw_events_render_plans_and_mutations() -> None:

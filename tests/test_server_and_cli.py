@@ -34,6 +34,7 @@ from harn_gibson.server import (
     health_payload,
     publish_diagnostic_event,
     renderer_interest_from_env,
+    route_rules_from_env,
     submit_event_to_renderer,
 )
 
@@ -475,7 +476,7 @@ def test_build_state_from_env() -> None:
 
 
 def test_renderer_interest_from_env_and_build_state() -> None:
-    payload = json.dumps(
+    interest_payload = json.dumps(
         {
             "eventTypes": ["tool_call"],
             "phases": ["before"],
@@ -483,15 +484,40 @@ def test_renderer_interest_from_env_and_build_state() -> None:
             "reason": "dogfood renderer scope",
         }
     )
-    interest = renderer_interest_from_env(payload)
-    state = build_state_from_env({"HARN_GIBSON_RENDERER_INTEREST": payload})
+    rules_payload = json.dumps(
+        [
+            {
+                "eventType": "runtime_error",
+                "route": "debug_only",
+                "reason": "local diagnostics",
+            },
+            {
+                "eventType": "model_select",
+                "route": "drop",
+            },
+        ]
+    )
+    interest = renderer_interest_from_env(interest_payload)
+    route_rules = route_rules_from_env(rules_payload)
+    state = build_state_from_env(
+        {
+            "HARN_GIBSON_RENDERER_INTEREST": interest_payload,
+            "HARN_GIBSON_ROUTE_RULES": rules_payload,
+        }
+    )
 
     assert renderer_interest_from_env(None) is None
     assert renderer_interest_from_env("") is None
+    assert route_rules_from_env(None) == ()
+    assert route_rules_from_env("") == ()
     assert interest is not None
     assert interest.event_types == ("tool_call",)
     assert interest.fallback_route == "drop"
+    assert route_rules[0].event_type == "runtime_error"
+    assert route_rules[0].route == "debug_only"
+    assert route_rules[1].reason == "drop route rule"
     assert state.router.renderer_interest == interest
+    assert state.router.route_rules["runtime_error"] == route_rules[0]
 
     for value, message in (
         ("{", "JSON object"),
@@ -500,6 +526,18 @@ def test_renderer_interest_from_env_and_build_state() -> None:
     ):
         try:
             renderer_interest_from_env(value)
+        except ValueError as error:
+            assert message in str(error)
+        else:
+            raise AssertionError("expected ValueError")
+
+    for value, message in (
+        ("{", "JSON list"),
+        (json.dumps({"eventType": "x", "route": "drop"}), "invalid"),
+        (json.dumps([{"eventType": "x", "route": "stream_buffer"}]), "unsupported"),
+    ):
+        try:
+            route_rules_from_env(value)
         except ValueError as error:
             assert message in str(error)
         else:

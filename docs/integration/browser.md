@@ -23,6 +23,11 @@ uv run harn-gibson replay examples/replays/stream-and-diagnostic.json \
   --output-scene test-artifacts/replays/scene.json \
   --output-result test-artifacts/replays/result.json \
   --screenshot test-artifacts/replays/scene.png
+
+uv run harn-gibson replay examples/replays/renderer-plan.json \
+  --output-scene test-artifacts/replays/renderer-scene.json \
+  --output-result test-artifacts/replays/renderer-result.json \
+  --screenshot test-artifacts/replays/renderer-scene.png
 ```
 
 The integration test verifies:

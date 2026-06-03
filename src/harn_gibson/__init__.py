@@ -21,6 +21,7 @@ from harn_gibson.routing import (
     RouteDecision,
     StreamBinding,
     TimelineWindow,
+    event_route_rules_from_value,
     renderer_event_interest_from_renderer,
     renderer_event_interest_from_value,
 )
@@ -66,6 +67,7 @@ __all__ = [
     "capture_scene_screenshot",
     "default_mutations_for_event",
     "default_visual_catalog",
+    "event_route_rules_from_value",
     "initial_scene",
     "load_hook_module",
     "phase_for_event",
