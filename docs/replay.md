@@ -65,6 +65,22 @@ The command exits with status `1` if any fixture fails to load, replay, satisfy 
 
 Use `--style gibson`, `--style neon-noir`, or `--style mainframe` to render replay scenes through a specific style pack. Styled runs put the style pack in scene metadata and browser screenshots, so use a matching baseline directory if the style affects expected final scene state.
 
+Replay does not use ambient `HARN_GIBSON_RENDERER_COMMAND` or `HARN_GIBSON_RENDERER_MODEL_COMMAND` values by default. That keeps baseline verification deterministic even when a dogfood shell has renderer environment configured. To intentionally exercise renderer adapters offline, pass explicit flags to `replay` or `replay-dir`:
+
+```bash
+uv run harn-gibson replay examples/replays/stream-and-diagnostic.json \
+  --renderer-model-command 'uv run python examples/renderers/gibson_prompt_echo_renderer.py' \
+  --renderer-model-timeout-ms 10000 \
+  --output-render-prompts test-artifacts/replays/prompts.json \
+  --output-scene test-artifacts/replays/model-scene.json
+
+uv run harn-gibson replay-dir examples/replays \
+  --renderer-command 'uv run python examples/renderers/gibson_echo_renderer.py' \
+  --renderer-timeout-ms 10000
+```
+
+The model command receives `harn-gibson.model-renderer-request.v1`; the external command receives `harn-gibson.external-renderer-request.v1`. Returned plans still go through the same validation, diagnostics, fail-open fallback, and final-scene expectation checks as live dogfood rendering.
+
 ## Baseline Review
 
 Replay baselines are canonical final-scene snapshots. They compare the visual state that renderers leave behind, including primitives, animations, event logs, and render-intent history. Absolute render-intent start/end timestamps are normalized out of baselines; duration, effects, targets, routes, and metadata remain comparable.

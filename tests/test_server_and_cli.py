@@ -11,6 +11,7 @@ from typing import Any
 
 from harn_gibson import (
     BrowserScreenshotResult,
+    DeterministicSceneRenderer,
     EventRouter,
     EventRouteRule,
     ExternalRenderer,
@@ -652,6 +653,10 @@ def test_cli_parser_and_run(monkeypatch: Any, capsys: Any) -> None:
             "600",
             "--style",
             "mainframe",
+            "--renderer-model-command",
+            '["python", "model-renderer.py"]',
+            "--renderer-model-timeout-ms",
+            "2500",
         ]
     )
     assert parsed_replay.command == "replay"
@@ -670,6 +675,8 @@ def test_cli_parser_and_run(monkeypatch: Any, capsys: Any) -> None:
     assert parsed_replay.screenshot_width == 800
     assert parsed_replay.screenshot_height == 600
     assert parsed_replay.style == "mainframe"
+    assert parsed_replay.renderer_model_command == '["python", "model-renderer.py"]'
+    assert parsed_replay.renderer_model_timeout_ms == "2500"
     parsed_replay_dir = parser.parse_args(
         [
             "replay-dir",
@@ -686,6 +693,10 @@ def test_cli_parser_and_run(monkeypatch: Any, capsys: Any) -> None:
             "baselines",
             "--style",
             "neon-noir",
+            "--renderer-command",
+            "python renderer.py",
+            "--renderer-timeout-ms",
+            "1500",
             "--update-baselines",
         ]
     )
@@ -697,6 +708,8 @@ def test_cli_parser_and_run(monkeypatch: Any, capsys: Any) -> None:
     assert parsed_replay_dir.screenshot_height == 768
     assert parsed_replay_dir.baseline_dir == "baselines"
     assert parsed_replay_dir.style == "neon-noir"
+    assert parsed_replay_dir.renderer_command == "python renderer.py"
+    assert parsed_replay_dir.renderer_timeout_ms == "1500"
     assert parsed_replay_dir.update_baselines is True
     parsed_event_log = parser.parse_args(
         ["event-log-to-replay", "events.jsonl", "--output", "fixture.json", "--name", "captured"]
@@ -717,6 +730,56 @@ def test_cli_parser_and_run(monkeypatch: Any, capsys: Any) -> None:
     assert cli.run(["serve", "--host", "0.0.0.0", "--port", "9999", "--style", "mainframe"]) == 0
     assert cli.run([]) == 0
     assert calls == [("0.0.0.0", 9999, "mainframe"), ("127.0.0.1", 8765, None)]
+
+
+def test_cli_replay_renderer_env_helpers(monkeypatch: Any) -> None:
+    parser = cli.build_parser()
+    monkeypatch.setenv("HARN_GIBSON_RENDERER_COMMAND", "python ambient-renderer.py")
+    deterministic = parser.parse_args(["replay", "fixture.json"])
+    external_no_timeout = parser.parse_args(["replay", "fixture.json", "--renderer-command", "python renderer.py"])
+    external_with_timeout = parser.parse_args(
+        ["replay", "fixture.json", "--renderer-command", "python renderer.py", "--renderer-timeout-ms", "1500"]
+    )
+    model_shared_timeout = parser.parse_args(
+        ["replay", "fixture.json", "--renderer-model-command", "python model.py", "--renderer-timeout-ms", "2500"]
+    )
+    model_specific_timeout = parser.parse_args(
+        [
+            "replay",
+            "fixture.json",
+            "--renderer-model-command",
+            "python model.py",
+            "--renderer-model-timeout-ms",
+            "3500",
+        ]
+    )
+    default_state = cli._replay_state_from_args(deterministic)
+    try:
+        assert isinstance(default_state.renderer, DeterministicSceneRenderer)
+    finally:
+        default_state.pipeline.stop()
+    state = cli._replay_state_from_args(external_no_timeout)
+    try:
+        assert isinstance(state.renderer, ExternalRenderer)
+        assert state.style_pack.id == "gibson"
+    finally:
+        state.pipeline.stop()
+
+    assert cli._explicit_replay_renderer_env_from_args(external_no_timeout) == {
+        "HARN_GIBSON_RENDERER_COMMAND": "python renderer.py"
+    }
+    assert cli._explicit_replay_renderer_env_from_args(external_with_timeout) == {
+        "HARN_GIBSON_RENDERER_COMMAND": "python renderer.py",
+        "HARN_GIBSON_RENDERER_TIMEOUT_MS": "1500",
+    }
+    assert cli._explicit_replay_renderer_env_from_args(model_shared_timeout) == {
+        "HARN_GIBSON_RENDERER_MODEL_COMMAND": "python model.py",
+        "HARN_GIBSON_RENDERER_TIMEOUT_MS": "2500",
+    }
+    assert cli._explicit_replay_renderer_env_from_args(model_specific_timeout) == {
+        "HARN_GIBSON_RENDERER_MODEL_COMMAND": "python model.py",
+        "HARN_GIBSON_RENDERER_MODEL_TIMEOUT_MS": "3500",
+    }
 
 
 def test_cli_replay_writes_outputs(tmp_path: Any, capsys: Any) -> None:
@@ -1074,6 +1137,90 @@ def test_cli_replay_reports_expectation_failures(tmp_path: Any, capsys: Any) -> 
     ]
 
 
+def test_cli_replay_can_use_model_renderer_command(tmp_path: Any, capsys: Any) -> None:
+    script = tmp_path / "model_renderer.py"
+    replay_path = tmp_path / "replay.json"
+    scene_path = tmp_path / "scene.json"
+    script.write_text(
+        """
+import json
+import sys
+
+payload = json.load(sys.stdin)
+assert payload["schema"] == "harn-gibson.model-renderer-request.v1"
+assert payload["metadata"]["renderer"] == "model-command"
+assert payload["metadata"]["prompt"]["schema"] == "harn-gibson.renderer-prompt.v1"
+json.dump(
+    {
+        "metadata": {"intent": "cli model replay"},
+        "steps": [
+            {
+                "eventIndex": 0,
+                "mutations": [
+                    {
+                        "op": "patch",
+                        "targetId": "status",
+                        "props": {"text": "model:replay", "tone": "magenta"},
+                    }
+                ],
+            }
+        ],
+    },
+    sys.stdout,
+)
+""".lstrip(),
+        encoding="utf-8",
+    )
+    event = {
+        "sequence": 1,
+        "timestampMs": 10,
+        "source": "test",
+        "eventType": "tool_call",
+        "phase": "before",
+        "title": "Tool call",
+        "summary": "running pytest",
+        "payload": {"type": "tool_call", "toolName": "pytest"},
+    }
+    replay_path.write_text(
+        json.dumps(
+            {
+                "steps": [{"type": "event", "event": event}],
+                "expect": {
+                    "sceneRevision": 1,
+                    "checks": [
+                        {"path": "metadata.displayStyle", "equals": "mainframe"},
+                        {"path": "primitives.status.props.text", "equals": "model:replay"},
+                    ],
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    assert (
+        cli.run(
+            [
+                "replay",
+                str(replay_path),
+                "--renderer-model-command",
+                json.dumps([sys.executable, str(script)]),
+                "--renderer-model-timeout-ms",
+                "2000",
+                "--style",
+                "mainframe",
+                "--output-scene",
+                str(scene_path),
+            ]
+        )
+        == 0
+    )
+
+    scene = json.loads(scene_path.read_text(encoding="utf-8"))
+    assert scene["metadata"]["displayStyle"] == "mainframe"
+    assert scene["primitives"]["status"]["props"]["text"] == "model:replay"
+    assert capsys.readouterr().out.splitlines() == ["replayed 1 steps; scene revision 1"]
+
+
 def test_cli_replay_dir_writes_suite_result(tmp_path: Any, monkeypatch: Any, capsys: Any) -> None:
     replay_dir = tmp_path / "replays"
     output = tmp_path / "out" / "suite.json"
@@ -1142,6 +1289,92 @@ def test_cli_replay_dir_writes_suite_result_without_screenshots(tmp_path: Any, c
     assert cli.run(["replay-dir", str(replay_dir)]) == 0
     assert capsys.readouterr().out.splitlines() == [
         "ok ok.json: 1 steps, revision 0",
+        "replayed 1 replay files; 0 failed",
+    ]
+
+
+def test_cli_replay_dir_can_use_external_renderer_command(tmp_path: Any, capsys: Any) -> None:
+    replay_dir = tmp_path / "replays"
+    output = tmp_path / "suite.json"
+    script = tmp_path / "renderer.py"
+    replay_dir.mkdir()
+    script.write_text(
+        """
+import json
+import sys
+
+payload = json.load(sys.stdin)
+request = payload["requests"][-1]["event"]
+assert payload["schema"] == "harn-gibson.external-renderer-request.v1"
+assert payload["context"]["schema"] == "harn-gibson.renderer-context.v1"
+assert payload["scene"]["metadata"]["displayStyle"] == "neon-noir"
+json.dump(
+    {
+        "metadata": {"intent": "cli external replay-dir"},
+        "steps": [
+            {
+                "eventIndex": 0,
+                "mutations": [
+                    {
+                        "op": "patch",
+                        "targetId": "status",
+                        "props": {"text": "external:" + request["eventType"], "tone": "cyan"},
+                    }
+                ],
+            }
+        ],
+    },
+    sys.stdout,
+)
+""".lstrip(),
+        encoding="utf-8",
+    )
+    event = {
+        "sequence": 1,
+        "timestampMs": 10,
+        "source": "test",
+        "eventType": "tool_call",
+        "phase": "before",
+        "title": "Tool call",
+        "summary": "running tests",
+        "payload": {"type": "tool_call", "toolName": "pytest"},
+    }
+    (replay_dir / "ok.json").write_text(
+        json.dumps(
+            {
+                "steps": [{"type": "event", "event": event}],
+                "expect": {
+                    "sceneRevision": 1,
+                    "checks": [{"path": "primitives.status.props.text", "equals": "external:tool_call"}],
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    assert (
+        cli.run(
+            [
+                "replay-dir",
+                str(replay_dir),
+                "--output-result",
+                str(output),
+                "--renderer-command",
+                json.dumps([sys.executable, str(script)]),
+                "--renderer-timeout-ms",
+                "2000",
+                "--style",
+                "neon-noir",
+            ]
+        )
+        == 0
+    )
+
+    suite = json.loads(output.read_text(encoding="utf-8"))
+    assert suite["ok"] is True
+    assert suite["files"][0]["expectations"] == 2
+    assert capsys.readouterr().out.splitlines() == [
+        "ok ok.json: 1 steps, revision 1",
         "replayed 1 replay files; 0 failed",
     ]
 

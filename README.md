@@ -129,6 +129,19 @@ uv run harn-gibson dogfood
 
 `HARN_GIBSON_RENDERER_MODEL_COMMAND` takes precedence over `HARN_GIBSON_RENDERER_COMMAND`. Model-command failures and unsafe model plans use the same fail-open deterministic fallback and trace/debug reporting as external render-plan commands.
 
+Replay is deterministic by default and ignores ambient renderer command environment. To intentionally dogfood renderer adapters against captured sessions or fixture suites, pass explicit replay flags:
+
+```bash
+uv run harn-gibson replay examples/replays/stream-and-diagnostic.json \
+  --renderer-model-command 'uv run python examples/renderers/gibson_prompt_echo_renderer.py' \
+  --renderer-model-timeout-ms 10000 \
+  --output-scene test-artifacts/replays/model-rendered-scene.json
+
+uv run harn-gibson replay-dir examples/replays \
+  --renderer-command 'uv run python examples/renderers/gibson_echo_renderer.py' \
+  --renderer-timeout-ms 10000
+```
+
 For offline inspection, write normalized events to JSONL:
 
 ```bash

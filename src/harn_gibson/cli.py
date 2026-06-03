@@ -61,6 +61,7 @@ def build_parser() -> argparse.ArgumentParser:
     replay.add_argument("--screenshot-width", type=int, default=1280, help="screenshot viewport width")
     replay.add_argument("--screenshot-height", type=int, default=900, help="screenshot viewport height")
     replay.add_argument("--style", choices=style_pack_ids(), default=None, help="display style pack")
+    _add_replay_renderer_arguments(replay)
 
     replay_dir = subcommands.add_parser("replay-dir", help="run every replay JSON fixture under a directory")
     replay_dir.add_argument("path", help="directory or replay JSON file")
@@ -70,6 +71,7 @@ def build_parser() -> argparse.ArgumentParser:
     replay_dir.add_argument("--screenshot-height", type=int, default=900, help="screenshot viewport height")
     replay_dir.add_argument("--baseline-dir", default=None, help="compare final scenes against baselines in this path")
     replay_dir.add_argument("--style", choices=style_pack_ids(), default=None, help="display style pack")
+    _add_replay_renderer_arguments(replay_dir)
     replay_dir.add_argument(
         "--update-baselines",
         action="store_true",
@@ -86,6 +88,60 @@ def build_parser() -> argparse.ArgumentParser:
 
     subcommands.add_parser("extension-path", help="print the harn extension file path")
     return parser
+
+
+def _add_replay_renderer_arguments(parser: argparse.ArgumentParser) -> None:
+    renderer = parser.add_mutually_exclusive_group()
+    renderer.add_argument(
+        "--renderer-command",
+        default=None,
+        help="external renderer command to exercise during replay",
+    )
+    renderer.add_argument(
+        "--renderer-model-command",
+        default=None,
+        help="prompt-command model renderer to exercise during replay",
+    )
+    parser.add_argument(
+        "--renderer-timeout-ms",
+        default=None,
+        help="external renderer timeout in milliseconds; also used by model renderer if no model timeout is set",
+    )
+    parser.add_argument(
+        "--renderer-model-timeout-ms",
+        default=None,
+        help="prompt-command model renderer timeout in milliseconds",
+    )
+
+
+def _replay_state_from_args(args: argparse.Namespace):
+    from harn_gibson.server import GibsonServerState, build_state_from_env
+
+    renderer_env = _explicit_replay_renderer_env_from_args(args)
+    if renderer_env:
+        if getattr(args, "style", None) is not None:
+            renderer_env["HARN_GIBSON_STYLE"] = args.style
+        return build_state_from_env(renderer_env)
+    return GibsonServerState(style_pack=style_pack_from_name(args.style))
+
+
+def _explicit_replay_renderer_env_from_args(args: argparse.Namespace) -> dict[str, str]:
+    renderer_env: dict[str, str] = {}
+    renderer_command = getattr(args, "renderer_command", None)
+    model_command = getattr(args, "renderer_model_command", None)
+    renderer_timeout_ms = getattr(args, "renderer_timeout_ms", None)
+    model_timeout_ms = getattr(args, "renderer_model_timeout_ms", None)
+    if renderer_command:
+        renderer_env["HARN_GIBSON_RENDERER_COMMAND"] = renderer_command
+        if renderer_timeout_ms is not None:
+            renderer_env["HARN_GIBSON_RENDERER_TIMEOUT_MS"] = str(renderer_timeout_ms)
+    if model_command:
+        renderer_env["HARN_GIBSON_RENDERER_MODEL_COMMAND"] = model_command
+        if renderer_timeout_ms is not None:
+            renderer_env["HARN_GIBSON_RENDERER_TIMEOUT_MS"] = str(renderer_timeout_ms)
+        if model_timeout_ms is not None:
+            renderer_env["HARN_GIBSON_RENDERER_MODEL_TIMEOUT_MS"] = str(model_timeout_ms)
+    return renderer_env
 
 
 def run_dogfood(
@@ -213,88 +269,93 @@ def run(argv: Sequence[str] | None = None) -> int:
             write_replay_timeline,
             write_scene,
         )
-        from harn_gibson.server import GibsonServerState
 
-        replay_state = GibsonServerState(style_pack=style_pack_from_name(args.style))
+        replay_state = _replay_state_from_args(args)
         try:
-            result = run_replay_file(
-                args.path,
-                replay_state,
-                capture_frames=bool(args.output_timeline or args.timeline_screenshot_dir or args.review_dir),
-                capture_renderer_contexts=bool(
-                    args.output_render_contexts
-                    or args.output_render_prompts
-                    or args.render_prompt_review
-                    or args.review_dir
-                ),
-            )
-        except ReplayExpectationError as error:
-            for failure in error.failures:
-                print(f"replay expectation failed: {failure.message}", file=sys.stderr)
-            return 1
-        if args.output_scene:
-            write_scene(args.output_scene, result.scene)
-        if args.output_result:
-            write_replay_result(args.output_result, result)
-        if args.output_timeline:
-            write_replay_timeline(args.output_timeline, result)
-        if args.output_render_contexts:
-            write_replay_renderer_contexts(args.output_render_contexts, result)
-        if args.output_render_prompts:
-            write_replay_renderer_prompts(args.output_render_prompts, result)
-        if args.render_prompt_review:
-            write_replay_renderer_prompts_review_html(
-                args.render_prompt_review,
-                replay_renderer_prompts_from_result(result),
-            )
-        if args.output_render_intents:
-            write_replay_render_intents(args.output_render_intents, result)
-        if args.render_intent_review:
-            write_replay_render_intents_review_html(
-                args.render_intent_review,
-                replay_render_intents_from_result(result),
-            )
-        if args.timeline_screenshot_dir:
-            screenshots = capture_replay_frame_screenshots(
-                result,
-                args.timeline_screenshot_dir,
-                width=args.screenshot_width,
-                height=args.screenshot_height,
-            )
-            screenshot_manifest = replay_frame_screenshot_manifest(result, screenshots)
-            write_replay_frame_screenshot_manifest(
-                Path(args.timeline_screenshot_dir) / "manifest.json",
-                result,
-                screenshots,
-            )
-            write_replay_frame_review_html(
-                Path(args.timeline_screenshot_dir) / "index.html",
-                screenshot_manifest,
-            )
-            print(f"captured replay timeline screenshots: {args.timeline_screenshot_dir} ({len(screenshots)} frames)")
-        if args.review_dir:
-            review_screenshots = capture_replay_frame_screenshots(
-                result,
-                Path(args.review_dir) / "frames",
-                width=args.screenshot_width,
-                height=args.screenshot_height,
-            )
-            write_replay_review_bundle(args.review_dir, result, review_screenshots)
-            print(f"wrote replay review bundle: {args.review_dir} ({len(review_screenshots)} frames)")
-        if args.screenshot:
-            from harn_gibson.browser_capture import capture_scene_screenshot
+            try:
+                result = run_replay_file(
+                    args.path,
+                    replay_state,
+                    capture_frames=bool(args.output_timeline or args.timeline_screenshot_dir or args.review_dir),
+                    capture_renderer_contexts=bool(
+                        args.output_render_contexts
+                        or args.output_render_prompts
+                        or args.render_prompt_review
+                        or args.review_dir
+                    ),
+                )
+            except ReplayExpectationError as error:
+                for failure in error.failures:
+                    print(f"replay expectation failed: {failure.message}", file=sys.stderr)
+                return 1
+            if args.output_scene:
+                write_scene(args.output_scene, result.scene)
+            if args.output_result:
+                write_replay_result(args.output_result, result)
+            if args.output_timeline:
+                write_replay_timeline(args.output_timeline, result)
+            if args.output_render_contexts:
+                write_replay_renderer_contexts(args.output_render_contexts, result)
+            if args.output_render_prompts:
+                write_replay_renderer_prompts(args.output_render_prompts, result)
+            if args.render_prompt_review:
+                write_replay_renderer_prompts_review_html(
+                    args.render_prompt_review,
+                    replay_renderer_prompts_from_result(result),
+                )
+            if args.output_render_intents:
+                write_replay_render_intents(args.output_render_intents, result)
+            if args.render_intent_review:
+                write_replay_render_intents_review_html(
+                    args.render_intent_review,
+                    replay_render_intents_from_result(result),
+                )
+            if args.timeline_screenshot_dir:
+                screenshots = capture_replay_frame_screenshots(
+                    result,
+                    args.timeline_screenshot_dir,
+                    width=args.screenshot_width,
+                    height=args.screenshot_height,
+                )
+                screenshot_manifest = replay_frame_screenshot_manifest(result, screenshots)
+                write_replay_frame_screenshot_manifest(
+                    Path(args.timeline_screenshot_dir) / "manifest.json",
+                    result,
+                    screenshots,
+                )
+                write_replay_frame_review_html(
+                    Path(args.timeline_screenshot_dir) / "index.html",
+                    screenshot_manifest,
+                )
+                print(
+                    f"captured replay timeline screenshots: {args.timeline_screenshot_dir} "
+                    f"({len(screenshots)} frames)"
+                )
+            if args.review_dir:
+                review_screenshots = capture_replay_frame_screenshots(
+                    result,
+                    Path(args.review_dir) / "frames",
+                    width=args.screenshot_width,
+                    height=args.screenshot_height,
+                )
+                write_replay_review_bundle(args.review_dir, result, review_screenshots)
+                print(f"wrote replay review bundle: {args.review_dir} ({len(review_screenshots)} frames)")
+            if args.screenshot:
+                from harn_gibson.browser_capture import capture_scene_screenshot
 
-            screenshot = capture_scene_screenshot(
-                replay_state,
-                args.screenshot,
-                width=args.screenshot_width,
-                height=args.screenshot_height,
+                screenshot = capture_scene_screenshot(
+                    replay_state,
+                    args.screenshot,
+                    width=args.screenshot_width,
+                    height=args.screenshot_height,
+                )
+                print(f"captured replay screenshot: {screenshot.path}")
+            print(
+                f"replayed {len(result.steps)} steps; scene revision {result.scene.revision}",
             )
-            print(f"captured replay screenshot: {screenshot.path}")
-        print(
-            f"replayed {len(result.steps)} steps; scene revision {result.scene.revision}",
-        )
-        return 0
+            return 0
+        finally:
+            replay_state.pipeline.stop()
     if args.command == "replay-dir":
         from harn_gibson.replay import run_replay_suite
 
@@ -309,6 +370,9 @@ def run(argv: Sequence[str] | None = None) -> int:
             baseline_dir=args.baseline_dir,
             update_baselines=args.update_baselines,
             style=args.style,
+            state_factory=(
+                (lambda: _replay_state_from_args(args)) if _explicit_replay_renderer_env_from_args(args) else None
+            ),
         )
         if args.output_result:
             Path(args.output_result).parent.mkdir(parents=True, exist_ok=True)

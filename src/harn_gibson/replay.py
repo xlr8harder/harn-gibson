@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import os
-from collections.abc import Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from copy import deepcopy
 from dataclasses import dataclass, field
 from difflib import unified_diff
@@ -248,6 +248,7 @@ def run_replay_suite(
     baseline_dir: str | Path | None = None,
     update_baselines: bool = False,
     style: str | None = None,
+    state_factory: Callable[[], GibsonServerState] | None = None,
 ) -> ReplaySuiteResult:
     if update_baselines and baseline_dir is None:
         raise ValueError("update_baselines requires baseline_dir")
@@ -258,7 +259,7 @@ def run_replay_suite(
     style_pack = style_pack_from_name(style)
     results = []
     for replay_file in files:
-        state = GibsonServerState(style_pack=style_pack)
+        state = state_factory() if state_factory is not None else GibsonServerState(style_pack=style_pack)
         result: ReplayResult | None = None
         baseline = None
         try:
