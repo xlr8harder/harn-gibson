@@ -85,7 +85,11 @@ Render mode is configurable:
 ```bash
 HARN_GIBSON_RENDER_MODE=blocking  # default
 HARN_GIBSON_RENDER_MODE=async HARN_GIBSON_RENDER_BATCH_MS=40
+HARN_GIBSON_RENDER_TIMING=immediate  # default
+HARN_GIBSON_RENDER_TIMING=scheduled  # honor render-plan startOffsetMs during playback
 ```
+
+Immediate timing keeps dogfood and replay runs responsive while still honoring explicit `delayMs`. Scheduled timing treats `startOffsetMs` as an absolute offset inside the coalesced render batch, which is useful for async renderer-agent plans that want a 5-10 second visual playback window after harn has already continued.
 
 Renderer event interest can also be narrowed with JSON. Events outside the interest fall back locally instead of going to the renderer:
 

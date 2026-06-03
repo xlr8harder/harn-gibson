@@ -24,8 +24,12 @@ from harn_gibson.rendering import (
     RenderRequest,
     RenderStep,
     RenderSubmitResult,
+    RenderTimingMode,
     TimelineWindow,
+    coerce_render_timing_mode,
     render_intent_from_plan,
+    step_schedule,
+    step_schedule_payload,
 )
 from harn_gibson.replay import (
     ReplayBaselineResult,
@@ -84,6 +88,7 @@ __all__ = [
     "RenderRequest",
     "RenderStep",
     "RenderSubmitResult",
+    "RenderTimingMode",
     "RendererContext",
     "RendererContextBuilder",
     "RendererContextConfig",
@@ -105,6 +110,7 @@ __all__ = [
     "TimelineWindow",
     "VisualCatalog",
     "capture_scene_screenshot",
+    "coerce_render_timing_mode",
     "compare_replay_baseline",
     "default_mutations_for_event",
     "default_visual_catalog",
@@ -130,6 +136,8 @@ __all__ = [
     "run_replay_file",
     "run_replay_suite",
     "scene_update_payload",
+    "step_schedule",
+    "step_schedule_payload",
     "summarize_event",
     "to_jsonable",
 ]

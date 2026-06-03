@@ -29,10 +29,13 @@ from harn_gibson.rendering import (
     RenderSubmitResult,
     coerce_batch_window_ms,
     coerce_render_mode,
+    coerce_render_timing_mode,
     decisions_from_payload,
     render_accept_payload,
     render_intent_from_plan,
     render_update_payload,
+    step_schedule,
+    step_schedule_payload,
 )
 from harn_gibson.scene import SceneAnimation, SceneEngine, SceneMutation, ScenePrimitive
 from harn_gibson.sinks import EventBuffer
@@ -920,9 +923,88 @@ def test_pipeline_validation_empty_and_delayed_steps() -> None:
     assert sleeps == [0.01]
     assert result.updates[0]["renderPlan"]["metadata"] == {"custom": True}
     assert result.updates[0]["renderPlan"]["intent"]["intent"] == "visualize input"
+    assert result.updates[0]["renderPlan"]["stepSchedule"] == {
+        "timingMode": "immediate",
+        "startOffsetMs": 0,
+        "delayMs": 10,
+        "scheduledWaitMs": 10,
+        "appliedOffsetMs": 10,
+    }
+    assert result.updates[1]["renderPlan"]["stepSchedule"]["appliedOffsetMs"] == 10
     assert result.updates[1]["scene"]["revision"] == 1
     with pytest.raises(ValueError, match="render mode"):
         RenderPipeline(scene=SceneEngine(), buffer=EventBuffer(), mode="later")  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="render timing mode"):
+        RenderPipeline(scene=SceneEngine(), buffer=EventBuffer(), timing_mode="later")  # type: ignore[arg-type]
+
+
+def test_pipeline_scheduled_timing_honors_start_offsets() -> None:
+    sleeps: list[float] = []
+
+    class TimelineRenderer:
+        def render(self, requests: tuple[RenderRequest, ...], _scene: object) -> RenderPlan:
+            return RenderPlan(
+                requests,
+                (
+                    RenderStep((SceneMutation("append_log", entry={"step": 0}),), event_index=0),
+                    RenderStep(
+                        (SceneMutation("append_log", entry={"step": 1}),),
+                        start_offset_ms=30,
+                        event_index=0,
+                    ),
+                    RenderStep(
+                        (SceneMutation("append_log", entry={"step": 2}),),
+                        delay_ms=5,
+                        start_offset_ms=20,
+                        event_index=0,
+                    ),
+                ),
+                {"renderer": "timeline"},
+            )
+
+    pipeline = RenderPipeline(
+        scene=SceneEngine(),
+        buffer=EventBuffer(),
+        renderer=TimelineRenderer(),
+        timing_mode="scheduled",
+        sleep_fn=lambda seconds: sleeps.append(seconds),
+    )
+
+    result = pipeline.submit(RenderRequest(event(7)))
+
+    assert sleeps == [0.03, 0.005]
+    assert [entry["step"] for entry in pipeline.scene.state.log] == [0, 1, 2]
+    assert [update["renderPlan"]["stepSchedule"] for update in result.updates] == [
+        {
+            "timingMode": "scheduled",
+            "startOffsetMs": 0,
+            "delayMs": 0,
+            "scheduledWaitMs": 0,
+            "appliedOffsetMs": 0,
+        },
+        {
+            "timingMode": "scheduled",
+            "startOffsetMs": 30,
+            "delayMs": 0,
+            "scheduledWaitMs": 30,
+            "appliedOffsetMs": 30,
+        },
+        {
+            "timingMode": "scheduled",
+            "startOffsetMs": 20,
+            "delayMs": 5,
+            "scheduledWaitMs": 5,
+            "appliedOffsetMs": 35,
+        },
+    ]
+    assert step_schedule(RenderStep((), delay_ms=-1, start_offset_ms=-1), 4, "scheduled") == (0, 4)
+    assert step_schedule_payload(RenderStep((), delay_ms=2, start_offset_ms=3), "scheduled", 1, 5) == {
+        "timingMode": "scheduled",
+        "startOffsetMs": 3,
+        "delayMs": 2,
+        "scheduledWaitMs": 1,
+        "appliedOffsetMs": 5,
+    }
 
 
 def test_pipeline_direct_apply_bypasses_renderer_queue() -> None:
@@ -969,6 +1051,9 @@ def test_render_update_and_coercion_helpers() -> None:
     assert coerce_render_mode("async") == "async"
     assert coerce_render_mode("blocking") == "blocking"
     assert coerce_render_mode(None) == "blocking"
+    assert coerce_render_timing_mode("scheduled") == "scheduled"
+    assert coerce_render_timing_mode("immediate") == "immediate"
+    assert coerce_render_timing_mode(None) == "immediate"
     assert coerce_batch_window_ms(None) == 40
     assert coerce_batch_window_ms("12") == 12
     assert coerce_batch_window_ms("-1") == 0

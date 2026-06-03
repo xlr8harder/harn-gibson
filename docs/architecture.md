@@ -60,6 +60,8 @@ In async mode, the server accepts the event immediately and a background worker 
 
 Immediately before renderer execution, the pipeline normalizes the queued requests into a render-input batch. That gives each request a timeline offset, coalesced count, and batch metadata, and the same render-input envelope is included on published scene updates for replay/debug inspection.
 
+Render-plan playback has two timing modes. Immediate timing is the default and applies steps as soon as the renderer plan is processed, preserving only explicit per-step delays. Scheduled timing treats `RenderStep.startOffsetMs` as an absolute offset within the coalesced batch timeline and publishes step-schedule metadata with each scene update. That gives future renderer agents a way to plan effects across a 5-10 second context window without blocking harn in async mode.
+
 Each applied render plan also records a bounded render-intent history in scene metadata. A render intent summarizes the renderer, requested intent, event types, routes, timeline, effects, targets, and original plan metadata. The browser debug drawer and replay final-scene snapshots expose this history so a future model-backed renderer can preserve visual continuity across turns.
 
 The pipeline also builds a `RendererContext` for renderers that opt into `render_with_context`. The context alternates between full compaction payloads and rolling summaries, combining project metadata, bounded repo topology, touched-file summaries, catalog entries, current scene state, recent agent context, render intents, and recent visualization history without requiring a full transcript on each renderer turn.

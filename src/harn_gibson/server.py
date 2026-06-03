@@ -20,9 +20,11 @@ from harn_gibson.rendering import (
     RenderMode,
     RenderPipeline,
     RenderSubmitResult,
+    RenderTimingMode,
     SceneRenderer,
     coerce_batch_window_ms,
     coerce_render_mode,
+    coerce_render_timing_mode,
     decisions_from_payload,
     render_accept_payload,
 )
@@ -49,6 +51,7 @@ class GibsonServerState:
     renderer_interest: RendererEventInterest | None = None
     render_mode: RenderMode = "blocking"
     render_batch_window_ms: int = 40
+    render_timing_mode: RenderTimingMode = "immediate"
     renderer: SceneRenderer = field(default_factory=DeterministicSceneRenderer)
     pipeline: RenderPipeline = field(init=False)
 
@@ -63,6 +66,7 @@ class GibsonServerState:
             catalog=self.catalog,
             mode=self.render_mode,
             batch_window_ms=self.render_batch_window_ms,
+            timing_mode=self.render_timing_mode,
         )
 
 
@@ -185,6 +189,7 @@ def build_state_from_env(env: dict[str, str] | None = None) -> GibsonServerState
         renderer_interest=renderer_interest,
         render_mode=coerce_render_mode(source.get("HARN_GIBSON_RENDER_MODE")),
         render_batch_window_ms=coerce_batch_window_ms(source.get("HARN_GIBSON_RENDER_BATCH_MS")),
+        render_timing_mode=coerce_render_timing_mode(source.get("HARN_GIBSON_RENDER_TIMING")),
         renderer=renderer or DeterministicSceneRenderer(),
     )
 
@@ -359,6 +364,7 @@ def health_payload(state: GibsonServerState) -> dict[str, Any]:
         "events": len(state.buffer.snapshot()),
         "sceneRevision": state.scene.state.revision,
         "renderMode": state.pipeline.mode,
+        "renderTiming": state.pipeline.timing_mode,
         "pendingRenderJobs": state.pipeline.pending_count(),
         "inputBridge": state.input_bridge.snapshot(pending_inputs=state.inputs.pending_count()),
         "streams": state.router.stream_snapshot(),

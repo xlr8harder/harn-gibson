@@ -94,6 +94,8 @@ If the command exits nonzero, times out, or writes invalid JSON, harn-gibson app
 
 Before the renderer is called, every batch is normalized into the render-input shape. Each `RenderRequest` receives a `timelineOffsetMs`, a `coalescedCount`, and `metadata.renderBatch` with the batch index, batch size, route, and full timeline. Published scene updates also include the same render-input envelope so replay/debug tools can inspect exactly what the renderer saw.
 
+`HARN_GIBSON_RENDER_TIMING=immediate` is the default playback mode. It applies steps as soon as the plan is processed while still honoring explicit per-step `delayMs`. `HARN_GIBSON_RENDER_TIMING=scheduled` treats `startOffsetMs` as an absolute offset within the render-input timeline, then adds `delayMs`. Scheduled mode is most useful with async rendering: harn can continue immediately while the display plays back a coalesced 5-10 second renderer-agent plan over a matching visual interval.
+
 ## Event Interest
 
 A renderer can advertise which normalized events it wants to receive by exposing an `event_interest` attribute. The value may be a `RendererEventInterest`, a mapping with the same fields, or a callable returning either form.

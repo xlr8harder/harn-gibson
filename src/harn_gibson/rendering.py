@@ -25,6 +25,7 @@ from harn_gibson.scene import (
 from harn_gibson.sinks import EventBuffer
 
 RenderMode = Literal["blocking", "async"]
+RenderTimingMode = Literal["immediate", "scheduled"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -357,10 +358,13 @@ class RenderPipeline:
         context_builder: RendererContextBuilder | None = None,
         mode: RenderMode = "blocking",
         batch_window_ms: int = 40,
+        timing_mode: RenderTimingMode = "immediate",
         sleep_fn: Callable[[float], None] = time.sleep,
     ) -> None:
         if mode not in {"blocking", "async"}:
             raise ValueError("render mode must be blocking or async")
+        if timing_mode not in {"immediate", "scheduled"}:
+            raise ValueError("render timing mode must be immediate or scheduled")
         self.scene = scene
         self.buffer = buffer
         self.renderer = renderer or DeterministicSceneRenderer()
@@ -368,6 +372,7 @@ class RenderPipeline:
         self.context_builder = context_builder or RendererContextBuilder()
         self.mode = mode
         self.batch_window_ms = max(0, batch_window_ms)
+        self.timing_mode = timing_mode
         self._sleep = sleep_fn
         self._queue: queue.Queue[RenderRequest | None] = queue.Queue()
         self._worker: threading.Thread | None = None
@@ -466,16 +471,50 @@ class RenderPipeline:
         )
         render_intent = render_intent_from_plan(plan, render_input)
         self.scene.record_render_intent(render_intent)
+        applied_offset_ms = 0
         for index, step in enumerate(plan.steps):
-            if step.delay_ms > 0:
-                self._sleep(step.delay_ms / 1000)
+            wait_ms, applied_offset_ms = step_schedule(step, applied_offset_ms, self.timing_mode)
+            if wait_ms > 0:
+                self._sleep(wait_ms / 1000)
             request = plan.request_for_step(step)
             scene = self.scene.apply(step.mutations)
-            update = render_update_payload(plan, step, index, request, scene, render_input, render_intent)
+            update = render_update_payload(
+                plan,
+                step,
+                index,
+                request,
+                scene,
+                render_input,
+                render_intent,
+                step_schedule=step_schedule_payload(step, self.timing_mode, wait_ms, applied_offset_ms),
+            )
             self.buffer.publish(update)
             updates.append(update)
         self.context_builder.record_plan(plan)
         return updates
+
+
+def step_schedule(step: RenderStep, current_offset_ms: int, timing_mode: RenderTimingMode) -> tuple[int, int]:
+    delay_ms = max(0, step.delay_ms)
+    start_offset_ms = max(0, step.start_offset_ms)
+    scheduled_start_ms = max(current_offset_ms, start_offset_ms) if timing_mode == "scheduled" else current_offset_ms
+    applied_offset_ms = scheduled_start_ms + delay_ms
+    return max(0, applied_offset_ms - current_offset_ms), applied_offset_ms
+
+
+def step_schedule_payload(
+    step: RenderStep,
+    timing_mode: RenderTimingMode,
+    wait_ms: int,
+    applied_offset_ms: int,
+) -> dict[str, Any]:
+    return {
+        "timingMode": timing_mode,
+        "startOffsetMs": step.start_offset_ms,
+        "delayMs": step.delay_ms,
+        "scheduledWaitMs": wait_ms,
+        "appliedOffsetMs": applied_offset_ms,
+    }
 
 
 def _catalog_context(catalog: VisualCatalog, *, full: bool) -> dict[str, Any]:
@@ -1052,6 +1091,7 @@ def render_update_payload(
     scene: SceneState,
     render_input: RenderInputBatch | None = None,
     render_intent: dict[str, Any] | None = None,
+    step_schedule: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     update = scene_update_payload(request.event, step.mutations, scene)
     render_input = render_input or RenderInputBatch.from_requests(plan.requests, route=request.route)
@@ -1064,6 +1104,8 @@ def render_update_payload(
         "intent": render_intent,
         "metadata": plan.metadata,
     }
+    if step_schedule is not None:
+        update["renderPlan"]["stepSchedule"] = step_schedule
     update["renderIntent"] = render_intent
     update["events"] = [current.event.to_dict() for current in plan.requests]
     update["renderInput"] = render_input.to_dict()
@@ -1090,6 +1132,10 @@ def decisions_from_payload(payload: dict[str, Any]) -> tuple[dict[str, Any], ...
 
 def coerce_render_mode(value: str | None) -> RenderMode:
     return "async" if value == "async" else "blocking"
+
+
+def coerce_render_timing_mode(value: str | None) -> RenderTimingMode:
+    return "scheduled" if value == "scheduled" else "immediate"
 
 
 def coerce_batch_window_ms(value: str | None) -> int:
