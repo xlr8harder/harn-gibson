@@ -724,6 +724,10 @@ def test_cli_parser_and_run(monkeypatch: Any, capsys: Any) -> None:
             "768",
             "--baseline-dir",
             "baselines",
+            "--review-dir",
+            "suite-review",
+            "--render-chunk-size",
+            "5",
             "--style",
             "neon-noir",
             "--renderer-command",
@@ -740,6 +744,8 @@ def test_cli_parser_and_run(monkeypatch: Any, capsys: Any) -> None:
     assert parsed_replay_dir.screenshot_width == 1024
     assert parsed_replay_dir.screenshot_height == 768
     assert parsed_replay_dir.baseline_dir == "baselines"
+    assert parsed_replay_dir.review_dir == "suite-review"
+    assert parsed_replay_dir.render_chunk_size == 5
     assert parsed_replay_dir.style == "neon-noir"
     assert parsed_replay_dir.renderer_command == "python renderer.py"
     assert parsed_replay_dir.renderer_timeout_ms == "1500"
@@ -1392,6 +1398,87 @@ def test_cli_replay_dir_writes_suite_result_without_screenshots(tmp_path: Any, c
     assert cli.run(["replay-dir", str(replay_dir)]) == 0
     assert capsys.readouterr().out.splitlines() == [
         "ok ok.json: 1 steps, revision 0",
+        "replayed 1 replay files; 0 failed",
+    ]
+
+
+def test_cli_replay_dir_writes_review_bundle(
+    tmp_path: Any,
+    monkeypatch: Any,
+    capsys: Any,
+) -> None:
+    replay_dir = tmp_path / "replays"
+    review_dir = tmp_path / "suite-review"
+    replay_dir.mkdir()
+    (replay_dir / "ok.json").write_text(
+        json.dumps(
+            {
+                "name": "suite fixture",
+                "steps": [
+                    {
+                        "type": "event",
+                        "event": {
+                            "sequence": 1,
+                            "timestampMs": 10,
+                            "source": "test",
+                            "eventType": "tool_call",
+                            "phase": "before",
+                            "title": "Tool call",
+                            "summary": "bash starting",
+                            "payload": {"type": "tool_call", "toolName": "bash"},
+                        },
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    calls: list[tuple[str, Path, int, int]] = []
+
+    def fake_capture(result: Any, output_dir: str | Path, *, width: int, height: int) -> tuple[Any, ...]:
+        calls.append((result.name, Path(output_dir), width, height))
+        screenshot = BrowserScreenshotResult(
+            Path(output_dir) / "frame-0000.png",
+            "http://127.0.0.1:1",
+            result.frames[0].scene["revision"],
+            width,
+            height,
+            {"nonblank": True},
+        )
+        return (ReplayFrameScreenshot(0, result.steps[0], screenshot.to_dict()),)
+
+    monkeypatch.setattr("harn_gibson.replay.capture_replay_frame_screenshots", fake_capture)
+
+    assert (
+        cli.run(
+            [
+                "replay-dir",
+                str(replay_dir),
+                "--review-dir",
+                str(review_dir),
+                "--screenshot-width",
+                "400",
+                "--screenshot-height",
+                "300",
+                "--render-chunk-size",
+                "2",
+            ]
+        )
+        == 0
+    )
+
+    manifest = json.loads((review_dir / "manifest.json").read_text(encoding="utf-8"))
+    assert calls == [("suite fixture", review_dir / "files" / "ok" / "frames", 400, 300)]
+    assert manifest["schema"] == "harn-gibson.replay-suite-review.v1"
+    assert manifest["total"] == 1
+    assert manifest["failed"] == 0
+    assert manifest["renderChunkSize"] == 2
+    assert manifest["files"][0]["review"] == "files/ok/index.html"
+    assert (review_dir / "index.html").exists()
+    assert (review_dir / "files" / "ok" / "renderer-chunks.html").exists()
+    assert capsys.readouterr().out.splitlines() == [
+        f"wrote replay suite review bundle: {review_dir} (1 files, 0 failed)",
+        "ok ok.json: 1 steps, revision 1",
         "replayed 1 replay files; 0 failed",
     ]
 

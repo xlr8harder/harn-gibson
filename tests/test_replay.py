@@ -20,6 +20,8 @@ from harn_gibson import (
     replay_render_intents_review_html,
     replay_review_bundle_index_html,
     replay_review_bundle_manifest,
+    replay_suite_review_bundle_manifest,
+    replay_suite_review_index_html,
     replay_timeline_from_result,
     run_replay_data,
     run_replay_file,
@@ -64,6 +66,7 @@ from harn_gibson.replay import (
     write_replay_renderer_prompts_review_html,
     write_replay_result,
     write_replay_review_bundle,
+    write_replay_suite_review_bundle,
     write_replay_timeline,
     write_scene,
 )
@@ -520,6 +523,204 @@ def test_replay_event_steps_file_io_and_writers(tmp_path: Path, monkeypatch: pyt
     assert 'src=""' in relative_html
     assert manifest["schema"] == "harn-gibson.replay-frame-screenshots.v1"
     assert manifest["frames"][1]["screenshot"]["canvasMetrics"] == {"nonblank": True}
+
+
+def test_replay_suite_review_bundle(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    replay_dir = tmp_path / "split"
+    replay_dir.mkdir()
+    review_dir = tmp_path / "suite-review"
+    replay_dir.joinpath("manifest.json").write_text(
+        json.dumps(
+            {
+                "schema": "harn-gibson.event-log-split.v1",
+                "captureSummary": {
+                    "durationMs": 4200,
+                    "eventTypes": ["tool_call"],
+                    "phases": ["before"],
+                    "sources": ["capture"],
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    replay_dir.joinpath("chunk-0001.json").write_text(
+        json.dumps(
+            {
+                "name": "chunk one",
+                "metadata": {
+                    "eventLogChunk": {
+                        "chunkIndex": 1,
+                        "chunkCount": 2,
+                        "eventsPerFixture": 1,
+                        "startEventOffset": 0,
+                        "endEventOffset": 0,
+                        "totalEventCount": 2,
+                    },
+                    "captureSummary": {
+                        "durationMs": 0,
+                        "eventTypes": ["tool_call"],
+                        "phases": ["before"],
+                        "sources": ["capture"],
+                    },
+                },
+                "steps": [{"type": "event", "event": event_payload(1, "tool_call", {"toolName": "bash"})}],
+            }
+        ),
+        encoding="utf-8",
+    )
+    replay_dir.joinpath("chunk-0002.json").write_text(
+        json.dumps({"name": "bad chunk", "steps": [], "expect": {"sceneRevision": 1}}),
+        encoding="utf-8",
+    )
+    replay_dir.joinpath("chunk-0003.json").write_text("[not-json", encoding="utf-8")
+    calls: list[tuple[str, int, int, int]] = []
+
+    def fake_capture(
+        result: ReplayResult,
+        output_dir: str | Path,
+        *,
+        width: int,
+        height: int,
+    ) -> tuple[ReplayFrameScreenshot, ...]:
+        calls.append((result.name, len(result.frames), width, height))
+        return tuple(
+            ReplayFrameScreenshot(
+                frame.index,
+                frame.step,
+                BrowserScreenshotResult(
+                    Path(output_dir) / f"frame-{frame.index:04d}.png",
+                    "http://127.0.0.1:1",
+                    frame.scene["revision"],
+                    width,
+                    height,
+                    {"nonblank": True},
+                ).to_dict(),
+            )
+            for frame in result.frames
+        )
+
+    monkeypatch.setattr("harn_gibson.replay.capture_replay_frame_screenshots", fake_capture)
+
+    suite_manifest = write_replay_suite_review_bundle(
+        review_dir,
+        replay_dir,
+        screenshot_width=320,
+        screenshot_height=240,
+        render_chunk_size=2,
+    )
+    html = (review_dir / "index.html").read_text(encoding="utf-8")
+    manifest_file = json.loads((review_dir / "manifest.json").read_text(encoding="utf-8"))
+
+    assert calls == [("chunk one", 1, 320, 240)]
+    assert suite_manifest["schema"] == "harn-gibson.replay-suite-review.v1"
+    assert suite_manifest["ok"] is False
+    assert suite_manifest["total"] == 3
+    assert suite_manifest["failed"] == 2
+    assert suite_manifest["renderChunkSize"] == 2
+    assert suite_manifest["captureSummary"]["durationMs"] == 4200
+    assert suite_manifest["splitManifest"]["schema"] == "harn-gibson.event-log-split.v1"
+    assert suite_manifest["files"][0]["path"] == "chunk-0001.json"
+    assert suite_manifest["files"][0]["ok"] is True
+    assert suite_manifest["files"][0]["review"] == "files/chunk-0001/index.html"
+    assert suite_manifest["files"][0]["eventLogChunk"]["chunkIndex"] == 1
+    assert suite_manifest["files"][0]["screenshotCount"] == 1
+    assert suite_manifest["files"][1]["path"] == "chunk-0002.json"
+    assert suite_manifest["files"][1]["ok"] is False
+    assert "replay expectations failed" in suite_manifest["files"][1]["error"]
+    assert suite_manifest["files"][2]["path"] == "chunk-0003.json"
+    assert suite_manifest["files"][2]["ok"] is False
+    assert "Expecting value" in suite_manifest["files"][2]["error"]
+    assert manifest_file == suite_manifest
+    assert (review_dir / "files" / "chunk-0001" / "index.html").exists()
+    assert (review_dir / "files" / "chunk-0001" / "frames" / "manifest.json").exists()
+    assert "replay suite review" in html
+    assert "chunk-0001.json" in html
+    assert "files/chunk-0001/index.html" in html
+    assert "chunk-0002.json" in html
+    assert "captured duration" in html
+    assert "4200 ms" in html
+    assert "window.__gibsonReplaySuiteReview" in html
+
+
+def test_replay_suite_review_bundle_fallbacks(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    replay_path = tmp_path / "single.json"
+    replay_path.write_text(
+        json.dumps({"name": "single", "steps": [{"type": "mutations", "mutations": []}]}),
+        encoding="utf-8",
+    )
+    invalid_manifest_dir = tmp_path / "invalid-manifest"
+    invalid_manifest_dir.mkdir()
+    invalid_manifest_dir.joinpath("manifest.json").write_text("{", encoding="utf-8")
+    invalid_manifest_dir.joinpath("ok.json").write_text(
+        json.dumps({"name": "invalid manifest fixture", "steps": [{"type": "mutations", "mutations": []}]}),
+        encoding="utf-8",
+    )
+    wrong_manifest_dir = tmp_path / "wrong-manifest"
+    wrong_manifest_dir.mkdir()
+    wrong_manifest_dir.joinpath("manifest.json").write_text(json.dumps({"schema": "wrong"}), encoding="utf-8")
+    wrong_manifest_dir.joinpath("ok.json").write_text(
+        json.dumps({"name": "wrong manifest fixture", "steps": [{"type": "mutations", "mutations": []}]}),
+        encoding="utf-8",
+    )
+
+    def fake_capture(
+        result: ReplayResult,
+        output_dir: str | Path,
+        *,
+        width: int,
+        height: int,
+    ) -> tuple[ReplayFrameScreenshot, ...]:
+        return tuple(
+            ReplayFrameScreenshot(
+                frame.index,
+                frame.step,
+                BrowserScreenshotResult(
+                    Path(output_dir) / f"frame-{frame.index:04d}.png",
+                    "http://127.0.0.1:1",
+                    frame.scene["revision"],
+                    width,
+                    height,
+                    {"nonblank": True},
+                ).to_dict(),
+            )
+            for frame in result.frames
+        )
+
+    monkeypatch.setattr("harn_gibson.replay.capture_replay_frame_screenshots", fake_capture)
+
+    single_manifest = write_replay_suite_review_bundle(tmp_path / "single-review", replay_path)
+    invalid_manifest = write_replay_suite_review_bundle(tmp_path / "invalid-review", invalid_manifest_dir)
+    wrong_manifest = write_replay_suite_review_bundle(tmp_path / "wrong-review", wrong_manifest_dir)
+    empty_index = replay_suite_review_index_html(replay_suite_review_bundle_manifest(tmp_path, []))
+    malformed_summary_manifest = replay_suite_review_bundle_manifest(
+        tmp_path,
+        [],
+        split_manifest={"schema": "harn-gibson.event-log-split.v1", "captureSummary": "bad"},
+    )
+    sparse_index = replay_suite_review_index_html(
+        {
+            "files": "bad",
+            "captureSummary": {
+                "durationMs": "bad",
+                "eventTypes": "bad",
+                "phases": [],
+                "sources": [None, ""],
+            },
+        }
+    )
+
+    assert single_manifest["files"][0]["path"] == "single.json"
+    assert single_manifest["files"][0]["review"] == "files/single/index.html"
+    assert "splitManifest" not in single_manifest
+    assert "splitManifest" not in invalid_manifest
+    assert "splitManifest" not in wrong_manifest
+    assert malformed_summary_manifest["splitManifest"]["captureSummary"] == "bad"
+    assert "captureSummary" not in malformed_summary_manifest
+    assert "No replay files were reviewed" in empty_index
+    assert "captured duration" not in sparse_index
+    assert "captured event types" not in sparse_index
+    assert "captured phases" not in sparse_index
+    assert "captured sources" not in sparse_index
 
 
 def test_replay_data_from_event_log(tmp_path: Path) -> None:

@@ -858,6 +858,12 @@ def _suite_screenshot_path(root: Path, path: Path, screenshot_root: Path) -> Pat
     return screenshot_root / relative_path.with_suffix(".png")
 
 
+def _suite_review_relative_path(root: Path, path: Path) -> str:
+    if root.is_dir():
+        return path.relative_to(root).as_posix()
+    return Path(path.name).as_posix()
+
+
 def _suite_baseline_path(root: Path, path: Path, baseline_root: Path) -> Path:
     if root.is_dir():
         relative_path = path.relative_to(root)
@@ -1921,6 +1927,180 @@ def write_replay_review_bundle(
     return manifest
 
 
+def write_replay_suite_review_bundle(
+    path: str | Path,
+    replay_path: str | Path,
+    *,
+    screenshot_width: int = 1280,
+    screenshot_height: int = 900,
+    render_chunk_size: int = 4,
+    style: str | None = None,
+    state_factory: Callable[[], GibsonServerState] | None = None,
+) -> dict[str, Any]:
+    review_path = Path(path)
+    root = Path(replay_path)
+    review_path.mkdir(parents=True, exist_ok=True)
+    files = discover_replay_files(root)
+    style_pack = style_pack_from_name(style)
+    entries: list[dict[str, Any]] = []
+    for replay_file in files:
+        relative_path = _suite_review_relative_path(root, replay_file)
+        bundle_dir = review_path / "files" / Path(relative_path).with_suffix("")
+        state = state_factory() if state_factory is not None else GibsonServerState(style_pack=style_pack)
+        try:
+            result = run_replay_file(
+                replay_file,
+                state,
+                capture_frames=True,
+                capture_renderer_contexts=True,
+            )
+            screenshots = capture_replay_frame_screenshots(
+                result,
+                bundle_dir / "frames",
+                width=screenshot_width,
+                height=screenshot_height,
+            )
+            bundle_manifest = write_replay_review_bundle(
+                bundle_dir,
+                result,
+                screenshots,
+                render_chunk_size=render_chunk_size,
+            )
+            entries.append(_replay_suite_review_entry(review_path, relative_path, bundle_dir, bundle_manifest))
+        except ReplayExpectationError as error:
+            entries.append(
+                {
+                    "path": relative_path,
+                    "ok": False,
+                    "error": str(error),
+                    "expectationFailures": [failure.to_dict() for failure in error.failures],
+                }
+            )
+        except Exception as error:
+            entries.append({"path": relative_path, "ok": False, "error": str(error)})
+        finally:
+            state.pipeline.stop()
+    manifest = replay_suite_review_bundle_manifest(
+        root,
+        entries,
+        render_chunk_size=render_chunk_size,
+        split_manifest=_load_split_manifest(root),
+    )
+    (review_path / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+    (review_path / "index.html").write_text(replay_suite_review_index_html(manifest), encoding="utf-8")
+    return manifest
+
+
+def replay_suite_review_bundle_manifest(
+    root: str | Path,
+    entries: Sequence[Mapping[str, Any]],
+    *,
+    render_chunk_size: int = 4,
+    split_manifest: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    rendered_entries = [dict(entry) for entry in entries]
+    failed = sum(1 for entry in rendered_entries if not entry.get("ok"))
+    manifest: dict[str, Any] = {
+        "schema": "harn-gibson.replay-suite-review.v1",
+        "root": Path(root).as_posix(),
+        "ok": failed == 0,
+        "total": len(rendered_entries),
+        "failed": failed,
+        "renderChunkSize": render_chunk_size,
+        "artifacts": {"overview": "index.html", "manifest": "manifest.json", "files": "files/"},
+        "files": rendered_entries,
+    }
+    if isinstance(split_manifest, Mapping):
+        manifest["splitManifest"] = dict(split_manifest)
+        capture_summary = split_manifest.get("captureSummary")
+        if isinstance(capture_summary, Mapping):
+            manifest["captureSummary"] = dict(capture_summary)
+    return manifest
+
+
+def replay_suite_review_index_html(manifest: Mapping[str, Any]) -> str:
+    root = str(manifest.get("root") or "replay suite")
+    schema = escape(str(manifest.get("schema", "")))
+    metrics = "\n".join(
+        _replay_review_metric(label, value) for label, value in _replay_suite_review_metric_items(manifest)
+    )
+    cards = "\n".join(_replay_suite_review_file_card(file) for file in _replay_suite_review_files(manifest))
+    if not cards:
+        cards = '      <section class="empty">No replay files were reviewed.</section>'
+    manifest_data = _html_script_json(manifest)
+    return f"""<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{escape(root)} replay suite review</title>
+  <style>
+    :root {{ color-scheme: dark; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }}
+    body {{ margin: 0; background: #020608; color: #d9fff7; }}
+    header {{
+      padding: 20px 22px;
+      border-bottom: 1px solid rgba(35, 255, 214, 0.32);
+      background: rgba(2, 6, 8, 0.94);
+    }}
+    h1 {{ margin: 0 0 7px; font-size: 23px; letter-spacing: 0; overflow-wrap: anywhere; }}
+    .meta {{ color: #7ee8d0; font-size: 13px; }}
+    main {{ display: grid; gap: 22px; padding: 20px; }}
+    .metrics {{
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 12px;
+    }}
+    .metric {{
+      border: 1px solid rgba(35, 255, 214, 0.28);
+      background: rgba(5, 16, 19, 0.88);
+      padding: 14px;
+    }}
+    .metric strong {{ display: block; color: #ffcf63; font-size: 24px; line-height: 1; overflow-wrap: anywhere; }}
+    .metric span {{ display: block; margin-top: 7px; color: #b8fff3; font-size: 12px; text-transform: uppercase; }}
+    .files {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; }}
+    article {{
+      display: grid;
+      gap: 10px;
+      border: 1px solid rgba(35, 255, 214, 0.28);
+      background: rgba(5, 16, 19, 0.88);
+      padding: 14px;
+    }}
+    article[data-ok="false"] {{ border-color: rgba(255, 95, 157, 0.48); }}
+    h2 {{ margin: 0; color: #ffcf63; font-size: 14px; letter-spacing: 0; overflow-wrap: anywhere; }}
+    .summary {{ color: #b8fff3; font-size: 12px; line-height: 1.45; }}
+    a {{ color: #d9fff7; text-decoration: none; overflow-wrap: anywhere; }}
+    a:hover {{ color: #ffcf63; }}
+    code {{ color: #ffcf63; }}
+    .error {{ color: #ff5f9d; font-size: 12px; overflow-wrap: anywhere; }}
+    .empty {{
+      border: 1px solid rgba(255, 207, 99, 0.30);
+      padding: 18px;
+      color: #ffcf63;
+      background: rgba(6, 12, 14, 0.86);
+    }}
+  </style>
+</head>
+<body>
+  <header>
+    <h1>{escape(root)} replay suite review</h1>
+    <div class="meta">schema {schema}</div>
+  </header>
+  <main>
+    <section class="metrics" aria-label="Replay suite metrics">
+{metrics}
+    </section>
+    <section class="files" aria-label="Reviewed replay files">
+{cards}
+    </section>
+  </main>
+  <script>
+    window.__gibsonReplaySuiteReview = {manifest_data};
+  </script>
+</body>
+</html>
+"""
+
+
 def _baseline_mismatch_error(expected_scene: Mapping[str, Any], actual_scene: Mapping[str, Any]) -> str:
     expected = json.dumps(expected_scene, indent=2, sort_keys=True).splitlines()
     actual = json.dumps(actual_scene, indent=2, sort_keys=True).splitlines()
@@ -1958,6 +2138,136 @@ def _replay_review_artifacts(value: Any) -> tuple[tuple[str, str], ...]:
 
 def _replay_review_artifact_link(label: str, href: str) -> str:
     return f'      <a href="{escape(href)}">{escape(label)}<br><code>{escape(href)}</code></a>'
+
+
+def _replay_suite_review_entry(
+    review_path: Path,
+    relative_path: str,
+    bundle_dir: Path,
+    bundle_manifest: Mapping[str, Any],
+) -> dict[str, Any]:
+    bundle_index = _relative_artifact_path(review_path, bundle_dir / "index.html")
+    entry: dict[str, Any] = {
+        "path": relative_path,
+        "ok": True,
+        "review": bundle_index,
+        "manifest": _relative_artifact_path(review_path, bundle_dir / "manifest.json"),
+        "stepCount": bundle_manifest.get("stepCount", 0),
+        "sceneRevision": bundle_manifest.get("sceneRevision", 0),
+        "frameCount": bundle_manifest.get("frameCount", 0),
+        "screenshotCount": bundle_manifest.get("screenshotCount", 0),
+        "contextCount": bundle_manifest.get("contextCount", 0),
+        "intentCount": bundle_manifest.get("intentCount", 0),
+        "promptCount": bundle_manifest.get("promptCount", 0),
+        "chunkCount": bundle_manifest.get("chunkCount", 0),
+    }
+    metadata = bundle_manifest.get("metadata")
+    if isinstance(metadata, Mapping) and isinstance(metadata.get("eventLogChunk"), Mapping):
+        entry["eventLogChunk"] = dict(metadata["eventLogChunk"])
+    capture_summary = bundle_manifest.get("captureSummary")
+    if isinstance(capture_summary, Mapping):
+        entry["captureSummary"] = dict(capture_summary)
+    return entry
+
+
+def _load_split_manifest(root: Path) -> dict[str, Any] | None:
+    if not root.is_dir():
+        return None
+    manifest_path = root / "manifest.json"
+    if not manifest_path.exists():
+        return None
+    try:
+        payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    if not isinstance(payload, dict) or payload.get("schema") != "harn-gibson.event-log-split.v1":
+        return None
+    return payload
+
+
+def _relative_artifact_path(root: Path, path: Path) -> str:
+    return os.path.relpath(path, root).replace(os.sep, "/")
+
+
+def _replay_suite_review_metric_items(manifest: Mapping[str, Any]) -> tuple[tuple[str, Any], ...]:
+    items: list[tuple[str, Any]] = [
+        ("files", manifest.get("total", 0)),
+        ("failed", manifest.get("failed", 0)),
+        ("renderer chunk size", manifest.get("renderChunkSize", 0)),
+    ]
+    files = _replay_suite_review_files(manifest)
+    items.extend(
+        [
+            ("steps", sum(_int_value(file.get("stepCount")) for file in files)),
+            ("frames", sum(_int_value(file.get("frameCount")) for file in files)),
+            ("screenshots", sum(_int_value(file.get("screenshotCount")) for file in files)),
+            ("renderer contexts", sum(_int_value(file.get("contextCount")) for file in files)),
+            ("render intents", sum(_int_value(file.get("intentCount")) for file in files)),
+            ("renderer prompts", sum(_int_value(file.get("promptCount")) for file in files)),
+        ]
+    )
+    capture_summary = manifest.get("captureSummary")
+    if isinstance(capture_summary, Mapping):
+        duration_ms = capture_summary.get("durationMs")
+        if isinstance(duration_ms, int | float):
+            items.append(("captured duration", f"{duration_ms} ms"))
+        event_types = _joined_summary_values(capture_summary.get("eventTypes"))
+        if event_types:
+            items.append(("captured event types", event_types))
+        phases = _joined_summary_values(capture_summary.get("phases"))
+        if phases:
+            items.append(("captured phases", phases))
+        sources = _joined_summary_values(capture_summary.get("sources"))
+        if sources:
+            items.append(("captured sources", sources))
+    return tuple(items)
+
+
+def _replay_suite_review_files(manifest: Mapping[str, Any]) -> tuple[Mapping[str, Any], ...]:
+    files = manifest.get("files")
+    if not isinstance(files, list):
+        return ()
+    return tuple(file for file in files if isinstance(file, Mapping))
+
+
+def _replay_suite_review_file_card(file: Mapping[str, Any]) -> str:
+    path = str(file.get("path") or "unknown replay")
+    ok = bool(file.get("ok"))
+    href = file.get("review")
+    link = (
+        f'<a href="{escape(str(href))}">Open Review<br><code>{escape(str(href))}</code></a>'
+        if isinstance(href, str) and href
+        else ""
+    )
+    error = str(file.get("error") or "")
+    error_html = f'      <div class="error">{escape(error)}</div>' if error else ""
+    chunk = file.get("eventLogChunk")
+    chunk_text = ""
+    if isinstance(chunk, Mapping):
+        chunk_text = (
+            f"chunk {escape(str(chunk.get('chunkIndex', '?')))} / {escape(str(chunk.get('chunkCount', '?')))} "
+            f"&middot; offsets {escape(str(chunk.get('startEventOffset', '?')))}-"
+            f"{escape(str(chunk.get('endEventOffset', '?')))}"
+        )
+    summary_parts = [
+        f"steps {escape(str(file.get('stepCount', 0)))}",
+        f"frames {escape(str(file.get('frameCount', 0)))}",
+        f"contexts {escape(str(file.get('contextCount', 0)))}",
+        f"prompts {escape(str(file.get('promptCount', 0)))}",
+    ]
+    if chunk_text:
+        summary_parts.append(chunk_text)
+    summary = " / ".join(summary_parts)
+    return f"""      <article data-ok="{str(ok).lower()}">
+        <h2>{escape(path)}</h2>
+        <div class="summary">{summary}</div>
+{error_html}
+        {link}
+      </article>"""
+
+
+def _int_value(value: Any) -> int:
+    return value if isinstance(value, int) else 0
 
 
 def _renderer_context_chunk_payload(index: int, contexts: tuple[ReplayRendererContext, ...]) -> dict[str, Any]:
@@ -2364,6 +2674,8 @@ __all__ = [
     "replay_render_intents_review_html",
     "replay_review_bundle_index_html",
     "replay_review_bundle_manifest",
+    "replay_suite_review_bundle_manifest",
+    "replay_suite_review_index_html",
     "replay_timeline_from_result",
     "run_replay_data",
     "run_replay_file",
@@ -2380,6 +2692,7 @@ __all__ = [
     "write_replay_render_intents",
     "write_replay_render_intents_review_html",
     "write_replay_review_bundle",
+    "write_replay_suite_review_bundle",
     "write_replay_timeline",
     "write_replay_baseline",
     "write_scene",

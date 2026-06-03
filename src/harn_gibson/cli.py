@@ -104,6 +104,8 @@ def build_parser() -> argparse.ArgumentParser:
     replay_dir.add_argument("--screenshot-width", type=int, default=1280, help="screenshot viewport width")
     replay_dir.add_argument("--screenshot-height", type=int, default=900, help="screenshot viewport height")
     replay_dir.add_argument("--baseline-dir", default=None, help="compare final scenes against baselines in this path")
+    replay_dir.add_argument("--review-dir", default=None, help="write a complete replay suite review bundle directory")
+    replay_dir.add_argument("--render-chunk-size", type=int, default=4, help="renderer contexts per review chunk")
     replay_dir.add_argument("--style", choices=style_pack_ids(), default=None, help="display style pack")
     _add_replay_renderer_arguments(replay_dir)
     replay_dir.add_argument(
@@ -522,11 +524,14 @@ def run(argv: Sequence[str] | None = None) -> int:
         finally:
             replay_state.pipeline.stop()
     if args.command == "replay-dir":
-        from harn_gibson.replay import run_replay_suite
+        from harn_gibson.replay import run_replay_suite, write_replay_suite_review_bundle
 
         if args.update_baselines and args.baseline_dir is None:
             print("--update-baselines requires --baseline-dir", file=sys.stderr)
             return 2
+        state_factory = (
+            (lambda: _replay_state_from_args(args)) if _explicit_replay_renderer_env_from_args(args) else None
+        )
         result = run_replay_suite(
             args.path,
             screenshot_dir=args.screenshot_dir,
@@ -535,13 +540,25 @@ def run(argv: Sequence[str] | None = None) -> int:
             baseline_dir=args.baseline_dir,
             update_baselines=args.update_baselines,
             style=args.style,
-            state_factory=(
-                (lambda: _replay_state_from_args(args)) if _explicit_replay_renderer_env_from_args(args) else None
-            ),
+            state_factory=state_factory,
         )
         if args.output_result:
             Path(args.output_result).parent.mkdir(parents=True, exist_ok=True)
             Path(args.output_result).write_text(json.dumps(result.to_dict(), indent=2) + "\n", encoding="utf-8")
+        if args.review_dir:
+            review_manifest = write_replay_suite_review_bundle(
+                args.review_dir,
+                args.path,
+                screenshot_width=args.screenshot_width,
+                screenshot_height=args.screenshot_height,
+                render_chunk_size=args.render_chunk_size,
+                style=args.style,
+                state_factory=state_factory,
+            )
+            print(
+                f"wrote replay suite review bundle: {args.review_dir} "
+                f"({review_manifest['total']} files, {review_manifest['failed']} failed)"
+            )
         for file_result in result.files:
             if file_result.ok:
                 line = f"ok {file_result.path}: {file_result.steps} steps, revision {file_result.scene_revision}"

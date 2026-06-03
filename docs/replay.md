@@ -70,10 +70,11 @@ Split mode writes `manifest.json` plus numbered replay fixtures such as `capture
 
 ```bash
 uv run harn-gibson replay-dir test-artifacts/replays/captured-session-split \
-  --screenshot-dir test-artifacts/replays/captured-session-split-screenshots
+  --screenshot-dir test-artifacts/replays/captured-session-split-screenshots \
+  --review-dir test-artifacts/replays/captured-session-split-review
 ```
 
-`replay-dir` skips `manifest.json` metadata files, so split fixture directories can be replayed directly.
+`replay-dir` skips `manifest.json` metadata files, so split fixture directories can be replayed directly. `--review-dir` creates `harn-gibson.replay-suite-review.v1`: a top-level `manifest.json` and `index.html` with aggregate metrics, split capture summary, per-fixture status, and links into one complete review bundle per replay fixture under `files/`.
 
 ## Expectations
 
@@ -171,6 +172,8 @@ uv run harn-gibson replay examples/replays/stream-and-diagnostic.json \
 Screenshot result metadata includes `canvasMetrics` with canvas dimensions, sampled pixel count, luminance total, lit-pixel count, lit ratio, maximum channel total, and a `nonblank` boolean. This makes replay screenshot artifacts reviewable in CI output even before a human opens the PNG. Checked-in fixtures use conservative `screenshotExpect` thresholds so browser rendering can fail fast if a fixture becomes blank or severely underlit.
 
 `--review-dir` is the fastest historical-session review path. It captures renderer contexts and per-step frames automatically, renders timeline screenshots under `frames/`, and writes `scene.json`, `result.json`, `timeline.json`, `renderer-contexts.json`, `renderer-prompts.json`, `renderer-chunks.json`, `renderer-chunks.html`, `renderer-prompts.html`, `render-intents.json`, `render-intents.html`, `frames/index.html`, `frames/manifest.json`, `manifest.json`, and a top-level `index.html` overview. Use the lower-level flags below when CI only needs one artifact family.
+
+`replay-dir --review-dir` applies the same review-bundle generation to every replay file in a directory. This is the preferred review path for split long captures: the suite overview records aggregate counts and links to each chunk's frame player, prompts, renderer chunks, render intents, final scene, and raw result JSON.
 
 `--output-render-contexts` records each `harn-gibson.renderer-context.v1` payload that replay sent to a renderer. Stream-buffer, debug-only, direct-scene, and saved-render-plan steps do not invent renderer contexts; the artifact is an exact review aid for model-renderer prompt inputs, compaction cadence, repo topology, touched-file extraction, and render-input batching.
 

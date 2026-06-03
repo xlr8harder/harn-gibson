@@ -182,10 +182,11 @@ uv run harn-gibson event-log-to-replay .harn-gibson.jsonl \
   --visual-fixture
 
 uv run harn-gibson replay-dir test-artifacts/replays/captured-session-split \
-  --screenshot-dir test-artifacts/replays/captured-session-split-screenshots
+  --screenshot-dir test-artifacts/replays/captured-session-split-screenshots \
+  --review-dir test-artifacts/replays/captured-session-split-review
 ```
 
-Split conversion writes one fixture per chunk plus `manifest.json`. `replay-dir` skips that manifest and replays the chunk fixtures directly.
+Split conversion writes one fixture per chunk plus `manifest.json`. `replay-dir` skips that manifest and replays the chunk fixtures directly. `--review-dir` writes one complete per-chunk review bundle under `files/` plus a top-level suite overview that links the chunk frame players, renderer contexts, prompts, chunks, and render-intent reviews.
 
 Replay fixtures can drive the same scene pipeline without a live harn process:
 
