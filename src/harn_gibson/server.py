@@ -1174,6 +1174,7 @@ function drawScenePrimitives(scene, w, h, now) {
     "particle_field",
     "mesh",
     "city_block",
+    "hologram",
     "svg_layer",
     "ribbon",
     "node_graph",
@@ -1189,6 +1190,7 @@ function drawScenePrimitives(scene, w, h, now) {
 function drawPrimitive(primitive, w, h, now) {
   if (primitive.kind === "mesh") drawMesh(primitive, w, h, now);
   if (primitive.kind === "city_block") drawCityBlock(primitive, w, h);
+  if (primitive.kind === "hologram") drawHologram(primitive, w, h, now);
   if (primitive.kind === "svg_layer") drawSvgLayer(primitive, w, h, now);
   if (primitive.kind === "node_graph") drawNodeGraph(primitive, w, h);
   if (primitive.kind === "ribbon") drawRibbon(primitive, w, h, now);
@@ -1467,6 +1469,155 @@ function drawCityBlock(primitive, w, h) {
       ctx.fillText(String(block.label).slice(0, 14), x + bw * 0.5, y - bh - bd * 0.16);
     }
   }
+  ctx.restore();
+}
+
+function drawHologram(primitive, w, h, now) {
+  const props = primitive.props || {};
+  const center = normalizedPoint(props.position || {x: 0.52, y: 0.48}, w, h);
+  const scale = Math.max(0.04, Math.min(0.72, finiteNumber(props.scale, 0.18))) * Math.min(w, h);
+  const tone = props.tone || "cyan";
+  const accentTone = props.accentTone || props.accent || "magenta";
+  const opacity = clamp(finiteNumber(props.opacity, 0.82), 0, 1);
+  const ringCount = Math.max(1, Math.min(9, Math.floor(finiteNumber(props.rings, 5))));
+  const beamCount = Math.max(0, Math.min(16, Math.floor(finiteNumber(props.beams, 5))));
+  const panelCount = Math.max(0, Math.min(12, Math.floor(finiteNumber(props.panels, 3))));
+  const moteCount = Math.max(0, Math.min(80, Math.floor(finiteNumber(props.motes, 18))));
+  const spin = finiteNumber(props.spin, 0.42);
+  const seed = finiteNumber(props.seed, 0);
+  const phase = now * 0.00028 * spin + seed * 0.017;
+  const scanEnabled = props.scan !== false;
+
+  if (typeof window !== "undefined") {
+    window.__gibsonHologramState = window.__gibsonHologramState || {};
+    window.__gibsonHologramState[primitive.id] = {
+      ringCount,
+      beamCount,
+      panelCount,
+      moteCount,
+      tone,
+      accentTone,
+      hasScan: scanEnabled,
+    };
+  }
+
+  ctx.save();
+  ctx.globalCompositeOperation = props.blend === "source-over" ? "source-over" : "screen";
+  ctx.globalAlpha *= opacity;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.translate(center.x, center.y);
+  ctx.shadowColor = toneColor(tone, 0.74);
+  ctx.shadowBlur = 18 * devicePixelRatio;
+
+  const baseRadius = scale * 0.58;
+  for (let index = ringCount - 1; index >= 0; index--) {
+    const depth = index / Math.max(1, ringCount - 1);
+    const radius = baseRadius * (0.34 + depth * 0.86);
+    const y = scale * (0.28 - depth * 0.18);
+    const alpha = 0.18 + (1 - depth) * 0.34;
+    ctx.save();
+    ctx.rotate(phase * (index % 2 ? -0.7 : 0.9) + index * 0.18);
+    ctx.lineWidth = Math.max(0.8, (1.15 - depth * 0.45) * devicePixelRatio);
+    ctx.strokeStyle = toneColor(index % 2 ? accentTone : tone, alpha);
+    ctx.beginPath();
+    ctx.ellipse(0, y, radius, Math.max(3 * devicePixelRatio, radius * 0.22), 0, 0, Math.PI * 2);
+    ctx.stroke();
+    if (index % 2 === 0) {
+      ctx.setLineDash([8 * devicePixelRatio, 9 * devicePixelRatio]);
+      ctx.lineDashOffset = -now * 0.026 * spin;
+      ctx.strokeStyle = toneColor("white", alpha * 0.56);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    ctx.restore();
+  }
+
+  for (let beam = 0; beam < beamCount; beam++) {
+    const angle = phase + (beam / Math.max(1, beamCount)) * Math.PI * 2;
+    const spread = 0.35 + seededUnit(seed + beam * 3.7) * 0.65;
+    const top = {
+      x: Math.cos(angle) * baseRadius * spread,
+      y: -scale * (0.82 + seededUnit(seed + beam) * 0.18),
+    };
+    const bottom = {
+      x: Math.cos(angle + 0.22) * baseRadius * (0.18 + spread * 0.18),
+      y: scale * 0.42,
+    };
+    ctx.strokeStyle = toneColor(beam % 3 === 0 ? accentTone : tone, 0.12 + seededUnit(seed + beam * 9.1) * 0.16);
+    ctx.lineWidth = Math.max(0.4, 0.9 * devicePixelRatio);
+    ctx.beginPath();
+    ctx.moveTo(bottom.x, bottom.y);
+    ctx.lineTo(top.x, top.y);
+    ctx.stroke();
+  }
+
+  for (let panel = 0; panel < panelCount; panel++) {
+    const panelPhase = phase * 1.4 + panel * 1.17;
+    const x = Math.cos(panelPhase) * baseRadius * 0.86;
+    const y = -scale * 0.38 + Math.sin(panelPhase * 0.73) * scale * 0.18;
+    const width = scale * (0.18 + seededUnit(seed + panel * 5.5) * 0.15);
+    const height = scale * (0.11 + seededUnit(seed + panel * 7.1) * 0.09);
+    const tilt = Math.sin(panelPhase) * 0.22;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(tilt);
+    ctx.fillStyle = toneColor(panel % 2 ? tone : accentTone, 0.055);
+    ctx.strokeStyle = toneColor(panel % 2 ? tone : accentTone, 0.46);
+    ctx.lineWidth = Math.max(0.5, 0.85 * devicePixelRatio);
+    ctx.fillRect(-width * 0.5, -height * 0.5, width, height);
+    ctx.strokeRect(-width * 0.5, -height * 0.5, width, height);
+    ctx.strokeStyle = toneColor("white", 0.32);
+    ctx.beginPath();
+    ctx.moveTo(-width * 0.38, 0);
+    ctx.lineTo(width * 0.38, 0);
+    ctx.moveTo(0, -height * 0.32);
+    ctx.lineTo(0, height * 0.32);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  for (let mote = 0; mote < moteCount; mote++) {
+    const orbit = phase * (0.9 + seededUnit(seed + mote) * 1.6) + mote * 0.77;
+    const radius = baseRadius * (0.18 + seededUnit(seed + mote * 2.3) * 1.04);
+    const x = Math.cos(orbit) * radius;
+    const y = Math.sin(orbit * 0.72) * radius * 0.34 - scale * 0.08;
+    const alpha = 0.22 + seededUnit(seed + mote * 4.1) * 0.46;
+    ctx.fillStyle = toneColor(mote % 5 === 0 ? "white" : tone, alpha);
+    ctx.beginPath();
+    ctx.arc(x, y, (0.9 + seededUnit(seed + mote * 8.2) * 1.9) * devicePixelRatio, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  if (scanEnabled) {
+    const scanProgress = (now * 0.00022 * Math.max(0.1, Math.abs(spin)) + seed * 0.031) % 1;
+    const y = -scale * 0.72 + scanProgress * scale * 1.34;
+    const gradient = ctx.createLinearGradient(-baseRadius, y, baseRadius, y);
+    gradient.addColorStop(0, toneColor(accentTone, 0));
+    gradient.addColorStop(0.5, toneColor(accentTone, 0.42));
+    gradient.addColorStop(1, toneColor(accentTone, 0));
+    ctx.fillStyle = gradient;
+    ctx.fillRect(-baseRadius, y - 2.5 * devicePixelRatio, baseRadius * 2, 5 * devicePixelRatio);
+  }
+
+  ctx.strokeStyle = toneColor(tone, 0.62);
+  ctx.lineWidth = Math.max(1, 1.1 * devicePixelRatio);
+  ctx.beginPath();
+  ctx.moveTo(-baseRadius * 0.35, scale * 0.58);
+  ctx.lineTo(baseRadius * 0.35, scale * 0.58);
+  ctx.moveTo(0, scale * 0.58);
+  ctx.lineTo(0, scale * 0.78);
+  ctx.stroke();
+
+  if (props.label) {
+    ctx.font = `${Math.max(9, scale * 0.085)}px ui-monospace, monospace`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = toneColor("white", 0.86);
+    ctx.shadowBlur = 8 * devicePixelRatio;
+    ctx.fillText(String(props.label).slice(0, 18), 0, -scale * 0.92);
+  }
+
   ctx.restore();
 }
 

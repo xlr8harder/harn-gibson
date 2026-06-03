@@ -230,7 +230,7 @@ def test_render_plan_validation_reports_scene_and_catalog_issues() -> None:
                         "upsert",
                         primitive=ScenePrimitive(
                             "unknown-primitive",
-                            "hologram",
+                            "neural_mist",
                             "void",
                             {"density": 2},
                         ),
@@ -527,7 +527,7 @@ json.dump(
                         "op": "upsert",
                         "primitive": {
                             "id": "unknown-toy",
-                            "kind": "hologram",
+                            "kind": "neural_mist",
                             "region": "stage",
                             "props": {"tone": "cyan"},
                         },
@@ -555,7 +555,7 @@ json.dump(
     assert diagnostics["warningCount"] == 1
     assert diagnostics["issues"][0]["code"] == "unsupported_primitive_kind"
     assert plan.steps[0].mutations[0].primitive is not None
-    assert plan.steps[0].mutations[0].primitive.kind == "hologram"
+    assert plan.steps[0].mutations[0].primitive.kind == "neural_mist"
 
 
 def test_external_renderer_failures_become_trace_state(tmp_path: Path) -> None:

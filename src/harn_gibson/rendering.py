@@ -51,6 +51,7 @@ _BROWSER_PRIMITIVE_KINDS = frozenset(
         "text_stream",
         "mesh",
         "city_block",
+        "hologram",
         "svg_layer",
         "node_graph",
         "ribbon",

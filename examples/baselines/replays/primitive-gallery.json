@@ -34,6 +34,7 @@
         "effects": [
           "patch",
           "append_log",
+          "primitive:hologram",
           "primitive:mesh",
           "primitive:svg_layer",
           "primitive:city_block",
@@ -53,7 +54,7 @@
           "renderer": "replay",
           "stepType": "mutations"
         },
-        "mutationCount": 12,
+        "mutationCount": 13,
         "renderer": "replay",
         "requestCount": 1,
         "routes": [
@@ -63,6 +64,7 @@
         "stepCount": 1,
         "targets": [
           "status",
+          "gallery-hologram",
           "gallery-mesh",
           "gallery-vector",
           "gallery-city",
@@ -82,6 +84,7 @@
           "effects": [
             "patch",
             "append_log",
+            "primitive:hologram",
             "primitive:mesh",
             "primitive:svg_layer",
             "primitive:city_block",
@@ -101,7 +104,7 @@
             "renderer": "replay",
             "stepType": "mutations"
           },
-          "mutationCount": 12,
+          "mutationCount": 13,
           "renderer": "replay",
           "requestCount": 1,
           "routes": [
@@ -111,6 +114,7 @@
           "stepCount": 1,
           "targets": [
             "status",
+            "gallery-hologram",
             "gallery-mesh",
             "gallery-vector",
             "gallery-city",
@@ -283,6 +287,30 @@
               "y": 0.64
             }
           ]
+        },
+        "region": "stage"
+      },
+      "gallery-hologram": {
+        "children": [],
+        "id": "gallery-hologram",
+        "kind": "hologram",
+        "props": {
+          "accentTone": "magenta",
+          "beams": 7,
+          "label": "HOLODECK",
+          "motes": 26,
+          "opacity": 0.86,
+          "panels": 4,
+          "position": {
+            "x": 0.36,
+            "y": 0.31
+          },
+          "rings": 6,
+          "scale": 0.18,
+          "scan": true,
+          "seed": 17,
+          "spin": 0.74,
+          "tone": "cyan"
         },
         "region": "stage"
       },

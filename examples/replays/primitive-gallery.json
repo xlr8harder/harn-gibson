@@ -24,6 +24,9 @@
       {"path": "primitives.gallery-vector.props.symbols.3.kind", "equals": "data_tunnel"},
       {"path": "primitives.gallery-vector.props.symbols.4.kind", "equals": "ice_wall"},
       {"path": "primitives.gallery-vector.props.symbols.5.kind", "equals": "mainframe_core"},
+      {"path": "primitives.gallery-hologram.kind", "equals": "hologram"},
+      {"path": "primitives.gallery-hologram.props.rings", "equals": 6},
+      {"path": "primitives.gallery-hologram.props.panels", "equals": 4},
       {"path": "primitives.gallery-city.kind", "equals": "city_block"},
       {"path": "primitives.gallery-graph.kind", "equals": "node_graph"},
       {"path": "primitives.gallery-ribbon.kind", "equals": "ribbon"},
@@ -57,6 +60,29 @@
             "eventType": "primitive_gallery",
             "title": "Primitive gallery",
             "summary": "mesh, vector paths, vector symbols, city blocks, graphs, ribbons, glyphs, data rain, particles, stream panel"
+          }
+        },
+        {
+          "op": "upsert",
+          "primitive": {
+            "id": "gallery-hologram",
+            "kind": "hologram",
+            "region": "stage",
+            "props": {
+              "label": "HOLODECK",
+              "position": {"x": 0.36, "y": 0.31},
+              "scale": 0.18,
+              "tone": "cyan",
+              "accentTone": "magenta",
+              "opacity": 0.86,
+              "rings": 6,
+              "beams": 7,
+              "panels": 4,
+              "motes": 26,
+              "scan": true,
+              "spin": 0.74,
+              "seed": 17
+            }
           }
         },
         {

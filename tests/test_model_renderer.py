@@ -189,7 +189,7 @@ def test_prompted_model_renderer_preserves_safe_warning_diagnostics() -> None:
                                 "op": "upsert",
                                 "primitive": {
                                     "id": "model-hologram",
-                                    "kind": "hologram",
+                                    "kind": "neural_mist",
                                     "region": "stage",
                                     "props": {"tone": "cyan"},
                                 },
@@ -217,7 +217,7 @@ def test_prompted_model_renderer_preserves_safe_warning_diagnostics() -> None:
     assert diagnostics["issues"][0]["code"] == "unsupported_primitive_kind"
     assert plan.metadata["renderer"] == "warning-model"
     assert plan.steps[0].mutations[0].primitive is not None
-    assert plan.steps[0].mutations[0].primitive.kind == "hologram"
+    assert plan.steps[0].mutations[0].primitive.kind == "neural_mist"
 
 
 def test_prompted_model_renderer_rejects_unsafe_or_failed_model_output() -> None:

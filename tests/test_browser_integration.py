@@ -232,12 +232,16 @@ def test_browser_display_renders_vector_symbols_and_data_rain() -> None:
                 page.goto(base, wait_until="domcontentloaded")
                 page.wait_for_function("window.__gibsonVectorState?.['gallery-vector']?.symbolCount === 6")
                 page.wait_for_function("window.__gibsonVectorAnimationState?.['gallery-vector']?.keyframeCount === 6")
+                page.wait_for_function("window.__gibsonHologramState?.['gallery-hologram']?.ringCount === 6")
                 page.wait_for_function("window.__gibsonDataRainState?.['gallery-rain']?.visibleColumns > 0")
                 vector_state = page.evaluate(
                     """() => window.__gibsonVectorState["gallery-vector"]"""
                 )
                 vector_animation_state = page.evaluate(
                     """() => window.__gibsonVectorAnimationState["gallery-vector"]"""
+                )
+                hologram_state = page.evaluate(
+                    """() => window.__gibsonHologramState["gallery-hologram"]"""
                 )
                 data_rain_state = page.evaluate(
                     """() => window.__gibsonDataRainState["gallery-rain"]"""
@@ -268,6 +272,15 @@ def test_browser_display_renders_vector_symbols_and_data_rain() -> None:
                 assert 0 <= vector_animation_state["progress"] <= 1
                 assert vector_animation_state["scale"] > 0
                 assert 0 <= vector_animation_state["opacity"] <= 1
+                assert hologram_state == {
+                    "ringCount": 6,
+                    "beamCount": 7,
+                    "panelCount": 4,
+                    "moteCount": 26,
+                    "tone": "cyan",
+                    "accentTone": "magenta",
+                    "hasScan": True,
+                }
                 assert data_rain_state == {
                     "columns": 42,
                     "direction": "down",

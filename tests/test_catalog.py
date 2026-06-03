@@ -34,7 +34,9 @@ def test_default_visual_catalog_has_generic_and_cinematic_building_blocks() -> N
     primitive_ids = {entry.id for entry in catalog.primitives}
     effect_ids = {entry.id for entry in catalog.effects}
 
-    assert {"text_stream", "mesh", "svg_layer", "data_rain", "particle_field", "city_block"} <= primitive_ids
+    assert {"text_stream", "mesh", "hologram", "svg_layer", "data_rain", "particle_field", "city_block"} <= (
+        primitive_ids
+    )
     assert {"glitch", "flythrough", "packet_burst", "vector_trace", "vector_keyframes", "hold"} <= effect_ids
     assert catalog.entry("city_block") is not None
     assert "gibson" in catalog.entry("city_block").tags  # type: ignore[union-attr]
@@ -69,3 +71,7 @@ def test_default_visual_catalog_has_generic_and_cinematic_building_blocks() -> N
     assert data_rain is not None
     assert {"glyphs", "columns", "density", "speed", "direction", "bands", "glitch"} <= set(data_rain.props)
     assert {"cinematic", "motion", "text"} <= set(data_rain.tags)
+    hologram = catalog.entry("hologram")
+    assert hologram is not None
+    assert {"rings", "beams", "panels", "motes", "scan", "spin", "label"} <= set(hologram.props)
+    assert {"gibson", "cinematic", "projection", "motion"} <= set(hologram.tags)
