@@ -294,63 +294,60 @@ def test_browser_display_renders_vector_symbols_and_data_rain() -> None:
             try:
                 page = browser.new_page(viewport={"width": 960, "height": 700})
                 page.goto(base, wait_until="domcontentloaded")
-                page.wait_for_function("window.__gibsonVectorState?.['gallery-vector']?.symbolCount === 6")
-                page.wait_for_function("window.__gibsonVectorState?.['gallery-vector']?.morphFrameCount === 3")
-                page.wait_for_function("window.__gibsonVectorAnimationState?.['gallery-vector']?.keyframeCount === 6")
-                page.wait_for_function("window.__gibsonVectorEffectState?.['gallery-vector']?.filterCount === 2")
-                page.wait_for_function("window.__gibsonHologramState?.['gallery-hologram']?.ringCount === 6")
-                page.wait_for_function("window.__gibsonDataVaultState?.['gallery-vault']?.lockCount === 5")
-                page.wait_for_function("window.__gibsonBlackIceState?.['gallery-black-ice']?.columnCount === 13")
-                page.wait_for_function("window.__gibsonSignalScopeState?.['gallery-scope']?.blipCount === 3")
-                page.wait_for_function("window.__gibsonTunnelState?.['gallery-tunnel']?.packetCount === 44")
-                page.wait_for_function("window.__gibsonWireLandscapeState?.['gallery-landscape']?.peakCount === 4")
-                page.wait_for_function("window.__gibsonCityState?.['gallery-city']?.cameraKeyframeCount === 3")
-                page.wait_for_function("window.__gibsonTerminalWallState?.['gallery-terminal']?.panelCount === 4")
-                page.wait_for_function("window.__gibsonAccessMatrixState?.['gallery-access']?.cellCount === 8")
-                page.wait_for_function("window.__gibsonDataRainState?.['gallery-rain']?.visibleColumns > 0")
-                page.wait_for_function("window.__gibsonTraceRouteState?.['gallery-trace']?.packetCount === 18")
-                vector_state = page.evaluate(
-                    """() => window.__gibsonVectorState["gallery-vector"]"""
+                page.wait_for_function(
+                    """() => [
+                      window.__gibsonVectorState?.["gallery-vector"]?.symbolCount === 6,
+                      window.__gibsonVectorState?.["gallery-vector"]?.morphFrameCount === 3,
+                      window.__gibsonVectorAnimationState?.["gallery-vector"]?.keyframeCount === 6,
+                      window.__gibsonVectorEffectState?.["gallery-vector"]?.filterCount === 2,
+                      window.__gibsonHologramState?.["gallery-hologram"]?.ringCount === 6,
+                      window.__gibsonDataVaultState?.["gallery-vault"]?.lockCount === 5,
+                      window.__gibsonBlackIceState?.["gallery-black-ice"]?.columnCount === 13,
+                      window.__gibsonSignalScopeState?.["gallery-scope"]?.blipCount === 3,
+                      window.__gibsonTunnelState?.["gallery-tunnel"]?.packetCount === 44,
+                      window.__gibsonWireLandscapeState?.["gallery-landscape"]?.peakCount === 4,
+                      window.__gibsonCityState?.["gallery-city"]?.cameraKeyframeCount === 3,
+                      window.__gibsonTerminalWallState?.["gallery-terminal"]?.panelCount === 4,
+                      window.__gibsonAccessMatrixState?.["gallery-access"]?.cellCount === 8,
+                      window.__gibsonOrbitalMapState?.["gallery-orbital"]?.nodeCount === 5,
+                      window.__gibsonDataRainState?.["gallery-rain"]?.visibleColumns > 0,
+                      window.__gibsonTraceRouteState?.["gallery-trace"]?.packetCount === 18,
+                    ].every(Boolean)"""
                 )
-                vector_animation_state = page.evaluate(
-                    """() => window.__gibsonVectorAnimationState["gallery-vector"]"""
+                gallery_state = page.evaluate(
+                    """() => ({
+                      vector: window.__gibsonVectorState["gallery-vector"],
+                      vectorAnimation: window.__gibsonVectorAnimationState["gallery-vector"],
+                      vectorEffect: window.__gibsonVectorEffectState["gallery-vector"],
+                      hologram: window.__gibsonHologramState["gallery-hologram"],
+                      dataVault: window.__gibsonDataVaultState["gallery-vault"],
+                      blackIce: window.__gibsonBlackIceState["gallery-black-ice"],
+                      signalScope: window.__gibsonSignalScopeState["gallery-scope"],
+                      tunnel: window.__gibsonTunnelState["gallery-tunnel"],
+                      wireLandscape: window.__gibsonWireLandscapeState["gallery-landscape"],
+                      city: window.__gibsonCityState["gallery-city"],
+                      terminalWall: window.__gibsonTerminalWallState["gallery-terminal"],
+                      accessMatrix: window.__gibsonAccessMatrixState["gallery-access"],
+                      orbitalMap: window.__gibsonOrbitalMapState["gallery-orbital"],
+                      dataRain: window.__gibsonDataRainState["gallery-rain"],
+                      traceRoute: window.__gibsonTraceRouteState["gallery-trace"],
+                    })"""
                 )
-                vector_effect_state = page.evaluate(
-                    """() => window.__gibsonVectorEffectState["gallery-vector"]"""
-                )
-                hologram_state = page.evaluate(
-                    """() => window.__gibsonHologramState["gallery-hologram"]"""
-                )
-                data_vault_state = page.evaluate(
-                    """() => window.__gibsonDataVaultState["gallery-vault"]"""
-                )
-                black_ice_state = page.evaluate(
-                    """() => window.__gibsonBlackIceState["gallery-black-ice"]"""
-                )
-                signal_scope_state = page.evaluate(
-                    """() => window.__gibsonSignalScopeState["gallery-scope"]"""
-                )
-                tunnel_state = page.evaluate(
-                    """() => window.__gibsonTunnelState["gallery-tunnel"]"""
-                )
-                wire_landscape_state = page.evaluate(
-                    """() => window.__gibsonWireLandscapeState["gallery-landscape"]"""
-                )
-                city_state = page.evaluate(
-                    """() => window.__gibsonCityState["gallery-city"]"""
-                )
-                terminal_wall_state = page.evaluate(
-                    """() => window.__gibsonTerminalWallState["gallery-terminal"]"""
-                )
-                access_matrix_state = page.evaluate(
-                    """() => window.__gibsonAccessMatrixState["gallery-access"]"""
-                )
-                data_rain_state = page.evaluate(
-                    """() => window.__gibsonDataRainState["gallery-rain"]"""
-                )
-                trace_route_state = page.evaluate(
-                    """() => window.__gibsonTraceRouteState["gallery-trace"]"""
-                )
+                vector_state = gallery_state["vector"]
+                vector_animation_state = gallery_state["vectorAnimation"]
+                vector_effect_state = gallery_state["vectorEffect"]
+                hologram_state = gallery_state["hologram"]
+                data_vault_state = gallery_state["dataVault"]
+                black_ice_state = gallery_state["blackIce"]
+                signal_scope_state = gallery_state["signalScope"]
+                tunnel_state = gallery_state["tunnel"]
+                wire_landscape_state = gallery_state["wireLandscape"]
+                city_state = gallery_state["city"]
+                terminal_wall_state = gallery_state["terminalWall"]
+                access_matrix_state = gallery_state["accessMatrix"]
+                orbital_map_state = gallery_state["orbitalMap"]
+                data_rain_state = gallery_state["dataRain"]
+                trace_route_state = gallery_state["traceRoute"]
                 assert vector_state == {
                     "pathCount": 3,
                     "morphPathCount": 1,
@@ -478,6 +475,17 @@ def test_browser_display_renders_vector_symbols_and_data_rain() -> None:
                     "accentTone": "magenta",
                     "hasSweep": True,
                     "hasLabels": True,
+                }
+                assert orbital_map_state == {
+                    "nodeCount": 5,
+                    "arcCount": 5,
+                    "ringCount": 4,
+                    "packetCount": 34,
+                    "focusNodeId": "uplink",
+                    "tone": "cyan",
+                    "accentTone": "magenta",
+                    "hasScan": True,
+                    "hasLabel": True,
                 }
                 assert data_rain_state == {
                     "columns": 42,

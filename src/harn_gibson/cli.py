@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import shlex
 import subprocess
@@ -172,7 +173,25 @@ def build_parser() -> argparse.ArgumentParser:
         "--step-delay-ms",
         type=int,
         default=900,
-        help="delay between replay steps",
+        help="delay between replay steps when --playback-timing fixed is used",
+    )
+    watch_replay.add_argument(
+        "--playback-timing",
+        choices=("fixed", "real-time"),
+        default="fixed",
+        help="use a fixed delay or replay source timestamp deltas between steps",
+    )
+    watch_replay.add_argument(
+        "--speed",
+        type=float,
+        default=1.0,
+        help="speed multiplier for --playback-timing real-time",
+    )
+    watch_replay.add_argument(
+        "--max-step-delay-ms",
+        type=int,
+        default=None,
+        help="cap each real-time replay delay in milliseconds",
     )
     watch_replay.add_argument("--style", choices=style_pack_ids(), default=None, help="display style pack")
     _add_replay_renderer_arguments(watch_replay)
@@ -682,6 +701,12 @@ def run_watch_replay(args: argparse.Namespace) -> int:
     if args.step_delay_ms < 0:
         print("--step-delay-ms must be non-negative", file=sys.stderr)
         return 2
+    if args.speed <= 0 or not math.isfinite(args.speed):
+        print("--speed must be positive", file=sys.stderr)
+        return 2
+    if args.max_step_delay_ms is not None and args.max_step_delay_ms < 0:
+        print("--max-step-delay-ms must be non-negative", file=sys.stderr)
+        return 2
 
     state = _replay_state_from_args(args)
     server = create_server(args.host, args.port, state)
@@ -707,6 +732,9 @@ def run_watch_replay(args: argparse.Namespace) -> int:
                 state,
                 start_delay_ms=args.start_delay_ms,
                 step_delay_ms=args.step_delay_ms,
+                playback_timing=args.playback_timing,
+                time_scale=args.speed,
+                max_step_delay_ms=args.max_step_delay_ms,
                 progress=report_progress,
             )
         except ReplayExpectationError as error:

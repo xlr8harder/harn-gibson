@@ -59,6 +59,10 @@
         "equals": "access_matrix"
       },
       {
+        "path": "primitives.dogfood-orbital-map.kind",
+        "equals": "orbital_map"
+      },
+      {
         "path": "primitives.dogfood-control-graph.kind",
         "equals": "node_graph"
       },

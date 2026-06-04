@@ -48,6 +48,7 @@ def main() -> None:
         _upsert_opcode_glyphs(event_type, summary, tone, accent, sequence, touched),
         _upsert_terminal_wall(event, summary, entries, touched, tone, accent, sequence),
         _upsert_access_matrix(event_type, phase, entries, touched, tone, accent, sequence),
+        _upsert_orbital_map(project_name, event_type, phase, entries, touched, tone, accent, sequence),
         _upsert_tunnel(event_type, tone, accent, sequence, touched),
         _upsert_wire_landscape(entries, touched, event_type, tone, accent, sequence),
         _upsert_data_vault(project_name, event_type, tone, accent, sequence, touched, entries),
@@ -369,6 +370,121 @@ def _upsert_access_matrix(
                 "sweep": True,
                 "speed": 0.78 if danger else 0.54,
                 "seed": sequence + len(touched) * 31 + len(entries) * 7,
+            },
+        },
+    }
+
+
+def _upsert_orbital_map(
+    project_name: str,
+    event_type: str,
+    phase: str,
+    entries: list[dict[str, Any]],
+    touched: list[dict[str, Any]],
+    tone: str,
+    accent: str,
+    sequence: int,
+) -> dict[str, Any]:
+    danger = phase == "after" or "error" in event_type or "fail" in event_type
+    nodes = [
+        {
+            "id": "local",
+            "label": "LOCAL",
+            "lat": 18,
+            "lon": -118,
+            "tone": "green",
+            "active": phase == "before",
+            "intensity": 0.72,
+        },
+        {
+            "id": "harn",
+            "label": "HARN",
+            "lat": 42,
+            "lon": -42,
+            "tone": tone,
+            "active": True,
+            "intensity": 0.82,
+        },
+        {
+            "id": "render",
+            "label": "RENDER",
+            "lat": 18,
+            "lon": 28,
+            "tone": accent,
+            "active": True,
+            "intensity": 0.88,
+        },
+        {
+            "id": "gibson",
+            "label": "GIBSON",
+            "lat": 31,
+            "lon": 118,
+            "tone": "red" if danger else "magenta",
+            "active": danger,
+            "intensity": 0.94,
+        },
+    ]
+    for index, item in enumerate(touched[:6]):
+        nodes.append(
+            {
+                "id": f"file-{index}",
+                "label": _path_label(_text(item.get("path"), f"file-{index}")),
+                "lat": -38 + index * 13,
+                "lon": -158 + index * 43,
+                "tone": "magenta" if index % 2 == 0 else accent,
+                "active": index == 0,
+                "intensity": round(0.54 + min(0.36, len(_list(item.get("phases"))) * 0.10), 3),
+            }
+        )
+    if not touched:
+        for index, entry in enumerate(entries[:5]):
+            nodes.append(
+                {
+                    "id": f"entry-{index}",
+                    "label": _path_label(_text(entry.get("path") or entry.get("name"), f"entry-{index}")),
+                    "lat": -34 + index * 15,
+                    "lon": -142 + index * 47,
+                    "tone": _entry_tone(_text(entry.get("kind"), "file"), tone, accent),
+                    "intensity": round(0.42 + min(0.42, _entry_line_count(entry) / 180), 3),
+                }
+            )
+    arcs = [
+        {"from": "local", "to": "harn", "packets": 3, "active": True, "tone": "green"},
+        {"from": "harn", "to": "render", "packets": 4, "active": True, "tone": tone},
+        {"from": "render", "to": "gibson", "packets": 5, "active": True, "tone": "red" if danger else accent},
+    ]
+    for index in range(min(6, len(touched) if touched else len(entries[:5]))):
+        arcs.append(
+            {
+                "from": "render",
+                "to": f"file-{index}" if touched else f"entry-{index}",
+                "packets": 1 + index % 3,
+                "active": index == 0,
+                "tone": "magenta" if index % 2 == 0 else accent,
+                "lift": 0.16,
+            }
+        )
+    return {
+        "op": "upsert",
+        "primitive": {
+            "id": "dogfood-orbital-map",
+            "kind": "orbital_map",
+            "region": "stage",
+            "props": {
+                "label": f"{_clip(project_name.upper(), 14)} UPLINK",
+                "position": {"x": 0.84, "y": 0.25},
+                "scale": 0.135,
+                "nodes": nodes,
+                "arcs": arcs,
+                "rings": 4,
+                "packets": 30 + min(42, len(touched) * 5 + len(entries) * 2),
+                "focusNodeId": "gibson" if danger else ("file-0" if touched else "render"),
+                "tone": tone,
+                "accentTone": accent,
+                "opacity": 0.66,
+                "scan": True,
+                "speed": 0.70 if danger else 0.54,
+                "seed": sequence + len(nodes) * 19,
             },
         },
     }

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 import re
 import time
@@ -32,6 +33,7 @@ from harn_gibson.styles import style_pack_from_name
 
 ReplayStepKind = Literal["event", "raw_event", "render_plan", "mutations"]
 ReplayExpectationOp = Literal["equals", "contains", "exists", "min", "max"]
+ReplayPlaybackTiming = Literal["fixed", "real-time"]
 MISSING = object()
 SENSITIVE_REDACTION = "[redacted]"
 EVENT_SUMMARY_TOUCHED_FILE_LIMIT = 16
@@ -328,6 +330,9 @@ def play_replay_file(
     *,
     start_delay_ms: int = 0,
     step_delay_ms: int = 900,
+    playback_timing: ReplayPlaybackTiming = "fixed",
+    time_scale: float = 1.0,
+    max_step_delay_ms: int | None = None,
     progress: ReplayProgressCallback | None = None,
     sleep_fn: Callable[[float], None] = time.sleep,
 ) -> ReplayResult:
@@ -336,6 +341,9 @@ def play_replay_file(
         state,
         start_delay_ms=start_delay_ms,
         step_delay_ms=step_delay_ms,
+        playback_timing=playback_timing,
+        time_scale=time_scale,
+        max_step_delay_ms=max_step_delay_ms,
         progress=progress,
         sleep_fn=sleep_fn,
     )
@@ -347,9 +355,18 @@ def play_replay_data(
     *,
     start_delay_ms: int = 0,
     step_delay_ms: int = 900,
+    playback_timing: ReplayPlaybackTiming = "fixed",
+    time_scale: float = 1.0,
+    max_step_delay_ms: int | None = None,
     progress: ReplayProgressCallback | None = None,
     sleep_fn: Callable[[float], None] = time.sleep,
 ) -> ReplayResult:
+    if playback_timing not in ("fixed", "real-time"):
+        raise ValueError("playback_timing must be 'fixed' or 'real-time'")
+    if time_scale <= 0 or not math.isfinite(time_scale):
+        raise ValueError("time_scale must be positive")
+    if max_step_delay_ms is not None and max_step_delay_ms < 0:
+        raise ValueError("max_step_delay_ms must be non-negative")
     replay_state = state or GibsonServerState()
     _apply_replay_project_metadata(replay_state, data)
     schema = str(data.get("schema") or "harn-gibson.replay.v1")
@@ -359,6 +376,7 @@ def play_replay_data(
         raise ValueError("replay must contain a steps list")
 
     results: list[ReplayStepResult] = []
+    timestamps = _replay_step_timestamps(steps) if playback_timing == "real-time" else ()
     if start_delay_ms > 0:
         sleep_fn(start_delay_ms / 1000)
     for index, step in enumerate(steps):
@@ -368,8 +386,17 @@ def play_replay_data(
         results.append(result)
         if progress is not None:
             progress(result, index + 1, len(steps), replay_state.scene.state)
-        if index < len(steps) - 1 and step_delay_ms > 0:
-            sleep_fn(step_delay_ms / 1000)
+        if index < len(steps) - 1:
+            delay_ms = _replay_step_delay_ms(
+                index,
+                timestamps=timestamps,
+                playback_timing=playback_timing,
+                step_delay_ms=step_delay_ms,
+                time_scale=time_scale,
+                max_step_delay_ms=max_step_delay_ms,
+            )
+            if delay_ms > 0:
+                sleep_fn(delay_ms / 1000)
 
     expectations = evaluate_replay_expectations(replay_state.scene.state, data.get("expect"))
     failures = tuple(expectation for expectation in expectations if not expectation.passed)
@@ -1526,6 +1553,89 @@ def _expectation_message(path: str, op: ReplayExpectationOp, expected: Any, actu
 def _screenshot_expectation_error(failures: tuple[ReplayExpectationResult, ...]) -> str:
     details = "; ".join(failure.message for failure in failures)
     return f"replay screenshot expectations failed: {details}"
+
+
+def _replay_step_timestamps(steps: Sequence[Any]) -> tuple[int | None, ...]:
+    return tuple(_replay_step_timestamp_ms(step) for step in steps)
+
+
+def _replay_step_delay_ms(
+    index: int,
+    *,
+    timestamps: Sequence[int | None],
+    playback_timing: ReplayPlaybackTiming,
+    step_delay_ms: int,
+    time_scale: float,
+    max_step_delay_ms: int | None,
+) -> float:
+    if playback_timing == "fixed":
+        return float(step_delay_ms)
+    if index >= len(timestamps) - 1:
+        return 0
+    current = timestamps[index]
+    following = timestamps[index + 1]
+    if current is None or following is None:
+        return 0
+    delay_ms = max(0, following - current) / time_scale
+    if max_step_delay_ms is not None:
+        delay_ms = min(delay_ms, max_step_delay_ms)
+    return delay_ms
+
+
+def _replay_step_timestamp_ms(step: Any) -> int | None:
+    if not isinstance(step, Mapping):
+        return None
+    kind = step.get("type", step.get("kind"))
+    if kind == "event":
+        return _first_timestamp_ms(_mapping_timestamp_ms(step.get("event")), _mapping_timestamp_ms(step))
+    if kind == "raw_event":
+        return _first_timestamp_ms(_mapping_timestamp_ms(step), _mapping_timestamp_ms(step.get("raw")))
+    if kind == "render_plan":
+        return _first_timestamp_ms(_render_plan_step_timestamp_ms(step), _mapping_timestamp_ms(step))
+    if kind == "mutations":
+        return _first_timestamp_ms(_mapping_timestamp_ms(step.get("event")), _mapping_timestamp_ms(step))
+    return _mapping_timestamp_ms(step)
+
+
+def _render_plan_step_timestamp_ms(step: Mapping[str, Any]) -> int | None:
+    nested_plan = step.get("plan")
+    plan_payload = nested_plan if isinstance(nested_plan, Mapping) else step
+    timestamp = _mapping_timestamp_ms(plan_payload)
+    if timestamp is not None:
+        return timestamp
+    requests = plan_payload.get("requests")
+    if not isinstance(requests, Sequence) or isinstance(requests, str | bytes):
+        return None
+    for request in requests:
+        if not isinstance(request, Mapping):
+            continue
+        timestamp = _first_timestamp_ms(_mapping_timestamp_ms(request.get("event")), _mapping_timestamp_ms(request))
+        if timestamp is not None:
+            return timestamp
+    return None
+
+
+def _first_timestamp_ms(*values: int | None) -> int | None:
+    for value in values:
+        if value is not None:
+            return value
+    return None
+
+
+def _mapping_timestamp_ms(value: Any) -> int | None:
+    if not isinstance(value, Mapping):
+        return None
+    return _timestamp_ms_value(value.get("timestampMs", value.get("timestamp_ms")))
+
+
+def _timestamp_ms_value(value: Any) -> int | None:
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        timestamp = int(value)
+    except (TypeError, ValueError):
+        return None
+    return timestamp if timestamp >= 0 else None
 
 
 def _suite_path(root: Path, path: Path) -> str:
@@ -3839,6 +3949,7 @@ __all__ = [
     "ReplayExpectationResult",
     "ReplayFrame",
     "ReplayFrameScreenshot",
+    "ReplayPlaybackTiming",
     "ReplayRendererContext",
     "ReplayResult",
     "ReplayStepKind",

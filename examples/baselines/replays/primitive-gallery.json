@@ -35,6 +35,7 @@
           "patch",
           "append_log",
           "primitive:access_matrix",
+          "primitive:orbital_map",
           "primitive:hologram",
           "primitive:signal_scope",
           "primitive:data_vault",
@@ -62,7 +63,7 @@
           "renderer": "replay",
           "stepType": "mutations"
         },
-        "mutationCount": 21,
+        "mutationCount": 22,
         "renderer": "replay",
         "requestCount": 1,
         "routes": [
@@ -73,6 +74,7 @@
         "targets": [
           "status",
           "gallery-access",
+          "gallery-orbital",
           "gallery-hologram",
           "gallery-scope",
           "gallery-vault",
@@ -101,6 +103,7 @@
             "patch",
             "append_log",
             "primitive:access_matrix",
+            "primitive:orbital_map",
             "primitive:hologram",
             "primitive:signal_scope",
             "primitive:data_vault",
@@ -128,7 +131,7 @@
             "renderer": "replay",
             "stepType": "mutations"
           },
-          "mutationCount": 21,
+          "mutationCount": 22,
           "renderer": "replay",
           "requestCount": 1,
           "routes": [
@@ -139,6 +142,7 @@
           "targets": [
             "status",
             "gallery-access",
+            "gallery-orbital",
             "gallery-hologram",
             "gallery-scope",
             "gallery-vault",
@@ -701,6 +705,111 @@
               1
             ]
           ]
+        },
+        "region": "stage"
+      },
+      "gallery-orbital": {
+        "children": [],
+        "id": "gallery-orbital",
+        "kind": "orbital_map",
+        "props": {
+          "accentTone": "magenta",
+          "arcs": [
+            {
+              "active": true,
+              "from": "local",
+              "packets": 3,
+              "to": "relay",
+              "tone": "green"
+            },
+            {
+              "active": true,
+              "from": "relay",
+              "packets": 2,
+              "to": "ice",
+              "tone": "cyan"
+            },
+            {
+              "active": true,
+              "from": "ice",
+              "packets": 4,
+              "to": "gibson",
+              "tone": "magenta"
+            },
+            {
+              "active": true,
+              "from": "gibson",
+              "packets": 3,
+              "to": "uplink",
+              "tone": "white"
+            },
+            {
+              "active": false,
+              "from": "uplink",
+              "packets": 1,
+              "to": "local",
+              "tone": "amber"
+            }
+          ],
+          "focusNodeId": "uplink",
+          "label": "ORBITAL UPLINK",
+          "nodes": [
+            {
+              "active": true,
+              "id": "local",
+              "intensity": 0.8,
+              "label": "LOCAL",
+              "lat": 18,
+              "lon": -118,
+              "tone": "green"
+            },
+            {
+              "id": "relay",
+              "intensity": 0.72,
+              "label": "RELAY",
+              "lat": 45,
+              "lon": -38,
+              "tone": "cyan"
+            },
+            {
+              "id": "ice",
+              "intensity": 0.88,
+              "label": "ICE",
+              "lat": 9,
+              "lon": 24,
+              "tone": "amber"
+            },
+            {
+              "active": true,
+              "id": "gibson",
+              "intensity": 0.94,
+              "label": "GIBSON",
+              "lat": 28,
+              "lon": 112,
+              "tone": "magenta"
+            },
+            {
+              "active": true,
+              "id": "uplink",
+              "intensity": 0.9,
+              "label": "UPLINK",
+              "lat": -32,
+              "lon": 76,
+              "tone": "white"
+            }
+          ],
+          "opacity": 0.76,
+          "packets": 34,
+          "position": {
+            "x": 0.74,
+            "y": 0.25
+          },
+          "rings": 4,
+          "scale": 0.105,
+          "scan": true,
+          "seed": 939,
+          "speed": 0.62,
+          "tone": "cyan"
         },
         "region": "stage"
       },

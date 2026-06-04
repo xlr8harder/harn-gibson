@@ -43,6 +43,7 @@ def test_default_visual_catalog_has_generic_and_cinematic_building_blocks() -> N
         "wire_landscape",
         "terminal_wall",
         "access_matrix",
+        "orbital_map",
         "data_vault",
         "black_ice",
         "svg_layer",
@@ -144,6 +145,10 @@ def test_default_visual_catalog_has_generic_and_cinematic_building_blocks() -> N
     assert access_matrix is not None
     assert {"cells", "rows", "columns", "focusCellId", "sweep", "speed", "seed"} <= set(access_matrix.props)
     assert {"gibson", "cinematic", "motion", "security", "grid"} <= set(access_matrix.tags)
+    orbital_map = catalog.entry("orbital_map")
+    assert orbital_map is not None
+    assert {"nodes", "arcs", "rings", "packets", "focusNodeId", "scan", "speed", "seed"} <= set(orbital_map.props)
+    assert {"gibson", "cinematic", "motion", "3d", "map", "network"} <= set(orbital_map.tags)
     data_vault = catalog.entry("data_vault")
     assert data_vault is not None
     assert {"layers", "rings", "panels", "locks", "packets", "spin", "label", "seed"} <= set(data_vault.props)

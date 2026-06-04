@@ -28,9 +28,9 @@ Replay fixtures use `harn-gibson.replay.v1`. They can replay either side of the 
 
 ## Step Types
 
-- `event`: accepts a normalized `GibsonEvent` dictionary and runs it through routing and rendering.
+- `event`: accepts a normalized `GibsonEvent` dictionary and runs it through routing and rendering. If replay was given `--renderer-command` or `--renderer-model-command`, this calls that renderer live.
 - `raw_event`: accepts a raw harn-style event plus optional sequence, timestamp, source, recent context, visualization context, and hook decisions.
-- `render_plan`: applies saved renderer requests and delayed render steps directly against scene state.
+- `render_plan`: applies saved renderer requests and delayed render steps directly against scene state. This is renderer-side replay, useful for freezing and reviewing a renderer's exact previous output without calling it again.
 - `mutations`: applies explicit scene mutations, optionally associated with a normalized event.
 
 ## Captured Event Logs
@@ -98,10 +98,11 @@ To watch a replay move through the live display, use `watch-replay`:
 uv run harn-gibson watch-replay examples/dogfood-replays/repo-map-trajectory.json \
   --renderer-command 'uv run python examples/renderers/gibson_dogfood_renderer.py' \
   --renderer-timeout-ms 10000 \
-  --step-delay-ms 900
+  --playback-timing real-time \
+  --speed 1
 ```
 
-`watch-replay` starts the browser server, opens the display, applies each replay step through the same pipeline as `replay`, and keeps the server open after playback by default. It accepts the same explicit renderer, style, and project metadata flags as offline replay. Use `--no-hold --no-browser --step-delay-ms 1 --start-delay-ms 0` for a fast command-line smoke run.
+`watch-replay` starts the browser server, opens the display, applies each replay step through the same pipeline as `replay`, and keeps the server open after playback by default. It accepts the same explicit renderer, style, and project metadata flags as offline replay. Fixed playback uses `--step-delay-ms`; real-time playback uses event and renderer-plan `timestampMs` gaps, scaled by `--speed`, with `--max-step-delay-ms` available for long idle periods. Use `--no-hold --no-browser --step-delay-ms 1 --start-delay-ms 0` for a fast command-line smoke run.
 
 ## Expectations
 
@@ -152,13 +153,13 @@ uv run harn-gibson replay-dir examples/replays \
 
 The model command receives `harn-gibson.model-renderer-request.v1`; the external command receives `harn-gibson.external-renderer-request.v1`. Returned plans still go through the same validation, diagnostics, fail-open fallback, and final-scene expectation checks as live dogfood rendering.
 
-The hard-coded `gibson_dogfood_renderer.py` is meant for live harn use before the renderer-agent backend is good enough. The checked-in `examples/dogfood-replays/` fixtures exercise that renderer against fixture workspaces under `examples/dogfood-workspaces/`, giving the showcase renderer committed trajectories for project bootstrapping, runtime diagnostics, failed tests, browser steering input, repo-topology, touched-file signals, active style packs, and the project hologram/data-vault/black-ICE/data-tunnel/wire-terrain/terminal-wall/access-matrix/ICE-mesh/control-graph/glyph-layer/ribbon/repo-city/spark-field/route-trace/signal-interference scene. A useful future fixture workflow is to run `uv run harn-gibson dogfood-capture --trajectory tiny-project` for a general bootstrap capture and `uv run harn-gibson dogfood-capture --trajectory repo-map` for a topology-heavy capture, then convert those event trajectories into split replay directories and browser screenshots. Several such trajectories should become regression inputs for event coalescing, renderer timing, touched-file visualization, route-trace timing, wire-terrain mapping, style-pack rendering, and visual continuity.
+The hard-coded `gibson_dogfood_renderer.py` is meant for live harn use before the renderer-agent backend is good enough. The checked-in `examples/dogfood-replays/` fixtures exercise that renderer against fixture workspaces under `examples/dogfood-workspaces/`, giving the showcase renderer committed trajectories for project bootstrapping, runtime diagnostics, failed tests, browser steering input, repo-topology, touched-file signals, active style packs, and the project hologram/data-vault/black-ICE/data-tunnel/wire-terrain/terminal-wall/access-matrix/orbital-map/ICE-mesh/control-graph/glyph-layer/ribbon/repo-city/spark-field/route-trace/signal-interference scene. A useful future fixture workflow is to run `uv run harn-gibson dogfood-capture --trajectory tiny-project` for a general bootstrap capture and `uv run harn-gibson dogfood-capture --trajectory repo-map` for a topology-heavy capture, then convert those event trajectories into split replay directories and browser screenshots. Several such trajectories should become regression inputs for event coalescing, renderer timing, touched-file visualization, route-trace timing, wire-terrain mapping, style-pack rendering, and visual continuity.
 
 ## Baseline Review
 
 Replay baselines are canonical final-scene snapshots. They compare the visual state that renderers leave behind, including primitives, animations, event logs, and render-intent history. Absolute render-intent start/end timestamps are normalized out of baselines; duration, effects, targets, routes, and metadata remain comparable.
 
-The checked-in fixtures include `primitive-gallery.json`, `animation-gallery.json`, and `style-showcase.json`, which are browser-review fixtures for the generic primitive/effect/style set rather than captured harn sessions. The primitive gallery includes a `hologram` projection, animated `signal_scope` radar/oscilloscope instrument, animated `tunnel_grid` data corridor, animated `wire_landscape` terrain, `terminal_wall` pane bank, `access_matrix` lock grid, rotating `data_vault` core, faceted `black_ice` barrier, animated `trace_route`, camera-drifting `city_block`, structured `svg_layer` paths, path morph frames, rects, lines, polylines, polygons, grouped transforms, numeric transform keyframes, gradients, filter/clip presets, traces, curated vector symbols, and a `data_rain` glyph curtain, so it is the quickest fixture for reviewing explicit vector or cinematic primitive rendering changes. The animation gallery covers persistent effects, including `timeline_cue` beat markers, `route_trace` packet paths, `signal_interference` CRT breakup, `breach_wave` overlays, `camera_jolt` impacts, and `camera_path` scene transforms for coalesced render windows. The style showcase applies the `satellite-uplink` style pack through scene state and pairs orbital backdrop motifs with radar, route, hologram, city, vector, data-rain, and timeline-cue primitives.
+The checked-in fixtures include `primitive-gallery.json`, `animation-gallery.json`, and `style-showcase.json`, which are browser-review fixtures for the generic primitive/effect/style set rather than captured harn sessions. The primitive gallery includes a `hologram` projection, animated `signal_scope` radar/oscilloscope instrument, animated `tunnel_grid` data corridor, animated `wire_landscape` terrain, `terminal_wall` pane bank, `access_matrix` lock grid, `orbital_map` uplink globe, rotating `data_vault` core, faceted `black_ice` barrier, animated `trace_route`, camera-drifting `city_block`, structured `svg_layer` paths, path morph frames, rects, lines, polylines, polygons, grouped transforms, numeric transform keyframes, gradients, filter/clip presets, traces, curated vector symbols, and a `data_rain` glyph curtain, so it is the quickest fixture for reviewing explicit vector or cinematic primitive rendering changes. The animation gallery covers persistent effects, including `timeline_cue` beat markers, `route_trace` packet paths, `signal_interference` CRT breakup, `breach_wave` overlays, `camera_jolt` impacts, and `camera_path` scene transforms for coalesced render windows. The style showcase applies the `satellite-uplink` style pack through scene state and pairs orbital backdrop motifs with radar, route, hologram, city, vector, data-rain, and timeline-cue primitives.
 
 Update baselines after intentionally changing visual output:
 

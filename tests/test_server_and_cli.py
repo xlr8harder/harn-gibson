@@ -887,6 +887,12 @@ def test_cli_parser_and_run(monkeypatch: Any, capsys: Any) -> None:
             "250",
             "--step-delay-ms",
             "125",
+            "--playback-timing",
+            "real-time",
+            "--speed",
+            "2.5",
+            "--max-step-delay-ms",
+            "5000",
             "--style",
             "satellite-uplink",
             "--renderer-command",
@@ -907,6 +913,9 @@ def test_cli_parser_and_run(monkeypatch: Any, capsys: Any) -> None:
     assert parsed_watch.hold is False
     assert parsed_watch.start_delay_ms == 250
     assert parsed_watch.step_delay_ms == 125
+    assert parsed_watch.playback_timing == "real-time"
+    assert parsed_watch.speed == 2.5
+    assert parsed_watch.max_step_delay_ms == 5000
     assert parsed_watch.style == "satellite-uplink"
     assert parsed_watch.renderer_command == "python renderer.py"
     assert parsed_watch.renderer_timeout_ms == "1750"
@@ -1079,9 +1088,13 @@ def test_cli_watch_replay_error_paths(monkeypatch: Any, capsys: Any) -> None:
     parser = cli.build_parser()
     bad_start = parser.parse_args(["watch-replay", "fixture.json", "--start-delay-ms", "-1"])
     bad_step = parser.parse_args(["watch-replay", "fixture.json", "--step-delay-ms", "-1"])
+    bad_speed = parser.parse_args(["watch-replay", "fixture.json", "--speed", "0"])
+    bad_max_step = parser.parse_args(["watch-replay", "fixture.json", "--max-step-delay-ms", "-1"])
 
     assert cli.run_watch_replay(bad_start) == 2
     assert cli.run_watch_replay(bad_step) == 2
+    assert cli.run_watch_replay(bad_speed) == 2
+    assert cli.run_watch_replay(bad_max_step) == 2
 
     from harn_gibson.replay import ReplayExpectationError, ReplayExpectationResult
 
@@ -1112,6 +1125,8 @@ def test_cli_watch_replay_error_paths(monkeypatch: Any, capsys: Any) -> None:
     captured = capsys.readouterr()
     assert "--start-delay-ms must be non-negative" in captured.err
     assert "--step-delay-ms must be non-negative" in captured.err
+    assert "--speed must be positive" in captured.err
+    assert "--max-step-delay-ms must be non-negative" in captured.err
     assert "revision expected to equal 2, got 1" in captured.err
     assert "watch-replay interrupted" in captured.err
 

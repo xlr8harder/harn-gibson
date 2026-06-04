@@ -704,6 +704,7 @@ def test_dogfood_showcase_renderer_returns_valid_event_reactive_plan(tmp_path: P
         "dogfood-opcodes": "glyph_layer",
         "dogfood-terminal-wall": "terminal_wall",
         "dogfood-access-matrix": "access_matrix",
+        "dogfood-orbital-map": "orbital_map",
         "dogfood-tunnel": "tunnel_grid",
         "dogfood-landscape": "wire_landscape",
         "dogfood-vault": "data_vault",
@@ -748,6 +749,10 @@ def test_dogfood_showcase_renderer_returns_valid_event_reactive_plan(tmp_path: P
     assert scene.state.primitives["dogfood-access-matrix"].props["rows"] == 3
     assert scene.state.primitives["dogfood-access-matrix"].props["columns"] == 5
     assert scene.state.primitives["dogfood-access-matrix"].props["cells"][2]["breached"] is True
+    assert scene.state.primitives["dogfood-orbital-map"].props["focusNodeId"] == "gibson"
+    assert scene.state.primitives["dogfood-orbital-map"].props["nodes"][3]["label"] == "GIBSON"
+    assert scene.state.primitives["dogfood-orbital-map"].props["arcs"][2]["to"] == "gibson"
+    assert scene.state.primitives["dogfood-orbital-map"].props["packets"] >= 45
     terminal_file_lines = scene.state.primitives["dogfood-terminal-wall"].props["panels"][2]["lines"]
     assert "docs/plan.md" in terminal_file_lines
     assert "src/app.py" in terminal_file_lines

@@ -18,7 +18,7 @@ RENDERER_SYSTEM_PROMPT = (
     "before patching new primitives. Use startOffsetMs, delayMs, timeline_cue, and route_trace animations when "
     "the renderInput timeline suggests a sequence. Use breach_wave beats, camera_jolt impacts, camera_path moves, "
     "signal_interference overlays, "
-    "hologram projections, signal scopes, tunnel grids, wire_landscape terrain, trace routes, "
+    "hologram projections, signal scopes, tunnel grids, wire_landscape terrain, orbital maps, trace routes, "
     "terminal walls, access matrices, camera-drifting city_block districts, "
     "data rain, and structured svg_layer keyframes, path morphs, filters, or clips when they make the scene "
     "feel cinematic. "

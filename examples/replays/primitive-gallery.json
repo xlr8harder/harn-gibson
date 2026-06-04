@@ -53,6 +53,9 @@
       {"path": "primitives.gallery-access.kind", "equals": "access_matrix"},
       {"path": "primitives.gallery-access.props.focusCellId", "equals": "core"},
       {"path": "primitives.gallery-access.props.cells.2.breached", "equals": true},
+      {"path": "primitives.gallery-orbital.kind", "equals": "orbital_map"},
+      {"path": "primitives.gallery-orbital.props.focusNodeId", "equals": "uplink"},
+      {"path": "primitives.gallery-orbital.props.nodes.3.label", "equals": "GIBSON"},
       {"path": "primitives.gallery-city.kind", "equals": "city_block"},
       {"path": "primitives.gallery-city.props.cameraPath.keyframes.1.scale", "equals": 1.04},
       {"path": "primitives.gallery-trace.kind", "equals": "trace_route"},
@@ -190,6 +193,80 @@
                   "value": 0.67,
                   "tone": "magenta"
                 }
+              ]
+            }
+          }
+        },
+        {
+          "op": "upsert",
+          "primitive": {
+            "id": "gallery-orbital",
+            "kind": "orbital_map",
+            "region": "stage",
+            "props": {
+              "label": "ORBITAL UPLINK",
+              "position": {"x": 0.74, "y": 0.25},
+              "scale": 0.105,
+              "tone": "cyan",
+              "accentTone": "magenta",
+              "opacity": 0.76,
+              "rings": 4,
+              "packets": 34,
+              "focusNodeId": "uplink",
+              "scan": true,
+              "speed": 0.62,
+              "seed": 939,
+              "nodes": [
+                {
+                  "id": "local",
+                  "label": "LOCAL",
+                  "lat": 18,
+                  "lon": -118,
+                  "tone": "green",
+                  "active": true,
+                  "intensity": 0.8
+                },
+                {
+                  "id": "relay",
+                  "label": "RELAY",
+                  "lat": 45,
+                  "lon": -38,
+                  "tone": "cyan",
+                  "intensity": 0.72
+                },
+                {
+                  "id": "ice",
+                  "label": "ICE",
+                  "lat": 9,
+                  "lon": 24,
+                  "tone": "amber",
+                  "intensity": 0.88
+                },
+                {
+                  "id": "gibson",
+                  "label": "GIBSON",
+                  "lat": 28,
+                  "lon": 112,
+                  "tone": "magenta",
+                  "active": true,
+                  "intensity": 0.94
+                },
+                {
+                  "id": "uplink",
+                  "label": "UPLINK",
+                  "lat": -32,
+                  "lon": 76,
+                  "tone": "white",
+                  "active": true,
+                  "intensity": 0.9
+                }
+              ],
+              "arcs": [
+                {"from": "local", "to": "relay", "packets": 3, "active": true, "tone": "green"},
+                {"from": "relay", "to": "ice", "packets": 2, "active": true, "tone": "cyan"},
+                {"from": "ice", "to": "gibson", "packets": 4, "active": true, "tone": "magenta"},
+                {"from": "gibson", "to": "uplink", "packets": 3, "active": true, "tone": "white"},
+                {"from": "uplink", "to": "local", "packets": 1, "active": false, "tone": "amber"}
               ]
             }
           }

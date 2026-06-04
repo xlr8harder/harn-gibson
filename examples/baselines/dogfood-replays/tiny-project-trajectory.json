@@ -315,6 +315,7 @@
           "primitive:glyph_layer",
           "primitive:terminal_wall",
           "primitive:access_matrix",
+          "primitive:orbital_map",
           "primitive:tunnel_grid",
           "primitive:wire_landscape",
           "primitive:data_vault",
@@ -349,7 +350,7 @@
           "renderer": "gibson-dogfood-showcase",
           "touchedFileCount": 4
         },
-        "mutationCount": 28,
+        "mutationCount": 29,
         "renderer": "gibson-dogfood-showcase",
         "requestCount": 1,
         "routes": [
@@ -363,6 +364,7 @@
           "dogfood-opcodes",
           "dogfood-terminal-wall",
           "dogfood-access-matrix",
+          "dogfood-orbital-map",
           "dogfood-tunnel",
           "dogfood-landscape",
           "dogfood-vault",
@@ -391,6 +393,7 @@
             "primitive:glyph_layer",
             "primitive:terminal_wall",
             "primitive:access_matrix",
+            "primitive:orbital_map",
             "primitive:tunnel_grid",
             "primitive:wire_landscape",
             "primitive:data_vault",
@@ -424,7 +427,7 @@
             "renderer": "gibson-dogfood-showcase",
             "touchedFileCount": 0
           },
-          "mutationCount": 27,
+          "mutationCount": 28,
           "renderer": "gibson-dogfood-showcase",
           "requestCount": 1,
           "routes": [
@@ -438,6 +441,7 @@
             "dogfood-opcodes",
             "dogfood-terminal-wall",
             "dogfood-access-matrix",
+            "dogfood-orbital-map",
             "dogfood-tunnel",
             "dogfood-landscape",
             "dogfood-vault",
@@ -465,6 +469,7 @@
             "primitive:glyph_layer",
             "primitive:terminal_wall",
             "primitive:access_matrix",
+            "primitive:orbital_map",
             "primitive:tunnel_grid",
             "primitive:wire_landscape",
             "primitive:data_vault",
@@ -498,7 +503,7 @@
             "renderer": "gibson-dogfood-showcase",
             "touchedFileCount": 0
           },
-          "mutationCount": 27,
+          "mutationCount": 28,
           "renderer": "gibson-dogfood-showcase",
           "requestCount": 1,
           "routes": [
@@ -512,6 +517,7 @@
             "dogfood-opcodes",
             "dogfood-terminal-wall",
             "dogfood-access-matrix",
+            "dogfood-orbital-map",
             "dogfood-tunnel",
             "dogfood-landscape",
             "dogfood-vault",
@@ -539,6 +545,7 @@
             "primitive:glyph_layer",
             "primitive:terminal_wall",
             "primitive:access_matrix",
+            "primitive:orbital_map",
             "primitive:tunnel_grid",
             "primitive:wire_landscape",
             "primitive:data_vault",
@@ -573,7 +580,7 @@
             "renderer": "gibson-dogfood-showcase",
             "touchedFileCount": 0
           },
-          "mutationCount": 28,
+          "mutationCount": 29,
           "renderer": "gibson-dogfood-showcase",
           "requestCount": 1,
           "routes": [
@@ -587,6 +594,7 @@
             "dogfood-opcodes",
             "dogfood-terminal-wall",
             "dogfood-access-matrix",
+            "dogfood-orbital-map",
             "dogfood-tunnel",
             "dogfood-landscape",
             "dogfood-vault",
@@ -614,6 +622,7 @@
             "primitive:glyph_layer",
             "primitive:terminal_wall",
             "primitive:access_matrix",
+            "primitive:orbital_map",
             "primitive:tunnel_grid",
             "primitive:wire_landscape",
             "primitive:data_vault",
@@ -647,7 +656,7 @@
             "renderer": "gibson-dogfood-showcase",
             "touchedFileCount": 4
           },
-          "mutationCount": 27,
+          "mutationCount": 28,
           "renderer": "gibson-dogfood-showcase",
           "requestCount": 1,
           "routes": [
@@ -661,6 +670,7 @@
             "dogfood-opcodes",
             "dogfood-terminal-wall",
             "dogfood-access-matrix",
+            "dogfood-orbital-map",
             "dogfood-tunnel",
             "dogfood-landscape",
             "dogfood-vault",
@@ -688,6 +698,7 @@
             "primitive:glyph_layer",
             "primitive:terminal_wall",
             "primitive:access_matrix",
+            "primitive:orbital_map",
             "primitive:tunnel_grid",
             "primitive:wire_landscape",
             "primitive:data_vault",
@@ -722,7 +733,7 @@
             "renderer": "gibson-dogfood-showcase",
             "touchedFileCount": 1
           },
-          "mutationCount": 28,
+          "mutationCount": 29,
           "renderer": "gibson-dogfood-showcase",
           "requestCount": 1,
           "routes": [
@@ -736,6 +747,7 @@
             "dogfood-opcodes",
             "dogfood-terminal-wall",
             "dogfood-access-matrix",
+            "dogfood-orbital-map",
             "dogfood-tunnel",
             "dogfood-landscape",
             "dogfood-vault",
@@ -763,6 +775,7 @@
             "primitive:glyph_layer",
             "primitive:terminal_wall",
             "primitive:access_matrix",
+            "primitive:orbital_map",
             "primitive:tunnel_grid",
             "primitive:wire_landscape",
             "primitive:data_vault",
@@ -796,7 +809,7 @@
             "renderer": "gibson-dogfood-showcase",
             "touchedFileCount": 2
           },
-          "mutationCount": 27,
+          "mutationCount": 28,
           "renderer": "gibson-dogfood-showcase",
           "requestCount": 1,
           "routes": [
@@ -810,6 +823,7 @@
             "dogfood-opcodes",
             "dogfood-terminal-wall",
             "dogfood-access-matrix",
+            "dogfood-orbital-map",
             "dogfood-tunnel",
             "dogfood-landscape",
             "dogfood-vault",
@@ -837,6 +851,7 @@
             "primitive:glyph_layer",
             "primitive:terminal_wall",
             "primitive:access_matrix",
+            "primitive:orbital_map",
             "primitive:tunnel_grid",
             "primitive:wire_landscape",
             "primitive:data_vault",
@@ -871,7 +886,7 @@
             "renderer": "gibson-dogfood-showcase",
             "touchedFileCount": 4
           },
-          "mutationCount": 28,
+          "mutationCount": 29,
           "renderer": "gibson-dogfood-showcase",
           "requestCount": 1,
           "routes": [
@@ -885,6 +900,7 @@
             "dogfood-opcodes",
             "dogfood-terminal-wall",
             "dogfood-access-matrix",
+            "dogfood-orbital-map",
             "dogfood-tunnel",
             "dogfood-landscape",
             "dogfood-vault",
@@ -1674,6 +1690,158 @@
           "palette": "magenta",
           "seed": 14,
           "text": "GIBSON TOOL-RESULT BASH COMPLETED: OK; TESTS PASSED AND COMMIT CREATED README.MD PYPROJECT.TO CLI.PY TEST_CLI.PY TRACE ROUTE ICE MESH NODE GRAPH",
+          "tone": "magenta"
+        },
+        "region": "stage"
+      },
+      "dogfood-orbital-map": {
+        "children": [],
+        "id": "dogfood-orbital-map",
+        "kind": "orbital_map",
+        "props": {
+          "accentTone": "white",
+          "arcs": [
+            {
+              "active": true,
+              "from": "local",
+              "packets": 3,
+              "to": "harn",
+              "tone": "green"
+            },
+            {
+              "active": true,
+              "from": "harn",
+              "packets": 4,
+              "to": "render",
+              "tone": "magenta"
+            },
+            {
+              "active": true,
+              "from": "render",
+              "packets": 5,
+              "to": "gibson",
+              "tone": "red"
+            },
+            {
+              "active": true,
+              "from": "render",
+              "lift": 0.16,
+              "packets": 1,
+              "to": "file-0",
+              "tone": "magenta"
+            },
+            {
+              "active": false,
+              "from": "render",
+              "lift": 0.16,
+              "packets": 2,
+              "to": "file-1",
+              "tone": "white"
+            },
+            {
+              "active": false,
+              "from": "render",
+              "lift": 0.16,
+              "packets": 3,
+              "to": "file-2",
+              "tone": "magenta"
+            },
+            {
+              "active": false,
+              "from": "render",
+              "lift": 0.16,
+              "packets": 1,
+              "to": "file-3",
+              "tone": "white"
+            }
+          ],
+          "focusNodeId": "gibson",
+          "label": "TINY-PROJECT UPLINK",
+          "nodes": [
+            {
+              "active": false,
+              "id": "local",
+              "intensity": 0.72,
+              "label": "LOCAL",
+              "lat": 18,
+              "lon": -118,
+              "tone": "green"
+            },
+            {
+              "active": true,
+              "id": "harn",
+              "intensity": 0.82,
+              "label": "HARN",
+              "lat": 42,
+              "lon": -42,
+              "tone": "magenta"
+            },
+            {
+              "active": true,
+              "id": "render",
+              "intensity": 0.88,
+              "label": "RENDER",
+              "lat": 18,
+              "lon": 28,
+              "tone": "white"
+            },
+            {
+              "active": true,
+              "id": "gibson",
+              "intensity": 0.94,
+              "label": "GIBSON",
+              "lat": 31,
+              "lon": 118,
+              "tone": "red"
+            },
+            {
+              "active": true,
+              "id": "file-0",
+              "intensity": 0.64,
+              "label": "README.md",
+              "lat": -38,
+              "lon": -158,
+              "tone": "magenta"
+            },
+            {
+              "active": false,
+              "id": "file-1",
+              "intensity": 0.64,
+              "label": "pyproject.to",
+              "lat": -25,
+              "lon": -115,
+              "tone": "white"
+            },
+            {
+              "active": false,
+              "id": "file-2",
+              "intensity": 0.64,
+              "label": "cli.py",
+              "lat": -12,
+              "lon": -72,
+              "tone": "magenta"
+            },
+            {
+              "active": false,
+              "id": "file-3",
+              "intensity": 0.64,
+              "label": "test_cli.py",
+              "lat": 1,
+              "lon": -29,
+              "tone": "white"
+            }
+          ],
+          "opacity": 0.66,
+          "packets": 58,
+          "position": {
+            "x": 0.84,
+            "y": 0.25
+          },
+          "rings": 4,
+          "scale": 0.135,
+          "scan": true,
+          "seed": 159,
+          "speed": 0.7,
           "tone": "magenta"
         },
         "region": "stage"

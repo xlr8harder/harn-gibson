@@ -1495,6 +1495,7 @@ function drawScenePrimitives(scene, w, h, now) {
     "data_vault",
     "black_ice",
     "access_matrix",
+    "orbital_map",
     "mesh",
     "city_block",
     "hologram",
@@ -1523,6 +1524,7 @@ function drawPrimitive(primitive, w, h, now) {
   if (primitive.kind === "data_vault") drawDataVault(primitive, w, h, now);
   if (primitive.kind === "black_ice") drawBlackIce(primitive, w, h, now);
   if (primitive.kind === "access_matrix") drawAccessMatrix(primitive, w, h, now);
+  if (primitive.kind === "orbital_map") drawOrbitalMap(primitive, w, h, now);
   if (primitive.kind === "svg_layer") drawSvgLayer(primitive, w, h, now);
   if (primitive.kind === "node_graph") drawNodeGraph(primitive, w, h);
   if (primitive.kind === "trace_route") drawTraceRoute(primitive, w, h, now);
@@ -2877,6 +2879,283 @@ function drawAccessMatrix(primitive, w, h, now) {
     ctx.fillRect(sweepX - gridWidth * 0.18, gridY, gridWidth * 0.36, gridHeight);
   }
 
+  ctx.restore();
+}
+
+function orbitalMapNodes(props) {
+  const seed = finiteNumber(props.seed, 0);
+  const rawNodes = Array.isArray(props.nodes) && props.nodes.length
+    ? props.nodes
+    : [
+      {id: "local", label: "LOCAL", lat: 18, lon: -112, tone: "green", active: true},
+      {id: "relay", label: "RELAY", lat: 42, lon: -38, tone: props.tone || "cyan"},
+      {id: "ice", label: "ICE", lat: 8, lon: 24, tone: "magenta"},
+      {id: "gibson", label: "GIBSON", lat: 27, lon: 115, tone: props.accentTone || "amber", active: true},
+    ];
+  return rawNodes
+    .filter((node) => node && typeof node === "object")
+    .slice(0, 32)
+    .map((node, index) => {
+      const id = String(node.id || `node-${index}`);
+      return {
+        ...node,
+        id,
+        label: String(node.label || node.name || id).slice(0, 14),
+        lat: clamp(finiteNumber(node.lat ?? node.latitude, -38 + seededUnit(seed + index) * 76), -88, 88),
+        lon: finiteNumber(node.lon ?? node.lng ?? node.longitude, seededUnit(seed + index * 3.1) * 360 - 180),
+        intensity: clamp(finiteNumber(node.intensity ?? node.value, node.active ? 0.9 : 0.55), 0, 1),
+      };
+    });
+}
+
+function orbitalMapNodeLookup(nodes) {
+  const lookup = {};
+  for (const node of nodes) lookup[node.id] = node;
+  return lookup;
+}
+
+function orbitalMapArcs(props, nodes) {
+  const rawArcs = Array.isArray(props.arcs) ? props.arcs : [];
+  if (rawArcs.length) {
+    return rawArcs.filter((arc) => arc && typeof arc === "object").slice(0, 48);
+  }
+  return nodes.slice(1).map((node, index) => ({
+    id: `arc-${index}`,
+    from: nodes[Math.max(0, index % nodes.length)]?.id,
+    to: node.id,
+    packets: index + 1,
+    active: index % 2 === 0,
+  }));
+}
+
+function orbitalProject(lat, lon, center, radius, phase, tilt) {
+  const latRad = clamp(finiteNumber(lat, 0), -89, 89) * Math.PI / 180;
+  const lonRad = finiteNumber(lon, 0) * Math.PI / 180 + phase;
+  const cosLat = Math.cos(latRad);
+  const x = cosLat * Math.sin(lonRad);
+  const y = Math.sin(latRad);
+  const z = cosLat * Math.cos(lonRad);
+  const tiltedY = y * Math.cos(tilt) - z * Math.sin(tilt);
+  const tiltedZ = y * Math.sin(tilt) + z * Math.cos(tilt);
+  const perspective = 0.78 + tiltedZ * 0.22;
+  return {
+    x: center.x + x * radius * perspective,
+    y: center.y - tiltedY * radius * 0.78 * perspective,
+    z: tiltedZ,
+    visible: tiltedZ > -0.42,
+    perspective,
+  };
+}
+
+function orbitalArcEndpoint(value, fallback, nodesById) {
+  if (typeof value === "string" && nodesById[value]) return nodesById[value];
+  if (value && typeof value === "object") return value;
+  return fallback;
+}
+
+function orbitalArcPoints(arc, nodes, nodesById, center, radius, phase, tilt) {
+  const from = orbitalArcEndpoint(arc.from ?? arc.source, nodes[0], nodesById);
+  const to = orbitalArcEndpoint(arc.to ?? arc.target, nodes[1] || nodes[0], nodesById);
+  if (!from || !to) return [];
+  const fromLat = finiteNumber(from.lat ?? from.latitude, 0);
+  const toLat = finiteNumber(to.lat ?? to.latitude, 0);
+  const fromLon = finiteNumber(from.lon ?? from.lng ?? from.longitude, 0);
+  const toLon = finiteNumber(to.lon ?? to.lng ?? to.longitude, 0);
+  let lonDelta = toLon - fromLon;
+  if (lonDelta > 180) lonDelta -= 360;
+  if (lonDelta < -180) lonDelta += 360;
+  const lift = clamp(finiteNumber(arc.lift, 0.10), 0, 0.45);
+  const samples = Math.max(8, Math.min(32, Math.floor(finiteNumber(arc.samples, 18))));
+  const points = [];
+  for (let sample = 0; sample <= samples; sample++) {
+    const progress = sample / samples;
+    const lat = fromLat + (toLat - fromLat) * progress + Math.sin(progress * Math.PI) * lift * 52;
+    const lon = fromLon + lonDelta * progress;
+    points.push(orbitalProject(lat, lon, center, radius, phase, tilt));
+  }
+  return points;
+}
+
+function drawOrbitalPath(points, tone, alpha, width) {
+  if (points.length < 2) return;
+  ctx.strokeStyle = toneColor(tone, alpha);
+  ctx.lineWidth = width;
+  ctx.beginPath();
+  let started = false;
+  for (const point of points) {
+    if (!point.visible && started) {
+      started = false;
+      continue;
+    }
+    if (!started) {
+      ctx.moveTo(point.x, point.y);
+      started = true;
+    } else {
+      ctx.lineTo(point.x, point.y);
+    }
+  }
+  ctx.stroke();
+}
+
+function drawOrbitalGrid(center, radius, phase, tilt, tone, opacity) {
+  const width = Math.max(0.55, 0.75 * devicePixelRatio);
+  for (let lat = -60; lat <= 60; lat += 30) {
+    const points = [];
+    for (let lon = -180; lon <= 180; lon += 8) {
+      points.push(orbitalProject(lat, lon, center, radius, phase, tilt));
+    }
+    drawOrbitalPath(points, tone, lat === 0 ? 0.26 * opacity : 0.13 * opacity, width);
+  }
+  for (let lon = 0; lon < 360; lon += 30) {
+    const points = [];
+    for (let lat = -82; lat <= 82; lat += 7) {
+      points.push(orbitalProject(lat, lon, center, radius, phase, tilt));
+    }
+    drawOrbitalPath(points, tone, 0.12 * opacity, width);
+  }
+}
+
+function drawOrbitalMap(primitive, w, h, now) {
+  const props = primitive.props || {};
+  const center = normalizedPoint(props.position || {x: 0.5, y: 0.5}, w, h);
+  const radius = clamp(finiteNumber(props.scale ?? props.radius, 0.16), 0.035, 0.42) * Math.min(w, h);
+  const tone = props.tone || "cyan";
+  const accentTone = props.accentTone || props.accent || "magenta";
+  const opacity = clamp(finiteNumber(props.opacity, 0.72), 0, 1);
+  const speed = Math.max(0, finiteNumber(props.speed, 0.62));
+  const seed = finiteNumber(props.seed, 0);
+  const phase = now * 0.00018 * speed + seed * 0.021;
+  const tilt = finiteNumber(props.tilt, -0.42);
+  const nodes = orbitalMapNodes(props);
+  const nodesById = orbitalMapNodeLookup(nodes);
+  const arcs = orbitalMapArcs(props, nodes);
+  const rings = Math.max(0, Math.min(8, Math.floor(finiteNumber(props.rings, 3))));
+  const packetCount = Math.max(0, Math.min(96, Math.floor(finiteNumber(props.packets, 24))));
+  const focusNodeId = props.focusNodeId || props.focusId || "";
+  const hasScan = props.scan !== false;
+  const hasLabel = Boolean(props.label);
+
+  if (typeof window !== "undefined") {
+    window.__gibsonOrbitalMapState = window.__gibsonOrbitalMapState || {};
+    window.__gibsonOrbitalMapState[primitive.id] = {
+      nodeCount: nodes.length,
+      arcCount: arcs.length,
+      ringCount: rings,
+      packetCount,
+      focusNodeId: focusNodeId || null,
+      tone,
+      accentTone,
+      hasScan,
+      hasLabel,
+    };
+  }
+
+  ctx.save();
+  ctx.globalCompositeOperation = props.blend === "source-over" ? "source-over" : "screen";
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.shadowColor = toneColor(tone, 0.42 * opacity);
+  ctx.shadowBlur = 12 * devicePixelRatio;
+  const halo = ctx.createRadialGradient(center.x, center.y, radius * 0.18, center.x, center.y, radius * 1.45);
+  halo.addColorStop(0, toneColor(tone, 0.10 * opacity));
+  halo.addColorStop(0.62, toneColor(accentTone, 0.045 * opacity));
+  halo.addColorStop(1, toneColor(tone, 0));
+  ctx.fillStyle = halo;
+  ctx.fillRect(center.x - radius * 1.55, center.y - radius * 1.55, radius * 3.1, radius * 3.1);
+
+  for (let ring = 0; ring < rings; ring++) {
+    const progress = (ring + 1) / (rings + 1);
+    const ringRadius = radius * (1.04 + progress * 0.48);
+    const rotation = phase * (ring % 2 ? -0.42 : 0.38) + ring * 0.74;
+    ctx.strokeStyle = toneColor(ring % 2 ? accentTone : tone, (0.10 + progress * 0.06) * opacity);
+    ctx.lineWidth = Math.max(0.55, (0.7 + progress * 0.55) * devicePixelRatio);
+    ctx.beginPath();
+    ctx.ellipse(center.x, center.y, ringRadius, ringRadius * (0.27 + progress * 0.11), rotation, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+
+  ctx.strokeStyle = toneColor(tone, 0.32 * opacity);
+  ctx.lineWidth = Math.max(0.8, 1.1 * devicePixelRatio);
+  ctx.beginPath();
+  ctx.ellipse(center.x, center.y, radius, radius * 0.78, 0, 0, Math.PI * 2);
+  ctx.stroke();
+  drawOrbitalGrid(center, radius, phase, tilt, tone, opacity);
+
+  for (const [index, arc] of arcs.entries()) {
+    const arcTone = arc.tone || (arc.active ? accentTone : tone);
+    const points = orbitalArcPoints(arc, nodes, nodesById, center, radius, phase, tilt);
+    drawOrbitalPath(
+      points,
+      arcTone,
+      (arc.active ? 0.42 : 0.22) * opacity,
+      Math.max(0.7, finiteNumber(arc.width, arc.active ? 1.2 : 0.85) * devicePixelRatio)
+    );
+    const localPackets = Math.max(0, Math.min(8, Math.floor(finiteNumber(arc.packets, 1))));
+    for (let packet = 0; packet < localPackets && points.length; packet++) {
+      const offset = (now * 0.00020 * speed + packet * 0.31 + index * 0.17 + seed * 0.013) % 1;
+      const point = points[Math.min(points.length - 1, Math.floor(offset * (points.length - 1)))];
+      if (!point.visible) continue;
+      ctx.fillStyle = toneColor(arcTone, (0.48 + point.perspective * 0.22) * opacity);
+      ctx.beginPath();
+      ctx.arc(point.x, point.y, Math.max(1.1, radius * 0.010 * point.perspective), 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  for (let packet = 0; packet < packetCount; packet++) {
+    const ring = packet % Math.max(1, rings);
+    const angle = phase * (ring % 2 ? -1.35 : 1.55) + packet * 2.399 + seed * 0.19;
+    const ringRadius = radius * (1.08 + ((ring + 1) / Math.max(1, rings + 1)) * 0.42);
+    const x = center.x + Math.cos(angle) * ringRadius;
+    const y = center.y + Math.sin(angle) * ringRadius * (0.25 + ring * 0.035);
+    ctx.fillStyle = toneColor(packet % 3 ? tone : accentTone, 0.18 * opacity);
+    ctx.fillRect(x - devicePixelRatio, y - devicePixelRatio, 2 * devicePixelRatio, 2 * devicePixelRatio);
+  }
+
+  if (hasScan) {
+    const scanAngle = phase * 1.8;
+    const gradient = ctx.createRadialGradient(center.x, center.y, radius * 0.06, center.x, center.y, radius * 1.08);
+    gradient.addColorStop(0, toneColor(accentTone, 0.16 * opacity));
+    gradient.addColorStop(1, toneColor(accentTone, 0));
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.moveTo(center.x, center.y);
+    ctx.arc(center.x, center.y, radius * 1.05, scanAngle - 0.10, scanAngle + 0.32);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  for (const [index, node] of nodes.entries()) {
+    const point = orbitalProject(node.lat, node.lon, center, radius, phase, tilt);
+    if (!point.visible) continue;
+    const focused = node.id === focusNodeId;
+    const active = Boolean(node.active || focused);
+    const nodeTone = node.tone || (active ? accentTone : tone);
+    const pulse = 0.5 + Math.sin(now * 0.004 * speed + seed + index * 0.91) * 0.5;
+    const nodeRadius = radius * (0.018 + node.intensity * 0.018 + (focused ? 0.014 : 0)) * point.perspective;
+    ctx.fillStyle = toneColor(nodeTone, (0.38 + pulse * (active ? 0.36 : 0.18)) * opacity);
+    ctx.strokeStyle = toneColor("white", (0.28 + pulse * 0.24) * opacity);
+    ctx.lineWidth = Math.max(0.6, 0.85 * devicePixelRatio);
+    ctx.beginPath();
+    ctx.arc(point.x, point.y, Math.max(2.2 * devicePixelRatio, nodeRadius), 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    if (focused || active || node.label) {
+      ctx.font = `${Math.max(7, Math.min(10, radius * 0.060)) * devicePixelRatio}px ui-monospace, monospace`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "bottom";
+      ctx.fillStyle = toneColor("white", (focused ? 0.90 : 0.58) * opacity);
+      ctx.fillText(node.label, point.x, point.y - nodeRadius - 4 * devicePixelRatio);
+    }
+  }
+
+  if (hasLabel) {
+    ctx.font = `${11 * devicePixelRatio}px ui-monospace, monospace`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "top";
+    ctx.fillStyle = toneColor("white", 0.78 * opacity);
+    ctx.fillText(String(props.label).slice(0, 26), center.x, center.y + radius * 0.90);
+  }
   ctx.restore();
 }
 
