@@ -1473,7 +1473,7 @@ def test_checked_in_replay_fixtures_cover_agent_and_renderer_sides() -> None:
     assert gallery_result.scene.primitives["assistant-stream"].props["title"] == "CATALOG STREAM"
 
     assert [step.kind for step in animation_result.steps] == ["mutations"]
-    assert len(animation_result.expectations) == 19
+    assert len(animation_result.expectations) == 21
     assert animation_result.scene.primitives["animation-vector"].kind == "svg_layer"
     assert animation_result.scene.primitives["animation-vector"].props["gradients"][0]["id"] == "fx-gradient"
     assert animation_result.scene.primitives["animation-vector"].props["traces"][0]["direction"] == "reverse"
@@ -1485,6 +1485,8 @@ def test_checked_in_replay_fixtures_cover_agent_and_renderer_sides() -> None:
     assert animation_result.scene.animations["gallery-packets"].kind == "packet_burst"
     assert animation_result.scene.animations["gallery-cues"].kind == "timeline_cue"
     assert animation_result.scene.animations["gallery-cues"].props["cues"][2]["label"] == "BREACH"
+    assert animation_result.scene.animations["gallery-route"].kind == "route_trace"
+    assert animation_result.scene.animations["gallery-route"].props["points"][2]["label"] == "BREACH"
     assert sorted(animation.kind for animation in animation_result.scene.animations.values()) == [
         "breach_wave",
         "camera_jolt",
@@ -1495,6 +1497,7 @@ def test_checked_in_replay_fixtures_cover_agent_and_renderer_sides() -> None:
         "hold",
         "packet_burst",
         "phase-pulse",
+        "route_trace",
         "scan",
         "timeline_cue",
     ]
@@ -1522,7 +1525,7 @@ def test_checked_in_dogfood_replay_exercises_showcase_renderer() -> None:
         state.pipeline.stop()
 
     assert [step.kind for step in result.steps] == ["event"] * 7
-    assert len(result.expectations) == 17
+    assert len(result.expectations) == 18
     assert result.scene.primitives["status"].props["text"] == "dogfood::tool_result"
     assert result.scene.primitives["dogfood-city"].kind == "city_block"
     assert result.scene.primitives["dogfood-city"].props["labels"] == ["DOGFOOD CITY", "4 touched"]
@@ -1538,6 +1541,7 @@ def test_checked_in_dogfood_replay_exercises_showcase_renderer() -> None:
     assert result.scene.primitives["dogfood-route"].props["focusHopId"] == "target-0"
     assert result.scene.primitives["dogfood-sigil"].kind == "svg_layer"
     assert result.scene.animations["dogfood-cues"].kind == "timeline_cue"
+    assert result.scene.animations["dogfood-route-trace"].kind == "route_trace"
     assert result.scene.metadata["lastRenderIntent"]["renderer"] == "gibson-dogfood-showcase"
 
 
@@ -1549,7 +1553,7 @@ def test_checked_in_dogfood_runtime_replay_exercises_failure_scene() -> None:
         state.pipeline.stop()
 
     assert [step.kind for step in result.steps] == ["event"] * 5
-    assert len(result.expectations) == 15
+    assert len(result.expectations) == 16
     assert result.scene.primitives["status"].props["text"] == "dogfood::runtime_error"
     assert result.scene.primitives["dogfood-city"].props["labels"] == ["DOGFOOD CITY", "1 touched"]
     assert result.scene.primitives["dogfood-opcodes"].kind == "glyph_layer"
@@ -1559,6 +1563,7 @@ def test_checked_in_dogfood_runtime_replay_exercises_failure_scene() -> None:
     assert result.scene.primitives["dogfood-file-sparks"].props["label"] == "1 TOUCHED FILES"
     assert result.scene.primitives["dogfood-route"].props["focusHopId"] == "target-0"
     assert result.scene.animations["dogfood-breach"].kind == "breach_wave"
+    assert result.scene.animations["dogfood-route-trace"].kind == "route_trace"
     assert result.scene.metadata["lastRenderIntent"]["eventTypes"] == ["runtime_error"]
 
 
@@ -1572,7 +1577,7 @@ def test_checked_in_dogfood_repo_map_replay_exercises_topology_scene() -> None:
     blocks = result.scene.primitives["dogfood-city"].props["blocks"]
     block_paths = {block["path"]: block for block in blocks}
     assert [step.kind for step in result.steps] == ["event"] * 8
-    assert len(result.expectations) == 16
+    assert len(result.expectations) == 17
     assert result.scene.primitives["status"].props["text"] == "dogfood::tool_result"
     assert result.scene.primitives["dogfood-city"].props["labels"] == ["DOGFOOD CITY", "7 touched"]
     assert result.scene.primitives["dogfood-file-sparks"].props["label"] == "7 TOUCHED FILES"
@@ -1585,6 +1590,7 @@ def test_checked_in_dogfood_repo_map_replay_exercises_topology_scene() -> None:
     assert result.scene.animations["dogfood-city-extrude"].kind == "extrude"
     assert result.scene.animations["dogfood-city-extrude"].target_id == "dogfood-city"
     assert result.scene.animations["dogfood-city-extrude"].props["sequence"] == 8
+    assert result.scene.animations["dogfood-route-trace"].props["points"][4]["label"] == "README.md"
     assert result.scene.metadata["lastRenderIntent"]["metadata"]["touchedFileCount"] == 7
 
 
@@ -1620,7 +1626,7 @@ def test_checked_in_dogfood_replay_suite_summarizes_trajectory_coverage() -> Non
             "primitive:trace_route",
             "primitive:city_block",
         ],
-        "maxActiveAnimationCount": 7,
+        "maxActiveAnimationCount": 8,
         "maxVisualAnchorCount": 15,
         "renderers": ["gibson-dogfood-showcase"],
         "targets": [
@@ -1647,7 +1653,7 @@ def test_checked_in_dogfood_replay_suite_summarizes_trajectory_coverage() -> Non
     assert summary["okCount"] == 3
     assert summary["failedCount"] == 0
     assert summary["stepCount"] == 20
-    assert summary["expectationCount"] == 48
+    assert summary["expectationCount"] == 51
     assert summary["rendererCounts"] == {"gibson-dogfood-showcase": 20}
     assert summary["routeCounts"] == {"renderer_agent": 20}
     assert summary["screenshotCount"] == 0

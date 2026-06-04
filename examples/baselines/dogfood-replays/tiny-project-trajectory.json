@@ -150,6 +150,74 @@
         "startedAtMs": 25600,
         "targetId": "dogfood-route"
       },
+      "dogfood-route-trace": {
+        "durationMs": 4800,
+        "id": "dogfood-route-trace",
+        "kind": "route_trace",
+        "loop": true,
+        "props": {
+          "accentTone": "white",
+          "label": "ROUTE TRACE",
+          "packets": 38,
+          "phase": "after",
+          "points": [
+            {
+              "id": "hook",
+              "label": "HOOK",
+              "tone": "green",
+              "x": 0.12,
+              "y": 0.82
+            },
+            {
+              "id": "route",
+              "label": "AFTER",
+              "tone": "magenta",
+              "x": 0.3,
+              "y": 0.7
+            },
+            {
+              "id": "render",
+              "label": "TOOL_RESUL",
+              "tone": "white",
+              "x": 0.52,
+              "y": 0.58
+            },
+            {
+              "id": "scene",
+              "label": "SCENE",
+              "tone": "cyan",
+              "x": 0.72,
+              "y": 0.46
+            },
+            {
+              "id": "file-0",
+              "label": "README.md",
+              "tone": "magenta",
+              "x": 0.82,
+              "y": 0.34
+            },
+            {
+              "id": "file-1",
+              "label": "pyproject.to",
+              "tone": "white",
+              "x": 0.865,
+              "y": 0.435
+            },
+            {
+              "id": "file-2",
+              "label": "cli.py",
+              "tone": "magenta",
+              "x": 0.91,
+              "y": 0.53
+            }
+          ],
+          "seed": 236,
+          "tail": 0.07,
+          "tone": "magenta"
+        },
+        "startedAtMs": 25600,
+        "targetId": "dogfood-route"
+      },
       "dogfood-scan": {
         "durationMs": 3200,
         "id": "dogfood-scan",
@@ -236,6 +304,7 @@
           "primitive:ribbon",
           "primitive:svg_layer",
           "animation:timeline_cue",
+          "animation:route_trace",
           "animation:camera_path",
           "animation:camera_jolt",
           "animation:packet_burst",
@@ -254,7 +323,7 @@
           "renderer": "gibson-dogfood-showcase",
           "touchedFileCount": 4
         },
-        "mutationCount": 23,
+        "mutationCount": 24,
         "renderer": "gibson-dogfood-showcase",
         "requestCount": 1,
         "routes": [
@@ -304,6 +373,7 @@
             "primitive:ribbon",
             "primitive:svg_layer",
             "animation:timeline_cue",
+            "animation:route_trace",
             "animation:camera_path",
             "animation:camera_jolt",
             "animation:packet_burst",
@@ -318,139 +388,6 @@
             "eventType": "input",
             "intent": "stage input as a Hollywood terminal intrusion",
             "phase": "before",
-            "renderer": "gibson-dogfood-showcase",
-            "touchedFileCount": 0
-          },
-          "mutationCount": 22,
-          "renderer": "gibson-dogfood-showcase",
-          "requestCount": 1,
-          "routes": [
-            "renderer_agent"
-          ],
-          "schema": "harn-gibson.render-intent.v1",
-          "stepCount": 1,
-          "targets": [
-            "status",
-            "dogfood-rain",
-            "dogfood-opcodes",
-            "dogfood-tunnel",
-            "dogfood-vault",
-            "dogfood-black-ice",
-            "dogfood-ice-mesh",
-            "dogfood-scope",
-            "dogfood-control-graph",
-            "dogfood-route",
-            "dogfood-city",
-            "dogfood-file-sparks",
-            "dogfood-hologram",
-            "dogfood-command-ribbon",
-            "dogfood-sigil",
-            "scan-grid"
-          ],
-          "timeline": {
-            "durationMs": 0
-          }
-        },
-        {
-          "effects": [
-            "patch",
-            "append_log",
-            "primitive:data_rain",
-            "primitive:glyph_layer",
-            "primitive:tunnel_grid",
-            "primitive:data_vault",
-            "primitive:black_ice",
-            "primitive:mesh",
-            "primitive:signal_scope",
-            "primitive:node_graph",
-            "primitive:trace_route",
-            "primitive:city_block",
-            "primitive:particle_field",
-            "primitive:hologram",
-            "primitive:ribbon",
-            "primitive:svg_layer",
-            "animation:timeline_cue",
-            "animation:camera_path",
-            "animation:camera_jolt",
-            "animation:packet_burst",
-            "animation:scan",
-            "animation:extrude"
-          ],
-          "eventTypes": [
-            "tool_call"
-          ],
-          "intent": "stage tool_call as a Hollywood terminal intrusion",
-          "metadata": {
-            "eventType": "tool_call",
-            "intent": "stage tool_call as a Hollywood terminal intrusion",
-            "phase": "before",
-            "renderer": "gibson-dogfood-showcase",
-            "touchedFileCount": 0
-          },
-          "mutationCount": 22,
-          "renderer": "gibson-dogfood-showcase",
-          "requestCount": 1,
-          "routes": [
-            "renderer_agent"
-          ],
-          "schema": "harn-gibson.render-intent.v1",
-          "stepCount": 1,
-          "targets": [
-            "status",
-            "dogfood-rain",
-            "dogfood-opcodes",
-            "dogfood-tunnel",
-            "dogfood-vault",
-            "dogfood-black-ice",
-            "dogfood-ice-mesh",
-            "dogfood-scope",
-            "dogfood-control-graph",
-            "dogfood-route",
-            "dogfood-city",
-            "dogfood-file-sparks",
-            "dogfood-hologram",
-            "dogfood-command-ribbon",
-            "dogfood-sigil",
-            "scan-grid"
-          ],
-          "timeline": {
-            "durationMs": 0
-          }
-        },
-        {
-          "effects": [
-            "patch",
-            "append_log",
-            "primitive:data_rain",
-            "primitive:glyph_layer",
-            "primitive:tunnel_grid",
-            "primitive:data_vault",
-            "primitive:black_ice",
-            "primitive:mesh",
-            "primitive:signal_scope",
-            "primitive:node_graph",
-            "primitive:trace_route",
-            "primitive:city_block",
-            "primitive:particle_field",
-            "primitive:hologram",
-            "primitive:ribbon",
-            "primitive:svg_layer",
-            "animation:timeline_cue",
-            "animation:camera_path",
-            "animation:camera_jolt",
-            "animation:packet_burst",
-            "animation:scan",
-            "animation:extrude",
-            "animation:breach_wave"
-          ],
-          "eventTypes": [
-            "tool_result"
-          ],
-          "intent": "stage tool_result as a Hollywood terminal intrusion",
-          "metadata": {
-            "eventType": "tool_result",
-            "intent": "stage tool_result as a Hollywood terminal intrusion",
-            "phase": "after",
             "renderer": "gibson-dogfood-showcase",
             "touchedFileCount": 0
           },
@@ -503,6 +440,7 @@
             "primitive:ribbon",
             "primitive:svg_layer",
             "animation:timeline_cue",
+            "animation:route_trace",
             "animation:camera_path",
             "animation:camera_jolt",
             "animation:packet_burst",
@@ -518,9 +456,9 @@
             "intent": "stage tool_call as a Hollywood terminal intrusion",
             "phase": "before",
             "renderer": "gibson-dogfood-showcase",
-            "touchedFileCount": 4
+            "touchedFileCount": 0
           },
-          "mutationCount": 22,
+          "mutationCount": 23,
           "renderer": "gibson-dogfood-showcase",
           "requestCount": 1,
           "routes": [
@@ -569,6 +507,142 @@
             "primitive:ribbon",
             "primitive:svg_layer",
             "animation:timeline_cue",
+            "animation:route_trace",
+            "animation:camera_path",
+            "animation:camera_jolt",
+            "animation:packet_burst",
+            "animation:scan",
+            "animation:extrude",
+            "animation:breach_wave"
+          ],
+          "eventTypes": [
+            "tool_result"
+          ],
+          "intent": "stage tool_result as a Hollywood terminal intrusion",
+          "metadata": {
+            "eventType": "tool_result",
+            "intent": "stage tool_result as a Hollywood terminal intrusion",
+            "phase": "after",
+            "renderer": "gibson-dogfood-showcase",
+            "touchedFileCount": 0
+          },
+          "mutationCount": 24,
+          "renderer": "gibson-dogfood-showcase",
+          "requestCount": 1,
+          "routes": [
+            "renderer_agent"
+          ],
+          "schema": "harn-gibson.render-intent.v1",
+          "stepCount": 1,
+          "targets": [
+            "status",
+            "dogfood-rain",
+            "dogfood-opcodes",
+            "dogfood-tunnel",
+            "dogfood-vault",
+            "dogfood-black-ice",
+            "dogfood-ice-mesh",
+            "dogfood-scope",
+            "dogfood-control-graph",
+            "dogfood-route",
+            "dogfood-city",
+            "dogfood-file-sparks",
+            "dogfood-hologram",
+            "dogfood-command-ribbon",
+            "dogfood-sigil",
+            "scan-grid"
+          ],
+          "timeline": {
+            "durationMs": 0
+          }
+        },
+        {
+          "effects": [
+            "patch",
+            "append_log",
+            "primitive:data_rain",
+            "primitive:glyph_layer",
+            "primitive:tunnel_grid",
+            "primitive:data_vault",
+            "primitive:black_ice",
+            "primitive:mesh",
+            "primitive:signal_scope",
+            "primitive:node_graph",
+            "primitive:trace_route",
+            "primitive:city_block",
+            "primitive:particle_field",
+            "primitive:hologram",
+            "primitive:ribbon",
+            "primitive:svg_layer",
+            "animation:timeline_cue",
+            "animation:route_trace",
+            "animation:camera_path",
+            "animation:camera_jolt",
+            "animation:packet_burst",
+            "animation:scan",
+            "animation:extrude"
+          ],
+          "eventTypes": [
+            "tool_call"
+          ],
+          "intent": "stage tool_call as a Hollywood terminal intrusion",
+          "metadata": {
+            "eventType": "tool_call",
+            "intent": "stage tool_call as a Hollywood terminal intrusion",
+            "phase": "before",
+            "renderer": "gibson-dogfood-showcase",
+            "touchedFileCount": 4
+          },
+          "mutationCount": 23,
+          "renderer": "gibson-dogfood-showcase",
+          "requestCount": 1,
+          "routes": [
+            "renderer_agent"
+          ],
+          "schema": "harn-gibson.render-intent.v1",
+          "stepCount": 1,
+          "targets": [
+            "status",
+            "dogfood-rain",
+            "dogfood-opcodes",
+            "dogfood-tunnel",
+            "dogfood-vault",
+            "dogfood-black-ice",
+            "dogfood-ice-mesh",
+            "dogfood-scope",
+            "dogfood-control-graph",
+            "dogfood-route",
+            "dogfood-city",
+            "dogfood-file-sparks",
+            "dogfood-hologram",
+            "dogfood-command-ribbon",
+            "dogfood-sigil",
+            "scan-grid"
+          ],
+          "timeline": {
+            "durationMs": 0
+          }
+        },
+        {
+          "effects": [
+            "patch",
+            "append_log",
+            "primitive:data_rain",
+            "primitive:glyph_layer",
+            "primitive:tunnel_grid",
+            "primitive:data_vault",
+            "primitive:black_ice",
+            "primitive:mesh",
+            "primitive:signal_scope",
+            "primitive:node_graph",
+            "primitive:trace_route",
+            "primitive:city_block",
+            "primitive:particle_field",
+            "primitive:hologram",
+            "primitive:ribbon",
+            "primitive:svg_layer",
+            "animation:timeline_cue",
+            "animation:route_trace",
             "animation:camera_path",
             "animation:camera_jolt",
             "animation:packet_burst",
@@ -587,6 +661,73 @@
             "renderer": "gibson-dogfood-showcase",
             "touchedFileCount": 1
           },
+          "mutationCount": 24,
+          "renderer": "gibson-dogfood-showcase",
+          "requestCount": 1,
+          "routes": [
+            "renderer_agent"
+          ],
+          "schema": "harn-gibson.render-intent.v1",
+          "stepCount": 1,
+          "targets": [
+            "status",
+            "dogfood-rain",
+            "dogfood-opcodes",
+            "dogfood-tunnel",
+            "dogfood-vault",
+            "dogfood-black-ice",
+            "dogfood-ice-mesh",
+            "dogfood-scope",
+            "dogfood-control-graph",
+            "dogfood-route",
+            "dogfood-city",
+            "dogfood-file-sparks",
+            "dogfood-hologram",
+            "dogfood-command-ribbon",
+            "dogfood-sigil",
+            "scan-grid"
+          ],
+          "timeline": {
+            "durationMs": 0
+          }
+        },
+        {
+          "effects": [
+            "patch",
+            "append_log",
+            "primitive:data_rain",
+            "primitive:glyph_layer",
+            "primitive:tunnel_grid",
+            "primitive:data_vault",
+            "primitive:black_ice",
+            "primitive:mesh",
+            "primitive:signal_scope",
+            "primitive:node_graph",
+            "primitive:trace_route",
+            "primitive:city_block",
+            "primitive:particle_field",
+            "primitive:hologram",
+            "primitive:ribbon",
+            "primitive:svg_layer",
+            "animation:timeline_cue",
+            "animation:route_trace",
+            "animation:camera_path",
+            "animation:camera_jolt",
+            "animation:packet_burst",
+            "animation:scan",
+            "animation:extrude"
+          ],
+          "eventTypes": [
+            "tool_call"
+          ],
+          "intent": "stage tool_call as a Hollywood terminal intrusion",
+          "metadata": {
+            "eventType": "tool_call",
+            "intent": "stage tool_call as a Hollywood terminal intrusion",
+            "phase": "before",
+            "renderer": "gibson-dogfood-showcase",
+            "touchedFileCount": 2
+          },
           "mutationCount": 23,
           "renderer": "gibson-dogfood-showcase",
           "requestCount": 1,
@@ -636,72 +777,7 @@
             "primitive:ribbon",
             "primitive:svg_layer",
             "animation:timeline_cue",
-            "animation:camera_path",
-            "animation:camera_jolt",
-            "animation:packet_burst",
-            "animation:scan",
-            "animation:extrude"
-          ],
-          "eventTypes": [
-            "tool_call"
-          ],
-          "intent": "stage tool_call as a Hollywood terminal intrusion",
-          "metadata": {
-            "eventType": "tool_call",
-            "intent": "stage tool_call as a Hollywood terminal intrusion",
-            "phase": "before",
-            "renderer": "gibson-dogfood-showcase",
-            "touchedFileCount": 2
-          },
-          "mutationCount": 22,
-          "renderer": "gibson-dogfood-showcase",
-          "requestCount": 1,
-          "routes": [
-            "renderer_agent"
-          ],
-          "schema": "harn-gibson.render-intent.v1",
-          "stepCount": 1,
-          "targets": [
-            "status",
-            "dogfood-rain",
-            "dogfood-opcodes",
-            "dogfood-tunnel",
-            "dogfood-vault",
-            "dogfood-black-ice",
-            "dogfood-ice-mesh",
-            "dogfood-scope",
-            "dogfood-control-graph",
-            "dogfood-route",
-            "dogfood-city",
-            "dogfood-file-sparks",
-            "dogfood-hologram",
-            "dogfood-command-ribbon",
-            "dogfood-sigil",
-            "scan-grid"
-          ],
-          "timeline": {
-            "durationMs": 0
-          }
-        },
-        {
-          "effects": [
-            "patch",
-            "append_log",
-            "primitive:data_rain",
-            "primitive:glyph_layer",
-            "primitive:tunnel_grid",
-            "primitive:data_vault",
-            "primitive:black_ice",
-            "primitive:mesh",
-            "primitive:signal_scope",
-            "primitive:node_graph",
-            "primitive:trace_route",
-            "primitive:city_block",
-            "primitive:particle_field",
-            "primitive:hologram",
-            "primitive:ribbon",
-            "primitive:svg_layer",
-            "animation:timeline_cue",
+            "animation:route_trace",
             "animation:camera_path",
             "animation:camera_jolt",
             "animation:packet_burst",
@@ -720,7 +796,7 @@
             "renderer": "gibson-dogfood-showcase",
             "touchedFileCount": 4
           },
-          "mutationCount": 23,
+          "mutationCount": 24,
           "renderer": "gibson-dogfood-showcase",
           "requestCount": 1,
           "routes": [

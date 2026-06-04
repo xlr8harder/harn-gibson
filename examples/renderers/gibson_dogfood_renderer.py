@@ -59,6 +59,7 @@ def main() -> None:
         _upsert_command_ribbon(event_type, phase, tone, accent, sequence, touched),
         _upsert_sigil(event_type, summary, tone, accent, sequence, touched),
         _timeline_cue_animation(event_type, phase, sequence, timestamp_ms, duration_ms, tone, accent, touched),
+        _route_trace_animation(event_type, phase, sequence, timestamp_ms, duration_ms, tone, accent, touched),
         _camera_path_animation(sequence, timestamp_ms, duration_ms),
         _camera_jolt_animation(sequence, timestamp_ms, phase),
         _packet_burst_animation(sequence, timestamp_ms, phase, tone),
@@ -887,6 +888,55 @@ def _timeline_cue_animation(
                 "window": 0.12,
                 "cues": cues,
                 "sequence": sequence,
+            },
+        },
+    }
+
+
+def _route_trace_animation(
+    event_type: str,
+    phase: str,
+    sequence: int,
+    timestamp_ms: int,
+    duration_ms: int,
+    tone: str,
+    accent: str,
+    touched: list[dict[str, Any]],
+) -> dict[str, Any]:
+    points = [
+        {"id": "hook", "label": "HOOK", "x": 0.12, "y": 0.82, "tone": "green"},
+        {"id": "route", "label": phase.upper()[:8], "x": 0.30, "y": 0.70, "tone": tone},
+        {"id": "render", "label": event_type.upper()[:10], "x": 0.52, "y": 0.58, "tone": accent},
+        {"id": "scene", "label": "SCENE", "x": 0.72, "y": 0.46, "tone": "cyan"},
+    ]
+    for index, item in enumerate(touched[:3]):
+        points.append(
+            {
+                "id": f"file-{index}",
+                "label": _path_label(_text(item.get("path"), f"file-{index}")),
+                "x": round(0.82 + index * 0.045, 3),
+                "y": round(0.34 + index * 0.095, 3),
+                "tone": "magenta" if index % 2 == 0 else accent,
+            }
+        )
+    return {
+        "op": "start_animation",
+        "animation": {
+            "id": "dogfood-route-trace",
+            "targetId": "dogfood-route",
+            "kind": "route_trace",
+            "startedAtMs": timestamp_ms,
+            "durationMs": max(4800, duration_ms),
+            "loop": True,
+            "props": {
+                "phase": phase,
+                "label": "ROUTE TRACE",
+                "tone": tone,
+                "accentTone": accent,
+                "points": points,
+                "packets": 18 + min(34, len(touched) * 5),
+                "tail": 0.07,
+                "seed": sequence + len(touched) * 29 + 113,
             },
         },
     }

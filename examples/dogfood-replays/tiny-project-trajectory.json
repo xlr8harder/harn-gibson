@@ -70,6 +70,10 @@
         "equals": "timeline_cue"
       },
       {
+        "path": "animations.dogfood-route-trace.kind",
+        "equals": "route_trace"
+      },
+      {
         "path": "metadata.lastRenderIntent.renderer",
         "equals": "gibson-dogfood-showcase"
       }

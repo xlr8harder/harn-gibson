@@ -56,6 +56,7 @@ def test_default_visual_catalog_has_generic_and_cinematic_building_blocks() -> N
         "flythrough",
         "packet_burst",
         "timeline_cue",
+        "route_trace",
         "vector_trace",
         "vector_keyframes",
         "hold",
@@ -157,3 +158,7 @@ def test_default_visual_catalog_has_generic_and_cinematic_building_blocks() -> N
     assert timeline_cue is not None
     assert {"targetId", "cues", "durationMs", "label"} <= set(timeline_cue.props)
     assert {"cinematic", "motion", "timed", "sequence"} <= set(timeline_cue.tags)
+    route_trace = catalog.entry("route_trace")
+    assert route_trace is not None
+    assert {"targetId", "points", "durationMs", "packets", "tail", "label"} <= set(route_trace.props)
+    assert {"gibson", "cinematic", "motion", "timed", "sequence"} <= set(route_trace.tags)

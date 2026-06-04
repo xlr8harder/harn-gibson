@@ -15,6 +15,8 @@
       {"path": "animations.gallery-packets.kind", "equals": "packet_burst"},
       {"path": "animations.gallery-cues.kind", "equals": "timeline_cue"},
       {"path": "animations.gallery-cues.props.cues.2.label", "equals": "BREACH"},
+      {"path": "animations.gallery-route.kind", "equals": "route_trace"},
+      {"path": "animations.gallery-route.props.points.2.label", "equals": "BREACH"},
       {"path": "animations.gallery-scan.kind", "equals": "scan"},
       {"path": "animations.gallery-glitch.kind", "equals": "glitch"},
       {"path": "animations.gallery-breach.kind", "equals": "breach_wave"},
@@ -220,6 +222,32 @@
               "tone": "magenta",
               "sequence": 961,
               "paths": ["src/harn_gibson/server.py", "docs/renderer-agent.md"]
+            }
+          }
+        },
+        {
+          "op": "start_animation",
+          "animation": {
+            "id": "gallery-route",
+            "targetId": "animation-ribbon",
+            "kind": "route_trace",
+            "startedAtMs": 9635,
+            "durationMs": 6200,
+            "loop": true,
+            "props": {
+              "phase": "lifecycle",
+              "label": "TRACE WINDOW",
+              "tone": "cyan",
+              "accentTone": "magenta",
+              "packets": 24,
+              "tail": 0.08,
+              "seed": 966,
+              "points": [
+                {"id": "queue", "label": "QUEUE", "x": 0.10, "y": 0.82, "tone": "green"},
+                {"id": "route", "label": "ROUTE", "x": 0.32, "y": 0.70, "tone": "cyan"},
+                {"id": "breach", "label": "BREACH", "x": 0.58, "y": 0.56, "tone": "magenta"},
+                {"id": "hold", "label": "HOLD", "x": 0.90, "y": 0.28, "tone": "amber"}
+              ]
             }
           }
         },

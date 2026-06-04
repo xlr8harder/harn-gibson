@@ -478,6 +478,7 @@ def test_browser_display_renders_timeline_cue_animation() -> None:
                 page = browser.new_page(viewport={"width": 960, "height": 700})
                 page.goto(base, wait_until="domcontentloaded")
                 page.wait_for_function("window.__gibsonTimelineCueState?.['gallery-cues']?.cueCount === 4")
+                page.wait_for_function("window.__gibsonRouteTraceState?.['gallery-route']?.pointCount === 4")
                 page.wait_for_function("window.__gibsonBreachWaveState?.['gallery-breach']?.ringCount === 5")
                 page.wait_for_function("window.__gibsonCameraState?.animationIds?.includes('gallery-camera')")
                 page.wait_for_function("window.__gibsonCameraState?.animationIds?.includes('gallery-camera-path')")
@@ -485,11 +486,13 @@ def test_browser_display_renders_timeline_cue_animation() -> None:
                     """() => ({
                       animationKinds: window.__gibsonAnimationState.kinds,
                       cueState: window.__gibsonTimelineCueState["gallery-cues"],
+                      routeState: window.__gibsonRouteTraceState["gallery-route"],
                       breachState: window.__gibsonBreachWaveState["gallery-breach"],
                       cameraState: window.__gibsonCameraState,
                     })"""
                 )
                 assert "timeline_cue" in state_payload["animationKinds"]
+                assert "route_trace" in state_payload["animationKinds"]
                 assert "breach_wave" in state_payload["animationKinds"]
                 assert "camera_jolt" in state_payload["animationKinds"]
                 assert "camera_path" in state_payload["animationKinds"]
@@ -504,6 +507,16 @@ def test_browser_display_renders_timeline_cue_animation() -> None:
                 assert 0 <= state_payload["cueState"]["activeCueIndex"] <= 3
                 assert state_payload["cueState"]["activeLabel"] in {"QUEUE", "ROUTE", "BREACH", "HOLD"}
                 assert 0 <= state_payload["cueState"]["progress"] <= 1
+                assert state_payload["routeState"] == {
+                    "targetId": "animation-ribbon",
+                    "pointCount": 4,
+                    "packetCount": 24,
+                    "activePointId": state_payload["routeState"]["activePointId"],
+                    "hasLabel": True,
+                    "progress": state_payload["routeState"]["progress"],
+                }
+                assert state_payload["routeState"]["activePointId"] in {"queue", "route", "breach", "hold"}
+                assert 0 <= state_payload["routeState"]["progress"] <= 1
                 assert state_payload["breachState"] == {
                     "targetId": "animation-vector",
                     "ringCount": 5,

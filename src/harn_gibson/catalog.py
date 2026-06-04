@@ -401,6 +401,13 @@ def default_visual_catalog() -> VisualCatalog:
                 ("cinematic", "motion", "timed", "sequence"),
             ),
             CatalogEntry(
+                "route_trace",
+                "effect",
+                "Animate packets through labeled route waypoints over one persistent render window.",
+                ("targetId", "points", "durationMs", "tone", "accentTone", "packets", "tail", "label", "seed"),
+                ("gibson", "cinematic", "motion", "timed", "sequence"),
+            ),
+            CatalogEntry(
                 "vector_trace",
                 "effect",
                 "Move glowing particles along declared vector-space points on an svg_layer.",

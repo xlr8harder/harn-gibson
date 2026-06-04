@@ -719,6 +719,7 @@ def test_dogfood_showcase_renderer_returns_valid_event_reactive_plan(tmp_path: P
     assert animation_kinds["dogfood-camera-jolt"] == "camera_jolt"
     assert animation_kinds["dogfood-breach"] == "breach_wave"
     assert animation_kinds["dogfood-city-extrude"] == "extrude"
+    assert animation_kinds["dogfood-route-trace"] == "route_trace"
     scene.apply(mutations)
     assert scene.state.primitives["dogfood-city"].props["blocks"][1]["path"] == "docs"
     assert scene.state.primitives["dogfood-city"].props["blocks"][1]["lines"] == 1
@@ -736,6 +737,7 @@ def test_dogfood_showcase_renderer_returns_valid_event_reactive_plan(tmp_path: P
     assert scene.state.primitives["dogfood-route"].props["focusHopId"] == "target-0"
     assert scene.state.primitives["dogfood-hologram"].props["rings"] == 6
     assert scene.state.animations["dogfood-camera-path"].props["keyframes"][1]["scale"] == 1.038
+    assert scene.state.animations["dogfood-route-trace"].props["points"][2]["label"] == "TOOL_RESUL"
     assert "displayStyle" not in plan.metadata
 
     styled_scene = SceneEngine()
@@ -1143,6 +1145,36 @@ def test_renderer_context_builder_compaction_rolling_and_history(tmp_path: Path)
                     props={"cues": [{"at": 0.5}]},
                 ),
             ),
+            SceneMutation(
+                "start_animation",
+                animation=SceneAnimation(
+                    "route-empty",
+                    "continuity-graph",
+                    "route_trace",
+                    150,
+                    2100,
+                    props={"points": [{"x": 0.2, "y": 0.7}, {"x": 0.8, "y": 0.3}]},
+                ),
+            ),
+            SceneMutation(
+                "start_animation",
+                animation=SceneAnimation(
+                    "route-1",
+                    "continuity-graph",
+                    "route_trace",
+                    160,
+                    2200,
+                    props={
+                        "tone": "cyan",
+                        "label": "route",
+                        "points": [
+                            {"id": "queue", "label": "QUEUE", "x": 0.1, "y": 0.8},
+                            {"id": "render", "label": "RENDER", "x": 0.5, "y": 0.5},
+                            {"id": "scene", "label": "SCENE", "x": 0.9, "y": 0.2},
+                        ],
+                    },
+                ),
+            ),
         )
     )
     context_event = GibsonEvent.from_raw(
@@ -1241,7 +1273,7 @@ def test_renderer_context_builder_compaction_rolling_and_history(tmp_path: Path)
     assert compaction.visual_continuity["mode"] == "compaction"
     assert compaction.visual_continuity["sceneRevision"] == scene.state.revision
     assert compaction.visual_continuity["style"] == {"id": "mainframe", "motifs": ["phosphor-grid"]}
-    assert compaction.visual_continuity["activeAnimationCount"] == 3
+    assert compaction.visual_continuity["activeAnimationCount"] == 5
     cue_summary = next(item for item in compaction.visual_continuity["activeAnimations"] if item["id"] == "cue-1")
     assert cue_summary["kind"] == "timeline_cue"
     assert cue_summary["cueCount"] == 2
@@ -1252,13 +1284,24 @@ def test_renderer_context_builder_compaction_rolling_and_history(tmp_path: Path)
     )
     assert unlabeled_cue["cueCount"] == 1
     assert "cueLabels" not in unlabeled_cue
+    unlabeled_route = next(
+        item for item in compaction.visual_continuity["activeAnimations"] if item["id"] == "route-empty"
+    )
+    assert unlabeled_route["pointCount"] == 2
+    assert "pointIds" not in unlabeled_route
+    assert "pointLabels" not in unlabeled_route
+    route_summary = next(item for item in compaction.visual_continuity["activeAnimations"] if item["id"] == "route-1")
+    assert route_summary["kind"] == "route_trace"
+    assert route_summary["pointCount"] == 3
+    assert route_summary["pointIds"] == ["queue", "render", "scene"]
+    assert route_summary["pointLabels"] == ["QUEUE", "RENDER", "SCENE"]
     graph_anchor = next(item for item in compaction.visual_continuity["anchors"] if item["id"] == "continuity-graph")
     assert graph_anchor["focus"] == "renderer"
     assert graph_anchor["tone"] == "cyan"
     stream_anchor = next(item for item in compaction.visual_continuity["anchors"] if item["id"] == "assistant-stream")
     assert stream_anchor["animated"] is True
     assert stream_anchor["isStreaming"] is True
-    assert compaction.to_dict()["visualContinuity"]["activeAnimationCount"] == 3
+    assert compaction.to_dict()["visualContinuity"]["activeAnimationCount"] == 5
 
     truncated_context = RendererContextBuilder(
         RendererContextConfig(project_root=str(repo_root), max_repo_entries=2)
@@ -1278,7 +1321,7 @@ def test_renderer_context_builder_compaction_rolling_and_history(tmp_path: Path)
     assert rolling.project["touchedFiles"]["truncated"] is True
     assert rolling.catalog["mode"] == "summary"
     assert rolling.scene["schema"] == "harn-gibson.scene-summary.v1"
-    assert rolling.scene["animationCount"] == 3
+    assert rolling.scene["animationCount"] == 5
     assert rolling.scene["recentLog"] == [{"eventType": "new"}]
     stream_summary = next(item for item in rolling.scene["primitives"] if item["id"] == "assistant-stream")
     assert stream_summary["propsPreview"]["text"] == ["abcde...", {"nested": "zyxwv..."}]

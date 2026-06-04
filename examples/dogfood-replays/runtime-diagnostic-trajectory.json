@@ -58,6 +58,10 @@
         "equals": "timeline_cue"
       },
       {
+        "path": "animations.dogfood-route-trace.kind",
+        "equals": "route_trace"
+      },
+      {
         "path": "metadata.lastRenderIntent.eventTypes",
         "contains": "runtime_error"
       },

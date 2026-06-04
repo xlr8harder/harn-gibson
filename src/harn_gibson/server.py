@@ -1803,6 +1803,7 @@ function drawSceneAnimation(animation, scene, w, h, now, progress) {
   else if (animation.kind === "scan") drawScanAnimation(animation, w, h, progress);
   else if (animation.kind === "glitch") drawGlitchAnimation(animation, scene, w, h, now, progress);
   else if (animation.kind === "breach_wave") drawBreachWaveAnimation(animation, scene, w, h, now, progress);
+  else if (animation.kind === "route_trace") drawRouteTraceAnimation(animation, scene, w, h, now, progress);
   else if (animation.kind === "flythrough") drawFlythroughAnimation(animation, w, h, progress);
   else if (animation.kind === "extrude") drawExtrudeAnimation(animation, scene, w, h, progress);
   else if (animation.kind === "hold") drawHoldAnimation(animation, scene, w, h, progress);
@@ -2121,6 +2122,178 @@ function drawBreachWaveAnimation(animation, scene, w, h, now, progress) {
     ctx.fillText(String(props.label).slice(0, 26), anchor.x, anchor.y - Math.min(w, h) * 0.16);
   }
 
+  ctx.restore();
+}
+
+function routeTracePoints(animation, scene, w, h) {
+  const rawPoints = Array.isArray(animation.props?.points) ? animation.props.points : [];
+  const points = rawPoints
+    .filter((point) => point && typeof point === "object")
+    .slice(0, 24)
+    .map((point, index) => ({
+      ...point,
+      id: String(point.id || `route-${index}`),
+      label: point.label || point.id || `HOP ${index + 1}`,
+      tone: point.tone || animation.props?.tone || "cyan",
+      point: normalizedPoint(point, w, h),
+    }));
+  if (points.length >= 2) return points;
+  const anchor = animationAnchor(animation, scene, w, h);
+  const radius = Math.min(w, h) * 0.16;
+  return [
+    {
+      id: "entry",
+      label: "ENTRY",
+      tone: animation.props?.tone || "green",
+      point: {x: anchor.x - radius, y: anchor.y + radius * 0.36},
+    },
+    {
+      id: "core",
+      label: "CORE",
+      tone: animation.props?.accentTone || "magenta",
+      point: {x: anchor.x + radius, y: anchor.y - radius * 0.36},
+    },
+  ];
+}
+
+function routeTraceSegments(points) {
+  const segments = [];
+  let total = 0;
+  for (let index = 1; index < points.length; index++) {
+    const a = points[index - 1].point;
+    const b = points[index].point;
+    const length = Math.hypot(b.x - a.x, b.y - a.y);
+    if (length <= 0) continue;
+    segments.push({a, b, left: points[index - 1], right: points[index], length, start: total});
+    total += length;
+  }
+  return {segments, total};
+}
+
+function routeTracePointOnPath(path, progress) {
+  if (!path.segments.length) return null;
+  const distance = clamp(progress, 0, 1) * path.total;
+  for (const segment of path.segments) {
+    if (distance <= segment.start + segment.length) {
+      const local = clamp((distance - segment.start) / segment.length, 0, 1);
+      return {
+        x: segment.a.x + (segment.b.x - segment.a.x) * local,
+        y: segment.a.y + (segment.b.y - segment.a.y) * local,
+        segment,
+      };
+    }
+  }
+  const last = path.segments[path.segments.length - 1];
+  return {x: last.b.x, y: last.b.y, segment: last};
+}
+
+function drawRouteTraceAnimation(animation, scene, w, h, now, progress) {
+  const props = animation.props || {};
+  const points = routeTracePoints(animation, scene, w, h);
+  const path = routeTraceSegments(points);
+  if (!path.total) return;
+  const tone = animationTone(animation);
+  const accentTone = props.accentTone || props.accent || "magenta";
+  const packetCount = Math.max(1, Math.min(80, Math.floor(finiteNumber(props.packets, 18))));
+  const tail = clamp(finiteNumber(props.tail, 0.055), 0, 0.35);
+  const seed = finiteNumber(props.seed, animation.id.length);
+  const activeIndex = Math.min(points.length - 1, Math.floor(progress * points.length));
+
+  if (typeof window !== "undefined") {
+    window.__gibsonRouteTraceState = window.__gibsonRouteTraceState || {};
+    window.__gibsonRouteTraceState[animation.id] = {
+      targetId: animation.targetId,
+      pointCount: points.length,
+      packetCount,
+      activePointId: points[activeIndex]?.id || null,
+      hasLabel: Boolean(props.label) || points.some((point) => Boolean(point.label)),
+      progress: vectorRounded(progress),
+    };
+  }
+
+  ctx.save();
+  ctx.globalCompositeOperation = props.blend === "source-over" ? "source-over" : "screen";
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.shadowBlur = 14 * devicePixelRatio;
+
+  for (const [index, segment] of path.segments.entries()) {
+    const phase = (progress * Math.max(1, path.segments.length) - index);
+    const activity = clamp(phase, 0, 1);
+    const segmentTone = segment.right.tone || (index % 2 ? accentTone : tone);
+    const width = (2.1 + activity * 2.2) * devicePixelRatio;
+    ctx.shadowColor = toneColor(segmentTone, 0.46 + activity * 0.34);
+    ctx.strokeStyle = toneColor(segmentTone, 0.22 + activity * 0.42);
+    ctx.lineWidth = Math.max(1, width);
+    ctx.setLineDash([
+      (12 + index * 2) * devicePixelRatio,
+      (8 + index) * devicePixelRatio,
+    ]);
+    ctx.lineDashOffset = -now * 0.030 * (1 + index * 0.08);
+    ctx.beginPath();
+    ctx.moveTo(segment.a.x, segment.a.y);
+    ctx.lineTo(segment.b.x, segment.b.y);
+    ctx.stroke();
+  }
+  ctx.setLineDash([]);
+
+  for (let packet = 0; packet < packetCount; packet++) {
+    const rawProgress = (progress + packet / packetCount + seededUnit(seed + packet * 7.3) * 0.045) % 1;
+    const head = routeTracePointOnPath(path, rawProgress);
+    if (!head) continue;
+    const tailPoint = routeTracePointOnPath(path, Math.max(0, rawProgress - tail));
+    const packetTone = packet % 5 === 0 ? "white" : (packet % 2 ? accentTone : tone);
+    const alpha = 0.30 + seededUnit(seed + packet * 2.9) * 0.48;
+    ctx.shadowColor = toneColor(packetTone, alpha);
+    ctx.shadowBlur = (8 + (packet % 4) * 3) * devicePixelRatio;
+    if (tailPoint && rawProgress - tail >= 0) {
+      ctx.strokeStyle = toneColor(packetTone, alpha * 0.56);
+      ctx.lineWidth = Math.max(0.8, (1.1 + (packet % 3) * 0.35) * devicePixelRatio);
+      ctx.beginPath();
+      ctx.moveTo(tailPoint.x, tailPoint.y);
+      ctx.lineTo(head.x, head.y);
+      ctx.stroke();
+    }
+    ctx.fillStyle = toneColor(packetTone, alpha);
+    ctx.beginPath();
+    ctx.arc(head.x, head.y, (1.6 + (packet % 4) * 0.62) * devicePixelRatio, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  for (const [index, item] of points.entries()) {
+    const pointProgress = points.length <= 1 ? 0 : index / (points.length - 1);
+    const distance = Math.abs(progress - pointProgress);
+    const active = clamp(1 - distance / 0.18, 0, 1);
+    const pointTone = item.tone || (index % 2 ? accentTone : tone);
+    const radius = (4.8 + active * 7.4) * devicePixelRatio;
+    ctx.shadowColor = toneColor(pointTone, 0.58 + active * 0.34);
+    ctx.shadowBlur = (8 + active * 14) * devicePixelRatio;
+    ctx.fillStyle = toneColor(pointTone, 0.22 + active * 0.48);
+    ctx.strokeStyle = toneColor("white", 0.34 + active * 0.42);
+    ctx.lineWidth = Math.max(0.8, (1 + active * 1.4) * devicePixelRatio);
+    ctx.beginPath();
+    ctx.arc(item.point.x, item.point.y, radius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    if (item.label && (active > 0.2 || props.showLabels === true)) {
+      ctx.font = `${9.5 * devicePixelRatio}px ui-monospace, monospace`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "bottom";
+      ctx.fillStyle = toneColor("white", 0.62 + active * 0.28);
+      ctx.fillText(String(item.label).slice(0, 14), item.point.x, item.point.y - radius - 4 * devicePixelRatio);
+    }
+  }
+
+  if (props.label) {
+    const first = points[0].point;
+    ctx.font = `${11.5 * devicePixelRatio}px ui-monospace, monospace`;
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    ctx.shadowColor = toneColor(accentTone, 0.7);
+    ctx.shadowBlur = 8 * devicePixelRatio;
+    ctx.fillStyle = toneColor("white", 0.78);
+    ctx.fillText(String(props.label).slice(0, 28), first.x, first.y - 18 * devicePixelRatio);
+  }
   ctx.restore();
 }
 

@@ -64,6 +64,10 @@
         "equals": "timeline_cue"
       },
       {
+        "path": "animations.dogfood-route-trace.kind",
+        "equals": "route_trace"
+      },
+      {
         "path": "animations.dogfood-city-extrude.kind",
         "equals": "extrude"
       },

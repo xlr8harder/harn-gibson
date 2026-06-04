@@ -201,6 +201,53 @@
         "startedAtMs": 9600,
         "targetId": "animation-vector"
       },
+      "gallery-route": {
+        "durationMs": 6200,
+        "id": "gallery-route",
+        "kind": "route_trace",
+        "loop": true,
+        "props": {
+          "accentTone": "magenta",
+          "label": "TRACE WINDOW",
+          "packets": 24,
+          "phase": "lifecycle",
+          "points": [
+            {
+              "id": "queue",
+              "label": "QUEUE",
+              "tone": "green",
+              "x": 0.1,
+              "y": 0.82
+            },
+            {
+              "id": "route",
+              "label": "ROUTE",
+              "tone": "cyan",
+              "x": 0.32,
+              "y": 0.7
+            },
+            {
+              "id": "breach",
+              "label": "BREACH",
+              "tone": "magenta",
+              "x": 0.58,
+              "y": 0.56
+            },
+            {
+              "id": "hold",
+              "label": "HOLD",
+              "tone": "amber",
+              "x": 0.9,
+              "y": 0.28
+            }
+          ],
+          "seed": 966,
+          "tail": 0.08,
+          "tone": "cyan"
+        },
+        "startedAtMs": 9635,
+        "targetId": "animation-ribbon"
+      },
       "gallery-scan": {
         "durationMs": 2600,
         "id": "gallery-scan",
@@ -235,6 +282,7 @@
           "animation:timeline_cue",
           "animation:phase-pulse",
           "animation:packet_burst",
+          "animation:route_trace",
           "animation:scan",
           "animation:glitch",
           "animation:breach_wave",
@@ -252,7 +300,7 @@
           "renderer": "replay",
           "stepType": "mutations"
         },
-        "mutationCount": 16,
+        "mutationCount": 17,
         "renderer": "replay",
         "requestCount": 1,
         "routes": [
@@ -282,6 +330,7 @@
             "animation:timeline_cue",
             "animation:phase-pulse",
             "animation:packet_burst",
+            "animation:route_trace",
             "animation:scan",
             "animation:glitch",
             "animation:breach_wave",
@@ -299,7 +348,7 @@
             "renderer": "replay",
             "stepType": "mutations"
           },
-          "mutationCount": 16,
+          "mutationCount": 17,
           "renderer": "replay",
           "requestCount": 1,
           "routes": [

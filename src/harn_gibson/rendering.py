@@ -77,6 +77,7 @@ _BROWSER_ANIMATION_KINDS = frozenset(
         "breach_wave",
         "camera_jolt",
         "camera_path",
+        "route_trace",
         "flythrough",
         "extrude",
         "hold",
@@ -1840,6 +1841,15 @@ def _visual_animation_summary(animation: SceneAnimation, max_chars: int) -> dict
         labels = [cue.get("label") for cue in cues if isinstance(cue, Mapping) and cue.get("label")]
         if labels:
             summary["cueLabels"] = [str(label)[:32] for label in labels[:6]]
+    points = props.get("points")
+    if isinstance(points, list):
+        summary["pointCount"] = len(points)
+        point_ids = [point.get("id") for point in points if isinstance(point, Mapping) and point.get("id")]
+        point_labels = [point.get("label") for point in points if isinstance(point, Mapping) and point.get("label")]
+        if point_ids:
+            summary["pointIds"] = [str(point_id)[:32] for point_id in point_ids[:8]]
+        if point_labels:
+            summary["pointLabels"] = [str(label)[:32] for label in point_labels[:8]]
     return summary
 
 
