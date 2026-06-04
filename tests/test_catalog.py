@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from harn_gibson.catalog import CatalogEntry, VisualCatalog, default_visual_catalog
+from harn_gibson.catalog import CatalogEntry, VisualCatalog, default_visual_catalog, visual_catalog_payload
 
 
 def test_catalog_entry_and_visual_catalog_to_dict() -> None:
@@ -27,6 +27,39 @@ def test_catalog_entry_and_visual_catalog_to_dict() -> None:
     assert catalog.entry("spin") == effect
     assert catalog.entry("missing") is None
     assert catalog.to_dict()["schema"] == "harn-gibson.visual-catalog.v1"
+
+
+def test_visual_catalog_payload_filters_entries_and_compacts_metadata() -> None:
+    catalog = default_visual_catalog()
+
+    assert visual_catalog_payload(catalog) == catalog.to_dict()
+
+    compact_svg = visual_catalog_payload(catalog, entry_ids=("svg_layer",), compact=True)
+    assert compact_svg["filters"] == {
+        "kind": "all",
+        "tags": [],
+        "ids": ["svg_layer"],
+        "compact": True,
+    }
+    assert [entry["id"] for entry in compact_svg["primitives"]] == ["svg_layer"]
+    assert compact_svg["effects"] == []
+    assert "props" in compact_svg["primitives"][0]
+    assert "metadata" not in compact_svg["primitives"][0]
+
+    camera_effects = visual_catalog_payload(catalog, kind="effect", tags=("camera",))
+    assert camera_effects["primitives"] == []
+    assert [entry["id"] for entry in camera_effects["effects"]] == ["camera_jolt", "camera_path"]
+    assert camera_effects["filters"] == {
+        "kind": "effect",
+        "tags": ["camera"],
+        "ids": [],
+        "compact": False,
+    }
+
+    deduped = visual_catalog_payload(catalog, tags=("gibson", "gibson", ""), entry_ids=("city_block", "city_block"))
+    assert [entry["id"] for entry in deduped["primitives"]] == ["city_block"]
+    assert deduped["filters"]["tags"] == ["gibson"]
+    assert deduped["filters"]["ids"] == ["city_block"]
 
 
 def test_default_visual_catalog_has_generic_and_cinematic_building_blocks() -> None:

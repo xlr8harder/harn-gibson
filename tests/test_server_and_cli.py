@@ -920,6 +920,12 @@ def test_cli_parser_and_run(monkeypatch: Any, capsys: Any) -> None:
     parsed_auth = parser.parse_args(["import-codex-auth", "--codex-auth", "codex.json", "--harn-auth", "harn.json"])
     assert parsed_auth.command == "import-codex-auth"
     assert parser.parse_args(["backend-contract"]).command == "backend-contract"
+    parsed_catalog = parser.parse_args(["catalog", "--kind", "effect", "--tag", "camera", "--compact"])
+    assert parsed_catalog.command == "catalog"
+    assert parsed_catalog.kind == "effect"
+    assert parsed_catalog.tag == ["camera"]
+    assert parsed_catalog.entry_ids is None
+    assert parsed_catalog.compact is True
     parsed_replay = parser.parse_args(
         [
             "replay",
@@ -1165,6 +1171,12 @@ def test_cli_parser_and_run(monkeypatch: Any, capsys: Any) -> None:
     assert "mainframe" in contract["supportedStylePackIds"]
     assert contract["capabilityProfile"]["timing"]["renderTimingModes"] == ["immediate", "scheduled"]
     assert "terminal_wall" in contract["supportedPrimitiveKinds"]
+    assert cli.run(["catalog", "--kind", "effect", "--tag", "camera", "--compact"]) == 0
+    catalog = json.loads(capsys.readouterr().out)
+    assert catalog["schema"] == "harn-gibson.visual-catalog.v1"
+    assert catalog["filters"] == {"kind": "effect", "tags": ["camera"], "ids": [], "compact": True}
+    assert catalog["primitives"] == []
+    assert [entry["id"] for entry in catalog["effects"]] == ["camera_jolt", "camera_path"]
 
     calls: list[tuple[str, int]] = []
 

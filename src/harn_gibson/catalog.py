@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
@@ -47,6 +48,66 @@ class VisualCatalog:
             if entry.id == entry_id:
                 return entry
         return None
+
+
+def visual_catalog_payload(
+    catalog: VisualCatalog | None = None,
+    *,
+    kind: Literal["all", "primitive", "effect"] = "all",
+    tags: Iterable[str] = (),
+    entry_ids: Iterable[str] = (),
+    compact: bool = False,
+) -> dict[str, Any]:
+    rendered_catalog = catalog or default_visual_catalog()
+    normalized_tags = _normalized_filter_values(tags)
+    normalized_ids = _normalized_filter_values(entry_ids)
+    payload = {
+        "schema": "harn-gibson.visual-catalog.v1",
+        "primitives": [
+            _catalog_entry_payload(entry, compact=compact)
+            for entry in rendered_catalog.primitives
+            if _catalog_entry_matches(entry, tags=normalized_tags, entry_ids=normalized_ids)
+        ]
+        if kind in {"all", "primitive"}
+        else [],
+        "effects": [
+            _catalog_entry_payload(entry, compact=compact)
+            for entry in rendered_catalog.effects
+            if _catalog_entry_matches(entry, tags=normalized_tags, entry_ids=normalized_ids)
+        ]
+        if kind in {"all", "effect"}
+        else [],
+    }
+    if compact or kind != "all" or normalized_tags or normalized_ids:
+        payload["filters"] = {
+            "kind": kind,
+            "tags": list(normalized_tags),
+            "ids": list(normalized_ids),
+            "compact": compact,
+        }
+    return payload
+
+
+def _catalog_entry_matches(
+    entry: CatalogEntry,
+    *,
+    tags: Sequence[str],
+    entry_ids: Sequence[str],
+) -> bool:
+    if entry_ids and entry.id not in entry_ids:
+        return False
+    return not tags or any(tag in entry.tags for tag in tags)
+
+
+def _catalog_entry_payload(entry: CatalogEntry, *, compact: bool) -> dict[str, Any]:
+    payload = entry.to_dict()
+    if compact:
+        payload.pop("metadata", None)
+    return payload
+
+
+def _normalized_filter_values(values: Iterable[str]) -> tuple[str, ...]:
+    return tuple(dict.fromkeys(value.strip() for value in values if value.strip()))
 
 
 def default_visual_catalog() -> VisualCatalog:

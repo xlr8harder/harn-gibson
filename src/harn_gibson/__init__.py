@@ -1,7 +1,7 @@
 """Public surface for harn-gibson."""
 
 from harn_gibson.browser_capture import BrowserScreenshotResult, capture_scene_screenshot
-from harn_gibson.catalog import CatalogEntry, VisualCatalog, default_visual_catalog
+from harn_gibson.catalog import CatalogEntry, VisualCatalog, default_visual_catalog, visual_catalog_payload
 from harn_gibson.events import EventPhase, GibsonEvent, phase_for_event, summarize_event, to_jsonable
 from harn_gibson.external_renderer import (
     ExternalRenderer,
@@ -252,4 +252,5 @@ __all__ = [
     "touched_files_context_from_events",
     "to_jsonable",
     "validate_render_plan",
+    "visual_catalog_payload",
 ]

@@ -141,6 +141,17 @@ def build_parser() -> argparse.ArgumentParser:
     auth.add_argument("--harn-auth", default=None, help="path to harn auth.json")
 
     subcommands.add_parser("backend-contract", help="print the display backend contract JSON")
+    catalog = subcommands.add_parser("catalog", help="print the visual primitive/effect catalog JSON")
+    catalog.add_argument("--kind", choices=("all", "primitive", "effect"), default="all", help="catalog entry kind")
+    catalog.add_argument("--tag", action="append", default=None, help="include entries with this tag; repeatable")
+    catalog.add_argument(
+        "--id",
+        dest="entry_ids",
+        action="append",
+        default=None,
+        help="include this entry id; repeatable",
+    )
+    catalog.add_argument("--compact", action="store_true", help="omit bulky entry metadata")
 
     replay = subcommands.add_parser("replay", help="replay harn events, render plans, or scene mutations")
     replay.add_argument("path", help="path to replay JSON")
@@ -878,6 +889,23 @@ def run(argv: Sequence[str] | None = None) -> int:
             print(json.dumps(backend_contract_payload(state), indent=2, sort_keys=True))
         finally:
             state.pipeline.stop()
+        return 0
+    if args.command == "catalog":
+        from harn_gibson.catalog import default_visual_catalog, visual_catalog_payload
+
+        print(
+            json.dumps(
+                visual_catalog_payload(
+                    default_visual_catalog(),
+                    kind=args.kind,
+                    tags=args.tag or (),
+                    entry_ids=args.entry_ids or (),
+                    compact=args.compact,
+                ),
+                indent=2,
+                sort_keys=True,
+            )
+        )
         return 0
     if args.command == "watch-replay":
         return run_watch_replay(args)
