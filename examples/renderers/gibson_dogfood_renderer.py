@@ -1011,6 +1011,10 @@ def _phase_tone(phase: str, event_type: str, display_style: str) -> str:
             phase,
             "magenta",
         )
+    if display_style == "satellite-uplink":
+        if "error" in event_type or "fail" in event_type:
+            return "red"
+        return {"before": "green", "during": "cyan", "after": "amber", "lifecycle": "cyan"}.get(phase, "cyan")
     return {"before": "green", "during": "cyan", "after": "magenta", "lifecycle": "amber"}.get(phase, "cyan")
 
 
@@ -1031,6 +1035,14 @@ def _accent_tone(phase: str, event_type: str, display_style: str) -> str:
         if phase == "before":
             return "amber"
         return "magenta"
+    if display_style == "satellite-uplink":
+        if "error" in event_type or "fail" in event_type:
+            return "amber"
+        if phase == "after" or "result" in event_type:
+            return "red"
+        if phase == "before":
+            return "amber"
+        return "green"
     if phase == "after" or "result" in event_type:
         return "white"
     if phase == "before":

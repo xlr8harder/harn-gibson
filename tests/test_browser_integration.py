@@ -190,7 +190,7 @@ def test_browser_display_renders_events_debug_and_input_queue() -> None:
 
 
 def test_browser_display_applies_scene_style_pack() -> None:
-    server, state, base = start_display_server(GibsonServerState(style_pack=style_pack_from_name("neon-noir")))
+    server, state, base = start_display_server(GibsonServerState(style_pack=style_pack_from_name("satellite-uplink")))
     try:
         with sync_playwright() as driver:
             try:
@@ -200,22 +200,29 @@ def test_browser_display_applies_scene_style_pack() -> None:
             try:
                 page = browser.new_page(viewport={"width": 900, "height": 640})
                 page.goto(base, wait_until="domcontentloaded")
-                page.wait_for_function("window.__gibsonStylePack?.id === 'neon-noir'")
+                page.wait_for_function("window.__gibsonStylePack?.id === 'satellite-uplink'")
+                page.wait_for_function("window.__gibsonBackdropState?.styleId === 'satellite-uplink'")
                 style_state = page.evaluate(
                     """() => ({
                       id: window.__gibsonStylePack.id,
                       bodyStyle: document.body.dataset.style,
                       gridTone: window.__gibsonStylePack.canvas.gridTone,
-                      cssMagenta: getComputedStyle(document.documentElement).getPropertyValue("--magenta").trim(),
+                      cssCyan: getComputedStyle(document.documentElement).getPropertyValue("--cyan").trim(),
                       sceneStyle: window.__gibsonScene.metadata.displayStyle,
+                      backdropStyle: window.__gibsonBackdropState.styleId,
+                      backdropMotifs: window.__gibsonBackdropState.motifs,
+                      motifEffectCount: window.__gibsonBackdropState.motifEffectCount,
                     })"""
                 )
                 assert style_state == {
-                    "id": "neon-noir",
-                    "bodyStyle": "neon-noir",
-                    "gridTone": "magenta",
-                    "cssMagenta": "#ff46d6",
-                    "sceneStyle": "neon-noir",
+                    "id": "satellite-uplink",
+                    "bodyStyle": "satellite-uplink",
+                    "gridTone": "cyan",
+                    "cssCyan": "#54ebe4",
+                    "sceneStyle": "satellite-uplink",
+                    "backdropStyle": "satellite-uplink",
+                    "backdropMotifs": ["orbital-grid", "radar-sweeps", "warning-chevrons"],
+                    "motifEffectCount": 3,
                 }
                 assert_canvas_nonblank(page)
             finally:

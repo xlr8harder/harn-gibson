@@ -1151,6 +1151,8 @@ markSceneDirty();
 
 function drawBackdrop(w, h, now) {
   const canvasStyle = currentStylePack.canvas || DEFAULT_STYLE_PACK.canvas;
+  const motifs = new Set(currentStylePack.motifs || []);
+  let motifEffectCount = 0;
   ctx.fillStyle = canvasStyle.background || DEFAULT_STYLE_PACK.canvas.background;
   ctx.fillRect(0, 0, w, h);
   const horizonAlpha = Number(canvasStyle.horizonAlpha || 0);
@@ -1177,10 +1179,212 @@ function drawBackdrop(w, h, now) {
     ctx.lineTo(w, y + h * 0.08);
     ctx.stroke();
   }
-  if ((currentStylePack.motifs || []).includes("phosphor-grid")) {
-    ctx.fillStyle = toneColor("green", 0.035 + Math.sin(now * 0.004) * 0.01);
-    for (let y = 0; y < h; y += 6 * devicePixelRatio) ctx.fillRect(0, y, w, devicePixelRatio);
+  if (motifs.has("packet-routes")) motifEffectCount += drawPacketRouteMotif(w, h, now);
+  if (motifs.has("vector-ice")) motifEffectCount += drawVectorIceMotif(w, h, now);
+  if (motifs.has("horizon-glow")) motifEffectCount += drawHotlineGridMotif(w, h, now);
+  if (motifs.has("chrome-decals")) motifEffectCount += drawChromeDecalMotif(w, h, now);
+  if (motifs.has("phosphor-grid")) motifEffectCount += drawPhosphorGridMotif(w, h, now);
+  if (motifs.has("audit-frames")) motifEffectCount += drawAuditFrameMotif(w, h, now);
+  if (motifs.has("amber-alerts")) motifEffectCount += drawAmberAlertMotif(w, h, now);
+  if (motifs.has("orbital-grid")) motifEffectCount += drawOrbitalGridMotif(w, h, now);
+  if (motifs.has("radar-sweeps")) motifEffectCount += drawRadarSweepMotif(w, h, now);
+  if (motifs.has("warning-chevrons")) motifEffectCount += drawWarningChevronMotif(w, h, now);
+  window.__gibsonBackdropState = {
+    styleId: currentStylePack.id || "gibson",
+    motifs: Array.from(motifs),
+    gridTone: canvasStyle.gridTone || "cyan",
+    horizonAlpha,
+    motifEffectCount,
+  };
+}
+
+function drawPacketRouteMotif(w, h, now) {
+  ctx.save();
+  ctx.globalCompositeOperation = "screen";
+  ctx.strokeStyle = toneColor("cyan", 0.10);
+  ctx.fillStyle = toneColor("amber", 0.34);
+  ctx.lineWidth = 1 * devicePixelRatio;
+  for (let route = 0; route < 5; route++) {
+    const y = h * (0.18 + route * 0.13);
+    const startX = w * (0.08 + route * 0.06);
+    const endX = w * (0.78 + route * 0.03);
+    ctx.beginPath();
+    ctx.moveTo(startX, y);
+    ctx.bezierCurveTo(w * 0.32, y - h * 0.08, w * 0.55, y + h * 0.06, endX, y - h * 0.03);
+    ctx.stroke();
+    const progress = (now * 0.00016 + route * 0.21) % 1;
+    const packetX = startX + (endX - startX) * progress;
+    const packetY = y + Math.sin(progress * Math.PI * 2 + route) * h * 0.035;
+    ctx.beginPath();
+    ctx.arc(packetX, packetY, 1.8 * devicePixelRatio, 0, Math.PI * 2);
+    ctx.fill();
   }
+  ctx.restore();
+  return 1;
+}
+
+function drawVectorIceMotif(w, h, now) {
+  ctx.save();
+  ctx.globalCompositeOperation = "screen";
+  ctx.strokeStyle = toneColor("white", 0.08);
+  ctx.fillStyle = toneColor("cyan", 0.025 + Math.sin(now * 0.002) * 0.006);
+  for (let shard = 0; shard < 8; shard++) {
+    const side = shard % 2;
+    const x = side ? w * (0.82 + (shard % 3) * 0.035) : w * (0.04 + (shard % 3) * 0.025);
+    const y = h * (0.16 + shard * 0.09);
+    const size = Math.min(w, h) * (0.045 + (shard % 3) * 0.01);
+    ctx.beginPath();
+    ctx.moveTo(x, y - size);
+    ctx.lineTo(x + (side ? size : -size) * 0.72, y + size * 0.15);
+    ctx.lineTo(x + (side ? size : -size) * 0.22, y + size);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+  }
+  ctx.restore();
+  return 1;
+}
+
+function drawHotlineGridMotif(w, h, now) {
+  ctx.save();
+  ctx.globalCompositeOperation = "screen";
+  ctx.strokeStyle = toneColor("magenta", 0.08 + Math.sin(now * 0.003) * 0.015);
+  ctx.lineWidth = 1.2 * devicePixelRatio;
+  for (let line = -4; line < 10; line++) {
+    const x = line * w * 0.12 + (now * 0.018) % (w * 0.12);
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x + w * 0.24, h);
+    ctx.stroke();
+  }
+  ctx.restore();
+  return 1;
+}
+
+function drawChromeDecalMotif(w, h, now) {
+  ctx.save();
+  ctx.globalCompositeOperation = "screen";
+  ctx.strokeStyle = toneColor("white", 0.12 + Math.sin(now * 0.004) * 0.02);
+  ctx.lineWidth = 1.4 * devicePixelRatio;
+  const inset = 18 * devicePixelRatio;
+  const length = Math.min(w, h) * 0.12;
+  for (const corner of [
+    [inset, inset, 1, 1],
+    [w - inset, inset, -1, 1],
+    [inset, h - inset, 1, -1],
+    [w - inset, h - inset, -1, -1],
+  ]) {
+    const [x, y, dx, dy] = corner;
+    ctx.beginPath();
+    ctx.moveTo(x, y + dy * length);
+    ctx.lineTo(x, y);
+    ctx.lineTo(x + dx * length, y);
+    ctx.stroke();
+  }
+  ctx.restore();
+  return 1;
+}
+
+function drawPhosphorGridMotif(w, h, now) {
+  ctx.save();
+  ctx.fillStyle = toneColor("green", 0.035 + Math.sin(now * 0.004) * 0.01);
+  for (let y = 0; y < h; y += 6 * devicePixelRatio) ctx.fillRect(0, y, w, devicePixelRatio);
+  ctx.restore();
+  return 1;
+}
+
+function drawAuditFrameMotif(w, h, now) {
+  ctx.save();
+  ctx.globalCompositeOperation = "screen";
+  ctx.strokeStyle = toneColor("green", 0.10);
+  ctx.lineWidth = 1 * devicePixelRatio;
+  const pulse = 0.5 + Math.sin(now * 0.003) * 0.5;
+  for (let frame = 0; frame < 3; frame++) {
+    const inset = (24 + frame * 28 + pulse * 4) * devicePixelRatio;
+    ctx.strokeRect(inset, inset, w - inset * 2, h - inset * 2);
+  }
+  ctx.restore();
+  return 1;
+}
+
+function drawAmberAlertMotif(w, h, now) {
+  ctx.save();
+  ctx.globalCompositeOperation = "screen";
+  ctx.fillStyle = toneColor("amber", 0.04 + Math.max(0, Math.sin(now * 0.006)) * 0.025);
+  const barHeight = 10 * devicePixelRatio;
+  for (let band = 0; band < 3; band++) {
+    const y = h * (0.18 + band * 0.23);
+    ctx.fillRect(0, y, w, barHeight);
+  }
+  ctx.restore();
+  return 1;
+}
+
+function drawOrbitalGridMotif(w, h, now) {
+  ctx.save();
+  ctx.globalCompositeOperation = "screen";
+  const cx = w * 0.72;
+  const cy = h * 0.34;
+  const radius = Math.min(w, h) * 0.28;
+  ctx.strokeStyle = toneColor("cyan", 0.13);
+  ctx.lineWidth = 1 * devicePixelRatio;
+  for (let ring = 0; ring < 4; ring++) {
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, radius * (0.42 + ring * 0.18), radius * (0.12 + ring * 0.05), 0.32, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  ctx.strokeStyle = toneColor("white", 0.10);
+  for (let spoke = 0; spoke < 8; spoke++) {
+    const angle = spoke * Math.PI * 0.25 + now * 0.00018;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.lineTo(cx + Math.cos(angle) * radius, cy + Math.sin(angle) * radius * 0.42);
+    ctx.stroke();
+  }
+  ctx.restore();
+  return 1;
+}
+
+function drawRadarSweepMotif(w, h, now) {
+  ctx.save();
+  ctx.globalCompositeOperation = "screen";
+  const cx = w * 0.72;
+  const cy = h * 0.34;
+  const radius = Math.min(w, h) * 0.34;
+  const angle = now * 0.0012;
+  ctx.fillStyle = toneColor("green", 0.055);
+  ctx.beginPath();
+  ctx.moveTo(cx, cy);
+  ctx.arc(cx, cy, radius, angle, angle + 0.42);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = toneColor("green", 0.28);
+  ctx.lineWidth = 1.2 * devicePixelRatio;
+  ctx.beginPath();
+  ctx.moveTo(cx, cy);
+  ctx.lineTo(cx + Math.cos(angle + 0.42) * radius, cy + Math.sin(angle + 0.42) * radius);
+  ctx.stroke();
+  ctx.restore();
+  return 1;
+}
+
+function drawWarningChevronMotif(w, h, now) {
+  ctx.save();
+  ctx.globalCompositeOperation = "screen";
+  ctx.strokeStyle = toneColor("red", 0.15 + Math.max(0, Math.sin(now * 0.005)) * 0.08);
+  ctx.lineWidth = 1.4 * devicePixelRatio;
+  const size = 14 * devicePixelRatio;
+  for (let index = 0; index < 12; index++) {
+    const x = w * 0.05 + index * size * 2.8;
+    const y = h * 0.90;
+    ctx.beginPath();
+    ctx.moveTo(x, y - size);
+    ctx.lineTo(x + size, y);
+    ctx.lineTo(x, y + size);
+    ctx.stroke();
+  }
+  ctx.restore();
+  return 1;
 }
 
 function drawPulses(w, h) {

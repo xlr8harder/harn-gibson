@@ -44,7 +44,7 @@ The browser treats `SceneAnimation` records as persistent renderable state, not 
 
 The raw event details, event feed, render intents, tracebacks, and hook decisions are treated as debug surfaces. They remain in scene state for inspection, but the default browser layout hides them behind a debug drawer.
 
-Display style is scene metadata, not a separate browser-only setting. `HARN_GIBSON_STYLE` or `--style` selects a style pack such as `gibson`, `neon-noir`, or `mainframe`. Non-default style packs are stored in `scene.metadata.stylePack`, applied to the browser palette and canvas backdrop, and included in renderer context so a future renderer agent can choose effects that match the active visual language.
+Display style is scene metadata, not a separate browser-only setting. `HARN_GIBSON_STYLE` or `--style` selects a style pack such as `gibson`, `neon-noir`, `mainframe`, or `satellite-uplink`. Non-default style packs are stored in `scene.metadata.stylePack`, applied to the browser palette and canvas backdrop, and included in renderer context so a future renderer agent can choose effects that match the active visual language. Style motifs also drive browser-local backdrop overlays, including packet routes, neon slashes, phosphor/audit frames, orbital grids, radar sweeps, and warning chevrons.
 
 ## Replay Testing
 

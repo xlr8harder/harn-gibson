@@ -14,7 +14,7 @@ def test_style_pack_catalog_and_serialization() -> None:
     neon = style_pack_by_id(" NEON-NOIR ")
 
     assert DEFAULT_STYLE_ID == "gibson"
-    assert {"gibson", "neon-noir", "mainframe"} <= set(ids)
+    assert {"gibson", "neon-noir", "mainframe", "satellite-uplink"} <= set(ids)
     assert default_style_pack().id == "gibson"
     assert neon is not None
     assert neon.to_dict() == {
@@ -56,6 +56,11 @@ def test_style_pack_catalog_and_serialization() -> None:
 
 def test_style_pack_from_name_falls_back_to_default() -> None:
     assert style_pack_from_name("mainframe").id == "mainframe"
+    assert style_pack_from_name("satellite-uplink").motifs == (
+        "orbital-grid",
+        "radar-sweeps",
+        "warning-chevrons",
+    )
     assert style_pack_from_name(None).id == "gibson"
     assert style_pack_from_name("").id == "gibson"
     assert style_pack_from_name("unknown").id == "gibson"

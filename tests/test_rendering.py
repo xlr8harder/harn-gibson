@@ -752,6 +752,24 @@ def test_dogfood_showcase_renderer_returns_valid_event_reactive_plan(tmp_path: P
     assert styled_scene.state.primitives["dogfood-rain"].props["accentTone"] == "green"
     assert styled_scene.state.primitives["dogfood-ice-mesh"].props["material"] == "amber"
 
+    uplink_scene = SceneEngine()
+    uplink_context = RendererContextBuilder(
+        RendererContextConfig(
+            project_root=str(repo_root),
+            display_style="satellite-uplink",
+            style_pack=style_pack_from_name("satellite-uplink").to_dict(),
+        )
+    ).build(batch, uplink_scene.state, pipeline_catalog())
+    uplink_plan = renderer.render_with_context(batch.requests, uplink_scene.state, uplink_context)
+    assert validate_render_plan(uplink_plan, uplink_scene.state, pipeline_catalog()) == ()
+    uplink_scene.apply(uplink_plan.steps[0].mutations)
+
+    assert uplink_plan.metadata["displayStyle"] == "satellite-uplink"
+    assert uplink_plan.metadata["styleMotifs"] == ["orbital-grid", "radar-sweeps", "warning-chevrons"]
+    assert uplink_scene.state.primitives["dogfood-rain"].props["tone"] == "amber"
+    assert uplink_scene.state.primitives["dogfood-rain"].props["accentTone"] == "red"
+    assert uplink_scene.state.primitives["dogfood-ice-mesh"].props["material"] == "amber"
+
 
 def test_external_renderer_failures_become_trace_state(tmp_path: Path) -> None:
     failing = tmp_path / "failing_renderer.py"

@@ -53,13 +53,13 @@ Set `HARN_GIBSON_RENDERER_COMMAND` to run a renderer as a subprocess. The comman
 ```bash
 HARN_GIBSON_RENDERER_COMMAND='uv run python examples/renderers/gibson_dogfood_renderer.py' \
 HARN_GIBSON_RENDERER_TIMEOUT_MS=10000 \
-uv run harn-gibson dogfood --style neon-noir
+uv run harn-gibson dogfood --style satellite-uplink
 ```
 
 For longer live sessions that should become replay fixtures, prefer the capture wrapper:
 
 ```bash
-uv run harn-gibson dogfood-capture --trajectory tiny-project --style neon-noir
+uv run harn-gibson dogfood-capture --trajectory tiny-project --style satellite-uplink
 ```
 
 The built-in trajectory creates an ignored bare workspace, injects the long tiny-project prompt, sets the showcase renderer, records normalized JSONL under ignored artifacts by default, and prints the matching split `event-log-to-replay --review-dir ... --output-result ...` command when harn exits, including the captured workspace's `--project-root` and `--project-name`. The prompt template asks for git setup, file creation, tests, fixes, and commits so the captured trajectory exercises more than streaming text. For custom prompts or workspace reuse, pass `--cwd PATH --split-every N -- -p "$(cat your-prompt.md)"` instead.

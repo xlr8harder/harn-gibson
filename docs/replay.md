@@ -119,7 +119,7 @@ uv run harn-gibson replay-dir examples/replays \
 
 The command exits with status `1` if any fixture fails to load, replay, satisfy expectations, match its requested baseline, render its requested browser screenshot, or satisfy screenshot expectations. Browser screenshots also sample the `#grid` canvas and fail if it is blank. The suite result JSON uses `harn-gibson.replay-suite-result.v1` and records per-file step counts, scene revisions, expectation counts, screenshot expectation counts, baseline metadata, screenshot metadata, canvas metrics, event summaries, renderer/route counts, visual-continuity summaries, and failures. Event summaries include bounded tool counts, command-field counts, failed tool-result counts, touched-file entries, touched paths, and top-level touched areas using the same path extraction as renderer context. The top-level `summary` aggregates those counts across the suite, so long dogfood captures can be compared for event mix, timing, tools, touched files, routes, renderers, screenshots, baseline coverage, visible anchors, active animations, effects, targets, and renderer continuity before opening the review bundle.
 
-Use `--style gibson`, `--style neon-noir`, or `--style mainframe` to render replay scenes through a specific style pack. Styled runs put the style pack in scene metadata and browser screenshots, so use a matching baseline directory if the style affects expected final scene state.
+Use `--style gibson`, `--style neon-noir`, `--style mainframe`, or `--style satellite-uplink` to render replay scenes through a specific style pack. Styled runs put the style pack in scene metadata and browser screenshots, so use a matching baseline directory if the style affects expected final scene state.
 
 Replay does not use ambient `HARN_GIBSON_RENDERER_COMMAND` or `HARN_GIBSON_RENDERER_MODEL_COMMAND` values by default. That keeps baseline verification deterministic even when a dogfood shell has renderer environment configured. To intentionally exercise renderer adapters offline, pass explicit flags to `replay` or `replay-dir`:
 
@@ -194,7 +194,7 @@ uv run harn-gibson replay examples/replays/stream-and-diagnostic.json \
   --output-timeline test-artifacts/replays/timeline.json \
   --timeline-screenshot-dir test-artifacts/replays/timeline-frames \
   --screenshot test-artifacts/replays/scene.png \
-  --style neon-noir
+  --style satellite-uplink
 ```
 
 Screenshot result metadata includes `canvasMetrics` with canvas dimensions, sampled pixel count, luminance total, lit-pixel count, lit ratio, maximum channel total, and a `nonblank` boolean. This makes replay screenshot artifacts reviewable in CI output even before a human opens the PNG. Checked-in fixtures use conservative `screenshotExpect` thresholds so browser rendering can fail fast if a fixture becomes blank or severely underlit.

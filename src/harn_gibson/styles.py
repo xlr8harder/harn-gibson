@@ -132,6 +132,40 @@ STYLE_PACKS: tuple[StylePack, ...] = (
         },
         motifs=("phosphor-grid", "audit-frames", "amber-alerts"),
     ),
+    StylePack(
+        id="satellite-uplink",
+        label="Satellite Uplink",
+        description="Orbital command screen with radar sweeps, cyan telemetry, red warnings, and amber route marks.",
+        tones={
+            "amber": (255, 203, 82),
+            "cyan": (84, 235, 228),
+            "green": (131, 255, 151),
+            "magenta": (255, 107, 176),
+            "red": (255, 82, 84),
+            "white": (236, 250, 255),
+        },
+        canvas={
+            "background": "#041010",
+            "gridTone": "cyan",
+            "gridAlpha": 0.16,
+            "gridPerspective": 0.18,
+            "horizonTone": "red",
+            "horizonAlpha": 0.18,
+        },
+        css_vars={
+            "--bg": "#030a0a",
+            "--stage-bg": "#041010",
+            "--panel": "rgba(4, 22, 22, 0.88)",
+            "--line": "rgba(84, 235, 228, 0.26)",
+            "--green": "#83ff97",
+            "--cyan": "#54ebe4",
+            "--amber": "#ffcb52",
+            "--magenta": "#ff6bb0",
+            "--text": "#ecfaff",
+            "--muted": "#91b8b2",
+        },
+        motifs=("orbital-grid", "radar-sweeps", "warning-chevrons"),
+    ),
 )
 
 DEFAULT_STYLE_ID = "gibson"

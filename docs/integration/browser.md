@@ -44,6 +44,6 @@ The integration test verifies:
 - posting a harn-style event mutates the scene;
 - the debug drawer toggles;
 - the browser input composer enqueues a message and `/input/next` drains it.
-- a non-default style pack reaches scene metadata, CSS variables, and browser runtime state.
+- a non-default style pack reaches scene metadata, CSS variables, browser runtime state, and backdrop motif overlays.
 - the checked-in agent-side and renderer-side replay fixtures render through the browser screenshot path with nonblank canvas metrics and fixture-level screenshot metric expectations.
 - the generated replay frame review page can switch active frames in headless Chromium.
