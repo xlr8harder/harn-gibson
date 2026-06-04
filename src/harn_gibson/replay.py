@@ -80,6 +80,8 @@ class ReplayStepResult:
     scene_revision: int
     updates: int
     route: str | None = None
+    timestamp_ms: int | None = None
+    delay_ms_to_next: int | None = None
 
     def to_dict(self) -> dict[str, Any]:
         payload: dict[str, Any] = {
@@ -90,6 +92,10 @@ class ReplayStepResult:
         }
         if self.route is not None:
             payload["route"] = self.route
+        if self.timestamp_ms is not None:
+            payload["timestampMs"] = self.timestamp_ms
+        if self.delay_ms_to_next is not None:
+            payload["delayMsToNext"] = self.delay_ms_to_next
         return payload
 
 
@@ -391,13 +397,14 @@ def play_replay_data(
     results: list[ReplayStepResult] = []
     selected_steps = tuple(enumerate(steps[start_index:end_index], start_index))
     selected_payloads = tuple(step for _, step in selected_steps)
-    timestamps = _replay_step_timestamps(selected_payloads) if playback_timing == "real-time" else ()
+    timestamps = _replay_step_timestamps(selected_payloads)
     if selected_steps and start_delay_ms > 0:
         sleep_fn(start_delay_ms / 1000)
     for position, (index, step) in enumerate(selected_steps):
         if not isinstance(step, Mapping):
             raise ValueError(f"replay step {index} must be an object")
         result = _run_step(index, step, replay_state)
+        result = _step_result_with_timing(result, timestamps, position)
         results.append(result)
         if progress is not None:
             progress(result, position + 1, len(selected_steps), replay_state.scene.state)
@@ -1340,6 +1347,7 @@ def run_replay_data(
     results: list[ReplayStepResult] = []
     frames: list[ReplayFrame] = []
     renderer_contexts: list[ReplayRendererContext] = []
+    timestamps = _replay_step_timestamps(steps)
     previous_context_recorder = replay_state.pipeline.context_recorder
 
     def capture_context(context: RendererContext) -> None:
@@ -1354,6 +1362,7 @@ def run_replay_data(
             if not isinstance(step, Mapping):
                 raise ValueError(f"replay step {index} must be an object")
             result = _run_step(index, step, replay_state)
+            result = _step_result_with_timing(result, timestamps, index)
             results.append(result)
             if capture_frames:
                 frames.append(
@@ -1597,6 +1606,28 @@ def _replay_step_delay_ms(
     if max_step_delay_ms is not None:
         delay_ms = min(delay_ms, max_step_delay_ms)
     return delay_ms
+
+
+def _step_result_with_timing(
+    result: ReplayStepResult,
+    timestamps: Sequence[int | None],
+    index: int,
+) -> ReplayStepResult:
+    timestamp = timestamps[index] if index < len(timestamps) else None
+    delay = _timestamp_delay_to_next_ms(timestamps, index)
+    if timestamp is None and delay is None:
+        return result
+    return replace(result, timestamp_ms=timestamp, delay_ms_to_next=delay)
+
+
+def _timestamp_delay_to_next_ms(timestamps: Sequence[int | None], index: int) -> int | None:
+    if index >= len(timestamps) - 1:
+        return None
+    current = timestamps[index]
+    following = timestamps[index + 1]
+    if current is None or following is None:
+        return None
+    return max(0, following - current)
 
 
 def _replay_step_timestamp_ms(step: Any) -> int | None:
@@ -2260,11 +2291,28 @@ def replay_frame_review_html(manifest: Mapping[str, Any], *, output_path: str | 
       const nextFrame = document.getElementById("nextFrame");
       let current = 0;
       let timer = null;
+      let playing = false;
 
       function stopPlayback() {{
-        if (timer !== null) window.clearInterval(timer);
+        if (timer !== null) window.clearTimeout(timer);
         timer = null;
+        playing = false;
         playPause.textContent = "PLAY";
+      }}
+
+      function frameDelay(index) {{
+        const frame = frames[index] || {{}};
+        const delay = Number(frame.delayMsToNext);
+        if (Number.isFinite(delay) && delay >= 0) return Math.max(80, Math.min(delay, 30000));
+        return 900;
+      }}
+
+      function scheduleNextFrame() {{
+        if (!playing) return;
+        timer = window.setTimeout(() => {{
+          stepFrame(1);
+          scheduleNextFrame();
+        }}, frameDelay(current));
       }}
 
       function selectFrame(index) {{
@@ -2284,6 +2332,8 @@ def replay_frame_review_html(manifest: Mapping[str, Any], *, output_path: str | 
           `revision ${{frame.revision || "unknown"}}`,
           `updates ${{frame.updates || "0"}}`,
           `route ${{frame.route || "n/a"}}`,
+          `timestamp ${{frame.timestampText || "n/a"}}`,
+          `next ${{frame.delayText || "n/a"}}`,
         ].join(" / ");
         frameHealth.textContent = `canvas nonblank: ${{frame.nonblankText}}`;
         frameHealth.dataset.ok = frame.nonblank ? "true" : "false";
@@ -2300,12 +2350,13 @@ def replay_frame_review_html(manifest: Mapping[str, Any], *, output_path: str | 
       }}
 
       playPause.addEventListener("click", () => {{
-        if (timer !== null) {{
+        if (playing) {{
           stopPlayback();
           return;
         }}
+        playing = true;
         playPause.textContent = "PAUSE";
-        timer = window.setInterval(() => stepFrame(1), 900);
+        scheduleNextFrame();
       }});
       previousFrame.addEventListener("click", () => {{ stopPlayback(); stepFrame(-1); }});
       nextFrame.addEventListener("click", () => {{ stopPlayback(); stepFrame(1); }});
@@ -3853,11 +3904,14 @@ def _replay_frame_review_card(position: int, frame: Mapping[str, Any], output_pa
     revision = escape(str(frame_data["revision"]))
     updates = escape(str(frame_data["updates"]))
     route = escape(str(frame_data["route"]))
+    timestamp = escape(str(frame_data["timestampText"]))
+    delay = escape(str(frame_data["delayText"]))
     step_line = (
         f"frame <code>{escape(str(index))}</code> &middot; "
         f"step <code>{kind}</code> &middot; revision <code>{revision}</code>"
     )
     route_line = f"updates <code>{updates}</code> &middot; route <code>{route}</code>"
+    timing_line = f"timestamp <code>{timestamp}</code> &middot; next <code>{delay}</code>"
     button_label = escape(str(index))
     button_open = (
         f'<button class="frame-select" type="button" data-frame-select="{position}" '
@@ -3870,6 +3924,7 @@ def _replay_frame_review_card(position: int, frame: Mapping[str, Any], output_pa
       <figcaption>
         <span>{step_line}</span>
         <span>{route_line}</span>
+        <span>{timing_line}</span>
         <span{nonblank_class}>canvas nonblank: <code>{escape(str(frame_data["nonblankText"]))}</code></span>
       </figcaption>
     </figure>"""
@@ -3888,6 +3943,14 @@ def _replay_frame_review_player_frame(frame: Mapping[str, Any], output_path: str
     index = frame.get("index", step.get("index") if isinstance(step, Mapping) else "")
     canvas_metrics = screenshot.get("canvasMetrics")
     nonblank = canvas_metrics.get("nonblank") if isinstance(canvas_metrics, Mapping) else None
+    timestamp_ms = step.get("timestampMs")
+    delay_ms_to_next = step.get("delayMsToNext")
+    timestamp_value = timestamp_ms if isinstance(timestamp_ms, int) and not isinstance(timestamp_ms, bool) else None
+    delay_value = (
+        delay_ms_to_next
+        if isinstance(delay_ms_to_next, int) and not isinstance(delay_ms_to_next, bool)
+        else None
+    )
     return {
         "index": str(index),
         "src": _replay_frame_image_src(screenshot.get("path"), output_path),
@@ -3895,6 +3958,10 @@ def _replay_frame_review_player_frame(frame: Mapping[str, Any], output_path: str
         "revision": str(step.get("sceneRevision", screenshot.get("sceneRevision", ""))),
         "updates": str(step.get("updates", "")),
         "route": str(step.get("route", "n/a")),
+        "timestampMs": timestamp_value,
+        "delayMsToNext": delay_value,
+        "timestampText": f"{timestamp_value} ms" if timestamp_value is not None else "n/a",
+        "delayText": f"{delay_value} ms" if delay_value is not None else "n/a",
         "nonblank": nonblank is True,
         "nonblankText": str(nonblank),
     }
