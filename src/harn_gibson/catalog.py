@@ -522,14 +522,14 @@ def default_visual_catalog() -> VisualCatalog:
                 "camera_jolt",
                 "effect",
                 "Scene-level shake, zoom, and roll for impact beats or sudden traversal changes.",
-                ("targetId", "durationMs", "intensity", "zoom", "roll", "position", "seed"),
+                ("targetId", "durationMs", "intensity", "zoom", "roll", "position", "targetRef", "seed"),
                 ("gibson", "cinematic", "camera", "timed"),
             ),
             CatalogEntry(
                 "camera_path",
                 "effect",
                 "Scene-level pan, zoom, and roll keyframes for staged motion across a coalesced render window.",
-                ("targetId", "durationMs", "keyframes", "position", "loop", "yoyo", "seed"),
+                ("targetId", "durationMs", "keyframes", "position", "targetRef", "loop", "yoyo", "seed"),
                 ("gibson", "cinematic", "camera", "timed"),
             ),
             CatalogEntry(

@@ -1343,13 +1343,14 @@ def _camera_jolt_animation(sequence: int, timestamp_ms: int, phase: str) -> dict
         "op": "start_animation",
         "animation": {
             "id": "dogfood-camera-jolt",
-            "targetId": "dogfood-sigil",
+            "targetId": "dogfood-city",
             "kind": "camera_jolt",
             "startedAtMs": timestamp_ms,
             "durationMs": 1900,
             "ttlMs": 3100,
             "props": {
                 "phase": phase,
+                "targetRef": {"id": "dogfood-city-0"},
                 "intensity": 0.58 + (sequence % 5) * 0.08,
                 "zoom": 0.018,
                 "roll": 0.013,

@@ -1717,6 +1717,7 @@ function sceneCameraState(scene, w, h, now) {
       activeCount: camera.activeCount + 1,
       animationIds: [...camera.animationIds, item.id],
       targetIds: [...camera.targetIds, item.targetId],
+      anchorRefs: [...camera.anchorRefs, item.anchorRef],
       kinds: [...camera.kinds, item.kind],
       pathKeyframeCount: camera.pathKeyframeCount + item.keyframeCount,
       anchorX: camera.anchorX + item.anchor.x,
@@ -1730,6 +1731,7 @@ function sceneCameraState(scene, w, h, now) {
       activeCount: 0,
       animationIds: [],
       targetIds: [],
+      anchorRefs: [],
       kinds: [],
       pathKeyframeCount: 0,
       anchorX: 0,
@@ -1751,6 +1753,7 @@ function sceneCameraState(scene, w, h, now) {
     activeCount: state.activeCount,
     animationIds: state.animationIds,
     targetIds: state.targetIds,
+    anchorRefs: state.anchorRefs,
     kinds: state.kinds,
     pathKeyframeCount: state.pathKeyframeCount,
     anchorX: vectorRounded(state.anchorX),
@@ -1772,13 +1775,14 @@ function cameraJoltState(animation, scene, w, h, now) {
   const seed = finiteNumber(props.seed, animation.id.length);
   const envelope = Math.sin(progress * Math.PI);
   const tremor = Math.sin(now * 0.049 + seed * 1.37) * Math.cos(now * 0.029 + seed * 0.73);
-  const anchor = props.position ? normalizedPoint(props.position, w, h) : animationAnchor(animation, scene, w, h);
+  const anchor = cameraAnimationAnchor(animation, scene, w, h);
   return {
     id: animation.id,
     targetId: animation.targetId,
     kind: animation.kind,
     progress,
     anchor,
+    anchorRef: anchor.ref || null,
     keyframeCount: 0,
     x: Math.sin(now * 0.041 + seed) * Math.min(w, h) * 0.012 * intensity * envelope,
     y: Math.cos(now * 0.052 + seed * 0.43) * Math.min(w, h) * 0.009 * intensity * envelope,
@@ -1798,13 +1802,14 @@ function cameraPathState(animation, scene, w, h, now) {
   const progress = cameraPathProgress(animation, now);
   if (!animation.loop && progress >= 1) return null;
   const transform = cameraPathTransform(frames, progress);
-  const anchor = props.position ? normalizedPoint(props.position, w, h) : animationAnchor(animation, scene, w, h);
+  const anchor = cameraAnimationAnchor(animation, scene, w, h);
   return {
     id: animation.id,
     targetId: animation.targetId,
     kind: animation.kind,
     progress,
     anchor,
+    anchorRef: anchor.ref || null,
     keyframeCount: transform.keyframeCount,
     x: cameraPathMeasure(transform.x, w),
     y: cameraPathMeasure(transform.y, h),
@@ -1905,33 +1910,175 @@ function colorPhaseTone(phase) {
   return null;
 }
 
+function cameraAnchor(point, ref) {
+  return {x: point.x, y: point.y, ref: ref || null};
+}
+
+function cameraAnimationAnchor(animation, scene, w, h) {
+  const props = animation.props || {};
+  if (props.position) {
+    return cameraAnchor(normalizedPoint(props.position, w, h), {
+      source: "position",
+      primitiveId: animation.targetId,
+    });
+  }
+  return animationAnchor(animation, scene, w, h);
+}
+
 function primitiveAnchor(primitive, w, h) {
   const props = primitive?.props || {};
-  if (props.position) return normalizedPoint(props.position, w, h);
+  if (props.position) {
+    return cameraAnchor(normalizedPoint(props.position, w, h), {
+      source: "primitive",
+      primitiveId: primitive?.id || null,
+    });
+  }
   if (primitive?.kind === "node_graph") {
     const nodes = Array.isArray(props.nodes) ? props.nodes : [];
     const focus = nodes.find((node) => node.id === props.focusNodeId) || nodes[0];
-    if (focus) return normalizedPoint(focus, w, h);
+    if (focus) {
+      return cameraAnchor(normalizedPoint(focus, w, h), objectAnchorRef(primitive, focus, "node", null, "primitive"));
+    }
   }
   if (primitive?.kind === "city_block") {
     const blocks = Array.isArray(props.blocks) ? props.blocks : [];
     const focus = blocks.find((block) => block.id === props.focusBlockId) || blocks[0];
-    if (focus) return {x: Number(focus.x || 0.5) * w, y: Number(focus.y || 0.5) * h};
+    if (focus) {
+      return cameraAnchor(
+        cityBlockAnchorPoint(focus, w, h),
+        objectAnchorRef(primitive, focus, "block", null, "primitive"),
+      );
+    }
   }
   if (primitive?.kind === "ribbon") {
     const points = Array.isArray(props.points) ? props.points : [];
-    if (points.length) return normalizedPoint(points[Math.floor(points.length / 2)], w, h);
+    if (points.length) {
+      const index = Math.floor(points.length / 2);
+      return cameraAnchor(
+        normalizedPoint(points[index], w, h),
+        objectAnchorRef(primitive, points[index], "point", index, "primitive"),
+      );
+    }
   }
   if (primitive?.kind === "particle_field") {
     const emitters = particleFieldEmitters(props, w, h);
-    if (emitters.length) return emitters[0].point;
+    if (emitters.length) {
+      return cameraAnchor(emitters[0].point, objectAnchorRef(primitive, emitters[0].config, "emitter", 0, "primitive"));
+    }
   }
-  return {x: w * 0.5, y: h * 0.48};
+  return cameraAnchor({x: w * 0.5, y: h * 0.48}, {
+    source: "fallback",
+    primitiveId: primitive?.id || null,
+  });
 }
 
 function animationAnchor(animation, scene, w, h) {
-  if (animation.targetId === "scan-grid") return {x: w * 0.5, y: h * 0.52};
-  return primitiveAnchor(scene?.primitives?.[animation.targetId], w, h);
+  const primitive = scene?.primitives?.[animation.targetId];
+  const ref = cameraTargetRef(animation);
+  if (ref && primitive) {
+    const objectAnchor = primitiveObjectAnchor(primitive, ref, w, h);
+    if (objectAnchor) return objectAnchor;
+  }
+  if (animation.targetId === "scan-grid") {
+    return cameraAnchor({x: w * 0.5, y: h * 0.52}, {
+      source: "primitive",
+      primitiveId: "scan-grid",
+    });
+  }
+  return primitiveAnchor(primitive, w, h);
+}
+
+function cameraTargetRef(animation) {
+  const props = animation.props || {};
+  const ref = props.targetRef || props.anchorRef;
+  return ref && typeof ref === "object" ? ref : null;
+}
+
+function primitiveObjectAnchor(primitive, ref, w, h) {
+  const props = primitive.props || {};
+  if (primitive.kind === "node_graph") {
+    const node = sceneObjectByRef(Array.isArray(props.nodes) ? props.nodes : [], ref);
+    if (node) return cameraAnchor(normalizedPoint(node, w, h), objectAnchorRef(primitive, node, "node"));
+  }
+  if (primitive.kind === "city_block") {
+    const block = sceneObjectByRef(Array.isArray(props.blocks) ? props.blocks : [], ref);
+    if (block) return cameraAnchor(cityBlockAnchorPoint(block, w, h), objectAnchorRef(primitive, block, "block"));
+  }
+  if (primitive.kind === "trace_route") {
+    const hop = sceneObjectByRef(traceRouteHops(props, w, h), ref);
+    if (hop) return cameraAnchor(hop.point, objectAnchorRef(primitive, hop, "hop"));
+  }
+  if (primitive.kind === "ribbon") {
+    const points = Array.isArray(props.points) ? props.points : [];
+    const point = sceneObjectByRef(points, ref);
+    if (point) {
+      return cameraAnchor(
+        normalizedPoint(point, w, h),
+        objectAnchorRef(primitive, point, "point", points.indexOf(point)),
+      );
+    }
+  }
+  if (primitive.kind === "wire_landscape") {
+    const peak = sceneObjectByRef(wireLandscapePeaks(props), ref);
+    if (peak) {
+      const rect = wireLandscapeRect(props, w, h);
+      const point = wireLandscapePoint(rect, props, peak.x, peak.z, peak.height, 0);
+      return cameraAnchor(point, objectAnchorRef(primitive, peak, "peak"));
+    }
+  }
+  return null;
+}
+
+function sceneObjectByRef(items, ref) {
+  if (!Array.isArray(items) || !items.length) return null;
+  const index = Number(ref.index);
+  if (Number.isInteger(index) && index >= 0 && index < items.length) return items[index];
+  const id = firstString(ref.id, ref.objectId, ref.blockId, ref.nodeId, ref.hopId, ref.peakId, ref.pointId);
+  if (id) {
+    const found = items.find((item) => item && typeof item === "object" && String(item.id || "") === id);
+    if (found) return found;
+  }
+  const path = firstString(ref.path, ref.objectPath);
+  if (path) {
+    const found = items.find((item) => item && typeof item === "object" && String(item.path || "") === path);
+    if (found) return found;
+  }
+  const label = firstString(ref.label, ref.name);
+  if (label) {
+    const found = items.find(
+      (item) => item && typeof item === "object" && String(item.label || item.name || "") === label,
+    );
+    if (found) return found;
+  }
+  return null;
+}
+
+function firstString(...values) {
+  for (const value of values) {
+    if (typeof value === "string" && value) return value;
+  }
+  return "";
+}
+
+function objectAnchorRef(primitive, object, kind, index = null, source = "targetRef") {
+  const ref = {
+    source,
+    primitiveId: primitive?.id || null,
+    kind,
+  };
+  if (object && typeof object === "object") {
+    if (object.id) ref.objectId = String(object.id);
+    if (object.path) ref.path = String(object.path);
+    if (object.label) ref.label = String(object.label).slice(0, 48);
+  }
+  if (index !== null && Number.isFinite(index)) ref.index = index;
+  return ref;
+}
+
+function cityBlockAnchorPoint(block, w, h) {
+  const x = finiteNumber(block?.x, 0.5) + finiteNumber(block?.w, 0) * 0.5;
+  const y = finiteNumber(block?.y, 0.5) - finiteNumber(block?.h, 0) * 0.35;
+  return {x: x * w, y: y * h};
 }
 
 function drawSceneAnimations(scene, w, h, now) {

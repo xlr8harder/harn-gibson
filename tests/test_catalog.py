@@ -208,11 +208,13 @@ def test_default_visual_catalog_has_generic_and_cinematic_building_blocks() -> N
     assert {"gibson", "cinematic", "motion", "timed", "overlay"} <= set(signal_interference.tags)
     camera_jolt = catalog.entry("camera_jolt")
     assert camera_jolt is not None
-    assert {"targetId", "intensity", "zoom", "roll", "position", "seed"} <= set(camera_jolt.props)
+    assert {"targetId", "intensity", "zoom", "roll", "position", "targetRef", "seed"} <= set(camera_jolt.props)
     assert {"gibson", "cinematic", "camera", "timed"} <= set(camera_jolt.tags)
     camera_path = catalog.entry("camera_path")
     assert camera_path is not None
-    assert {"targetId", "keyframes", "durationMs", "position", "loop", "yoyo", "seed"} <= set(camera_path.props)
+    assert {"targetId", "keyframes", "durationMs", "position", "targetRef", "loop", "yoyo", "seed"} <= set(
+        camera_path.props
+    )
     assert {"gibson", "cinematic", "camera", "timed"} <= set(camera_path.tags)
     timeline_cue = catalog.entry("timeline_cue")
     assert timeline_cue is not None

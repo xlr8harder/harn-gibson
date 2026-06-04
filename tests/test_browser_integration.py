@@ -682,7 +682,22 @@ def test_browser_display_renders_timeline_cue_animation() -> None:
                 assert state_payload["cameraState"] == {
                     "activeCount": 2,
                     "animationIds": ["gallery-camera", "gallery-camera-path"],
-                    "targetIds": ["animation-vector", "scan-grid"],
+                    "targetIds": ["animation-city", "animation-ribbon"],
+                    "anchorRefs": [
+                        {
+                            "source": "targetRef",
+                            "primitiveId": "animation-city",
+                            "kind": "block",
+                            "objectId": "fx-city-2",
+                            "label": "scan",
+                        },
+                        {
+                            "source": "targetRef",
+                            "primitiveId": "animation-ribbon",
+                            "kind": "point",
+                            "index": 3,
+                        },
+                    ],
                     "kinds": ["camera_jolt", "camera_path"],
                     "pathKeyframeCount": 3,
                     "anchorX": state_payload["cameraState"]["anchorX"],

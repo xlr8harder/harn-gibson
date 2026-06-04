@@ -326,13 +326,14 @@
           "op": "start_animation",
           "animation": {
             "id": "gallery-camera",
-            "targetId": "animation-vector",
+            "targetId": "animation-city",
             "kind": "camera_jolt",
             "startedAtMs": 9675,
             "durationMs": 3600,
             "loop": true,
             "props": {
               "phase": "after",
+              "targetRef": {"id": "fx-city-2"},
               "intensity": 0.84,
               "zoom": 0.022,
               "roll": 0.014,
@@ -344,7 +345,7 @@
           "op": "start_animation",
           "animation": {
             "id": "gallery-camera-path",
-            "targetId": "scan-grid",
+            "targetId": "animation-ribbon",
             "kind": "camera_path",
             "startedAtMs": 9685,
             "durationMs": 6800,
@@ -352,7 +353,7 @@
             "props": {
               "phase": "lifecycle",
               "yoyo": true,
-              "position": {"x": 0.50, "y": 0.52},
+              "targetRef": {"index": 3},
               "keyframes": [
                 {"at": 0, "x": -0.018, "y": 0.012, "scale": 1.0, "rotation": -0.006},
                 {"at": 0.5, "x": 0.022, "y": -0.018, "scale": 1.035, "rotation": 0.012},

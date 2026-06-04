@@ -35,10 +35,13 @@
           "phase": "after",
           "roll": 0.014,
           "seed": 964,
+          "targetRef": {
+            "id": "fx-city-2"
+          },
           "zoom": 0.022
         },
         "startedAtMs": 9675,
-        "targetId": "animation-vector"
+        "targetId": "animation-city"
       },
       "gallery-camera-path": {
         "durationMs": 6800,
@@ -70,15 +73,14 @@
             }
           ],
           "phase": "lifecycle",
-          "position": {
-            "x": 0.5,
-            "y": 0.52
-          },
           "seed": 965,
+          "targetRef": {
+            "index": 3
+          },
           "yoyo": true
         },
         "startedAtMs": 9685,
-        "targetId": "scan-grid"
+        "targetId": "animation-ribbon"
       },
       "gallery-cues": {
         "durationMs": 6200,

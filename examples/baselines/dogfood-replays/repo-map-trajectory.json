@@ -39,10 +39,13 @@
           "phase": "after",
           "roll": 0.013,
           "seed": 91,
+          "targetRef": {
+            "id": "dogfood-city-0"
+          },
           "zoom": 0.018
         },
         "startedAtMs": 28400,
-        "targetId": "dogfood-sigil",
+        "targetId": "dogfood-city",
         "ttlMs": 3100
       },
       "dogfood-camera-path": {
