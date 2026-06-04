@@ -40,6 +40,7 @@ from harn_gibson.rendering import (
     render_update_payload,
     step_schedule,
     step_schedule_payload,
+    touched_files_context_from_events,
     validate_render_plan,
 )
 from harn_gibson.scene import SceneAnimation, SceneEngine, SceneMutation, ScenePrimitive
@@ -53,6 +54,38 @@ def event(sequence: int = 1, event_type: str = "input") -> GibsonEvent:
         sequence,
         timestamp_ms=sequence * 10,
     )
+
+
+def test_touched_files_context_from_events_uses_default_config() -> None:
+    touched = touched_files_context_from_events(
+        (
+            GibsonEvent.from_raw(
+                {
+                    "type": "tool_call",
+                    "toolName": "bash",
+                    "input": {"command": "python -m pytest tests/test_rendering.py"},
+                },
+                7,
+                timestamp_ms=70,
+            ),
+        )
+    )
+
+    assert touched == {
+        "schema": "harn-gibson.touched-files.v1",
+        "files": [
+            {
+                "path": "tests/test_rendering.py",
+                "operation": "bash:before",
+                "firstSequence": 7,
+                "lastSequence": 7,
+                "phases": ["before"],
+                "sources": ["input.command"],
+            }
+        ],
+        "count": 1,
+        "truncated": False,
+    }
 
 
 def test_render_request_step_and_plan_helpers() -> None:

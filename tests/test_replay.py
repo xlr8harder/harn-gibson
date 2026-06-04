@@ -32,9 +32,11 @@ from harn_gibson.replay import (
     ReplayExpectationResult,
     ReplayFileResult,
     ReplaySuiteResult,
+    _merge_event_touched_file_summaries,
     _replay_data_event_summary,
     _replay_result_render_summary,
     _replay_scene_visual_continuity_summary,
+    _touched_file_top_level_counts,
     capture_replay_frame_screenshots,
     compare_replay_baseline,
     discover_replay_files,
@@ -674,7 +676,16 @@ def test_replay_suite_review_bundle(tmp_path: Path, monkeypatch: pytest.MonkeyPa
                         "sources": ["capture"],
                     },
                 },
-                "steps": [{"type": "event", "event": event_payload(1, "tool_call", {"toolName": "bash"})}],
+                "steps": [
+                    {
+                        "type": "event",
+                        "event": event_payload(
+                            1,
+                            "tool_call",
+                            {"toolName": "bash", "input": {"command": "python -m pytest tests/test_cli.py"}},
+                        ),
+                    }
+                ],
             }
         ),
         encoding="utf-8",
@@ -683,7 +694,20 @@ def test_replay_suite_review_bundle(tmp_path: Path, monkeypatch: pytest.MonkeyPa
         json.dumps(
             {
                 "name": "bad expectation chunk",
-                "steps": [{"type": "event", "event": event_payload(2, "tool_result", {"toolName": "bash"})}],
+                "steps": [
+                    {
+                        "type": "event",
+                        "event": event_payload(
+                            2,
+                            "tool_result",
+                            {
+                                "toolName": "bash",
+                                "isError": True,
+                                "filePath": ["src/tiny_tasks/cli.py", "tests/test_cli.py"],
+                            },
+                        ),
+                    }
+                ],
                 "expect": {"sceneRevision": 0},
             }
         ),
@@ -765,6 +789,37 @@ def test_replay_suite_review_bundle(tmp_path: Path, monkeypatch: pytest.MonkeyPa
             "phases": ["after", "before", "lifecycle"],
             "sourceCounts": {"unit": 3},
             "sources": ["unit"],
+            "tools": {
+                "commandCount": 1,
+                "failedToolResultCount": 1,
+                "toolCounts": {"bash": 2},
+                "toolNames": ["bash"],
+            },
+            "touchedFiles": {
+                "schema": "harn-gibson.touched-files.v1",
+                "files": [
+                    {
+                        "path": "src/tiny_tasks/cli.py",
+                        "operation": "bash:after",
+                        "firstSequence": 2,
+                        "lastSequence": 2,
+                        "phases": ["after"],
+                        "sources": ["filePath.0"],
+                    },
+                    {
+                        "path": "tests/test_cli.py",
+                        "operation": "bash:before",
+                        "firstSequence": 1,
+                        "lastSequence": 2,
+                        "phases": ["before", "after"],
+                        "sources": ["input.command", "filePath.1"],
+                    },
+                ],
+                "paths": ["src/tiny_tasks/cli.py", "tests/test_cli.py"],
+                "count": 2,
+                "truncated": False,
+                "topLevelCounts": {"src": 1, "tests": 1},
+            },
         },
         "failedCount": 3,
         "fileCount": 4,
@@ -790,6 +845,12 @@ def test_replay_suite_review_bundle(tmp_path: Path, monkeypatch: pytest.MonkeyPa
     assert suite_manifest["files"][0]["review"] == "files/chunk-0001/index.html"
     assert suite_manifest["files"][0]["eventLogChunk"]["chunkIndex"] == 1
     assert suite_manifest["files"][0]["eventSummary"]["eventTypeCounts"] == {"tool_call": 1}
+    assert suite_manifest["files"][0]["eventSummary"]["tools"] == {
+        "commandCount": 1,
+        "toolCounts": {"bash": 1},
+        "toolNames": ["bash"],
+    }
+    assert suite_manifest["files"][0]["eventSummary"]["touchedFiles"]["paths"] == ["tests/test_cli.py"]
     assert suite_manifest["files"][0]["routeCounts"] == {"renderer_agent": 1}
     assert suite_manifest["files"][0]["rendererCounts"] == {"deterministic": 1}
     assert suite_manifest["files"][0]["visualContinuitySummary"] == {
@@ -802,6 +863,8 @@ def test_replay_suite_review_bundle(tmp_path: Path, monkeypatch: pytest.MonkeyPa
     assert suite_manifest["files"][1]["ok"] is False
     assert "replay expectations failed" in suite_manifest["files"][1]["error"]
     assert suite_manifest["files"][1]["eventSummary"]["eventTypeCounts"] == {"tool_result": 1}
+    assert suite_manifest["files"][1]["eventSummary"]["tools"]["failedToolResultCount"] == 1
+    assert suite_manifest["files"][1]["eventSummary"]["touchedFiles"]["topLevelCounts"] == {"src": 1, "tests": 1}
     assert suite_manifest["files"][2]["path"] == "chunk-0003.json"
     assert suite_manifest["files"][2]["ok"] is False
     assert "render_plan replay step must include steps list" in suite_manifest["files"][2]["error"]
@@ -821,6 +884,10 @@ def test_replay_suite_review_bundle(tmp_path: Path, monkeypatch: pytest.MonkeyPa
     assert "captured duration" in html
     assert "4200 ms" in html
     assert "reviewed event types" in html
+    assert "reviewed tools" in html
+    assert "reviewed touched files" in html
+    assert "reviewed touched areas" in html
+    assert "src: 1, tests: 1" in html
     assert "reviewed visual anchors" in html
     assert "reviewed continuity anchors" in html
     assert "renderer_agent" in html
@@ -831,6 +898,18 @@ def test_replay_suite_review_bundle(tmp_path: Path, monkeypatch: pytest.MonkeyPa
     sparse_suite_index = replay_suite_review_index_html(
         {
             "summary": {
+                "eventSummary": {
+                    "tools": {
+                        "toolNames": [],
+                        "commandCount": 0,
+                        "failedToolResultCount": 0,
+                    },
+                    "touchedFiles": {
+                        "count": 0,
+                        "topLevelCounts": "bad",
+                        "paths": [],
+                    },
+                },
                 "visualContinuitySummary": {
                     "maxVisualAnchorCount": 0,
                     "maxActiveAnimationCount": 0,
@@ -838,9 +917,26 @@ def test_replay_suite_review_bundle(tmp_path: Path, monkeypatch: pytest.MonkeyPa
                     "effects": [],
                 }
             },
-            "files": [{"path": "sparse.json", "visualContinuitySummary": {"anchors": [], "effects": []}}],
+            "files": [
+                {
+                    "path": "sparse.json",
+                    "eventSummary": {
+                        "tools": {"toolNames": []},
+                        "touchedFiles": {"topLevelCounts": "bad"},
+                    },
+                    "visualContinuitySummary": {"anchors": [], "effects": []},
+                }
+            ],
         }
     )
+    assert "reviewed tools" not in sparse_suite_index
+    assert "reviewed command fields" not in sparse_suite_index
+    assert "reviewed failed tools" not in sparse_suite_index
+    assert "reviewed touched files" not in sparse_suite_index
+    assert "reviewed touched areas" not in sparse_suite_index
+    assert "reviewed touched paths" not in sparse_suite_index
+    assert "tools " not in sparse_suite_index
+    assert "touched " not in sparse_suite_index
     assert "reviewed visual anchors" not in sparse_suite_index
     assert "reviewed continuity anchors" not in sparse_suite_index
     assert "continuity " not in sparse_suite_index
@@ -1052,6 +1148,10 @@ def test_replay_data_from_event_log(tmp_path: Path) -> None:
         "phases": ["before", "during"],
         "sourceCounts": {"unit": 2},
         "sources": ["unit"],
+        "tools": {
+            "toolCounts": {"bash": 1},
+            "toolNames": ["bash"],
+        },
     }
     assert visual_fixture["screenshotExpect"] == {
         "nonblank": True,
@@ -1124,6 +1224,16 @@ def test_split_replay_data_from_event_log(tmp_path: Path) -> None:
             "phases": ["before"],
             "sourceCounts": {"unit": 5},
             "sources": ["unit"],
+            "tools": {
+                "toolCounts": {
+                    "tool-1": 1,
+                    "tool-2": 1,
+                    "tool-3": 1,
+                    "tool-4": 1,
+                    "tool-5": 1,
+                },
+                "toolNames": ["tool-1", "tool-2", "tool-3", "tool-4", "tool-5"],
+            },
         },
         "fixtures": [
             {
@@ -1502,6 +1612,76 @@ def test_checked_in_dogfood_replay_suite_summarizes_trajectory_coverage() -> Non
             "phases": ["after", "before", "lifecycle"],
             "sourceCounts": {"browser": 1, "harn": 10, "harn-gibson": 1},
             "sources": ["browser", "harn", "harn-gibson"],
+            "tools": {
+                "commandCount": 8,
+                "failedToolResultCount": 2,
+                "toolCounts": {"bash": 8},
+                "toolNames": ["bash"],
+            },
+            "touchedFiles": {
+                "schema": "harn-gibson.touched-files.v1",
+                "files": [
+                    {
+                        "path": "README.md",
+                        "operation": "bash:after",
+                        "firstSequence": 7,
+                        "lastSequence": 7,
+                        "phases": ["after"],
+                        "sources": ["filePath.0"],
+                    },
+                    {
+                        "path": "pyproject.toml",
+                        "operation": "bash:after",
+                        "firstSequence": 7,
+                        "lastSequence": 7,
+                        "phases": ["after"],
+                        "sources": ["filePath.1"],
+                    },
+                    {
+                        "path": "src/tiny_tasks",
+                        "operation": "bash:before",
+                        "firstSequence": 4,
+                        "lastSequence": 4,
+                        "phases": ["before"],
+                        "sources": ["input.command"],
+                    },
+                    {
+                        "path": "src/tiny_tasks/__init__.py",
+                        "operation": "bash:before",
+                        "firstSequence": 4,
+                        "lastSequence": 4,
+                        "phases": ["before"],
+                        "sources": ["input.command"],
+                    },
+                    {
+                        "path": "src/tiny_tasks/cli.py",
+                        "operation": "bash:after",
+                        "firstSequence": 3,
+                        "lastSequence": 7,
+                        "phases": ["after", "before"],
+                        "sources": ["filePath.0", "filePath", "input.command", "filePath.2"],
+                    },
+                    {
+                        "path": "tests/test_cli.py",
+                        "operation": "bash:before",
+                        "firstSequence": 2,
+                        "lastSequence": 7,
+                        "phases": ["before", "after"],
+                        "sources": ["input.command", "filePath.1", "filePath.3"],
+                    },
+                ],
+                "paths": [
+                    "README.md",
+                    "pyproject.toml",
+                    "src/tiny_tasks",
+                    "src/tiny_tasks/__init__.py",
+                    "src/tiny_tasks/cli.py",
+                    "tests/test_cli.py",
+                ],
+                "count": 6,
+                "truncated": False,
+                "topLevelCounts": {"README.md": 1, "pyproject.toml": 1, "src": 3, "tests": 1},
+            },
         },
         "expectationCount": 28,
         "failedCount": 0,
@@ -2022,6 +2202,35 @@ def test_replay_suite_summary_helpers_handle_sparse_shapes() -> None:
     }
     assert "routeCounts" not in sparse_summary
     assert "rendererCounts" not in sparse_summary
+    malformed_touched = _merge_event_touched_file_summaries(
+        (
+            {"files": "bad"},
+            {
+                "truncated": True,
+                "files": [
+                    "bad",
+                    {"path": ""},
+                    {"path": "docs/readme.md", "phases": "bad", "sources": "bad"},
+                ],
+            },
+        )
+    )
+    assert malformed_touched == {
+        "schema": "harn-gibson.touched-files.v1",
+        "files": [
+            {
+                "path": "docs/readme.md",
+                "operation": "touched",
+                "phases": [],
+                "sources": [],
+            }
+        ],
+        "paths": ["docs/readme.md"],
+        "count": 1,
+        "truncated": True,
+        "topLevelCounts": {"docs": 1},
+    }
+    assert _touched_file_top_level_counts(({"path": ""}, {"bad": True})) == {}
 
     raw_event = {
         "eventType": "raw_custom",

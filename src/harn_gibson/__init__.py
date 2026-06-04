@@ -50,6 +50,7 @@ from harn_gibson.rendering import (
     render_plan_has_validation_errors,
     step_schedule,
     step_schedule_payload,
+    touched_files_context_from_events,
     validate_render_plan,
 )
 from harn_gibson.replay import (
@@ -238,6 +239,7 @@ __all__ = [
     "style_pack_from_name",
     "style_pack_ids",
     "summarize_event",
+    "touched_files_context_from_events",
     "to_jsonable",
     "validate_render_plan",
 ]

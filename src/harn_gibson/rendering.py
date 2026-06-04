@@ -2455,25 +2455,33 @@ def _skip_repo_path(name: str) -> bool:
 
 
 def _touched_files_context(batch: RenderInputBatch, config: RendererContextConfig) -> dict[str, Any]:
+    return touched_files_context_from_events(tuple(request.event for request in batch.requests), config)
+
+
+def touched_files_context_from_events(
+    events: Sequence[GibsonEvent],
+    config: RendererContextConfig | None = None,
+) -> dict[str, Any]:
+    actual_config = config or RendererContextConfig()
     touched: list[dict[str, Any]] = []
     by_path: dict[str, dict[str, Any]] = {}
-    max_files = max(0, config.max_touched_files)
-    for request in batch.requests:
-        for path, source in _event_touched_paths(request.event, config):
+    max_files = max(0, actual_config.max_touched_files)
+    for event in events:
+        for path, source in _event_touched_paths(event, actual_config):
             current = by_path.get(path)
             if current is None:
                 current = {
                     "path": path,
-                    "operation": _operation_for_event(request.event),
-                    "firstSequence": request.event.sequence,
-                    "lastSequence": request.event.sequence,
+                    "operation": _operation_for_event(event),
+                    "firstSequence": event.sequence,
+                    "lastSequence": event.sequence,
                     "phases": [],
                     "sources": [],
                 }
                 by_path[path] = current
                 touched.append(current)
-            current["lastSequence"] = request.event.sequence
-            _append_unique(current["phases"], request.event.phase)
+            current["lastSequence"] = event.sequence
+            _append_unique(current["phases"], event.phase)
             _append_unique(current["sources"], source)
     files = touched[:max_files]
     return {

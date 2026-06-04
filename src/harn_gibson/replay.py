@@ -12,11 +12,19 @@ from difflib import unified_diff
 from html import escape
 from itertools import islice
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
-from harn_gibson.events import GibsonEvent, diagnostic_event
+from harn_gibson.events import EventPhase, GibsonEvent, diagnostic_event, phase_for_event
 from harn_gibson.renderer_prompt import renderer_prompt_from_context
-from harn_gibson.rendering import RendererContext, RenderPlan, RenderRequest, RenderStep, RenderSubmitResult
+from harn_gibson.rendering import (
+    RendererContext,
+    RendererContextConfig,
+    RenderPlan,
+    RenderRequest,
+    RenderStep,
+    RenderSubmitResult,
+    touched_files_context_from_events,
+)
 from harn_gibson.scene import SceneMutation, SceneState, mutation_from_mapping, scene_state_from_mapping
 from harn_gibson.server import GibsonServerState, event_from_payload, submit_event_to_renderer
 from harn_gibson.styles import style_pack_from_name
@@ -25,6 +33,7 @@ ReplayStepKind = Literal["event", "raw_event", "render_plan", "mutations"]
 ReplayExpectationOp = Literal["equals", "contains", "exists", "min", "max"]
 MISSING = object()
 SENSITIVE_REDACTION = "[redacted]"
+EVENT_SUMMARY_TOUCHED_FILE_LIMIT = 16
 _SENSITIVE_EVENT_KEYS = frozenset(
     {
         "access_token",
@@ -597,6 +606,7 @@ def _scene_style_motifs(scene: SceneState) -> list[str]:
 
 
 def _merge_replay_event_summaries(summaries: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
+    summary_items = tuple(summary for summary in summaries if isinstance(summary, Mapping))
     event_count = 0
     event_type_counts: dict[str, int] = {}
     phase_counts: dict[str, int] = {}
@@ -605,7 +615,7 @@ def _merge_replay_event_summaries(summaries: Iterable[Mapping[str, Any]]) -> dic
     last_sequences: list[int] = []
     first_timestamps: list[int] = []
     last_timestamps: list[int] = []
-    for summary in summaries:
+    for summary in summary_items:
         event_count += _coerce_int(summary.get("eventCount"), 0)
         _merge_count_mapping(event_type_counts, summary.get("eventTypeCounts"))
         _merge_count_mapping(phase_counts, summary.get("phaseCounts"))
@@ -635,7 +645,91 @@ def _merge_replay_event_summaries(summaries: Iterable[Mapping[str, Any]]) -> dic
         merged["firstTimestampMs"] = first_timestamp
         merged["lastTimestampMs"] = last_timestamp
         merged["durationMs"] = max(0, last_timestamp - first_timestamp)
+    tool_summary = _merge_event_tool_summaries(
+        summary.get("tools") for summary in summary_items if isinstance(summary.get("tools"), Mapping)
+    )
+    if tool_summary:
+        merged["tools"] = tool_summary
+    touched_summary = _merge_event_touched_file_summaries(
+        summary.get("touchedFiles") for summary in summary_items if isinstance(summary.get("touchedFiles"), Mapping)
+    )
+    if touched_summary:
+        merged["touchedFiles"] = touched_summary
     return merged
+
+
+def _merge_event_tool_summaries(summaries: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
+    tool_counts: dict[str, int] = {}
+    command_count = 0
+    failed_tool_result_count = 0
+    for summary in summaries:
+        _merge_count_mapping(tool_counts, summary.get("toolCounts"))
+        command_count += _coerce_int(summary.get("commandCount"), 0)
+        failed_tool_result_count += _coerce_int(summary.get("failedToolResultCount"), 0)
+    payload: dict[str, Any] = {}
+    if tool_counts:
+        payload["toolNames"] = sorted(tool_counts)
+        payload["toolCounts"] = dict(sorted(tool_counts.items()))
+    if command_count:
+        payload["commandCount"] = command_count
+    if failed_tool_result_count:
+        payload["failedToolResultCount"] = failed_tool_result_count
+    return payload
+
+
+def _merge_event_touched_file_summaries(summaries: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
+    by_path: dict[str, dict[str, Any]] = {}
+    any_truncated = False
+    for summary in summaries:
+        any_truncated = any_truncated or bool(summary.get("truncated"))
+        files = summary.get("files")
+        if not isinstance(files, list):
+            continue
+        for item in files:
+            if not isinstance(item, Mapping):
+                continue
+            path = item.get("path")
+            if not isinstance(path, str) or not path:
+                continue
+            current = by_path.get(path)
+            if current is None:
+                current = {
+                    "path": path,
+                    "operation": str(item.get("operation") or "touched"),
+                    "phases": [],
+                    "sources": [],
+                }
+                by_path[path] = current
+            _merge_optional_sequence_range(current, item)
+            phases = item.get("phases")
+            if isinstance(phases, list):
+                _extend_unique(current["phases"], phases)
+            sources = item.get("sources")
+            if isinstance(sources, list):
+                _extend_unique(current["sources"], sources)
+    if not by_path:
+        return {}
+    files = tuple(sorted(by_path.values(), key=lambda item: str(item["path"])))
+    bounded_files = files[:EVENT_SUMMARY_TOUCHED_FILE_LIMIT]
+    return {
+        "schema": "harn-gibson.touched-files.v1",
+        "files": [dict(item) for item in bounded_files],
+        "paths": [str(item["path"]) for item in bounded_files],
+        "count": len(files),
+        "truncated": any_truncated or len(files) > EVENT_SUMMARY_TOUCHED_FILE_LIMIT,
+        "topLevelCounts": _touched_file_top_level_counts(files),
+    }
+
+
+def _merge_optional_sequence_range(target: dict[str, Any], source: Mapping[str, Any]) -> None:
+    first_sequence = source.get("firstSequence")
+    if isinstance(first_sequence, int) and not isinstance(first_sequence, bool):
+        current = target.get("firstSequence")
+        target["firstSequence"] = min(current, first_sequence) if isinstance(current, int) else first_sequence
+    last_sequence = source.get("lastSequence")
+    if isinstance(last_sequence, int) and not isinstance(last_sequence, bool):
+        current = target.get("lastSequence")
+        target["lastSequence"] = max(current, last_sequence) if isinstance(current, int) else last_sequence
 
 
 def _merge_count_mappings(summaries: Iterable[Mapping[str, int]]) -> dict[str, int]:
@@ -931,6 +1025,12 @@ def _event_log_capture_summary(events: Sequence[Mapping[str, Any]]) -> dict[str,
         "sources": sorted(source_counts),
         "sourceCounts": source_counts,
     }
+    tool_summary = _event_log_tool_summary(events)
+    if tool_summary:
+        summary["tools"] = tool_summary
+    touched_summary = _event_log_touched_file_summary(events)
+    if touched_summary:
+        summary["touchedFiles"] = touched_summary
     if sequences:
         summary["firstSequence"] = min(sequences)
         summary["lastSequence"] = max(sequences)
@@ -941,6 +1041,100 @@ def _event_log_capture_summary(events: Sequence[Mapping[str, Any]]) -> dict[str,
         summary["lastTimestampMs"] = last_timestamp
         summary["durationMs"] = max(0, last_timestamp - first_timestamp)
     return summary
+
+
+def _event_log_tool_summary(events: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+    tool_counts: dict[str, int] = {}
+    command_count = 0
+    failed_tool_result_count = 0
+    for event in events:
+        payload = event.get("payload")
+        payload_mapping = payload if isinstance(payload, Mapping) else {}
+        tool_name = payload_mapping.get("toolName")
+        if isinstance(tool_name, str) and tool_name:
+            tool_counts[tool_name] = tool_counts.get(tool_name, 0) + 1
+        command_count += _event_command_field_count(payload_mapping)
+        if event.get("eventType") in {"tool_result", "tool_execution_end"} and bool(payload_mapping.get("isError")):
+            failed_tool_result_count += 1
+    summary: dict[str, Any] = {}
+    if tool_counts:
+        summary["toolNames"] = sorted(tool_counts)
+        summary["toolCounts"] = dict(sorted(tool_counts.items()))
+    if command_count:
+        summary["commandCount"] = command_count
+    if failed_tool_result_count:
+        summary["failedToolResultCount"] = failed_tool_result_count
+    return summary
+
+
+def _event_command_field_count(value: Any) -> int:
+    if isinstance(value, Mapping):
+        count = 0
+        for key, child in value.items():
+            if str(key) in {"cmd", "command", "shellCommand"} and isinstance(child, str):
+                count += 1
+            count += _event_command_field_count(child)
+        return count
+    if isinstance(value, list | tuple):
+        return sum(_event_command_field_count(item) for item in value)
+    return 0
+
+
+def _event_log_touched_file_summary(events: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+    replay_events = tuple(_gibson_event_from_event_log_mapping(item) for item in events)
+    if not replay_events:
+        return {}
+    touched = touched_files_context_from_events(
+        replay_events,
+        RendererContextConfig(max_touched_files=EVENT_SUMMARY_TOUCHED_FILE_LIMIT),
+    )
+    files = touched.get("files")
+    file_items = [dict(item) for item in files if isinstance(item, Mapping)] if isinstance(files, list) else []
+    if not file_items:
+        return {}
+    return {
+        "schema": touched["schema"],
+        "files": file_items,
+        "paths": [str(item["path"]) for item in file_items if isinstance(item.get("path"), str)],
+        "count": touched["count"],
+        "truncated": touched["truncated"],
+        "topLevelCounts": _touched_file_top_level_counts(file_items),
+    }
+
+
+def _gibson_event_from_event_log_mapping(event: Mapping[str, Any]) -> GibsonEvent:
+    payload_value = event.get("payload")
+    payload = dict(payload_value) if isinstance(payload_value, Mapping) else {}
+    event_type = str(event.get("eventType") or payload.get("type") or "unknown")
+    phase_value = event.get("phase")
+    phase = (
+        cast(EventPhase, str(phase_value))
+        if phase_value in {"before", "during", "after", "lifecycle"}
+        else phase_for_event(event_type)
+    )
+    return GibsonEvent(
+        sequence=_coerce_int(event.get("sequence"), 0),
+        timestamp_ms=_coerce_int(event.get("timestampMs"), 0),
+        source=str(event.get("source") or "capture"),
+        event_type=event_type,
+        phase=phase,
+        title=str(event.get("title") or event_type),
+        summary=str(event.get("summary") or ""),
+        payload=payload,
+        recent_context=_string_tuple(event.get("recentContext", ())),
+        visualization_context=_string_tuple(event.get("visualizationContext", ())),
+    )
+
+
+def _touched_file_top_level_counts(files: Sequence[Mapping[str, Any]]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for item in files:
+        path = item.get("path")
+        if not isinstance(path, str) or not path:
+            continue
+        top_level = path.split("/", 1)[0]
+        counts[top_level] = counts.get(top_level, 0) + 1
+    return dict(sorted(counts.items()))
 
 
 def _event_log_counts(values: Iterable[Any]) -> dict[str, int]:
@@ -2276,6 +2470,17 @@ def _joined_summary_values(value: Any) -> str:
     return ", ".join(str(item) for item in value[:6] if item)
 
 
+def _joined_count_mapping(value: Any) -> str:
+    if not isinstance(value, Mapping):
+        return ""
+    items = [
+        f"{key}: {count}"
+        for key, count in sorted(value.items())
+        if isinstance(key, str) and key and isinstance(count, int) and not isinstance(count, bool)
+    ]
+    return ", ".join(items[:6])
+
+
 def write_replay_review_bundle(
     path: str | Path,
     result: ReplayResult,
@@ -2714,6 +2919,28 @@ def _replay_suite_review_metric_items(manifest: Mapping[str, Any]) -> tuple[tupl
             phases = _joined_summary_values(event_summary.get("phases"))
             if phases:
                 items.append(("reviewed phases", phases))
+            tools = event_summary.get("tools")
+            if isinstance(tools, Mapping):
+                tool_names = _joined_summary_values(tools.get("toolNames"))
+                if tool_names:
+                    items.append(("reviewed tools", tool_names))
+                command_count = _int_value(tools.get("commandCount"))
+                if command_count:
+                    items.append(("reviewed command fields", command_count))
+                failed_tool_results = _int_value(tools.get("failedToolResultCount"))
+                if failed_tool_results:
+                    items.append(("reviewed failed tools", failed_tool_results))
+            touched_files = event_summary.get("touchedFiles")
+            if isinstance(touched_files, Mapping):
+                touched_count = _int_value(touched_files.get("count"))
+                if touched_count:
+                    items.append(("reviewed touched files", touched_count))
+                top_levels = _joined_count_mapping(touched_files.get("topLevelCounts"))
+                if top_levels:
+                    items.append(("reviewed touched areas", top_levels))
+                touched_paths = _joined_summary_values(touched_files.get("paths"))
+                if touched_paths:
+                    items.append(("reviewed touched paths", touched_paths))
         routes = _joined_summary_values(summary.get("routes"))
         if routes:
             items.append(("reviewed routes", routes))
@@ -2774,6 +3001,16 @@ def _replay_suite_review_file_card(file: Mapping[str, Any]) -> str:
         event_types = _joined_summary_values(event_summary.get("eventTypes"))
         if event_types:
             summary_parts.append(f"events {escape(event_types)}")
+        tools = event_summary.get("tools")
+        if isinstance(tools, Mapping):
+            tool_names = _joined_summary_values(tools.get("toolNames"))
+            if tool_names:
+                summary_parts.append(f"tools {escape(tool_names)}")
+        touched_files = event_summary.get("touchedFiles")
+        if isinstance(touched_files, Mapping):
+            top_levels = _joined_count_mapping(touched_files.get("topLevelCounts"))
+            if top_levels:
+                summary_parts.append(f"touched {escape(top_levels)}")
     routes = _joined_summary_values(file.get("routes"))
     if routes:
         summary_parts.append(f"routes {escape(routes)}")
