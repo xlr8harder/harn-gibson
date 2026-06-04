@@ -452,6 +452,7 @@ def run_dogfood_capture(
             str(renderer_timeout_ms),
             style,
             split_every,
+            project_root=harn_cwd,
         ),
         file=sys.stderr,
     )
@@ -473,6 +474,8 @@ def _capture_replay_command(
     renderer_timeout_ms: str,
     style: str | None,
     split_every: int | None,
+    *,
+    project_root: Path | None = None,
 ) -> str:
     fixture_output = event_log_path.with_suffix(".replay.json")
     split_output_dir = event_log_path.with_suffix(".replays")
@@ -502,6 +505,8 @@ def _capture_replay_command(
     )
     if style is not None:
         command.extend(["--style", style])
+    if project_root is not None:
+        command.extend(["--project-root", str(project_root), "--project-name", project_root.name or "workspace"])
     return " ".join(shlex.quote(part) for part in command)
 
 

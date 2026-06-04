@@ -2475,6 +2475,7 @@ def test_cli_dogfood_capture_split_hint(
 def test_cli_dogfood_capture_cwd_resolves_event_log(
     monkeypatch: Any,
     tmp_path: Path,
+    capsys: Any,
 ) -> None:
     dogfood_calls: list[dict[str, Any]] = []
     workspace = tmp_path / "workspace"
@@ -2504,6 +2505,9 @@ def test_cli_dogfood_capture_cwd_resolves_event_log(
         launcher_dir / "captures" / "events.jsonl"
     )
     assert (launcher_dir / "captures").is_dir()
+    stderr = capsys.readouterr().err
+    assert f"--project-root {workspace.resolve()}" in stderr
+    assert "--project-name workspace" in stderr
 
 
 def test_cli_dogfood_capture_rejects_missing_cwd_before_artifacts(
