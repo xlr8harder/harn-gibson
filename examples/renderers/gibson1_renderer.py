@@ -24,6 +24,7 @@ def main() -> None:
     duration_ms = _clamp(_int(timeline.get("durationMs"), 0), 2600, 7200)
     touched = _touched_files(context)
     entries = _repo_entries(context)
+    semantic = _semantic_graph(context)
     tone = _phase_tone(phase, event_type, display_style)
     accent = _accent_tone(phase, event_type, display_style, touched=bool(touched), tone=tone)
     project_name = _text(project.get("name"), "project")
@@ -45,13 +46,13 @@ def main() -> None:
             },
         },
         _upsert_terminal_wall(event, summary, entries, touched, tone, accent, sequence),
-        _upsert_repo_terrain(entries, touched, event_type, tone, accent, sequence),
-        _upsert_repo_city(entries, touched, event_type, tone, accent, sequence),
+        _upsert_repo_terrain(entries, touched, semantic, event_type, tone, accent, sequence),
+        _upsert_repo_city(entries, touched, semantic, event_type, tone, accent, sequence),
         _upsert_signal_scope(event_type, phase, touched, tone, accent, sequence),
-        _upsert_trace_route(event_type, phase, touched, tone, accent, sequence),
+        _upsert_trace_route(event_type, phase, touched, semantic, tone, accent, sequence),
         _upsert_data_rain(event_type, summary, tone, accent, sequence),
         _timeline_cue(event_type, phase, sequence, timestamp_ms, duration_ms, tone, accent),
-        _route_trace_animation(event_type, phase, touched, sequence, timestamp_ms, duration_ms, tone, accent),
+        _route_trace_animation(event_type, phase, touched, semantic, sequence, timestamp_ms, duration_ms, tone, accent),
     ]
 
     metadata: dict[str, Any] = {
@@ -63,6 +64,9 @@ def main() -> None:
         "mode": "usable-default",
         "touchedFileCount": len(touched),
         "repoTerrain": bool(entries),
+        "semanticGraph": semantic["available"],
+        "semanticNodeCount": len(semantic["nodes"]),
+        "semanticEdgeCount": len(semantic["edges"]),
         "projectName": project_name,
     }
     if display_style != "gibson":
@@ -94,6 +98,56 @@ def _repo_entries(context: dict[str, Any]) -> list[dict[str, Any]]:
     project = _dict(context.get("project"))
     topology = _dict(project.get("repoTopology"))
     return [_dict(item) for item in _list(topology.get("entries"))[:7]]
+
+
+def _semantic_graph(context: dict[str, Any]) -> dict[str, Any]:
+    project = _dict(context.get("project"))
+    graph = _dict(project.get("semanticGraph"))
+    nodes = [_dict(item) for item in _list(graph.get("nodes"))]
+    edges = [_dict(item) for item in _list(graph.get("edges"))]
+    file_nodes = {
+        _text(node.get("path"), ""): node
+        for node in nodes
+        if _text(node.get("kind"), "") == "file" and _text(node.get("path"), "")
+    }
+    package_nodes = {
+        _text(node.get("label") or node.get("module"), ""): node
+        for node in nodes
+        if _text(node.get("kind"), "") == "package" and _text(node.get("label") or node.get("module"), "")
+    }
+    relation_edges = [
+        edge
+        for edge in edges
+        if _text(edge.get("relationship"), "") in {"imports", "tests"}
+        and _text(edge.get("source"), "").startswith("file:")
+        and _text(edge.get("target"), "").startswith("file:")
+    ][:10]
+    file_degrees: dict[str, int] = {}
+    test_targets: dict[str, list[str]] = {}
+    import_targets: dict[str, list[str]] = {}
+    for edge in relation_edges:
+        source_path = _text(edge.get("source"), "").removeprefix("file:")
+        target_path = _text(edge.get("target"), "").removeprefix("file:")
+        if not source_path or not target_path:
+            continue
+        file_degrees[source_path] = file_degrees.get(source_path, 0) + 1
+        file_degrees[target_path] = file_degrees.get(target_path, 0) + 1
+        if edge.get("relationship") == "tests":
+            test_targets.setdefault(source_path, [])
+            _append_unique(test_targets[source_path], target_path)
+        else:
+            import_targets.setdefault(source_path, [])
+            _append_unique(import_targets[source_path], target_path)
+    return {
+        "available": bool(graph.get("available")) and bool(nodes),
+        "nodes": nodes,
+        "edges": relation_edges,
+        "files": file_nodes,
+        "packages": package_nodes,
+        "degrees": file_degrees,
+        "testTargets": test_targets,
+        "importTargets": import_targets,
+    }
 
 
 def _display_style(project: dict[str, Any], context: dict[str, Any]) -> str:
@@ -200,6 +254,7 @@ def _upsert_terminal_wall(
 def _upsert_repo_city(
     entries: list[dict[str, Any]],
     touched: list[dict[str, Any]],
+    semantic: dict[str, Any],
     event_type: str,
     tone: str,
     accent: str,
@@ -212,8 +267,9 @@ def _upsert_repo_city(
         path = _text(entry.get("path") or entry.get("name"), f"entry-{index}")
         touched_count = _touch_count(path, touched_paths)
         lines = _entry_line_count(entry)
-        x = round(0.18 + (index % 4) * 0.15, 3)
-        y = round(0.46 + (index // 4) * 0.10, 3)
+        semantic_summary = _semantic_path_summary(path, semantic)
+        x = round(0.18 + (index % 4) * 0.15 + semantic_summary["xBias"], 3)
+        y = round(0.46 + (index // 4) * 0.10 + semantic_summary["yBias"], 3)
         blocks.append(
             {
                 "id": f"gibson1-block-{index}",
@@ -223,11 +279,16 @@ def _upsert_repo_city(
                 "y": y,
                 "w": 0.082,
                 "d": 0.088,
-                "h": round(0.10 + min(0.26, lines * 0.004 + touched_count * 0.08), 3),
+                "h": round(
+                    0.10
+                    + min(0.26, lines * 0.004 + touched_count * 0.08 + semantic_summary["degree"] * 0.018),
+                    3,
+                ),
                 "tone": "magenta" if touched_count else _entry_tone(_text(entry.get("kind"), "file"), tone, accent),
                 "active": touched_count > 0,
                 "lines": lines,
                 "touched": touched_count,
+                **_semantic_block_props(semantic_summary),
             }
         )
         for child_index, child in enumerate(_list(entry.get("children"))[:2]):
@@ -237,17 +298,25 @@ def _upsert_repo_city(
                 continue
             child_touched_count = _touch_count(child_path, touched_paths)
             child_lines = _entry_line_count(child_entry)
+            child_semantic = _semantic_path_summary(child_path, semantic)
             child_blocks.append(
                 {
                     "id": f"gibson1-block-{index}-child-{child_index}",
                     "parentId": f"gibson1-block-{index}",
                     "label": _path_label(child_path) if child_touched_count else "",
                     "path": child_path,
-                    "x": round(x + 0.018 + child_index * 0.038, 3),
-                    "y": round(y + 0.042 + child_index * 0.014, 3),
+                    "x": round(x + 0.018 + child_index * 0.038 + child_semantic["xBias"] * 0.55, 3),
+                    "y": round(y + 0.042 + child_index * 0.014 + child_semantic["yBias"] * 0.55, 3),
                     "w": 0.032,
                     "d": 0.038,
-                    "h": round(0.055 + min(0.16, child_lines * 0.0028 + child_touched_count * 0.055), 3),
+                    "h": round(
+                        0.055
+                        + min(
+                            0.16,
+                            child_lines * 0.0028 + child_touched_count * 0.055 + child_semantic["degree"] * 0.014,
+                        ),
+                        3,
+                    ),
                     "tone": "magenta"
                     if child_touched_count
                     else _entry_tone(_text(child_entry.get("kind"), "file"), tone, accent),
@@ -255,9 +324,11 @@ def _upsert_repo_city(
                     "kind": _text(child_entry.get("kind"), "entry"),
                     "lines": child_lines,
                     "touched": child_touched_count,
+                    **_semantic_block_props(child_semantic),
                 }
             )
     blocks.extend(child_blocks)
+    blocks.extend(_semantic_file_blocks(blocks, touched_paths, semantic, tone, accent))
     if not blocks:
         blocks = [
             {
@@ -293,6 +364,8 @@ def _upsert_repo_city(
                 "opacity": 0.72,
                 "labels": True,
                 "heightScale": 0.92,
+                "layout": "semantic-repo-city" if semantic.get("available") else "repo-topology",
+                "semanticEdgeCount": len(_list(semantic.get("edges"))),
                 "cameraPath": {
                     "durationMs": 7400,
                     "loop": True,
@@ -318,6 +391,7 @@ def _upsert_repo_city(
 def _upsert_repo_terrain(
     entries: list[dict[str, Any]],
     touched: list[dict[str, Any]],
+    semantic: dict[str, Any],
     event_type: str,
     tone: str,
     accent: str,
@@ -330,8 +404,9 @@ def _upsert_repo_terrain(
         children = _list(entry.get("children"))
         touched_count = _touch_count(path, touched_paths)
         line_count = _entry_line_count(entry)
-        x = round(0.12 + (index % 4) * 0.24, 3)
-        z = round(0.28 + (index // 4) * 0.32, 3)
+        semantic_summary = _semantic_path_summary(path, semantic)
+        x = round(0.12 + (index % 4) * 0.24 + semantic_summary["xBias"], 3)
+        z = round(0.28 + (index // 4) * 0.32 + semantic_summary["zBias"], 3)
         peaks.append(
             {
                 "id": f"gibson1-terrain-{index}",
@@ -340,14 +415,26 @@ def _upsert_repo_terrain(
                 "x": x,
                 "z": z,
                 "height": round(
-                    0.16 + min(0.38, len(children) * 0.032 + line_count * 0.004 + touched_count * 0.11),
+                    0.16
+                    + min(
+                        0.38,
+                        len(children) * 0.032
+                        + line_count * 0.004
+                        + touched_count * 0.11
+                        + semantic_summary["degree"] * 0.022,
+                    ),
                     3,
                 ),
-                "radius": round(0.15 + min(0.10, len(children) * 0.014 + touched_count * 0.025), 3),
+                "radius": round(
+                    0.15
+                    + min(0.10, len(children) * 0.014 + touched_count * 0.025 + semantic_summary["fileCount"] * 0.008),
+                    3,
+                ),
                 "tone": "magenta" if touched_count else _entry_tone(_text(entry.get("kind"), "file"), tone, accent),
                 "active": touched_count > 0,
                 "lines": line_count,
                 "touched": touched_count,
+                **_semantic_block_props(semantic_summary),
             }
         )
         for child_index, child in enumerate(children[:2]):
@@ -357,15 +444,23 @@ def _upsert_repo_terrain(
                 continue
             child_touched_count = _touch_count(child_path, touched_paths)
             child_lines = _entry_line_count(child_entry)
+            child_semantic = _semantic_path_summary(child_path, semantic)
             peaks.append(
                 {
                     "id": f"gibson1-terrain-{index}-child-{child_index}",
                     "parentId": f"gibson1-terrain-{index}",
                     "label": _path_label(child_path) if child_touched_count else "",
                     "path": child_path,
-                    "x": round(min(0.94, x + 0.034 + child_index * 0.046), 3),
-                    "z": round(min(0.88, z + 0.054 + child_index * 0.044), 3),
-                    "height": round(0.09 + min(0.25, child_lines * 0.003 + child_touched_count * 0.09), 3),
+                    "x": round(min(0.94, x + 0.034 + child_index * 0.046 + child_semantic["xBias"] * 0.50), 3),
+                    "z": round(min(0.88, z + 0.054 + child_index * 0.044 + child_semantic["zBias"] * 0.50), 3),
+                    "height": round(
+                        0.09
+                        + min(
+                            0.25,
+                            child_lines * 0.003 + child_touched_count * 0.09 + child_semantic["degree"] * 0.018,
+                        ),
+                        3,
+                    ),
                     "radius": round(0.11 + min(0.07, child_lines * 0.001 + child_touched_count * 0.018), 3),
                     "tone": "magenta"
                     if child_touched_count
@@ -374,6 +469,7 @@ def _upsert_repo_terrain(
                     "kind": _text(child_entry.get("kind"), "entry"),
                     "lines": child_lines,
                     "touched": child_touched_count,
+                    **_semantic_block_props(child_semantic),
                 }
             )
     if not peaks:
@@ -414,6 +510,8 @@ def _upsert_repo_terrain(
                 "tone": tone,
                 "accentTone": accent,
                 "opacity": 0.30,
+                "layout": "semantic-repo-terrain" if semantic.get("available") else "repo-topology",
+                "semanticEdgeCount": len(_list(semantic.get("edges"))),
                 "seed": sequence + len(peaks) * 7,
             },
         },
@@ -468,6 +566,7 @@ def _upsert_trace_route(
     event_type: str,
     phase: str,
     touched: list[dict[str, Any]],
+    semantic: dict[str, Any],
     tone: str,
     accent: str,
     sequence: int,
@@ -489,6 +588,8 @@ def _upsert_trace_route(
                 "active": index == 0,
             }
         )
+    semantic_hops, semantic_links = _semantic_route_hops_and_links(semantic, touched, tone, accent)
+    hops.extend(semantic_hops)
     return {
         "op": "upsert",
         "primitive": {
@@ -500,6 +601,7 @@ def _upsert_trace_route(
                 "position": {"x": 0.50, "y": 0.23},
                 "size": {"w": 0.58, "h": 0.22},
                 "hops": hops,
+                "links": semantic_links,
                 "focusHopId": "file-0" if touched else "scene",
                 "packets": 10 + min(18, len(touched) * 4),
                 "tone": tone,
@@ -571,6 +673,7 @@ def _route_trace_animation(
     event_type: str,
     phase: str,
     touched: list[dict[str, Any]],
+    semantic: dict[str, Any],
     sequence: int,
     timestamp_ms: int,
     duration_ms: int,
@@ -585,6 +688,9 @@ def _route_trace_animation(
     ]
     if touched:
         points.append({"x": 0.56, "y": 0.70, "label": _path_label(_text(touched[0].get("path"), event_type))})
+    semantic_points = _semantic_route_points(semantic, touched)
+    if semantic_points:
+        points.extend(semantic_points)
     return {
         "op": "start_animation",
         "animation": {
@@ -617,6 +723,241 @@ def _event_output_lines(payload: dict[str, Any]) -> list[str]:
     if not output:
         output = _text(payload.get("stderr"), "") or _text(payload.get("stdout"), "")
     return [_clip(line.strip(), 76) for line in output.splitlines()[:5] if line.strip()]
+
+
+def _semantic_path_summary(path: str, semantic: dict[str, Any]) -> dict[str, Any]:
+    files = _dict(semantic.get("files"))
+    degrees = _dict(semantic.get("degrees"))
+    matched = [
+        _dict(node)
+        for file_path, node in files.items()
+        if isinstance(file_path, str) and (file_path == path or file_path.startswith(f"{path}/"))
+    ]
+    exact = _dict(files.get(path))
+    package = _semantic_package(path, matched or ([exact] if exact else [])) if matched or exact else ""
+    role = "test" if path.startswith("tests/") or path == "tests" else "source" if matched or exact else ""
+    degree = sum(_int(degrees.get(_text(node.get("path"), "")), 0) for node in matched)
+    if exact:
+        degree = max(degree, _int(degrees.get(path), 0))
+    package_index = _package_index(package, semantic)
+    role_y = 0.018 if role == "test" else -0.014 if role == "source" else 0.0
+    return {
+        "package": package,
+        "role": role,
+        "degree": degree,
+        "fileCount": len(matched) if matched else (1 if exact else 0),
+        "xBias": round((package_index % 3 - 1) * 0.012, 3) if package else 0.0,
+        "yBias": round(role_y + min(0.024, degree * 0.004), 3),
+        "zBias": round(role_y + min(0.030, degree * 0.005), 3),
+    }
+
+
+def _semantic_block_props(summary: dict[str, Any]) -> dict[str, Any]:
+    props: dict[str, Any] = {}
+    if summary["package"]:
+        props["semanticPackage"] = summary["package"]
+    if summary["role"]:
+        props["semanticRole"] = summary["role"]
+    if summary["degree"]:
+        props["semanticDegree"] = summary["degree"]
+    if summary["fileCount"]:
+        props["semanticFileCount"] = summary["fileCount"]
+    return props
+
+
+def _semantic_file_blocks(
+    blocks: list[dict[str, Any]],
+    touched_paths: list[str],
+    semantic: dict[str, Any],
+    tone: str,
+    accent: str,
+) -> list[dict[str, Any]]:
+    existing_paths = {_text(block.get("path"), "") for block in blocks}
+    files = _dict(semantic.get("files"))
+    degrees = _dict(semantic.get("degrees"))
+    additions: list[dict[str, Any]] = []
+    semantic_paths = (
+        file_path
+        for file_path, node in files.items()
+        if isinstance(file_path, str)
+        and file_path
+        and file_path not in existing_paths
+        and _dict(node).get("syntaxOk") is not False
+    )
+    for index, path in enumerate(sorted(semantic_paths, key=lambda item: (_semantic_role_sort(item), item))[:6]):
+        touched_count = _touch_count(path, touched_paths)
+        node = _dict(files.get(path))
+        package = _semantic_package(path, [node])
+        degree = _int(degrees.get(path), 0)
+        package_index = _package_index(package, semantic)
+        additions.append(
+            {
+                "id": f"gibson1-semantic-file-{index}",
+                "label": _path_label(path),
+                "path": path,
+                "x": round(0.22 + (package_index % 4) * 0.125 + (index % 2) * 0.034, 3),
+                "y": round(0.35 + min(0.28, (package_index // 4) * 0.08 + index * 0.018), 3),
+                "w": 0.030,
+                "d": 0.036,
+                "h": round(0.060 + min(0.18, _int(node.get("lineCount"), 0) * 0.0026 + degree * 0.018), 3),
+                "tone": "magenta" if touched_count else _entry_tone(_semantic_role(path), tone, accent),
+                "active": touched_count > 0,
+                "kind": "semantic-file",
+                "lines": _int(node.get("lineCount"), 0),
+                "touched": touched_count,
+                "semanticPackage": package,
+                "semanticRole": _semantic_role(path),
+                "semanticDegree": degree,
+            }
+        )
+    return additions
+
+
+def _semantic_route_hops_and_links(
+    semantic: dict[str, Any],
+    touched: list[dict[str, Any]],
+    tone: str,
+    accent: str,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    route_edges = _semantic_route_edges(semantic, touched)
+    paths: list[str] = []
+    for edge in route_edges:
+        _append_unique(paths, _text(edge.get("source"), "").removeprefix("file:"))
+        _append_unique(paths, _text(edge.get("target"), "").removeprefix("file:"))
+    hops = []
+    for index, path in enumerate(paths[:5]):
+        role = _semantic_role(path)
+        hops.append(
+            {
+                "id": f"semantic-{index}",
+                "label": _path_label(path),
+                "x": round(0.18 + (index % 3) * 0.28, 3),
+                "y": round(0.80 + (index // 3) * 0.10, 3),
+                "tone": "green" if role == "test" else accent if role == "source" else tone,
+                "active": index == 0,
+                "path": path,
+                "semanticRole": role,
+            }
+        )
+    path_to_hop = {_text(hop.get("path"), ""): _text(hop.get("id"), "") for hop in hops}
+    links = []
+    for edge in route_edges[:6]:
+        source_path = _text(edge.get("source"), "").removeprefix("file:")
+        target_path = _text(edge.get("target"), "").removeprefix("file:")
+        source_id = path_to_hop.get(source_path)
+        target_id = path_to_hop.get(target_path)
+        if not source_id or not target_id:
+            continue
+        relationship = _text(edge.get("relationship"), "imports")
+        links.append(
+            {
+                "source": source_id,
+                "target": target_id,
+                "label": relationship.upper(),
+                "tone": "green" if relationship == "tests" else accent,
+                "curved": True,
+                "relationship": relationship,
+            }
+        )
+    return hops, links
+
+
+def _semantic_route_points(semantic: dict[str, Any], touched: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    route_edges = _semantic_route_edges(semantic, touched)
+    if not route_edges:
+        return []
+    points = []
+    paths: list[str] = []
+    for edge in route_edges[:3]:
+        _append_unique(paths, _text(edge.get("source"), "").removeprefix("file:"))
+        _append_unique(paths, _text(edge.get("target"), "").removeprefix("file:"))
+    for index, path in enumerate(paths[:4]):
+        points.append(
+            {
+                "x": round(0.22 + (index % 2) * 0.30, 3),
+                "y": round(0.78 + (index // 2) * 0.10, 3),
+                "label": _path_label(path),
+                "id": f"semantic-point-{index}",
+            }
+        )
+    return points
+
+
+def _semantic_route_edges(semantic: dict[str, Any], touched: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    edges = [_dict(edge) for edge in _list(semantic.get("edges"))]
+    touched_paths = [_text(item.get("path"), "") for item in touched if _text(item.get("path"), "")]
+    if touched_paths:
+        focused = [
+            edge
+            for edge in edges
+            if any(_edge_mentions_path(edge, path) or _edge_touches_parent(edge, path) for path in touched_paths)
+        ]
+        if focused:
+            return _unique_semantic_edges(sorted(focused, key=_semantic_edge_sort_key))[:8]
+    return _unique_semantic_edges(sorted(edges, key=_semantic_edge_sort_key))[:8]
+
+
+def _unique_semantic_edges(edges: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    seen: set[tuple[str, str, str]] = set()
+    unique = []
+    for edge in edges:
+        key = (
+            _text(edge.get("source"), ""),
+            _text(edge.get("target"), ""),
+            _text(edge.get("relationship"), ""),
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(edge)
+    return unique
+
+
+def _edge_mentions_path(edge: dict[str, Any], path: str) -> bool:
+    source = _text(edge.get("source"), "").removeprefix("file:")
+    target = _text(edge.get("target"), "").removeprefix("file:")
+    return source == path or target == path
+
+
+def _edge_touches_parent(edge: dict[str, Any], path: str) -> bool:
+    source = _text(edge.get("source"), "").removeprefix("file:")
+    target = _text(edge.get("target"), "").removeprefix("file:")
+    return bool(path and (source.startswith(f"{path}/") or target.startswith(f"{path}/")))
+
+
+def _semantic_edge_sort_key(edge: dict[str, Any]) -> tuple[int, str, str]:
+    relationship = _text(edge.get("relationship"), "")
+    return (0 if relationship == "tests" else 1, _text(edge.get("source"), ""), _text(edge.get("target"), ""))
+
+
+def _semantic_package(path: str, nodes: list[dict[str, Any]]) -> str:
+    for node in nodes:
+        module = _text(node.get("module"), "")
+        if module:
+            return module.split(".", 1)[0]
+    if path.startswith("src/"):
+        parts = path.split("/")
+        if len(parts) > 2:
+            return parts[1]
+    return path.split("/", 1)[0] if "/" in path else path.rsplit(".", 1)[0]
+
+
+def _semantic_role(path: str) -> str:
+    return "test" if path.startswith("tests/") or "/test_" in path else "source"
+
+
+def _semantic_role_sort(path: str) -> int:
+    return 0 if _semantic_role(path) == "source" else 1
+
+
+def _package_index(package: str, semantic: dict[str, Any]) -> int:
+    if not package:
+        return 0
+    packages = sorted(_dict(semantic.get("packages")))
+    try:
+        return packages.index(package)
+    except ValueError:
+        return len(packages)
 
 
 def _phase_tone(phase: str, event_type: str, display_style: str) -> str:
@@ -717,6 +1058,11 @@ def _clamp(value: int, minimum: int, maximum: int) -> int:
 def _clip(value: str, limit: int) -> str:
     text = str(value)
     return text if len(text) <= limit else f"{text[: max(0, limit - 3)]}..."
+
+
+def _append_unique(items: list[str], item: str) -> None:
+    if item and item not in items:
+        items.append(item)
 
 
 if __name__ == "__main__":

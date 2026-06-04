@@ -62,8 +62,27 @@
         "equals": "gibson1-block-0-child-0"
       },
       {
+        "path": "primitives.gibson1-repo-city.props.layout",
+        "equals": "semantic-repo-city"
+      },
+      {
+        "path": "primitives.gibson1-repo-city.props.blocks",
+        "contains": {
+          "id": "gibson1-semantic-file-1",
+          "path": "src/repo_map/cli.py",
+          "kind": "semantic-file",
+          "semanticPackage": "repo_map",
+          "semanticRole": "source",
+          "active": true
+        }
+      },
+      {
         "path": "primitives.gibson1-repo-terrain.kind",
         "equals": "wire_landscape"
+      },
+      {
+        "path": "primitives.gibson1-repo-terrain.props.layout",
+        "equals": "semantic-repo-terrain"
       },
       {
         "path": "primitives.gibson1-repo-terrain.props.peaks",
@@ -96,6 +115,14 @@
         "equals": "file-0"
       },
       {
+        "path": "primitives.gibson1-route.props.links",
+        "contains": {
+          "source": "semantic-0",
+          "target": "semantic-1",
+          "relationship": "tests"
+        }
+      },
+      {
         "path": "primitives.gibson1-rain.kind",
         "equals": "data_rain"
       },
@@ -114,6 +141,10 @@
       {
         "path": "metadata.lastRenderIntent.eventTypes",
         "contains": "tool_result"
+      },
+      {
+        "path": "metadata.lastRenderIntent.metadata.semanticGraph",
+        "equals": true
       }
     ]
   },

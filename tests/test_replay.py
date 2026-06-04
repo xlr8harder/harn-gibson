@@ -1772,7 +1772,7 @@ def test_checked_in_gibson1_replay_exercises_default_renderer() -> None:
     terrain_paths = {peak["path"]: peak for peak in terrain_peaks}
 
     assert [step.kind for step in result.steps] == ["event"] * 4
-    assert len(result.expectations) == 20
+    assert len(result.expectations) == 25
     assert result.scene.primitives["status"].props["text"] == "gibson1::tool_result"
     assert result.scene.primitives["gibson1-terminal"].kind == "terminal_wall"
     assert result.scene.primitives["gibson1-terminal"].props["title"] == "GIBSON1 EVENT BOARD"
@@ -1780,10 +1780,14 @@ def test_checked_in_gibson1_replay_exercises_default_renderer() -> None:
     assert result.scene.primitives["gibson1-repo-city"].kind == "city_block"
     assert result.scene.primitives["gibson1-repo-city"].props["focusBlockId"] == "gibson1-block-0-child-0"
     assert result.scene.primitives["gibson1-repo-city"].props["heightScale"] == 0.92
+    assert result.scene.primitives["gibson1-repo-city"].props["layout"] == "semantic-repo-city"
+    assert result.scene.primitives["gibson1-repo-city"].props["semanticEdgeCount"] == 9
     assert len(result.scene.primitives["gibson1-repo-city"].props["cameraPath"]["keyframes"]) == 3
     assert result.scene.primitives["gibson1-repo-terrain"].kind == "wire_landscape"
     assert result.scene.primitives["gibson1-repo-terrain"].props["focusPeakId"] == "gibson1-terrain-0-child-0"
     assert result.scene.primitives["gibson1-repo-terrain"].props["opacity"] == 0.30
+    assert result.scene.primitives["gibson1-repo-terrain"].props["layout"] == "semantic-repo-terrain"
+    assert result.scene.primitives["gibson1-repo-terrain"].props["semanticEdgeCount"] == 9
     assert terrain_paths["docs/usage.md"]["parentId"] == "gibson1-terrain-0"
     assert terrain_paths["docs/usage.md"]["tone"] == "magenta"
     assert terrain_paths["docs/usage.md"]["active"] is True
@@ -1797,19 +1801,32 @@ def test_checked_in_gibson1_replay_exercises_default_renderer() -> None:
     assert block_paths["docs/usage.md"]["touched"] == 1
     assert block_paths["scripts/line_summary.py"]["parentId"] == "gibson1-block-2"
     assert block_paths["src/repo_map"]["parentId"] == "gibson1-block-3"
+    assert block_paths["src/repo_map"]["semanticPackage"] == "repo_map"
+    assert block_paths["src/repo_map"]["semanticDegree"] == 11
+    assert block_paths["src/repo_map/cli.py"]["kind"] == "semantic-file"
+    assert block_paths["src/repo_map/cli.py"]["semanticPackage"] == "repo_map"
+    assert block_paths["src/repo_map/cli.py"]["semanticDegree"] == 9
+    assert block_paths["tests/test_cli.py"]["semanticRole"] == "test"
     assert block_paths["src"]["touched"] == 1
     assert result.scene.primitives["gibson1-scope"].kind == "signal_scope"
     assert result.scene.primitives["gibson1-scope"].props["blips"][0]["label"] == "USAGE.MD"
     assert result.scene.primitives["gibson1-route"].kind == "trace_route"
     assert result.scene.primitives["gibson1-route"].props["focusHopId"] == "file-0"
+    first_semantic_link = result.scene.primitives["gibson1-route"].props["links"][0]
+    assert first_semantic_link["source"] == "semantic-0"
+    assert first_semantic_link["target"] == "semantic-1"
+    assert first_semantic_link["relationship"] == "tests"
     assert result.scene.primitives["gibson1-rain"].kind == "data_rain"
     assert result.scene.animations["gibson1-cues"].kind == "timeline_cue"
     assert result.scene.animations["gibson1-route-trace"].target_id == "gibson1-route"
+    assert result.scene.animations["gibson1-route-trace"].props["points"][-2]["label"] == "CLI.PY"
     assert result.scene.metadata["lastRenderIntent"]["renderer"] == "gibson1"
+    assert result.scene.metadata["lastRenderIntent"]["metadata"]["semanticGraph"] is True
+    assert result.scene.metadata["lastRenderIntent"]["metadata"]["semanticEdgeCount"] == 9
     assert suite.ok is True
     assert summary["fileCount"] == 1
     assert summary["stepCount"] == 4
-    assert summary["expectationCount"] == 20
+    assert summary["expectationCount"] == 25
     assert summary["rendererCounts"] == {"gibson1": 4}
     assert summary["routeCounts"] == {"renderer_agent": 4}
 

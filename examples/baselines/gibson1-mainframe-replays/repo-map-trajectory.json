@@ -58,6 +58,24 @@
               "label": "USAGE.MD",
               "x": 0.56,
               "y": 0.7
+            },
+            {
+              "id": "semantic-point-0",
+              "label": "TEST-CLI.PY",
+              "x": 0.22,
+              "y": 0.78
+            },
+            {
+              "id": "semantic-point-1",
+              "label": "CLI.PY",
+              "x": 0.52,
+              "y": 0.78
+            },
+            {
+              "id": "semantic-point-2",
+              "label": "--INIT--.PY",
+              "x": 0.22,
+              "y": 0.88
             }
           ],
           "sequence": 4,
@@ -125,6 +143,9 @@
           "projectName": "repo-map",
           "renderer": "gibson1",
           "repoTerrain": true,
+          "semanticEdgeCount": 9,
+          "semanticGraph": true,
+          "semanticNodeCount": 15,
           "styleMotifs": [
             "phosphor-grid",
             "audit-frames",
@@ -181,6 +202,9 @@
             "projectName": "repo-map",
             "renderer": "gibson1",
             "repoTerrain": true,
+            "semanticEdgeCount": 9,
+            "semanticGraph": true,
+            "semanticNodeCount": 15,
             "styleMotifs": [
               "phosphor-grid",
               "audit-frames",
@@ -236,6 +260,9 @@
             "projectName": "repo-map",
             "renderer": "gibson1",
             "repoTerrain": true,
+            "semanticEdgeCount": 9,
+            "semanticGraph": true,
+            "semanticNodeCount": 15,
             "styleMotifs": [
               "phosphor-grid",
               "audit-frames",
@@ -291,6 +318,9 @@
             "projectName": "repo-map",
             "renderer": "gibson1",
             "repoTerrain": true,
+            "semanticEdgeCount": 9,
+            "semanticGraph": true,
+            "semanticNodeCount": 15,
             "styleMotifs": [
               "phosphor-grid",
               "audit-frames",
@@ -346,6 +376,9 @@
             "projectName": "repo-map",
             "renderer": "gibson1",
             "repoTerrain": true,
+            "semanticEdgeCount": 9,
+            "semanticGraph": true,
+            "semanticNodeCount": 15,
             "styleMotifs": [
               "phosphor-grid",
               "audit-frames",
@@ -531,39 +564,50 @@
               "label": "SCRIPTS",
               "lines": 17,
               "path": "scripts",
+              "semanticFileCount": 1,
+              "semanticPackage": "scripts",
+              "semanticRole": "source",
               "tone": "magenta",
               "touched": 1,
               "w": 0.082,
               "x": 0.48,
-              "y": 0.46
+              "y": 0.446
             },
             {
               "active": true,
               "d": 0.088,
-              "h": 0.18,
+              "h": 0.36,
               "id": "gibson1-block-3",
               "label": "SRC",
               "lines": 0,
               "path": "src",
+              "semanticDegree": 11,
+              "semanticFileCount": 2,
+              "semanticPackage": "repo_map",
+              "semanticRole": "source",
               "tone": "magenta",
               "touched": 1,
               "w": 0.082,
-              "x": 0.63,
-              "y": 0.46
+              "x": 0.618,
+              "y": 0.47
             },
             {
               "active": false,
               "d": 0.088,
-              "h": 0.244,
+              "h": 0.36,
               "id": "gibson1-block-4",
               "label": "TESTS",
               "lines": 36,
               "path": "tests",
+              "semanticDegree": 7,
+              "semanticFileCount": 1,
+              "semanticPackage": "tests",
+              "semanticRole": "test",
               "tone": "green",
               "touched": 0,
               "w": 0.082,
-              "x": 0.18,
-              "y": 0.56
+              "x": 0.192,
+              "y": 0.602
             },
             {
               "active": false,
@@ -635,11 +679,14 @@
               "lines": 17,
               "parentId": "gibson1-block-2",
               "path": "scripts/line_summary.py",
+              "semanticFileCount": 1,
+              "semanticPackage": "scripts",
+              "semanticRole": "source",
               "tone": "magenta",
               "touched": 1,
               "w": 0.032,
               "x": 0.498,
-              "y": 0.502
+              "y": 0.48
             },
             {
               "active": true,
@@ -651,27 +698,71 @@
               "lines": 48,
               "parentId": "gibson1-block-3",
               "path": "src/repo_map",
+              "semanticDegree": 11,
+              "semanticFileCount": 2,
+              "semanticPackage": "repo_map",
+              "semanticRole": "source",
               "tone": "magenta",
               "touched": 1,
               "w": 0.032,
-              "x": 0.648,
-              "y": 0.502
+              "x": 0.629,
+              "y": 0.517
             },
             {
               "active": false,
               "d": 0.038,
-              "h": 0.156,
+              "h": 0.215,
               "id": "gibson1-block-4-child-0",
               "kind": "file",
               "label": "",
               "lines": 36,
               "parentId": "gibson1-block-4",
               "path": "tests/test_cli.py",
+              "semanticDegree": 7,
+              "semanticFileCount": 1,
+              "semanticPackage": "tests",
+              "semanticRole": "test",
               "tone": "amber",
               "touched": 0,
               "w": 0.032,
-              "x": 0.198,
-              "y": 0.602
+              "x": 0.217,
+              "y": 0.667
+            },
+            {
+              "active": false,
+              "d": 0.036,
+              "h": 0.109,
+              "id": "gibson1-semantic-file-0",
+              "kind": "semantic-file",
+              "label": "--INIT--.PY",
+              "lines": 5,
+              "path": "src/repo_map/__init__.py",
+              "semanticDegree": 2,
+              "semanticPackage": "repo_map",
+              "semanticRole": "source",
+              "tone": "amber",
+              "touched": 0,
+              "w": 0.03,
+              "x": 0.22,
+              "y": 0.35
+            },
+            {
+              "active": true,
+              "d": 0.036,
+              "h": 0.24,
+              "id": "gibson1-semantic-file-1",
+              "kind": "semantic-file",
+              "label": "CLI.PY",
+              "lines": 43,
+              "path": "src/repo_map/cli.py",
+              "semanticDegree": 9,
+              "semanticPackage": "repo_map",
+              "semanticRole": "source",
+              "tone": "magenta",
+              "touched": 1,
+              "w": 0.03,
+              "x": 0.254,
+              "y": 0.368
             }
           ],
           "cameraPath": {
@@ -704,12 +795,14 @@
           "heightScale": 0.92,
           "label": "REPO MAP",
           "labels": true,
+          "layout": "semantic-repo-city",
           "opacity": 0.72,
           "position": {
             "x": 0.48,
             "y": 0.42
           },
-          "seed": 208,
+          "seed": 242,
+          "semanticEdgeCount": 9,
           "size": {
             "h": 0.38,
             "w": 0.7
@@ -729,6 +822,7 @@
           "focusPeakId": "gibson1-terrain-0-child-0",
           "height": 0.242,
           "label": "REPO TERRAIN",
+          "layout": "semantic-repo-terrain",
           "opacity": 0.3,
           "packets": 38,
           "peaks": [
@@ -795,11 +889,14 @@
               "label": "SCRIPTS",
               "lines": 17,
               "path": "scripts",
-              "radius": 0.189,
+              "radius": 0.197,
+              "semanticFileCount": 1,
+              "semanticPackage": "scripts",
+              "semanticRole": "source",
               "tone": "magenta",
               "touched": 1,
               "x": 0.6,
-              "z": 0.28
+              "z": 0.266
             },
             {
               "active": true,
@@ -811,27 +908,34 @@
               "parentId": "gibson1-terrain-2",
               "path": "scripts/line_summary.py",
               "radius": 0.145,
+              "semanticFileCount": 1,
+              "semanticPackage": "scripts",
+              "semanticRole": "source",
               "tone": "magenta",
               "touched": 1,
               "x": 0.634,
-              "z": 0.334
+              "z": 0.313
             },
             {
               "active": true,
-              "height": 0.302,
+              "height": 0.54,
               "id": "gibson1-terrain-3",
               "label": "SRC",
               "lines": 0,
               "path": "src",
-              "radius": 0.189,
+              "radius": 0.205,
+              "semanticDegree": 11,
+              "semanticFileCount": 2,
+              "semanticPackage": "repo_map",
+              "semanticRole": "source",
               "tone": "magenta",
               "touched": 1,
-              "x": 0.84,
-              "z": 0.28
+              "x": 0.828,
+              "z": 0.296
             },
             {
               "active": true,
-              "height": 0.324,
+              "height": 0.34,
               "id": "gibson1-terrain-3-child-0",
               "kind": "dir",
               "label": "REPO-MAP",
@@ -839,27 +943,35 @@
               "parentId": "gibson1-terrain-3",
               "path": "src/repo_map",
               "radius": 0.176,
+              "semanticDegree": 11,
+              "semanticFileCount": 2,
+              "semanticPackage": "repo_map",
+              "semanticRole": "source",
               "tone": "magenta",
               "touched": 1,
-              "x": 0.874,
-              "z": 0.334
+              "x": 0.856,
+              "z": 0.358
             },
             {
               "active": false,
-              "height": 0.336,
+              "height": 0.49,
               "id": "gibson1-terrain-4",
               "label": "TESTS",
               "lines": 36,
               "path": "tests",
-              "radius": 0.164,
+              "radius": 0.172,
+              "semanticDegree": 7,
+              "semanticFileCount": 1,
+              "semanticPackage": "tests",
+              "semanticRole": "test",
               "tone": "green",
               "touched": 0,
-              "x": 0.12,
-              "z": 0.6
+              "x": 0.132,
+              "z": 0.648
             },
             {
               "active": false,
-              "height": 0.198,
+              "height": 0.324,
               "id": "gibson1-terrain-4-child-0",
               "kind": "file",
               "label": "",
@@ -867,10 +979,14 @@
               "parentId": "gibson1-terrain-4",
               "path": "tests/test_cli.py",
               "radius": 0.146,
+              "semanticDegree": 7,
+              "semanticFileCount": 1,
+              "semanticPackage": "tests",
+              "semanticRole": "test",
               "tone": "amber",
               "touched": 0,
-              "x": 0.154,
-              "z": 0.654
+              "x": 0.172,
+              "z": 0.726
             },
             {
               "active": false,
@@ -905,6 +1021,7 @@
           },
           "rows": 14,
           "seed": 88,
+          "semanticEdgeCount": 9,
           "size": {
             "h": 0.34,
             "w": 0.74
@@ -977,16 +1094,72 @@
               "tone": "magenta",
               "x": 0.68,
               "y": 0.62
+            },
+            {
+              "active": true,
+              "id": "semantic-0",
+              "label": "TEST-CLI.PY",
+              "path": "tests/test_cli.py",
+              "semanticRole": "test",
+              "tone": "green",
+              "x": 0.18,
+              "y": 0.8
+            },
+            {
+              "active": false,
+              "id": "semantic-1",
+              "label": "CLI.PY",
+              "path": "src/repo_map/cli.py",
+              "semanticRole": "source",
+              "tone": "green",
+              "x": 0.46,
+              "y": 0.8
+            },
+            {
+              "active": false,
+              "id": "semantic-2",
+              "label": "--INIT--.PY",
+              "path": "src/repo_map/__init__.py",
+              "semanticRole": "source",
+              "tone": "green",
+              "x": 0.74,
+              "y": 0.8
             }
           ],
           "label": "TOOL RESULT",
+          "links": [
+            {
+              "curved": true,
+              "label": "TESTS",
+              "relationship": "tests",
+              "source": "semantic-0",
+              "target": "semantic-1",
+              "tone": "green"
+            },
+            {
+              "curved": true,
+              "label": "IMPORTS",
+              "relationship": "imports",
+              "source": "semantic-2",
+              "target": "semantic-1",
+              "tone": "green"
+            },
+            {
+              "curved": true,
+              "label": "IMPORTS",
+              "relationship": "imports",
+              "source": "semantic-0",
+              "target": "semantic-1",
+              "tone": "green"
+            }
+          ],
           "opacity": 0.74,
           "packets": 22,
           "position": {
             "x": 0.5,
             "y": 0.23
           },
-          "seed": 39,
+          "seed": 54,
           "size": {
             "h": 0.22,
             "w": 0.58

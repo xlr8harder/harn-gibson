@@ -880,6 +880,9 @@ def test_gibson1_renderer_returns_coherent_valid_plan(tmp_path: Path) -> None:
     assert plan.metadata["visualizer"] == "gibson1"
     assert plan.metadata["touchedFileCount"] == 1
     assert plan.metadata["repoTerrain"] is True
+    assert plan.metadata["semanticGraph"] is True
+    assert plan.metadata["semanticNodeCount"] == 6
+    assert plan.metadata["semanticEdgeCount"] == 1
     assert "displayStyle" not in plan.metadata
     assert "renderPlanDiagnostics" not in plan.metadata
     assert issues == ()
@@ -907,25 +910,50 @@ def test_gibson1_renderer_returns_coherent_valid_plan(tmp_path: Path) -> None:
     repo_city = scene.state.primitives["gibson1-repo-city"]
     assert repo_city.props["focusBlockId"] == "gibson1-block-1"
     assert repo_city.props["heightScale"] == 0.92
+    assert repo_city.props["layout"] == "semantic-repo-city"
+    assert repo_city.props["semanticEdgeCount"] == 1
     assert repo_city.props["cameraPath"]["keyframes"][0]["scale"] == 0.90
     assert repo_city.props["blocks"][1]["path"] == "tests"
     assert repo_city.props["blocks"][1]["touched"] == 1
+    assert repo_city.props["blocks"][1]["semanticPackage"] == "tests"
+    assert repo_city.props["blocks"][1]["semanticRole"] == "test"
     assert 0.45 <= repo_city.props["blocks"][1]["y"] <= 0.65
     assert repo_city.props["blocks"][1]["h"] <= 0.32
     city_blocks = {block["path"]: block for block in repo_city.props["blocks"]}
     assert city_blocks["src/app.py"]["parentId"] == "gibson1-block-0"
     assert city_blocks["src/app.py"]["lines"] == 2
+    assert city_blocks["src/app.py"]["semanticPackage"] == "app"
+    assert city_blocks["src/app.py"]["semanticDegree"] == 1
     assert city_blocks["tests/test_app.py"]["parentId"] == "gibson1-block-1"
     repo_terrain = scene.state.primitives["gibson1-repo-terrain"]
     terrain_peaks = {peak["path"]: peak for peak in repo_terrain.props["peaks"]}
     assert repo_terrain.props["focusPeakId"] == "gibson1-terrain-1"
     assert repo_terrain.props["opacity"] == 0.30
+    assert repo_terrain.props["layout"] == "semantic-repo-terrain"
+    assert repo_terrain.props["semanticEdgeCount"] == 1
     assert terrain_peaks["tests"]["tone"] == "magenta"
     assert terrain_peaks["tests"]["touched"] == 1
+    assert terrain_peaks["tests"]["semanticRole"] == "test"
     assert terrain_peaks["tests/test_app.py"]["parentId"] == "gibson1-terrain-1"
     assert scene.state.primitives["gibson1-scope"].props["blips"][0]["label"] == "TEST-APP.PY"
-    assert scene.state.primitives["gibson1-route"].props["focusHopId"] == "file-0"
+    route = scene.state.primitives["gibson1-route"]
+    assert route.props["focusHopId"] == "file-0"
+    assert route.props["links"] == [
+        {
+            "source": "semantic-0",
+            "target": "semantic-1",
+            "label": "TESTS",
+            "tone": "green",
+            "curved": True,
+            "relationship": "tests",
+        }
+    ]
+    assert [hop["path"] for hop in route.props["hops"] if hop["id"].startswith("semantic-")] == [
+        "tests/test_app.py",
+        "src/app.py",
+    ]
     assert scene.state.animations["gibson1-route-trace"].target_id == "gibson1-route"
+    assert scene.state.animations["gibson1-route-trace"].props["points"][-1]["label"] == "APP.PY"
 
     styled_scene = SceneEngine()
     styled_context = RendererContextBuilder(
