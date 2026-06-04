@@ -852,6 +852,7 @@ def test_gibson1_renderer_returns_coherent_valid_plan(tmp_path: Path) -> None:
     assert plan.metadata["visualizer"] == "gibson1"
     assert plan.metadata["touchedFileCount"] == 1
     assert plan.metadata["repoTerrain"] is True
+    assert "displayStyle" not in plan.metadata
     assert "renderPlanDiagnostics" not in plan.metadata
     assert issues == ()
     assert primitive_kinds == {
@@ -897,6 +898,25 @@ def test_gibson1_renderer_returns_coherent_valid_plan(tmp_path: Path) -> None:
     assert scene.state.primitives["gibson1-scope"].props["blips"][0]["label"] == "TEST-APP.PY"
     assert scene.state.primitives["gibson1-route"].props["focusHopId"] == "file-0"
     assert scene.state.animations["gibson1-route-trace"].target_id == "gibson1-route"
+
+    styled_scene = SceneEngine()
+    styled_context = RendererContextBuilder(
+        RendererContextConfig(
+            project_root=str(repo_root),
+            display_style="mainframe",
+            style_pack=style_pack_from_name("mainframe").to_dict(),
+        )
+    ).build(batch, styled_scene.state, pipeline_catalog())
+    styled_plan = renderer.render_with_context(batch.requests, styled_scene.state, styled_context)
+    assert validate_render_plan(styled_plan, styled_scene.state, pipeline_catalog()) == ()
+    styled_scene.apply(styled_plan.steps[0].mutations)
+
+    assert styled_plan.metadata["displayStyle"] == "mainframe"
+    assert styled_plan.metadata["styleMotifs"] == ["phosphor-grid", "audit-frames", "amber-alerts"]
+    assert styled_scene.state.primitives["status"].props["tone"] == "amber"
+    assert styled_scene.state.primitives["gibson1-rain"].props["tone"] == "amber"
+    assert styled_scene.state.primitives["gibson1-rain"].props["accentTone"] == "green"
+    assert styled_scene.state.primitives["gibson1-repo-terrain"].props["accentTone"] == "green"
 
 
 def test_external_renderer_failures_become_trace_state(tmp_path: Path) -> None:

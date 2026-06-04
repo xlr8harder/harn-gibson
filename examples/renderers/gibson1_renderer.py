@@ -12,6 +12,8 @@ def main() -> None:
     requests = _list(payload.get("requests"))
     context = _dict(payload.get("context"))
     project = _dict(context.get("project"))
+    display_style = _display_style(project, context)
+    style_motifs = _style_motifs(project, context)
     event = _latest_event(requests)
     event_type = _text(event.get("eventType"), "event")
     phase = _text(event.get("phase"), "lifecycle")
@@ -22,8 +24,8 @@ def main() -> None:
     duration_ms = _clamp(_int(timeline.get("durationMs"), 0), 2600, 7200)
     touched = _touched_files(context)
     entries = _repo_entries(context)
-    tone = _phase_tone(phase, event_type)
-    accent = "magenta" if touched and tone != "magenta" else "cyan"
+    tone = _phase_tone(phase, event_type, display_style)
+    accent = _accent_tone(phase, event_type, display_style, touched=bool(touched), tone=tone)
     project_name = _text(project.get("name"), "project")
 
     mutations = [
@@ -52,19 +54,24 @@ def main() -> None:
         _route_trace_animation(event_type, phase, touched, sequence, timestamp_ms, duration_ms, tone, accent),
     ]
 
+    metadata: dict[str, Any] = {
+        "renderer": "gibson1",
+        "intent": f"show {event_type} as a coherent live operations display",
+        "eventType": event_type,
+        "phase": phase,
+        "visualizer": "gibson1",
+        "mode": "usable-default",
+        "touchedFileCount": len(touched),
+        "repoTerrain": bool(entries),
+        "projectName": project_name,
+    }
+    if display_style != "gibson":
+        metadata["displayStyle"] = display_style
+        if style_motifs:
+            metadata["styleMotifs"] = style_motifs
     plan = {
         "schema": "harn-gibson.render-plan.v1",
-        "metadata": {
-            "renderer": "gibson1",
-            "intent": f"show {event_type} as a coherent live operations display",
-            "eventType": event_type,
-            "phase": phase,
-            "visualizer": "gibson1",
-            "mode": "usable-default",
-            "touchedFileCount": len(touched),
-            "repoTerrain": bool(entries),
-            "projectName": project_name,
-        },
+        "metadata": metadata,
         "steps": [{"eventIndex": max(0, len(requests) - 1), "mutations": mutations}],
     }
     json.dump(plan, sys.stdout, separators=(",", ":"))
@@ -87,6 +94,28 @@ def _repo_entries(context: dict[str, Any]) -> list[dict[str, Any]]:
     project = _dict(context.get("project"))
     topology = _dict(project.get("repoTopology"))
     return [_dict(item) for item in _list(topology.get("entries"))[:7]]
+
+
+def _display_style(project: dict[str, Any], context: dict[str, Any]) -> str:
+    display_style = _text(project.get("displayStyle"), "")
+    if display_style:
+        return display_style
+    project_style = _dict(project.get("stylePack"))
+    style_id = _text(project_style.get("id"), "")
+    if style_id:
+        return style_id
+    continuity_style = _dict(_dict(context.get("visualContinuity")).get("style"))
+    return _text(continuity_style.get("id"), "gibson")
+
+
+def _style_motifs(project: dict[str, Any], context: dict[str, Any]) -> list[str]:
+    project_style = _dict(project.get("stylePack"))
+    motifs = [_text(item, "") for item in _list(project_style.get("motifs"))]
+    motifs = [item for item in motifs if item]
+    if motifs:
+        return motifs
+    continuity_style = _dict(_dict(context.get("visualContinuity")).get("style"))
+    return [item for item in (_text(value, "") for value in _list(continuity_style.get("motifs"))) if item]
 
 
 def _upsert_terminal_wall(
@@ -590,10 +619,47 @@ def _event_output_lines(payload: dict[str, Any]) -> list[str]:
     return [_clip(line.strip(), 76) for line in output.splitlines()[:5] if line.strip()]
 
 
-def _phase_tone(phase: str, event_type: str) -> str:
+def _phase_tone(phase: str, event_type: str, display_style: str) -> str:
     if "error" in event_type or "fail" in event_type:
         return "red"
+    if display_style == "mainframe":
+        return {"before": "green", "during": "cyan", "after": "amber", "lifecycle": "green"}.get(phase, "green")
+    if display_style == "neon-noir":
+        return {"before": "cyan", "during": "magenta", "after": "magenta", "lifecycle": "amber"}.get(
+            phase,
+            "magenta",
+        )
+    if display_style == "satellite-uplink":
+        return {"before": "green", "during": "cyan", "after": "amber", "lifecycle": "cyan"}.get(phase, "cyan")
     return {"before": "green", "during": "cyan", "after": "magenta"}.get(phase, "amber")
+
+
+def _accent_tone(phase: str, event_type: str, display_style: str, *, touched: bool, tone: str) -> str:
+    if display_style == "mainframe":
+        if "error" in event_type or "fail" in event_type:
+            return "amber"
+        if phase == "after" or "result" in event_type:
+            return "green"
+        if phase == "before":
+            return "amber"
+        return "cyan"
+    if display_style == "neon-noir":
+        if "error" in event_type or "fail" in event_type:
+            return "amber"
+        if phase == "after" or "result" in event_type:
+            return "cyan"
+        if phase == "before":
+            return "amber"
+        return "magenta"
+    if display_style == "satellite-uplink":
+        if "error" in event_type or "fail" in event_type:
+            return "amber"
+        if phase == "after" or "result" in event_type:
+            return "red"
+        if phase == "before":
+            return "amber"
+        return "green"
+    return "magenta" if touched and tone != "magenta" else "cyan"
 
 
 def _entry_tone(kind: str, tone: str, accent: str) -> str:

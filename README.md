@@ -133,7 +133,7 @@ Noisy event types can also be sampled before routing. This keeps one matching ev
 HARN_GIBSON_ROUTE_RULES='[{"eventType":"session_tree","route":"renderer_agent","sampleEvery":4,"fallbackRoute":"debug_only"}]'
 ```
 
-To dogfood the renderer-agent process boundary without a live model call, use one of the launcher presets or point the server at an external renderer command. The command receives `harn-gibson.external-renderer-request.v1` JSON on stdin and returns a render plan with `steps` on stdout. `examples/renderers/gibson1_renderer.py` is the default calmer hard-coded visualizer: it keeps status, a terminal board, depth-2 repo city, repo wire terrain, signal scope, route trace, and low-opacity data rain coherent enough for everyday use while still reacting to event phase, touched files, repo topology, and coalesced timing:
+To dogfood the renderer-agent process boundary without a live model call, use one of the launcher presets or point the server at an external renderer command. The command receives `harn-gibson.external-renderer-request.v1` JSON on stdin and returns a render plan with `steps` on stdout. `examples/renderers/gibson1_renderer.py` is the default calmer hard-coded visualizer: it keeps status, a terminal board, depth-2 repo city, repo wire terrain, signal scope, route trace, and low-opacity data rain coherent enough for everyday use while still reacting to event phase, touched files, repo topology, coalesced timing, and the active style pack:
 
 ```bash
 uv run harn-gibson dogfood
