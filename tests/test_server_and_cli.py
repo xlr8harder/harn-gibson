@@ -1920,6 +1920,9 @@ def test_cli_event_log_to_replay_writes_split_chunks(tmp_path: Any, capsys: Any)
     ]
     assert result["schema"] == "harn-gibson.replay-suite-result.v1"
     assert result["total"] == 2
+    assert result["splitManifest"]["schema"] == "harn-gibson.event-log-split.v1"
+    assert result["splitManifest"]["chunkCount"] == 2
+    assert result["captureSummary"] == manifest["captureSummary"]
     assert result["summary"]["eventSummary"]["eventTypeCounts"] == {"tool_call": 3}
 
     output_dir_without_result = tmp_path / "split-without-result"
@@ -2084,6 +2087,8 @@ def test_cli_event_log_to_replay_split_writes_review_bundle(
     result_payload = json.loads(result_path.read_text(encoding="utf-8"))
     assert result_payload["schema"] == "harn-gibson.replay-suite-result.v1"
     assert result_payload["total"] == 2
+    assert result_payload["splitManifest"]["chunkCount"] == 2
+    assert result_payload["captureSummary"]["eventTypeCounts"] == {"tool_call": 3}
     assert capsys.readouterr().out.splitlines() == [
         f"wrote replay fixture chunk: {output_dir_with_result / 'captured-dogfood-0001.json'} (2 events)",
         f"wrote replay fixture chunk: {output_dir_with_result / 'captured-dogfood-0002.json'} (1 events)",

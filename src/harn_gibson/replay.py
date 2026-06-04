@@ -239,6 +239,7 @@ class ReplayFileResult:
 class ReplaySuiteResult:
     root: str
     files: tuple[ReplayFileResult, ...]
+    split_manifest: dict[str, Any] | None = None
 
     @property
     def total(self) -> int:
@@ -257,7 +258,7 @@ class ReplaySuiteResult:
         return _replay_suite_result_summary(self.files)
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        payload: dict[str, Any] = {
             "schema": "harn-gibson.replay-suite-result.v1",
             "root": self.root,
             "ok": self.ok,
@@ -266,6 +267,12 @@ class ReplaySuiteResult:
             "summary": self.summary,
             "files": [result.to_dict() for result in self.files],
         }
+        if isinstance(self.split_manifest, Mapping):
+            payload["splitManifest"] = dict(self.split_manifest)
+            capture_summary = self.split_manifest.get("captureSummary")
+            if isinstance(capture_summary, Mapping):
+                payload["captureSummary"] = dict(capture_summary)
+        return payload
 
 
 @dataclass(frozen=True, slots=True)
@@ -426,7 +433,7 @@ def run_replay_suite(
             )
         finally:
             state.pipeline.stop()
-    return ReplaySuiteResult(root=str(root), files=tuple(results))
+    return ReplaySuiteResult(root=str(root), files=tuple(results), split_manifest=_load_split_manifest(root))
 
 
 def discover_replay_files(path: str | Path) -> tuple[Path, ...]:

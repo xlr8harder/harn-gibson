@@ -1866,7 +1866,20 @@ def test_replay_suite_discovers_runs_and_serializes(tmp_path: Path) -> None:
         "utf-8",
     )
     ignored.write_text("not json", "utf-8")
-    manifest.write_text(json.dumps({"schema": "harn-gibson.event-log-split.v1"}), "utf-8")
+    manifest.write_text(
+        json.dumps(
+            {
+                "schema": "harn-gibson.event-log-split.v1",
+                "name": "split capture",
+                "captureSummary": {
+                    "durationMs": 400,
+                    "eventTypes": ["message_update"],
+                    "eventTypeCounts": {"message_update": 2},
+                },
+            }
+        ),
+        "utf-8",
+    )
 
     assert [path.name for path in discover_replay_files(fixture_dir)] == ["first.json", "second.json"]
     assert discover_replay_files(first) == (first,)
@@ -1894,10 +1907,17 @@ def test_replay_suite_discovers_runs_and_serializes(tmp_path: Path) -> None:
     assert payload["summary"]["eventSummary"]["eventTypeCounts"] == {"message_update": 2}
     assert payload["summary"]["routeCounts"] == {"stream_buffer": 1}
     assert payload["summary"]["rendererCounts"] == {"direct": 1}
+    assert payload["splitManifest"]["name"] == "split capture"
+    assert payload["captureSummary"] == {
+        "durationMs": 400,
+        "eventTypes": ["message_update"],
+        "eventTypeCounts": {"message_update": 2},
+    }
     assert payload["files"][0]["eventSummary"]["eventTypes"] == ["message_update"]
     assert payload["files"][1]["eventSummary"]["eventCount"] == 1
     assert payload["files"][1]["expectationFailures"][0]["passed"] is False
     assert run_replay_suite(first).to_dict()["files"][0]["path"] == first.as_posix()
+    assert "splitManifest" not in run_replay_suite(first).to_dict()
 
 
 def test_replay_suite_can_run_with_style_pack(tmp_path: Path) -> None:
@@ -2178,6 +2198,13 @@ def test_replay_suite_summary_helpers_handle_sparse_shapes() -> None:
         "screenshotExpectationCount": 0,
         "stepCount": 0,
     }
+    malformed_split_suite = ReplaySuiteResult(
+        "malformed",
+        (),
+        split_manifest={"schema": "harn-gibson.event-log-split.v1", "captureSummary": "bad"},
+    ).to_dict()
+    assert malformed_split_suite["splitManifest"]["captureSummary"] == "bad"
+    assert "captureSummary" not in malformed_split_suite
 
     sparse_summary = ReplaySuiteResult(
         "sparse",
