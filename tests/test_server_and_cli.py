@@ -741,6 +741,8 @@ def test_cli_parser_and_run(monkeypatch: Any, capsys: Any) -> None:
             "1234",
             "--split-every",
             "200",
+            "--trajectory",
+            "tiny-project",
             "--",
             "-p",
             "capture",
@@ -754,6 +756,7 @@ def test_cli_parser_and_run(monkeypatch: Any, capsys: Any) -> None:
     assert parsed_capture.renderer_command == "python renderer.py"
     assert parsed_capture.renderer_timeout_ms == "1234"
     assert parsed_capture.split_every == 200
+    assert parsed_capture.trajectory == "tiny-project"
     assert parsed_capture.harn_args == ["--", "-p", "capture"]
     parsed_auth = parser.parse_args(["import-codex-auth", "--codex-auth", "codex.json", "--harn-auth", "harn.json"])
     assert parsed_auth.command == "import-codex-auth"
@@ -2562,6 +2565,87 @@ def test_cli_dogfood_capture_split_hint(
     assert "--split-every must be positive" in capsys.readouterr().err
 
 
+def test_cli_dogfood_capture_trajectory_preset_creates_workspace_and_prompt(
+    monkeypatch: Any,
+    tmp_path: Path,
+    capsys: Any,
+) -> None:
+    dogfood_calls: list[dict[str, Any]] = []
+
+    def fake_run_dogfood(**kwargs: Any) -> int:
+        dogfood_calls.append(kwargs)
+        return 0
+
+    monkeypatch.setattr(cli, "run_dogfood", fake_run_dogfood)
+    monkeypatch.setattr(cli.time, "strftime", lambda _format: "20260604-001122")
+    monkeypatch.chdir(tmp_path)
+
+    assert (
+        cli.run(
+            [
+                "dogfood-capture",
+                "--trajectory",
+                "tiny-project",
+                "--no-browser",
+                "--no-codex-auth-import",
+                "--no-hold-on-error",
+            ]
+        )
+        == 0
+    )
+    workspace = tmp_path / "test-artifacts" / "dogfood-workspaces" / "tiny-project-20260604-001122"
+    event_log = tmp_path / "test-artifacts" / "captures" / "tiny-project-20260604-001122.jsonl"
+    assert workspace.is_dir()
+    assert dogfood_calls[0]["cwd"] == str(workspace)
+    assert dogfood_calls[0]["harn_args"][:2] == ["--", "-p"]
+    assert "Initialize a git repository" in dogfood_calls[0]["harn_args"][2]
+    assert dogfood_calls[0]["env_overrides"]["HARN_GIBSON_EVENT_LOG"] == str(event_log)
+    stderr = capsys.readouterr().err
+    assert "harn-gibson capture trajectory: tiny-project" in stderr
+    assert f"harn-gibson capture workspace: {workspace}" in stderr
+    assert f"--output-dir {event_log.with_suffix('.replays')}" in stderr
+    assert "--split-every 200" in stderr
+    assert f"--project-root {workspace}" in stderr
+    assert "--project-name tiny-project-20260604-001122" in stderr
+
+
+def test_cli_dogfood_capture_trajectory_respects_overrides(
+    monkeypatch: Any,
+    tmp_path: Path,
+    capsys: Any,
+) -> None:
+    dogfood_calls: list[dict[str, Any]] = []
+    workspace = tmp_path / "custom-workspace"
+    event_log = tmp_path / "custom" / "events.jsonl"
+
+    def fake_run_dogfood(**kwargs: Any) -> int:
+        dogfood_calls.append(kwargs)
+        return 0
+
+    monkeypatch.setattr(cli, "run_dogfood", fake_run_dogfood)
+
+    assert (
+        cli.run_dogfood_capture(
+            trajectory="tiny-project",
+            cwd=str(workspace),
+            harn_args=["--", "-p", "custom prompt"],
+            event_log=str(event_log),
+            split_every=25,
+            launch_browser=False,
+            codex_auth_import=False,
+            hold_on_error=False,
+        )
+        == 0
+    )
+    assert workspace.is_dir()
+    assert dogfood_calls[0]["cwd"] == str(workspace.resolve())
+    assert dogfood_calls[0]["harn_args"] == ["--", "-p", "custom prompt"]
+    assert dogfood_calls[0]["env_overrides"]["HARN_GIBSON_EVENT_LOG"] == str(event_log)
+    stderr = capsys.readouterr().err
+    assert "--split-every 25" in stderr
+    assert f"--project-root {workspace.resolve()}" in stderr
+
+
 def test_cli_dogfood_capture_cwd_resolves_event_log(
     monkeypatch: Any,
     tmp_path: Path,
@@ -2648,6 +2732,30 @@ def test_cli_dogfood_capture_defaults_to_ignored_timestamped_log(monkeypatch: An
     assert renderer_command[0] == sys.executable
     assert renderer_command[1].endswith("examples/renderers/gibson_dogfood_renderer.py")
     assert "--style" not in capsys.readouterr().err
+
+
+def test_cli_dogfood_capture_trajectory_helpers_reject_unknown() -> None:
+    assert cli._has_forwarded_harn_args([]) is False
+    assert cli._has_forwarded_harn_args(["--"]) is False
+    assert cli._has_forwarded_harn_args(["--", "-p", "prompt"]) is True
+    try:
+        cli._prepare_dogfood_capture_options(
+            trajectory="unknown",
+            cwd=None,
+            harn_args=(),
+            event_log=None,
+            split_every=None,
+        )
+    except ValueError as error:
+        assert "unknown dogfood capture trajectory: unknown" in str(error)
+    else:  # pragma: no cover
+        raise AssertionError("unknown trajectory should fail")
+    try:
+        cli._dogfood_trajectory_prompt("unknown")
+    except ValueError as error:
+        assert "unknown dogfood capture trajectory: unknown" in str(error)
+    else:  # pragma: no cover
+        raise AssertionError("unknown trajectory prompt should fail")
 
 
 def test_cli_import_codex_auth_command(monkeypatch: Any, capsys: Any) -> None:

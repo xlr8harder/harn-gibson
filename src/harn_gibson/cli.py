@@ -19,6 +19,8 @@ from harn_gibson.extension import extension_path
 from harn_gibson.styles import style_pack_from_name, style_pack_ids
 
 DOGFOOD_CAPTURE_RENDERER_TIMEOUT_MS = "10000"
+DOGFOOD_CAPTURE_TRAJECTORIES = ("tiny-project",)
+DOGFOOD_CAPTURE_TRAJECTORY_SPLIT_EVERY = 200
 PROJECT_HARN_PROVIDER = "openai-codex"
 PROJECT_HARN_MODEL = "gpt-5.5"
 PROJECT_HARN_THINKING = "high"
@@ -76,6 +78,12 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=None,
         help="print a split replay-review command with at most this many events per fixture",
+    )
+    capture.add_argument(
+        "--trajectory",
+        choices=DOGFOOD_CAPTURE_TRAJECTORIES,
+        default=None,
+        help="apply a built-in long capture trajectory preset",
     )
     capture.add_argument("harn_args", nargs=argparse.REMAINDER, help="arguments forwarded to harn after --")
 
@@ -414,17 +422,24 @@ def run_dogfood_capture(
     renderer_command: str | None = None,
     renderer_timeout_ms: str = DOGFOOD_CAPTURE_RENDERER_TIMEOUT_MS,
     split_every: int | None = None,
+    trajectory: str | None = None,
     cwd: str | None = None,
 ) -> int:
     try:
-        harn_cwd = _coerce_harn_cwd(cwd)
+        harn_cwd, capture_harn_args, capture_event_log, capture_split_every = _prepare_dogfood_capture_options(
+            trajectory=trajectory,
+            cwd=cwd,
+            harn_args=harn_args,
+            event_log=event_log,
+            split_every=split_every,
+        )
     except ValueError as error:
         print(error, file=sys.stderr)
         return 2
-    if split_every is not None and split_every <= 0:
+    if capture_split_every is not None and capture_split_every <= 0:
         print("--split-every must be positive", file=sys.stderr)
         return 2
-    event_log_path = Path(event_log) if event_log is not None else _default_capture_event_log_path()
+    event_log_path = Path(capture_event_log) if capture_event_log is not None else _default_capture_event_log_path()
     if harn_cwd is not None:
         event_log_path = event_log_path.expanduser().resolve()
     event_log_path.parent.mkdir(parents=True, exist_ok=True)
@@ -434,13 +449,16 @@ def run_dogfood_capture(
         "HARN_GIBSON_RENDERER_COMMAND": capture_renderer_command,
         "HARN_GIBSON_RENDERER_TIMEOUT_MS": str(renderer_timeout_ms),
     }
+    if trajectory is not None:
+        print(f"harn-gibson capture trajectory: {trajectory}", file=sys.stderr)
+        print(f"harn-gibson capture workspace: {harn_cwd}", file=sys.stderr)
     print(f"harn-gibson capture log: {event_log_path}", file=sys.stderr)
     print(f"harn-gibson capture renderer: {capture_renderer_command}", file=sys.stderr)
     exit_code = run_dogfood(
         host=host,
         port=port,
         harn_bin=harn_bin,
-        harn_args=harn_args,
+        harn_args=capture_harn_args,
         launch_browser=launch_browser,
         codex_auth_import=codex_auth_import,
         hold_on_error=hold_on_error,
@@ -456,7 +474,7 @@ def run_dogfood_capture(
             capture_renderer_command,
             str(renderer_timeout_ms),
             style,
-            split_every,
+            capture_split_every,
             project_root=harn_cwd,
         ),
         file=sys.stderr,
@@ -464,8 +482,50 @@ def run_dogfood_capture(
     return exit_code
 
 
-def _default_capture_event_log_path() -> Path:
-    return Path("test-artifacts") / "captures" / f"dogfood-{time.strftime('%Y%m%d-%H%M%S')}.jsonl"
+def _prepare_dogfood_capture_options(
+    *,
+    trajectory: str | None,
+    cwd: str | None,
+    harn_args: Sequence[str],
+    event_log: str | None,
+    split_every: int | None,
+) -> tuple[Path | None, list[str], str | None, int | None]:
+    if trajectory is None:
+        return _coerce_harn_cwd(cwd), list(harn_args), event_log, split_every
+    if trajectory not in DOGFOOD_CAPTURE_TRAJECTORIES:
+        raise ValueError(f"unknown dogfood capture trajectory: {trajectory}")
+    harn_cwd = _prepare_dogfood_trajectory_workspace(trajectory, cwd)
+    capture_harn_args = list(harn_args)
+    if not _has_forwarded_harn_args(capture_harn_args):
+        capture_harn_args = ["--", "-p", _dogfood_trajectory_prompt(trajectory)]
+    capture_event_log = event_log if event_log is not None else str(_default_capture_event_log_path(prefix=trajectory))
+    capture_split_every = split_every if split_every is not None else DOGFOOD_CAPTURE_TRAJECTORY_SPLIT_EVERY
+    return harn_cwd, capture_harn_args, capture_event_log, capture_split_every
+
+
+def _prepare_dogfood_trajectory_workspace(trajectory: str, cwd: str | None) -> Path:
+    if cwd is not None:
+        workspace = Path(cwd).expanduser().resolve()
+    else:
+        workspace = Path("test-artifacts") / "dogfood-workspaces" / f"{trajectory}-{time.strftime('%Y%m%d-%H%M%S')}"
+        workspace = workspace.resolve()
+    workspace.mkdir(parents=True, exist_ok=True)
+    return workspace
+
+
+def _has_forwarded_harn_args(harn_args: Sequence[str]) -> bool:
+    return bool(harn_args) and list(harn_args) != ["--"]
+
+
+def _dogfood_trajectory_prompt(trajectory: str) -> str:
+    if trajectory != "tiny-project":
+        raise ValueError(f"unknown dogfood capture trajectory: {trajectory}")
+    prompt_path = Path(__file__).resolve().parents[2] / "examples" / "prompts" / "dogfood-tiny-project.md"
+    return prompt_path.read_text(encoding="utf-8")
+
+
+def _default_capture_event_log_path(*, prefix: str = "dogfood") -> Path:
+    return Path("test-artifacts") / "captures" / f"{prefix}-{time.strftime('%Y%m%d-%H%M%S')}.jsonl"
 
 
 def _default_dogfood_renderer_command() -> str:
@@ -869,6 +929,7 @@ def run(argv: Sequence[str] | None = None) -> int:
             renderer_command=args.renderer_command,
             renderer_timeout_ms=args.renderer_timeout_ms,
             split_every=args.split_every,
+            trajectory=args.trajectory,
             cwd=args.cwd,
         )
     if args.command in {None, "serve"}:
