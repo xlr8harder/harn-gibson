@@ -2040,6 +2040,88 @@ def test_play_replay_data_reports_progress_and_uses_pacing() -> None:
     assert result.scene.primitives["status"].props["text"] == "second"
 
 
+def test_play_replay_data_can_slice_steps_and_skip_expectations() -> None:
+    sleeps: list[float] = []
+    progress: list[tuple[int, int, int, int]] = []
+
+    result = play_replay_data(
+        {
+            "name": "sliced watched replay",
+            "expect": {
+                "sceneRevision": 3,
+                "checks": [{"path": "primitives.status.props.text", "equals": "third"}],
+            },
+            "steps": [
+                {
+                    "type": "mutations",
+                    "mutations": [{"op": "patch", "targetId": "status", "props": {"text": "first"}}],
+                },
+                {
+                    "type": "mutations",
+                    "mutations": [{"op": "patch", "targetId": "status", "props": {"text": "second"}}],
+                },
+                {
+                    "type": "mutations",
+                    "mutations": [{"op": "patch", "targetId": "status", "props": {"text": "third"}}],
+                },
+            ],
+        },
+        start_index=1,
+        end_index=3,
+        check_expectations=False,
+        start_delay_ms=10,
+        step_delay_ms=20,
+        sleep_fn=sleeps.append,
+        progress=lambda step, position, total, scene: progress.append(
+            (step.index, position, total, scene.revision)
+        ),
+    )
+
+    assert sleeps == [0.01, 0.02]
+    assert progress == [(1, 1, 2, 1), (2, 2, 2, 2)]
+    assert [step.index for step in result.steps] == [1, 2]
+    assert result.scene.primitives["status"].props["text"] == "third"
+    with pytest.raises(ReplayExpectationError):
+        play_replay_data(
+            {
+                "expect": {"sceneRevision": 1},
+                "steps": [
+                    {
+                        "type": "mutations",
+                        "mutations": [
+                            {"op": "patch", "targetId": "status", "props": {"text": "unplayed"}}
+                        ],
+                    }
+                ],
+            },
+            start_index=1,
+        )
+
+
+def test_play_replay_data_empty_slice_does_not_sleep() -> None:
+    sleeps: list[float] = []
+
+    result = play_replay_data(
+        {
+            "steps": [
+                {
+                    "type": "mutations",
+                    "mutations": [{"op": "patch", "targetId": "status", "props": {"text": "skipped"}}],
+                }
+            ],
+        },
+        start_index=5,
+        check_expectations=False,
+        start_delay_ms=25,
+        sleep_fn=sleeps.append,
+    )
+
+    assert sleeps == []
+    assert result.steps == ()
+    assert result.scene.revision == 0
+    assert result.scene.primitives["status"].props["text"] == "awaiting signal"
+
+
 def test_play_replay_data_uses_real_time_timestamp_pacing() -> None:
     sleeps: list[float] = []
     first_event = event_payload(1, "browser_input", {"message": "first"})
@@ -2283,6 +2365,10 @@ def test_play_replay_file_and_error_paths(tmp_path: Path) -> None:
         play_replay_data({"steps": []}, playback_timing="real-time", time_scale=0)
     with pytest.raises(ValueError, match="max_step_delay_ms must be non-negative"):
         play_replay_data({"steps": []}, playback_timing="real-time", max_step_delay_ms=-1)
+    with pytest.raises(ValueError, match="start_index must be non-negative"):
+        play_replay_data({"steps": []}, start_index=-1)
+    with pytest.raises(ValueError, match="end_index must be greater than or equal to start_index"):
+        play_replay_data({"steps": []}, start_index=2, end_index=1)
 
 
 def test_replay_expectations_pass_fail_and_serialize() -> None:

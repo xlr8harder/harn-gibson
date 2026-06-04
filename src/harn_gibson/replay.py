@@ -333,6 +333,9 @@ def play_replay_file(
     playback_timing: ReplayPlaybackTiming = "fixed",
     time_scale: float = 1.0,
     max_step_delay_ms: int | None = None,
+    start_index: int = 0,
+    end_index: int | None = None,
+    check_expectations: bool = True,
     progress: ReplayProgressCallback | None = None,
     sleep_fn: Callable[[float], None] = time.sleep,
 ) -> ReplayResult:
@@ -344,6 +347,9 @@ def play_replay_file(
         playback_timing=playback_timing,
         time_scale=time_scale,
         max_step_delay_ms=max_step_delay_ms,
+        start_index=start_index,
+        end_index=end_index,
+        check_expectations=check_expectations,
         progress=progress,
         sleep_fn=sleep_fn,
     )
@@ -358,6 +364,9 @@ def play_replay_data(
     playback_timing: ReplayPlaybackTiming = "fixed",
     time_scale: float = 1.0,
     max_step_delay_ms: int | None = None,
+    start_index: int = 0,
+    end_index: int | None = None,
+    check_expectations: bool = True,
     progress: ReplayProgressCallback | None = None,
     sleep_fn: Callable[[float], None] = time.sleep,
 ) -> ReplayResult:
@@ -367,6 +376,10 @@ def play_replay_data(
         raise ValueError("time_scale must be positive")
     if max_step_delay_ms is not None and max_step_delay_ms < 0:
         raise ValueError("max_step_delay_ms must be non-negative")
+    if start_index < 0:
+        raise ValueError("start_index must be non-negative")
+    if end_index is not None and end_index < start_index:
+        raise ValueError("end_index must be greater than or equal to start_index")
     replay_state = state or GibsonServerState()
     _apply_replay_project_metadata(replay_state, data)
     schema = str(data.get("schema") or "harn-gibson.replay.v1")
@@ -376,19 +389,21 @@ def play_replay_data(
         raise ValueError("replay must contain a steps list")
 
     results: list[ReplayStepResult] = []
-    timestamps = _replay_step_timestamps(steps) if playback_timing == "real-time" else ()
-    if start_delay_ms > 0:
+    selected_steps = tuple(enumerate(steps[start_index:end_index], start_index))
+    selected_payloads = tuple(step for _, step in selected_steps)
+    timestamps = _replay_step_timestamps(selected_payloads) if playback_timing == "real-time" else ()
+    if selected_steps and start_delay_ms > 0:
         sleep_fn(start_delay_ms / 1000)
-    for index, step in enumerate(steps):
+    for position, (index, step) in enumerate(selected_steps):
         if not isinstance(step, Mapping):
             raise ValueError(f"replay step {index} must be an object")
         result = _run_step(index, step, replay_state)
         results.append(result)
         if progress is not None:
-            progress(result, index + 1, len(steps), replay_state.scene.state)
-        if index < len(steps) - 1:
+            progress(result, position + 1, len(selected_steps), replay_state.scene.state)
+        if position < len(selected_steps) - 1:
             delay_ms = _replay_step_delay_ms(
-                index,
+                position,
                 timestamps=timestamps,
                 playback_timing=playback_timing,
                 step_delay_ms=step_delay_ms,
@@ -398,7 +413,9 @@ def play_replay_data(
             if delay_ms > 0:
                 sleep_fn(delay_ms / 1000)
 
-    expectations = evaluate_replay_expectations(replay_state.scene.state, data.get("expect"))
+    expectations = (
+        evaluate_replay_expectations(replay_state.scene.state, data.get("expect")) if check_expectations else ()
+    )
     failures = tuple(expectation for expectation in expectations if not expectation.passed)
     if failures:
         raise ReplayExpectationError(failures)

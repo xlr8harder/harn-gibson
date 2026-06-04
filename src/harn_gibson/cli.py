@@ -193,6 +193,24 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="cap each real-time replay delay in milliseconds",
     )
+    watch_replay.add_argument(
+        "--start-step",
+        type=int,
+        default=1,
+        help="1-based replay step to start from",
+    )
+    watch_replay.add_argument(
+        "--end-step",
+        type=int,
+        default=None,
+        help="1-based inclusive replay step to stop after",
+    )
+    watch_replay.add_argument(
+        "--check-expectations",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="check final replay expectations; defaults off for partial watch ranges",
+    )
     watch_replay.add_argument("--style", choices=style_pack_ids(), default=None, help="display style pack")
     _add_replay_renderer_arguments(watch_replay)
     _add_replay_project_arguments(watch_replay)
@@ -707,6 +725,12 @@ def run_watch_replay(args: argparse.Namespace) -> int:
     if args.max_step_delay_ms is not None and args.max_step_delay_ms < 0:
         print("--max-step-delay-ms must be non-negative", file=sys.stderr)
         return 2
+    if args.start_step < 1:
+        print("--start-step must be at least 1", file=sys.stderr)
+        return 2
+    if args.end_step is not None and args.end_step < args.start_step:
+        print("--end-step must be greater than or equal to --start-step", file=sys.stderr)
+        return 2
 
     state = _replay_state_from_args(args)
     server = create_server(args.host, args.port, state)
@@ -725,6 +749,10 @@ def run_watch_replay(args: argparse.Namespace) -> int:
     print(f"harn-gibson replay display: {display_url}", file=sys.stderr)
     if args.browser:
         webbrowser.open(display_url)
+    start_index = args.start_step - 1
+    end_index = args.end_step
+    partial_playback = args.start_step != 1 or args.end_step is not None
+    check_expectations = (not partial_playback) if args.check_expectations is None else args.check_expectations
     try:
         try:
             result = play_replay_file(
@@ -735,6 +763,9 @@ def run_watch_replay(args: argparse.Namespace) -> int:
                 playback_timing=args.playback_timing,
                 time_scale=args.speed,
                 max_step_delay_ms=args.max_step_delay_ms,
+                start_index=start_index,
+                end_index=end_index,
+                check_expectations=check_expectations,
                 progress=report_progress,
             )
         except ReplayExpectationError as error:

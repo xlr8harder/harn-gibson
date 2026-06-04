@@ -893,6 +893,11 @@ def test_cli_parser_and_run(monkeypatch: Any, capsys: Any) -> None:
             "2.5",
             "--max-step-delay-ms",
             "5000",
+            "--start-step",
+            "2",
+            "--end-step",
+            "4",
+            "--no-check-expectations",
             "--style",
             "satellite-uplink",
             "--renderer-command",
@@ -916,6 +921,9 @@ def test_cli_parser_and_run(monkeypatch: Any, capsys: Any) -> None:
     assert parsed_watch.playback_timing == "real-time"
     assert parsed_watch.speed == 2.5
     assert parsed_watch.max_step_delay_ms == 5000
+    assert parsed_watch.start_step == 2
+    assert parsed_watch.end_step == 4
+    assert parsed_watch.check_expectations is False
     assert parsed_watch.style == "satellite-uplink"
     assert parsed_watch.renderer_command == "python renderer.py"
     assert parsed_watch.renderer_timeout_ms == "1750"
@@ -1072,6 +1080,8 @@ def test_cli_watch_replay_runs_browser_playback(tmp_path: Path, monkeypatch: Any
             "0",
             "--step-delay-ms",
             "0",
+            "--end-step",
+            "1",
         ]
     )
 
@@ -1090,11 +1100,15 @@ def test_cli_watch_replay_error_paths(monkeypatch: Any, capsys: Any) -> None:
     bad_step = parser.parse_args(["watch-replay", "fixture.json", "--step-delay-ms", "-1"])
     bad_speed = parser.parse_args(["watch-replay", "fixture.json", "--speed", "0"])
     bad_max_step = parser.parse_args(["watch-replay", "fixture.json", "--max-step-delay-ms", "-1"])
+    bad_start_step = parser.parse_args(["watch-replay", "fixture.json", "--start-step", "0"])
+    bad_end_step = parser.parse_args(["watch-replay", "fixture.json", "--start-step", "3", "--end-step", "2"])
 
     assert cli.run_watch_replay(bad_start) == 2
     assert cli.run_watch_replay(bad_step) == 2
     assert cli.run_watch_replay(bad_speed) == 2
     assert cli.run_watch_replay(bad_max_step) == 2
+    assert cli.run_watch_replay(bad_start_step) == 2
+    assert cli.run_watch_replay(bad_end_step) == 2
 
     from harn_gibson.replay import ReplayExpectationError, ReplayExpectationResult
 
@@ -1113,7 +1127,9 @@ def test_cli_watch_replay_error_paths(monkeypatch: Any, capsys: Any) -> None:
         )
 
     monkeypatch.setattr("harn_gibson.replay.play_replay_file", fail_replay)
-    failure_args = parser.parse_args(["watch-replay", "fixture.json", "--no-browser", "--no-hold"])
+    failure_args = parser.parse_args(
+        ["watch-replay", "fixture.json", "--no-browser", "--no-hold", "--no-check-expectations"]
+    )
     assert cli.run_watch_replay(failure_args) == 1
 
     def interrupt_replay(*_args: Any, **_kwargs: Any) -> None:
@@ -1127,6 +1143,8 @@ def test_cli_watch_replay_error_paths(monkeypatch: Any, capsys: Any) -> None:
     assert "--step-delay-ms must be non-negative" in captured.err
     assert "--speed must be positive" in captured.err
     assert "--max-step-delay-ms must be non-negative" in captured.err
+    assert "--start-step must be at least 1" in captured.err
+    assert "--end-step must be greater than or equal to --start-step" in captured.err
     assert "revision expected to equal 2, got 1" in captured.err
     assert "watch-replay interrupted" in captured.err
 

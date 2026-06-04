@@ -102,7 +102,7 @@ uv run harn-gibson watch-replay examples/dogfood-replays/repo-map-trajectory.jso
   --speed 1
 ```
 
-`watch-replay` starts the browser server, opens the display, applies each replay step through the same pipeline as `replay`, and keeps the server open after playback by default. It accepts the same explicit renderer, style, and project metadata flags as offline replay. Fixed playback uses `--step-delay-ms`; real-time playback uses event and renderer-plan `timestampMs` gaps, scaled by `--speed`, with `--max-step-delay-ms` available for long idle periods. Use `--no-hold --no-browser --step-delay-ms 1 --start-delay-ms 0` for a fast command-line smoke run.
+`watch-replay` starts the browser server, opens the display, applies each replay step through the same pipeline as `replay`, and keeps the server open after playback by default. It accepts the same explicit renderer, style, and project metadata flags as offline replay. Fixed playback uses `--step-delay-ms`; real-time playback uses event and renderer-plan `timestampMs` gaps, scaled by `--speed`, with `--max-step-delay-ms` available for long idle periods. Use `--start-step N --end-step M` to inspect a 1-based inclusive step range from a long capture. Full playback checks fixture expectations by default; partial playback skips them unless `--check-expectations` is supplied, because a slice usually cannot satisfy final-scene expectations. Use `--no-hold --no-browser --step-delay-ms 1 --start-delay-ms 0` for a fast command-line smoke run.
 
 ## Expectations
 
