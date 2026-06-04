@@ -2685,9 +2685,12 @@ def _int_value(value: Any) -> int:
     return value if isinstance(value, int) else 0
 
 
+MAX_CHUNK_SUMMARY_VALUES = 12
+
+
 def _renderer_context_chunk_payload(index: int, contexts: tuple[ReplayRendererContext, ...]) -> dict[str, Any]:
     prompts = [renderer_prompt_from_context(context.context, context_index=context.index) for context in contexts]
-    summary = _renderer_context_chunk_summary(prompts)
+    summary = _renderer_context_chunk_summary(prompts, contexts)
     return {
         "index": index,
         "contextStart": contexts[0].index,
@@ -2701,7 +2704,10 @@ def _renderer_context_chunk_payload(index: int, contexts: tuple[ReplayRendererCo
     }
 
 
-def _renderer_context_chunk_summary(prompts: list[dict[str, Any]]) -> dict[str, Any]:
+def _renderer_context_chunk_summary(
+    prompts: list[dict[str, Any]],
+    contexts: tuple[ReplayRendererContext, ...],
+) -> dict[str, Any]:
     event_types: list[str] = []
     routes: list[str] = []
     modes: list[str] = []
@@ -2712,6 +2718,8 @@ def _renderer_context_chunk_summary(prompts: list[dict[str, Any]]) -> dict[str, 
     message_chars = 0
     context_chars = 0
     request_count = 0
+    visual_anchor_count = 0
+    active_animation_count = 0
     for prompt in prompts:
         metadata = prompt["metadata"]
         timeline = metadata["timeline"]
@@ -2725,6 +2733,8 @@ def _renderer_context_chunk_summary(prompts: list[dict[str, Any]]) -> dict[str, 
         message_chars += _coerce_int(metadata["messageChars"], 0)
         context_chars += _coerce_int(metadata["contextChars"], 0)
         request_count += _coerce_int(metadata["requestCount"], 0)
+        visual_anchor_count = max(visual_anchor_count, _coerce_int(metadata.get("visualAnchorCount"), 0))
+        active_animation_count = max(active_animation_count, _coerce_int(metadata.get("activeAnimationCount"), 0))
     start_ms = min(starts)
     end_ms = max(ends)
     return {
@@ -2740,7 +2750,63 @@ def _renderer_context_chunk_summary(prompts: list[dict[str, Any]]) -> dict[str, 
         },
         "messageChars": message_chars,
         "contextChars": context_chars,
+        "visualAnchorCount": visual_anchor_count,
+        "activeAnimationCount": active_animation_count,
+        **_renderer_context_chunk_continuity_summary(contexts),
     }
+
+
+def _renderer_context_chunk_continuity_summary(contexts: tuple[ReplayRendererContext, ...]) -> dict[str, Any]:
+    anchors: list[str] = []
+    effects: list[str] = []
+    targets: list[str] = []
+    renderers: list[str] = []
+    motifs: list[str] = []
+    for context in contexts:
+        continuity = _mapping_value(context.context.get("visualContinuity"))
+        for anchor in _mapping_list(continuity.get("anchors")):
+            anchor_id = anchor.get("id")
+            if isinstance(anchor_id, str) and anchor_id:
+                _append_bounded_unique(anchors, anchor_id)
+        _extend_bounded_unique(effects, continuity.get("recentEffects"))
+        _extend_bounded_unique(targets, continuity.get("recentTargets"))
+        _extend_bounded_unique(renderers, continuity.get("recentRenderers"))
+        style = _mapping_value(continuity.get("style"))
+        _extend_bounded_unique(motifs, style.get("motifs"))
+    payload: dict[str, Any] = {}
+    if anchors:
+        payload["continuityAnchors"] = anchors
+    if effects:
+        payload["continuityEffects"] = effects
+    if targets:
+        payload["continuityTargets"] = targets
+    if renderers:
+        payload["continuityRenderers"] = renderers
+    if motifs:
+        payload["styleMotifs"] = motifs
+    return payload
+
+
+def _mapping_value(value: Any) -> Mapping[str, Any]:
+    return value if isinstance(value, Mapping) else {}
+
+
+def _mapping_list(value: Any) -> list[Mapping[str, Any]]:
+    return [item for item in value if isinstance(item, Mapping)] if isinstance(value, list) else []
+
+
+def _extend_bounded_unique(items: list[str], values: Any) -> None:
+    if not isinstance(values, list):
+        return
+    for value in values:
+        if isinstance(value, str | int | float | bool):
+            _append_bounded_unique(items, str(value))
+
+
+def _append_bounded_unique(items: list[str], item: str) -> None:
+    if len(items) >= MAX_CHUNK_SUMMARY_VALUES:
+        return
+    _append_unique(items, item)
 
 
 def _extend_unique(items: list[str], values: Iterable[Any]) -> None:
@@ -2878,6 +2944,11 @@ def _renderer_chunk_review_card(chunk: Mapping[str, Any]) -> str:
     routes = _badge_row(chunk.get("routes"), "route")
     modes = _badge_row(chunk.get("modes"), "mode")
     display_styles = _badge_row(chunk.get("displayStyles"), "style")
+    continuity_anchors = _badge_row(chunk.get("continuityAnchors"), "target")
+    continuity_effects = _badge_row(chunk.get("continuityEffects"), "effect")
+    continuity_targets = _badge_row(chunk.get("continuityTargets"), "target")
+    continuity_renderers = _badge_row(chunk.get("continuityRenderers"), "renderer")
+    style_motifs = _badge_row(chunk.get("styleMotifs"), "style")
     prompt_preview = _renderer_chunk_prompt_preview(chunk)
     return f"""    <article>
       <h2>chunk #{index} / contexts <code>{context_range}</code></h2>
@@ -2886,6 +2957,8 @@ def _renderer_chunk_review_card(chunk: Mapping[str, Any]) -> str:
         <span>prompts <code>{escape(str(chunk.get("promptCount", 0)))}</code></span>
         <span>requests <code>{escape(str(chunk.get("requestCount", 0)))}</code></span>
         <span>timeline <code>{timeline_text}</code></span>
+        <span>visual anchors <code>{escape(str(chunk.get("visualAnchorCount", 0)))}</code></span>
+        <span>active animations <code>{escape(str(chunk.get("activeAnimationCount", 0)))}</code></span>
         <span>prompt chars <code>{escape(str(chunk.get("messageChars", 0)))}</code></span>
         <span>context chars <code>{escape(str(chunk.get("contextChars", 0)))}</code></span>
       </div>
@@ -2893,6 +2966,21 @@ def _renderer_chunk_review_card(chunk: Mapping[str, Any]) -> str:
       <div class="badge-set"><span class="badge-label">styles</span><div class="badge-row">{display_styles}</div></div>
       <div class="badge-set"><span class="badge-label">events</span><div class="badge-row">{event_types}</div></div>
       <div class="badge-set"><span class="badge-label">routes</span><div class="badge-row">{routes}</div></div>
+      <div class="badge-set">
+        <span class="badge-label">continuity anchors</span><div class="badge-row">{continuity_anchors}</div>
+      </div>
+      <div class="badge-set">
+        <span class="badge-label">continuity effects</span><div class="badge-row">{continuity_effects}</div>
+      </div>
+      <div class="badge-set">
+        <span class="badge-label">continuity targets</span><div class="badge-row">{continuity_targets}</div>
+      </div>
+      <div class="badge-set">
+        <span class="badge-label">continuity renderers</span><div class="badge-row">{continuity_renderers}</div>
+      </div>
+      <div class="badge-set">
+        <span class="badge-label">style motifs</span><div class="badge-row">{style_motifs}</div>
+      </div>
 {prompt_preview}
     </article>"""
 

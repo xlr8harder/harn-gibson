@@ -233,6 +233,16 @@ def test_replay_event_steps_file_io_and_writers(tmp_path: Path, monkeypatch: pyt
     second_context = json.loads(json.dumps(context_result.renderer_contexts[0].context))
     second_context["mode"] = "rolling"
     second_context["renderInput"]["timeline"] = {"startMs": 2000, "endMs": 2400, "durationMs": 400}
+    second_context["visualContinuity"]["anchorCount"] = 12
+    second_context["visualContinuity"]["activeAnimationCount"] = 7
+    second_context["visualContinuity"]["anchors"] = [
+        {"id": "persisted-city", "kind": "city_block"},
+        {"id": "signal-reticle", "kind": "svg_layer"},
+    ]
+    second_context["visualContinuity"]["recentEffects"] = ["scan", "breach_wave"]
+    second_context["visualContinuity"]["recentTargets"] = ["persisted-city"]
+    second_context["visualContinuity"]["recentRenderers"] = ["continuity-fixture"]
+    second_context["visualContinuity"]["style"]["motifs"] = ["wireframe-city"]
     multi_context_result = ReplayResult(
         schema="harn-gibson.replay.v1",
         name="chunked context replay",
@@ -262,15 +272,66 @@ def test_replay_event_steps_file_io_and_writers(tmp_path: Path, monkeypatch: pyt
     assert chunks["chunks"][0]["routes"] == ["renderer_agent"]
     assert chunks["chunks"][0]["requestCount"] == 2
     assert chunks["chunks"][0]["timeline"] == {"startMs": 1001, "endMs": 2400, "durationMs": 1399}
+    assert chunks["chunks"][0]["visualAnchorCount"] == 12
+    assert chunks["chunks"][0]["activeAnimationCount"] == 7
+    assert "persisted-city" in chunks["chunks"][0]["continuityAnchors"]
+    assert chunks["chunks"][0]["continuityEffects"] == ["scan", "breach_wave"]
+    assert chunks["chunks"][0]["continuityTargets"] == ["persisted-city"]
+    assert chunks["chunks"][0]["continuityRenderers"] == ["continuity-fixture"]
+    assert "wireframe-city" in chunks["chunks"][0]["styleMotifs"]
     assert chunks["chunks"][0]["prompts"][1]["mode"] == "rolling"
     assert chunks["chunks"][0]["contexts"][0]["context"]["mode"] == "compaction"
     assert chunks["chunks"][0]["messageChars"] > chunks["chunks"][0]["contextChars"]
     assert chunk_file["chunkCount"] == 2
     assert chunk_file["chunks"][1]["contextStart"] == 1
+    malformed_continuity_result = ReplayResult(
+        schema="harn-gibson.replay.v1",
+        name="malformed continuity",
+        steps=(),
+        scene=SceneState(),
+        renderer_contexts=(
+            ReplayRendererContext(
+                0,
+                {
+                    "visualContinuity": {
+                        "anchors": [{"id": ""}, {"label": "missing"}, "bad"],
+                        "recentEffects": "bad",
+                        "recentTargets": [{"bad": True}],
+                        "recentRenderers": [],
+                        "style": "bad",
+                    }
+                },
+            ),
+        ),
+    )
+    malformed_chunk = replay_renderer_chunks_from_result(malformed_continuity_result, chunk_size=1)["chunks"][0]
+    assert "continuityAnchors" not in malformed_chunk
+    assert "continuityEffects" not in malformed_chunk
+    assert "continuityTargets" not in malformed_chunk
+    assert "continuityRenderers" not in malformed_chunk
+    assert "styleMotifs" not in malformed_chunk
+    bounded_context = json.loads(json.dumps(second_context))
+    bounded_context["visualContinuity"]["anchors"] = [
+        {"id": f"anchor-{index}"} for index in range(0, 14)
+    ]
+    bounded_chunk = replay_renderer_chunks_from_result(
+        ReplayResult(
+            schema="harn-gibson.replay.v1",
+            name="bounded continuity",
+            steps=(),
+            scene=SceneState(),
+            renderer_contexts=(ReplayRendererContext(0, bounded_context),),
+        ),
+        chunk_size=1,
+    )["chunks"][0]
+    assert bounded_chunk["continuityAnchors"] == [f"anchor-{index}" for index in range(0, 12)]
     assert "chunked context replay renderer chunk review" in chunks_review
     assert "window.__gibsonRendererChunks" in chunks_review
     assert "first prompt user message" in chunks_review
     assert "tool_call" in chunks_review
+    assert "persisted-city" in chunks_review
+    assert "breach_wave" in chunks_review
+    assert "wireframe-city" in chunks_review
     assert "<\\/script>" in replay_renderer_chunks_review_html(
         {
             "replayName": "</script>",
