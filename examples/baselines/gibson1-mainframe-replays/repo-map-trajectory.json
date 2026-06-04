@@ -1412,13 +1412,18 @@
             {
               "active": true,
               "activityCount": 2,
+              "ageMs": 0,
+              "ageSequences": 0,
               "confidence": 1.0,
               "entityId": "file:docs/usage.md",
               "entityKind": "file",
               "label": "USAGE.MD",
               "mass": 0.74,
+              "opacity": 1.0,
               "path": "docs/usage.md",
+              "recency": "current",
               "semanticDegree": 0,
+              "settlement": "reconciled",
               "status": "ok",
               "tone": "magenta",
               "x": 0.18,
@@ -1428,13 +1433,18 @@
             {
               "active": true,
               "activityCount": 2,
+              "ageMs": 0,
+              "ageSequences": 0,
               "confidence": 1.0,
               "entityId": "file:src/repo_map/cli.py",
               "entityKind": "file",
               "label": "CLI.PY",
               "mass": 0.95,
+              "opacity": 1.0,
               "path": "src/repo_map/cli.py",
+              "recency": "current",
               "semanticDegree": 9,
+              "settlement": "reconciled",
               "status": "ok",
               "tone": "magenta",
               "x": 0.468,
@@ -1444,13 +1454,18 @@
             {
               "active": true,
               "activityCount": 1,
+              "ageMs": 0,
+              "ageSequences": 0,
               "confidence": 1.0,
               "entityId": "file:scripts/line_summary.py",
               "entityKind": "file",
               "label": "LINE-SUMM...",
               "mass": 0.62,
+              "opacity": 1.0,
               "path": "scripts/line_summary.py",
+              "recency": "current",
               "semanticDegree": 0,
+              "settlement": "reconciled",
               "status": "ok",
               "tone": "magenta",
               "x": 0.78,
@@ -1460,13 +1475,18 @@
             {
               "active": false,
               "activityCount": 1,
+              "ageMs": 3200,
+              "ageSequences": 1,
               "confidence": 1.0,
               "entityId": "file:README.md",
               "entityKind": "file",
               "label": "README.MD",
-              "mass": 0.4,
+              "mass": 0.368,
+              "opacity": 0.934,
               "path": "README.md",
+              "recency": "recent",
               "semanticDegree": 0,
+              "settlement": "reconciled",
               "status": "ok",
               "tone": "green",
               "x": 0.18,
@@ -1476,13 +1496,18 @@
             {
               "active": false,
               "activityCount": 1,
+              "ageMs": 3200,
+              "ageSequences": 1,
               "confidence": 1.0,
               "entityId": "file:tests/test_cli.py",
               "entityKind": "file",
               "label": "TEST-CLI.PY",
-              "mass": 0.645,
+              "mass": 0.593,
+              "opacity": 0.934,
               "path": "tests/test_cli.py",
+              "recency": "recent",
               "semanticDegree": 7,
+              "settlement": "reconciled",
               "status": "ok",
               "tone": "green",
               "x": 0.492,
@@ -1522,6 +1547,15 @@
               "targetProp": "objects[0].tone"
             },
             {
+              "entityId": "file:docs/usage.md",
+              "entityKind": "file",
+              "fieldPath": "entities.files[].lifecycle.recency",
+              "intent": "older world-model facts fade without losing identity",
+              "relationship": "dims",
+              "source": "worldModel",
+              "targetProp": "objects[0].opacity"
+            },
+            {
               "entityId": "file:src/repo_map/cli.py",
               "entityKind": "file",
               "fieldPath": "entities.files[].activityCount",
@@ -1538,6 +1572,15 @@
               "relationship": "colors",
               "source": "worldModel",
               "targetProp": "objects[1].tone"
+            },
+            {
+              "entityId": "file:src/repo_map/cli.py",
+              "entityKind": "file",
+              "fieldPath": "entities.files[].lifecycle.recency",
+              "intent": "older world-model facts fade without losing identity",
+              "relationship": "dims",
+              "source": "worldModel",
+              "targetProp": "objects[1].opacity"
             },
             {
               "entityId": "file:scripts/line_summary.py",
@@ -1558,6 +1601,15 @@
               "targetProp": "objects[2].tone"
             },
             {
+              "entityId": "file:scripts/line_summary.py",
+              "entityKind": "file",
+              "fieldPath": "entities.files[].lifecycle.recency",
+              "intent": "older world-model facts fade without losing identity",
+              "relationship": "dims",
+              "source": "worldModel",
+              "targetProp": "objects[2].opacity"
+            },
+            {
               "entityId": "file:README.md",
               "entityKind": "file",
               "fieldPath": "entities.files[].activityCount",
@@ -1576,22 +1628,13 @@
               "targetProp": "objects[3].tone"
             },
             {
-              "entityId": "file:tests/test_cli.py",
+              "entityId": "file:README.md",
               "entityKind": "file",
-              "fieldPath": "entities.files[].activityCount",
-              "intent": "activity gives world objects visual mass",
-              "relationship": "scales",
+              "fieldPath": "entities.files[].lifecycle.recency",
+              "intent": "older world-model facts fade without losing identity",
+              "relationship": "dims",
               "source": "worldModel",
-              "targetProp": "objects[4].mass"
-            },
-            {
-              "entityId": "file:tests/test_cli.py",
-              "entityKind": "file",
-              "fieldPath": "entities.files[].lastOutcome.status",
-              "intent": "observed outcomes color file objects",
-              "relationship": "colors",
-              "source": "worldModel",
-              "targetProp": "objects[4].tone"
+              "targetProp": "objects[3].opacity"
             }
           ]
         },

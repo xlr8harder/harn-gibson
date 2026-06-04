@@ -966,8 +966,14 @@ def test_gibson1_renderer_returns_coherent_valid_plan(tmp_path: Path) -> None:
     assert world_map.props["objects"][0]["entityKind"] == "file"
     assert world_map.props["objects"][0]["semanticDegree"] == 1
     assert world_map.props["objects"][0]["mass"] == 0.655
+    assert world_map.props["objects"][0]["opacity"] == 1.0
+    assert world_map.props["objects"][0]["recency"] == "current"
+    assert world_map.props["objects"][0]["settlement"] == "reconciled"
     assert world_map.props["objects"][1]["entityKind"] == "health"
     assert world_map.props["objects"][1]["health"] == "ok"
+    assert world_map.props["objects"][1]["opacity"] == 1.0
+    assert world_map.props["objects"][1]["recency"] == "current"
+    assert world_map.props["objects"][1]["settlement"] == "reconciled"
     assert world_map.props["edges"] == [
         {
             "source": "file:tests/test_app.py",
@@ -981,7 +987,9 @@ def test_gibson1_renderer_returns_coherent_valid_plan(tmp_path: Path) -> None:
     assert [binding["targetProp"] for binding in world_map.props["worldBindings"]] == [
         "objects[0].mass",
         "objects[0].tone",
+        "objects[0].opacity",
         "objects[1].tone",
+        "objects[1].opacity",
     ]
     assert scene.state.animations["gibson1-route-trace"].target_id == "gibson1-route"
     assert scene.state.animations["gibson1-route-trace"].ttl_ms == 3800
@@ -1571,14 +1579,26 @@ def test_renderer_context_builder_compaction_rolling_and_history(tmp_path: Path)
     }
     assert compaction.project["worldModel"]["schema"] == "harn-gibson.world-model.v1"
     assert compaction.project["worldModel"]["revision"] == 1
+    assert compaction.project["worldModel"]["latestSequence"] == 9
+    assert compaction.project["worldModel"]["latestSeenMs"] == 900
     assert compaction.project["worldModel"]["entityCount"] == 4
     assert compaction.project["worldModel"]["counts"] == {"files": 2, "commands": 1, "changes": 0, "health": 1}
     assert compaction.project["worldModel"]["truncated"] is False
+    assert compaction.project["worldModel"]["lifecycle"]["renderedEntityCounts"] == {
+        "byRecency": {"current": 4},
+        "bySettlement": {"open": 4},
+    }
     assert [item["path"] for item in compaction.project["worldModel"]["entities"]["files"]] == [
         "src/harn_gibson/rendering.py",
         "tests/test_rendering.py",
     ]
     assert compaction.project["worldModel"]["entities"]["files"][0]["provenance"]["source"] == "observed"
+    assert compaction.project["worldModel"]["entities"]["files"][0]["lifecycle"] == {
+        "recency": "current",
+        "settlement": "open",
+        "ageSequences": 0,
+        "ageMs": 0,
+    }
     assert compaction.project["worldModel"]["entities"]["commands"][0]["commandPreview"] == (
         "uv run pytest tests/test_rendering.py docs/renderer-agent.md"
     )
@@ -1670,6 +1690,7 @@ def test_renderer_context_builder_compaction_rolling_and_history(tmp_path: Path)
     assert rolling.project["worldModel"]["revision"] == 1
     assert rolling.project["worldModel"]["entityCount"] == 4
     assert rolling.project["worldModel"]["counts"] == {"files": 2, "commands": 1, "changes": 0, "health": 1}
+    assert rolling.project["worldModel"]["lifecycle"]["renderedEntityCounts"]["byRecency"] == {"current": 4}
     assert rolling.catalog["mode"] == "summary"
     assert rolling.scene["schema"] == "harn-gibson.scene-summary.v1"
     assert rolling.scene["animationCount"] == 5

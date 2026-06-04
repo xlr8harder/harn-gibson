@@ -67,9 +67,24 @@ def test_world_model_tracks_file_activity_outcomes_and_provenance() -> None:
 
     assert payload["schema"] == WORLD_MODEL_SCHEMA
     assert payload["revision"] == 1
+    assert payload["latestSequence"] == 4
+    assert payload["latestSeenMs"] == 400
     assert payload["entityCount"] == 3
     assert payload["counts"] == {"files": 1, "commands": 1, "changes": 0, "health": 1}
     assert payload["truncated"] is False
+    assert payload["lifecycle"] == {
+        "schema": "harn-gibson.world-model-lifecycle.v1",
+        "latestSequence": 4,
+        "latestSeenMs": 400,
+        "recentSequenceWindow": 6,
+        "staleSequenceWindow": 18,
+        "recentMsWindow": 60000,
+        "staleMsWindow": 300000,
+        "renderedEntityCounts": {
+            "byRecency": {"recent": 3},
+            "bySettlement": {"reconciled": 3},
+        },
+    }
     assert payload["provenance"] == {
         "source": "observed",
         "confidence": 1.0,
@@ -100,6 +115,12 @@ def test_world_model_tracks_file_activity_outcomes_and_provenance() -> None:
         "lastConfirmedSequence": 2,
         "lastConfirmedMs": 200,
     }
+    assert file_entity["lifecycle"] == {
+        "recency": "recent",
+        "settlement": "reconciled",
+        "ageSequences": 2,
+        "ageMs": 200,
+    }
     assert [item["status"] for item in payload["recentOutcomes"]] == ["error", "error"]
     assert payload["recentOutcomes"][0]["eventType"] == "runtime_error"
     assert payload["recentOutcomes"][1]["eventType"] == "harn_exit"
@@ -122,6 +143,8 @@ def test_world_model_tracks_file_activity_outcomes_and_provenance() -> None:
     assert command_entity["touchedPathsTruncated"] is False
     assert command_entity["lastOutcome"]["status"] == "ok"
     assert command_entity["provenance"]["source"] == "observed"
+    assert command_entity["lifecycle"]["recency"] == "recent"
+    assert command_entity["lifecycle"]["settlement"] == "reconciled"
     health_entity = payload["entities"]["health"][0]
     assert health_entity["id"] == "health:command:1"
     assert health_entity["kind"] == "health"
@@ -136,6 +159,8 @@ def test_world_model_tracks_file_activity_outcomes_and_provenance() -> None:
     assert health_entity["lastOutcome"]["status"] == "ok"
     assert health_entity["provenance"]["source"] == "inferred"
     assert health_entity["provenance"]["confidence"] == 0.85
+    assert health_entity["lifecycle"]["recency"] == "recent"
+    assert health_entity["lifecycle"]["settlement"] == "reconciled"
     assert model.to_dict(max_entities=0)["truncated"] is True
 
 
@@ -154,8 +179,101 @@ def test_world_model_handles_empty_or_malformed_touched_files_and_outcome_shapes
 
     assert payload["entityCount"] == 0
     assert payload["counts"] == {"files": 0, "commands": 0, "changes": 0, "health": 0}
+    assert payload["latestSequence"] == 3
+    assert payload["latestSeenMs"] == 30
+    assert payload["lifecycle"]["renderedEntityCounts"] == {"byRecency": {}, "bySettlement": {}}
     assert [item["status"] for item in payload["recentOutcomes"]] == ["ok", "error"]
     assert outcome_from_event(no_outcome) is None
+
+
+def test_world_model_lifecycle_marks_aging_and_stale_entities() -> None:
+    model = WorldModel()
+    first_touch = GibsonEvent.from_raw({"type": "tool_call", "toolName": "write"}, 1, timestamp_ms=1_000)
+    model.apply_batch(
+        (first_touch,),
+        {
+            "files": [
+                {
+                    "path": "src/old.py",
+                    "firstSequence": 1,
+                    "lastSequence": 1,
+                    "sources": ["input.path"],
+                }
+            ]
+        },
+    )
+
+    later_event = GibsonEvent.from_raw({"type": "message_update"}, 8, timestamp_ms=71_000)
+    model.apply_batch((later_event,), {"files": []})
+    aging_payload = model.to_dict()
+    aging_file = aging_payload["entities"]["files"][0]
+
+    assert aging_payload["latestSequence"] == 8
+    assert aging_file["lifecycle"] == {
+        "recency": "aging",
+        "settlement": "open",
+        "ageSequences": 7,
+        "ageMs": 70000,
+    }
+    assert aging_payload["lifecycle"]["renderedEntityCounts"]["byRecency"] == {"aging": 1}
+
+    stale_event = GibsonEvent.from_raw({"type": "message_update"}, 19, timestamp_ms=310_000)
+    model.apply_batch((stale_event,), {"files": []})
+    stale_payload = model.to_dict()
+    stale_file = stale_payload["entities"]["files"][0]
+
+    assert stale_payload["latestSequence"] == 19
+    assert stale_file["lifecycle"] == {
+        "recency": "stale",
+        "settlement": "open",
+        "ageSequences": 18,
+        "ageMs": 309000,
+    }
+    assert stale_payload["lifecycle"]["renderedEntityCounts"]["byRecency"] == {"stale": 1}
+
+
+def test_world_model_lifecycle_reopens_files_and_marks_observed_changes() -> None:
+    model = WorldModel()
+    result = GibsonEvent.from_raw(
+        {"type": "tool_result", "toolName": "write", "isError": False, "input": {"filePath": "README.md"}},
+        1,
+        timestamp_ms=100,
+    )
+    later_touch = GibsonEvent.from_raw(
+        {"type": "tool_call", "toolName": "edit", "input": {"filePath": "README.md"}},
+        2,
+        timestamp_ms=200,
+    )
+    observed_change = GibsonEvent.from_raw(
+        {
+            "type": "message_end",
+            "toolName": "edit",
+            "input": {"filePath": "README.md", "addedLines": 1, "removedLines": 0},
+        },
+        3,
+        timestamp_ms=300,
+    )
+    touched_files = {
+        "files": [
+            {"path": "README.md", "firstSequence": 1, "lastSequence": 3},
+        ]
+    }
+
+    model.apply_batch((result, later_touch, observed_change), touched_files)
+    payload = model.to_dict(max_entities=10)
+    file_entity = payload["entities"]["files"][0]
+    change_entity = payload["entities"]["changes"][0]
+
+    assert file_entity["lastOutcome"]["eventSequence"] == 1
+    assert file_entity["lastSequence"] == 3
+    assert file_entity["lifecycle"]["settlement"] == "open"
+    assert change_entity["status"] == "observed"
+    assert change_entity["lifecycle"] == {
+        "recency": "current",
+        "settlement": "observed",
+        "ageSequences": 0,
+        "ageMs": 0,
+    }
 
 
 def test_world_model_tracks_command_entities_and_command_extraction() -> None:
@@ -309,7 +427,11 @@ def test_world_model_tracks_structured_change_facts() -> None:
         5,
         timestamp_ms=500,
     )
-    no_delta = GibsonEvent.from_raw({"type": "tool_call", "toolName": "edit", "input": {"filePath": "src/noop.py"}}, 6)
+    no_delta = GibsonEvent.from_raw(
+        {"type": "tool_call", "toolName": "edit", "input": {"filePath": "src/noop.py"}},
+        6,
+        timestamp_ms=600,
+    )
     touched_files = {
         "files": [
             {"path": "src/app.py", "operation": "edit:before", "firstSequence": 1, "lastSequence": 1},
@@ -349,6 +471,12 @@ def test_world_model_tracks_structured_change_facts() -> None:
             "confidence": 1.0,
             "lastConfirmedSequence": 1,
             "lastConfirmedMs": 100,
+        },
+        "lifecycle": {
+            "recency": "recent",
+            "settlement": "open",
+            "ageSequences": 5,
+            "ageMs": 500,
         },
     }
     assert changes["change:2:0"]["operation"] == "write"

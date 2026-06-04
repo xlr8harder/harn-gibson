@@ -6060,6 +6060,8 @@ function drawSpatialMap(primitive, w, h, now) {
   for (const [index, object] of objects.entries()) {
     const point = objectPoints.get(object.id);
     if (!point) continue;
+    ctx.save();
+    ctx.globalAlpha *= clamp(finiteNumber(object.opacity, 1), 0.12, 1);
     const focused = object.id === focusObjectId || object.entityId === focusObjectId;
     const active = Boolean(object.active || focused);
     const objectTone = spatialMapObjectTone(object, props);
@@ -6102,6 +6104,7 @@ function drawSpatialMap(primitive, w, h, now) {
       ctx.shadowBlur = 4 * devicePixelRatio;
       ctx.fillText(String(object.label).slice(0, 18), point.x, point.y + r + 4 * devicePixelRatio);
     }
+    ctx.restore();
   }
 
   if (props.label) {

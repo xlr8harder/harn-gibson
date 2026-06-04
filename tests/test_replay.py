@@ -1779,7 +1779,7 @@ def test_checked_in_gibson1_replay_exercises_default_renderer() -> None:
     terrain_paths = {peak["path"]: peak for peak in terrain_peaks}
 
     assert [step.kind for step in result.steps] == ["event"] * 4
-    assert len(result.expectations) == 35
+    assert len(result.expectations) == 37
     assert result.scene.primitives["status"].props["text"] == "gibson1::tool_result"
     assert result.scene.primitives["gibson1-terminal"].kind == "terminal_wall"
     assert result.scene.primitives["gibson1-terminal"].props["title"] == "GIBSON1 EVENT BOARD"
@@ -1828,10 +1828,18 @@ def test_checked_in_gibson1_replay_exercises_default_renderer() -> None:
     assert world_map.props["focusObjectId"] == "file:docs/usage.md"
     assert world_map.props["objects"][0]["entityId"] == "file:docs/usage.md"
     assert world_map.props["objects"][0]["active"] is True
+    assert world_map.props["objects"][0]["opacity"] == 1.0
+    assert world_map.props["objects"][0]["recency"] == "current"
+    assert world_map.props["objects"][0]["settlement"] == "reconciled"
     assert world_map.props["objects"][1]["entityId"] == "file:src/repo_map/cli.py"
     assert world_map.props["objects"][1]["semanticDegree"] == 9
+    assert world_map.props["objects"][3]["entityId"] == "file:README.md"
+    assert world_map.props["objects"][3]["opacity"] == 0.934
+    assert world_map.props["objects"][3]["recency"] == "recent"
     assert world_map.props["edges"][0]["label"] == "TESTS"
     assert world_map.props["worldBindings"][0]["targetProp"] == "objects[0].mass"
+    assert world_map.props["worldBindings"][2]["targetProp"] == "objects[0].opacity"
+    assert world_map.props["worldBindings"][2]["relationship"] == "dims"
     assert result.scene.primitives["gibson1-rain"].kind == "data_rain"
     assert result.scene.animations["gibson1-cues"].kind == "timeline_cue"
     assert result.scene.animations["gibson1-route-trace"].target_id == "gibson1-route"
@@ -1848,7 +1856,7 @@ def test_checked_in_gibson1_replay_exercises_default_renderer() -> None:
     assert suite.ok is True
     assert summary["fileCount"] == 1
     assert summary["stepCount"] == 4
-    assert summary["expectationCount"] == 35
+    assert summary["expectationCount"] == 37
     assert summary["rendererCounts"] == {"gibson1": 4}
     assert summary["routeCounts"] == {"renderer_agent": 4}
 

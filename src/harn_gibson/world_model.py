@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import Counter
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Literal
@@ -18,6 +19,10 @@ _MAX_COMMAND_PREVIEW_CHARS = 240
 _MAX_COMMAND_SUMMARY_CHARS = 200
 _MAX_COMMAND_TOUCHED_PATHS = 12
 _MAX_CHANGE_SOURCE_CHARS = 120
+_RECENT_SEQUENCE_WINDOW = 6
+_STALE_SEQUENCE_WINDOW = 18
+_RECENT_MS_WINDOW = 60_000
+_STALE_MS_WINDOW = 300_000
 _HEALTH_COMMAND_PATTERNS = (
     ("test", "pytest"),
     ("test", "tox"),
@@ -120,7 +125,7 @@ class FileWorldEntity:
             "toolName": outcome.get("toolName"),
         }
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self, *, latest_sequence: int, latest_seen_ms: int) -> dict[str, Any]:
         payload: dict[str, Any] = {
             "id": f"file:{self.path}",
             "kind": "file",
@@ -142,7 +147,14 @@ class FileWorldEntity:
         }
         if self.last_outcome is not None:
             payload["lastOutcome"] = dict(self.last_outcome)
-        return payload
+        return _with_lifecycle(
+            payload,
+            latest_sequence=latest_sequence,
+            latest_seen_ms=latest_seen_ms,
+            last_sequence=self.last_sequence,
+            last_seen_ms=self.last_seen_ms,
+            settlement=_file_settlement(self),
+        )
 
 
 @dataclass(slots=True)
@@ -215,7 +227,7 @@ class CommandWorldEntity:
         }
         self.record_event(event, observation, touches)
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self, *, latest_sequence: int, latest_seen_ms: int) -> dict[str, Any]:
         touched_paths = self.touched_paths[:_MAX_COMMAND_TOUCHED_PATHS]
         payload: dict[str, Any] = {
             "id": self.id,
@@ -250,7 +262,14 @@ class CommandWorldEntity:
             payload["durationMs"] = self.duration_ms
         if self.last_outcome is not None:
             payload["lastOutcome"] = dict(self.last_outcome)
-        return payload
+        return _with_lifecycle(
+            payload,
+            latest_sequence=latest_sequence,
+            latest_seen_ms=latest_seen_ms,
+            last_sequence=self.last_sequence,
+            last_seen_ms=self.last_seen_ms,
+            settlement="open" if self.status == "running" else "reconciled",
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -271,7 +290,7 @@ class ChangeWorldEntity:
     end_line: int | None = None
     last_outcome: dict[str, Any] | None = None
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self, *, latest_sequence: int, latest_seen_ms: int) -> dict[str, Any]:
         payload: dict[str, Any] = {
             "id": self.id,
             "kind": "change",
@@ -301,7 +320,14 @@ class ChangeWorldEntity:
             payload["endLine"] = self.end_line
         if self.last_outcome is not None:
             payload["lastOutcome"] = dict(self.last_outcome)
-        return payload
+        return _with_lifecycle(
+            payload,
+            latest_sequence=latest_sequence,
+            latest_seen_ms=latest_seen_ms,
+            last_sequence=self.event_sequence,
+            last_seen_ms=self.timestamp_ms,
+            settlement=_change_settlement(self),
+        )
 
 
 @dataclass(slots=True)
@@ -348,7 +374,7 @@ class HealthWorldEntity:
         self.last_summary = command.last_summary
         self.last_outcome = dict(command.last_outcome) if command.last_outcome is not None else None
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self, *, latest_sequence: int, latest_seen_ms: int) -> dict[str, Any]:
         touched_paths = self.touched_paths[:_MAX_COMMAND_TOUCHED_PATHS]
         payload: dict[str, Any] = {
             "id": self.id,
@@ -390,7 +416,14 @@ class HealthWorldEntity:
             payload["durationMs"] = self.duration_ms
         if self.last_outcome is not None:
             payload["lastOutcome"] = dict(self.last_outcome)
-        return payload
+        return _with_lifecycle(
+            payload,
+            latest_sequence=latest_sequence,
+            latest_seen_ms=latest_seen_ms,
+            last_sequence=self.last_sequence,
+            last_seen_ms=self.last_seen_ms,
+            settlement="open" if self.status == "running" else "reconciled",
+        )
 
 
 class WorldModel:
@@ -406,6 +439,8 @@ class WorldModel:
         self._recent_outcomes: list[dict[str, Any]] = []
         self._seen_event_keys: set[tuple[str, int, int, str]] = set()
         self.max_recent_outcomes = max(1, max_recent_outcomes)
+        self.latest_sequence = 0
+        self.latest_seen_ms = 0
 
     def apply_batch(self, events: Sequence[GibsonEvent], touched_files: Mapping[str, Any]) -> None:
         touched_by_sequence = _touched_files_by_sequence(touched_files)
@@ -415,6 +450,8 @@ class WorldModel:
             if key in self._seen_event_keys:
                 continue
             self._seen_event_keys.add(key)
+            self.latest_sequence = max(self.latest_sequence, event.sequence)
+            self.latest_seen_ms = max(self.latest_seen_ms, event.timestamp_ms)
             changed = True
             touches = touched_by_sequence.get(event.sequence, ())
             for touch in touches:
@@ -456,13 +493,27 @@ class WorldModel:
         commands = sorted(self._commands.values(), key=lambda item: (-item.last_sequence, item.id))
         changes = sorted(self._changes.values(), key=lambda item: (-item.event_sequence, item.id))
         health = sorted(self._health.values(), key=lambda item: (-item.last_sequence, item.id))
-        rendered_files = [entity.to_dict() for entity in files[:limit]]
-        rendered_commands = [entity.to_dict() for entity in commands[:limit]]
-        rendered_changes = [entity.to_dict() for entity in changes[:limit]]
-        rendered_health = [entity.to_dict() for entity in health[:limit]]
+        rendered_files = [
+            entity.to_dict(latest_sequence=self.latest_sequence, latest_seen_ms=self.latest_seen_ms)
+            for entity in files[:limit]
+        ]
+        rendered_commands = [
+            entity.to_dict(latest_sequence=self.latest_sequence, latest_seen_ms=self.latest_seen_ms)
+            for entity in commands[:limit]
+        ]
+        rendered_changes = [
+            entity.to_dict(latest_sequence=self.latest_sequence, latest_seen_ms=self.latest_seen_ms)
+            for entity in changes[:limit]
+        ]
+        rendered_health = [
+            entity.to_dict(latest_sequence=self.latest_sequence, latest_seen_ms=self.latest_seen_ms)
+            for entity in health[:limit]
+        ]
         return {
             "schema": WORLD_MODEL_SCHEMA,
             "revision": self.revision,
+            "latestSequence": self.latest_sequence,
+            "latestSeenMs": self.latest_seen_ms,
             "entityCount": len(files) + len(commands) + len(changes) + len(health),
             "truncated": len(files) > limit or len(commands) > limit or len(changes) > limit or len(health) > limit,
             "counts": {
@@ -471,6 +522,11 @@ class WorldModel:
                 "changes": len(changes),
                 "health": len(health),
             },
+            "lifecycle": _world_lifecycle_summary(
+                (*rendered_files, *rendered_commands, *rendered_changes, *rendered_health),
+                latest_sequence=self.latest_sequence,
+                latest_seen_ms=self.latest_seen_ms,
+            ),
             "entities": {
                 "files": rendered_files,
                 "commands": rendered_commands,
@@ -919,6 +975,80 @@ def _line_count(value: str) -> int:
     if not value:
         return 0
     return value.count("\n") + (0 if value.endswith("\n") else 1)
+
+
+def _with_lifecycle(
+    payload: dict[str, Any],
+    *,
+    latest_sequence: int,
+    latest_seen_ms: int,
+    last_sequence: int,
+    last_seen_ms: int,
+    settlement: str,
+) -> dict[str, Any]:
+    age_sequences = max(0, latest_sequence - last_sequence)
+    age_ms = max(0, latest_seen_ms - last_seen_ms)
+    payload["lifecycle"] = {
+        "recency": _recency(age_sequences, age_ms),
+        "settlement": settlement,
+        "ageSequences": age_sequences,
+        "ageMs": age_ms,
+    }
+    return payload
+
+
+def _recency(age_sequences: int, age_ms: int) -> str:
+    if age_sequences == 0 and age_ms == 0:
+        return "current"
+    if age_sequences <= _RECENT_SEQUENCE_WINDOW or age_ms <= _RECENT_MS_WINDOW:
+        return "recent"
+    if age_sequences >= _STALE_SEQUENCE_WINDOW or age_ms >= _STALE_MS_WINDOW:
+        return "stale"
+    return "aging"
+
+
+def _file_settlement(entity: FileWorldEntity) -> str:
+    if entity.last_outcome is None:
+        return "open"
+    outcome_sequence = entity.last_outcome.get("eventSequence")
+    if isinstance(outcome_sequence, int) and outcome_sequence >= entity.last_sequence:
+        return "reconciled"
+    return "open"
+
+
+def _change_settlement(entity: ChangeWorldEntity) -> str:
+    if entity.status == "planned":
+        return "open"
+    if entity.status in {"ok", "error"}:
+        return "reconciled"
+    return "observed"
+
+
+def _world_lifecycle_summary(
+    rendered_entities: Sequence[Mapping[str, Any]],
+    *,
+    latest_sequence: int,
+    latest_seen_ms: int,
+) -> dict[str, Any]:
+    recency_counts: Counter[str] = Counter()
+    settlement_counts: Counter[str] = Counter()
+    for entity in rendered_entities:
+        lifecycle = entity["lifecycle"]
+        recency_counts[str(lifecycle["recency"])] += 1
+        settlement_counts[str(lifecycle["settlement"])] += 1
+    return {
+        "schema": "harn-gibson.world-model-lifecycle.v1",
+        "latestSequence": latest_sequence,
+        "latestSeenMs": latest_seen_ms,
+        "recentSequenceWindow": _RECENT_SEQUENCE_WINDOW,
+        "staleSequenceWindow": _STALE_SEQUENCE_WINDOW,
+        "recentMsWindow": _RECENT_MS_WINDOW,
+        "staleMsWindow": _STALE_MS_WINDOW,
+        "renderedEntityCounts": {
+            "byRecency": dict(sorted(recency_counts.items())),
+            "bySettlement": dict(sorted(settlement_counts.items())),
+        },
+    }
 
 
 __all__ = [

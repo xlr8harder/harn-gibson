@@ -639,6 +639,9 @@ def _upsert_world_spatial_map(
             continue
         semantic_summary = _semantic_path_summary(path, semantic)
         touched_count = _touch_count(path, touched_paths)
+        lifecycle = _world_lifecycle(file_entity)
+        recency = _text(lifecycle.get("recency"), "recent")
+        settlement = _text(lifecycle.get("settlement"), "open")
         active = touched_count > 0 or index == 0
         last_outcome = _dict(file_entity.get("lastOutcome"))
         objects.append(
@@ -652,15 +655,23 @@ def _upsert_world_spatial_map(
                 "z": round(0.14 + min(0.42, semantic_summary["degree"] * 0.026 + touched_count * 0.12), 3),
                 "mass": _world_file_mass(file_entity, semantic_summary, touched_count),
                 "tone": _world_file_tone(file_entity, semantic_summary, active, tone, accent),
+                "opacity": _world_entity_opacity(file_entity),
                 "active": active,
                 "confidence": _world_confidence(file_entity),
                 "status": _text(last_outcome.get("status"), ""),
+                "recency": recency,
+                "settlement": settlement,
+                "ageSequences": _int(lifecycle.get("ageSequences"), 0),
+                "ageMs": _int(lifecycle.get("ageMs"), 0),
                 "activityCount": _int(file_entity.get("activityCount"), 0),
                 "semanticDegree": semantic_summary["degree"],
             }
         )
     for index, health_entity in enumerate(health_entities[:2]):
         status = _text(health_entity.get("status"), "unknown")
+        lifecycle = _world_lifecycle(health_entity)
+        recency = _text(lifecycle.get("recency"), "recent")
+        settlement = _text(lifecycle.get("settlement"), "open")
         objects.append(
             {
                 "entityId": _text(health_entity.get("id"), f"health:{index}"),
@@ -672,8 +683,13 @@ def _upsert_world_spatial_map(
                 "mass": 0.58 if status == "ok" else 0.78,
                 "health": status,
                 "tone": "green" if status == "ok" else "red" if status == "error" else "amber",
+                "opacity": _world_entity_opacity(health_entity),
                 "active": status != "ok",
                 "confidence": _world_confidence(health_entity),
+                "recency": recency,
+                "settlement": settlement,
+                "ageSequences": _int(lifecycle.get("ageSequences"), 0),
+                "ageMs": _int(lifecycle.get("ageMs"), 0),
             }
         )
     if not objects:
@@ -1116,6 +1132,10 @@ def _world_health_entities(world: dict[str, Any]) -> list[dict[str, Any]]:
     return _world_entities(world, "health")
 
 
+def _world_lifecycle(entity: dict[str, Any]) -> dict[str, Any]:
+    return _dict(entity.get("lifecycle"))
+
+
 def _prioritized_world_files(files: list[dict[str, Any]], touched_paths: list[str]) -> list[dict[str, Any]]:
     return sorted(
         files,
@@ -1131,7 +1151,8 @@ def _prioritized_world_files(files: list[dict[str, Any]], touched_paths: list[st
 def _world_file_mass(file_entity: dict[str, Any], semantic_summary: dict[str, Any], touched_count: int) -> float:
     activity = _int(file_entity.get("activityCount"), 0)
     degree = _int(semantic_summary.get("degree"), 0)
-    return round(min(0.95, 0.28 + activity * 0.12 + touched_count * 0.22 + degree * 0.035), 3)
+    base = min(0.95, 0.28 + activity * 0.12 + touched_count * 0.22 + degree * 0.035)
+    return round(base * _world_recency_scale(file_entity), 3)
 
 
 def _world_file_tone(
@@ -1146,6 +1167,9 @@ def _world_file_tone(
         return "red"
     if active:
         return "magenta"
+    recency = _text(_world_lifecycle(file_entity).get("recency"), "")
+    if recency == "stale":
+        return "amber"
     if status == "ok":
         return "green"
     role = _text(semantic_summary.get("role"), "")
@@ -1161,6 +1185,23 @@ def _world_confidence(entity: dict[str, Any]) -> float:
     if isinstance(confidence, int | float) and not isinstance(confidence, bool):
         return round(max(0.0, min(1.0, float(confidence))), 3)
     return 0.85
+
+
+def _world_recency_scale(entity: dict[str, Any]) -> float:
+    recency = _text(_world_lifecycle(entity).get("recency"), "recent")
+    if recency == "current":
+        return 1.0
+    if recency == "recent":
+        return 0.92
+    if recency == "aging":
+        return 0.72
+    if recency == "stale":
+        return 0.52
+    return 0.85
+
+
+def _world_entity_opacity(entity: dict[str, Any]) -> float:
+    return round(max(0.28, min(1.0, 0.18 + _world_recency_scale(entity) * 0.82)), 3)
 
 
 def _spatial_focus_object(objects: list[dict[str, Any]], touched_paths: list[str]) -> str:
@@ -1261,6 +1302,17 @@ def _spatial_world_bindings(objects: list[dict[str, Any]]) -> list[dict[str, Any
                     "intent": "observed outcomes color file objects",
                 }
             )
+            bindings.append(
+                {
+                    "entityId": entity_id,
+                    "entityKind": "file",
+                    "fieldPath": "entities.files[].lifecycle.recency",
+                    "targetProp": f"objects[{index}].opacity",
+                    "source": "worldModel",
+                    "relationship": "dims",
+                    "intent": "older world-model facts fade without losing identity",
+                }
+            )
         elif entity_kind == "health":
             bindings.append(
                 {
@@ -1271,6 +1323,17 @@ def _spatial_world_bindings(objects: list[dict[str, Any]]) -> list[dict[str, Any
                     "source": "worldModel",
                     "relationship": "colors",
                     "intent": "test/build status colors health objects",
+                }
+            )
+            bindings.append(
+                {
+                    "entityId": entity_id,
+                    "entityKind": "health",
+                    "fieldPath": "entities.health[].lifecycle.recency",
+                    "targetProp": f"objects[{index}].opacity",
+                    "source": "worldModel",
+                    "relationship": "dims",
+                    "intent": "older health checks fade while remaining available as context",
                 }
             )
     return bindings[:12]

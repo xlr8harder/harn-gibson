@@ -136,7 +136,20 @@
           "entityId": "file:docs/usage.md",
           "path": "docs/usage.md",
           "tone": "magenta",
+          "opacity": 1.0,
+          "recency": "current",
+          "settlement": "reconciled",
           "active": true
+        }
+      },
+      {
+        "path": "primitives.gibson1-world-map.props.objects",
+        "contains": {
+          "entityId": "file:README.md",
+          "path": "README.md",
+          "opacity": 0.934,
+          "recency": "recent",
+          "settlement": "reconciled"
         }
       },
       {
@@ -153,6 +166,15 @@
           "entityId": "file:docs/usage.md",
           "targetProp": "objects[0].mass",
           "source": "worldModel"
+        }
+      },
+      {
+        "path": "primitives.gibson1-world-map.props.worldBindings",
+        "contains": {
+          "entityId": "file:docs/usage.md",
+          "targetProp": "objects[0].opacity",
+          "source": "worldModel",
+          "relationship": "dims"
         }
       },
       {

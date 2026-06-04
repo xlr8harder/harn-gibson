@@ -28,6 +28,8 @@ RENDERER_SYSTEM_PROMPT = (
     "feel cinematic. "
     "Use context.project.semanticGraph when routing packets, arranging districts, or showing blast radius along "
     "imports, definitions, packages, and inferred test-to-code edges. "
+    "Use context.project.worldModel entity lifecycle fields to keep current/recent facts bright, let aging/stale "
+    "facts fade, and distinguish open work from reconciled command/change/health facts. "
     "When a visual property follows a durable repo or world-model fact, attach props.worldBindings entries using "
     "the harn-gibson.world-binding.v1 schema so later turns can preserve that mapping. "
     "For one-shot or temporary animations, set ttlMs or expiresAtMs on the animation so stale effects are pruned "
