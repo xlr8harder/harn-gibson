@@ -105,6 +105,7 @@ def main() -> None:
                             "kind": "packet_burst",
                             "startedAtMs": timestamp_ms,
                             "durationMs": 1800,
+                            "ttlMs": 3000,
                             "props": {"phase": phase, "tone": tone, "sequence": sequence},
                         },
                     },

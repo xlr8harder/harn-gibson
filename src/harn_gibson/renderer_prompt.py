@@ -26,6 +26,8 @@ RENDERER_SYSTEM_PROMPT = (
     "imports, definitions, packages, and inferred test-to-code edges. "
     "When a visual property follows a durable repo or world-model fact, attach props.worldBindings entries using "
     "the harn-gibson.world-binding.v1 schema so later turns can preserve that mapping. "
+    "For one-shot or temporary animations, set ttlMs or expiresAtMs on the animation so stale effects are pruned "
+    "from later visual-continuity context without requiring a separate stop_animation turn. "
     "Use only structured svg_layer data; never emit raw SVG markup, HTML, scripts, event handlers, "
     "foreignObject, or external references. If unsure, produce a small safe plan with status/log updates "
     "plus one visible primitive "

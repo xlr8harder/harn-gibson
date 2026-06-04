@@ -16,8 +16,8 @@
         "equals": "runtime_error"
       },
       {
-        "path": "animations.stream-pulse-2.kind",
-        "equals": "stream-pulse"
+        "path": "animations.stream-pulse-2",
+        "exists": false
       },
       {
         "path": "log",

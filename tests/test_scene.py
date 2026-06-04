@@ -22,6 +22,7 @@ from harn_gibson.scene import (
 def test_scene_primitive_animation_mutation_and_state_to_dict() -> None:
     primitive = ScenePrimitive("node", "meter", "side", {"value": 1}, ("child",))
     animation = SceneAnimation("anim", "node", "blink", 10, 20, True, {"color": "green"})
+    expiring_animation = SceneAnimation("ttl", "node", "blink", 100, 300, ttl_ms=900)
     mutation = SceneMutation("upsert", primitive=primitive)
     state = initial_scene()
 
@@ -40,6 +41,20 @@ def test_scene_primitive_animation_mutation_and_state_to_dict() -> None:
         "durationMs": 20,
         "loop": True,
         "props": {"color": "green"},
+    }
+    assert expiring_animation.expiry_ms == 1000
+    assert expiring_animation.is_expired(999) is False
+    assert expiring_animation.is_expired(1000) is True
+    assert expiring_animation.to_dict() == {
+        "id": "ttl",
+        "targetId": "node",
+        "kind": "blink",
+        "startedAtMs": 100,
+        "durationMs": 300,
+        "loop": False,
+        "props": {},
+        "ttlMs": 900,
+        "expiresAtMs": 1000,
     }
     assert mutation.to_dict()["primitive"] == primitive.to_dict()
     assert state.to_dict()["schema"] == "harn-gibson.scene.v1"
@@ -81,7 +96,16 @@ def test_scene_state_from_mapping_round_trips_scene_payload() -> None:
                 "startedAtMs": 10,
                 "durationMs": 20,
                 "loop": True,
+                "ttlMs": 200,
                 "props": {"tone": "cyan"},
+            },
+            "explicit-expiry": {
+                "id": "explicit-expiry",
+                "targetId": "node",
+                "kind": "pulse",
+                "startedAtMs": 30,
+                "durationMs": 20,
+                "expiresAtMs": 1250,
             },
             "bad": None,
         },
@@ -94,7 +118,9 @@ def test_scene_state_from_mapping_round_trips_scene_payload() -> None:
 
     assert state.revision == 7
     assert state.primitives["node"] == ScenePrimitive("node", "panel", "stage", {"text": "ready"}, ("leaf",))
-    assert state.animations["anim"] == SceneAnimation("anim", "node", "pulse", 10, 20, True, {"tone": "cyan"})
+    assert state.animations["anim"] == SceneAnimation("anim", "node", "pulse", 10, 20, True, {"tone": "cyan"}, 200)
+    assert state.animations["anim"].expiry_ms == 210
+    assert state.animations["explicit-expiry"].expiry_ms == 1250
     assert state.log == [{"eventType": "x"}]
     assert state.metadata == {"displayStyle": "mainframe"}
     assert empty == SceneState()
@@ -182,6 +208,47 @@ def test_scene_engine_applies_all_mutations_and_trims_log() -> None:
     engine.apply([SceneMutation("reset_scene")])
     assert engine.state.revision == 1
     assert set(engine.state.primitives) >= {"stage", "status", "event-feed", "trace-log"}
+
+
+def test_scene_engine_prunes_expired_animations_by_scene_time() -> None:
+    engine = SceneEngine()
+    expiring = SceneAnimation("ttl", "status", "pulse", 100, 200, ttl_ms=500)
+    explicit = SceneAnimation("explicit", "status", "pulse", 100, 200, expires_at_ms=1000)
+    persistent = SceneAnimation("persistent", "status", "pulse", 100, 200)
+
+    state = engine.apply(
+        [
+            SceneMutation("start_animation", animation=expiring),
+            SceneMutation("start_animation", animation=explicit),
+            SceneMutation("start_animation", animation=persistent),
+        ],
+        now_ms=599,
+    )
+
+    assert state.revision == 1
+    assert set(state.animations) == {"ttl", "explicit", "persistent"}
+    assert engine.prune_expired_animations(600) == ("ttl",)
+    assert engine.state.revision == 2
+    assert set(engine.state.animations) == {"explicit", "persistent"}
+
+    state = engine.apply([SceneMutation("patch", target_id="status", props={"text": "fresh"})], now_ms=1000)
+
+    assert state.revision == 3
+    assert set(state.animations) == {"persistent"}
+    assert engine.apply([], now_ms=5000).revision == 3
+
+    state = engine.apply(
+        [
+            SceneMutation(
+                "start_animation",
+                animation=SceneAnimation("already-expired", "status", "pulse", 2000, 100, ttl_ms=1),
+            )
+        ],
+        now_ms=2001,
+    )
+
+    assert state.revision == 4
+    assert set(state.animations) == {"persistent"}
 
 
 def test_scene_engine_validation_errors() -> None:
@@ -274,6 +341,8 @@ def test_default_mutations_and_scene_update_payload() -> None:
     assert scene.animations["pulse-4"].props["tone"] == "magenta"
     assert payload["event"]["eventType"] == "tool_result"
     assert payload["mutations"][8]["animation"]["targetId"] == "scan-grid"
+    assert payload["mutations"][8]["animation"]["ttlMs"] == 2600
+    assert payload["mutations"][8]["animation"]["expiresAtMs"] == 2700
 
 
 def test_default_mutations_capture_tracebacks() -> None:

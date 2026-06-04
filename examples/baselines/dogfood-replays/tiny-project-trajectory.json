@@ -29,6 +29,7 @@
       },
       "dogfood-camera-jolt": {
         "durationMs": 1900,
+        "expiresAtMs": 28700,
         "id": "dogfood-camera-jolt",
         "kind": "camera_jolt",
         "loop": false,
@@ -40,7 +41,8 @@
           "zoom": 0.018
         },
         "startedAtMs": 25600,
-        "targetId": "dogfood-sigil"
+        "targetId": "dogfood-sigil",
+        "ttlMs": 3100
       },
       "dogfood-camera-path": {
         "durationMs": 5200,

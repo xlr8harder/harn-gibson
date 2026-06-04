@@ -658,6 +658,7 @@ def _timeline_cue(
             "kind": "timeline_cue",
             "startedAtMs": timestamp_ms,
             "durationMs": duration_ms,
+            "ttlMs": duration_ms + 1200,
             "props": {
                 "label": _clip(event_type.upper().replace("_", " "), 18),
                 "phase": phase,
@@ -699,6 +700,7 @@ def _route_trace_animation(
             "kind": "route_trace",
             "startedAtMs": timestamp_ms,
             "durationMs": max(1800, duration_ms),
+            "ttlMs": max(1800, duration_ms) + 1200,
             "props": {
                 "points": points,
                 "phase": phase,

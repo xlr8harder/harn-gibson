@@ -5,33 +5,7 @@
   "replayName": "stream and diagnostic",
   "replaySchema": "harn-gibson.replay.v1",
   "scene": {
-    "animations": {
-      "pulse-1": {
-        "durationMs": 1600,
-        "id": "pulse-1",
-        "kind": "phase-pulse",
-        "loop": false,
-        "props": {
-          "phase": "before",
-          "sequence": 1,
-          "tone": "green"
-        },
-        "startedAtMs": 1000,
-        "targetId": "scan-grid"
-      },
-      "stream-pulse-2": {
-        "durationMs": 600,
-        "id": "stream-pulse-2",
-        "kind": "stream-pulse",
-        "loop": false,
-        "props": {
-          "sequence": 2,
-          "streamId": "assistant-main"
-        },
-        "startedAtMs": 1250,
-        "targetId": "scan-grid"
-      }
-    },
+    "animations": {},
     "log": [
       {
         "eventType": "tool_call",
@@ -546,12 +520,12 @@
             {
               "d": 0.066,
               "dirs": 1,
-              "files": 5,
-              "h": 0.66,
+              "files": 6,
+              "h": 0.71,
               "id": "repo-city-docs",
               "kind": "dir",
               "label": "docs",
-              "lines": 1027,
+              "lines": 1091,
               "path": "docs",
               "tone": "green",
               "touched": 0,
@@ -611,12 +585,12 @@
               "d": 0.03,
               "dirs": 0,
               "files": 1,
-              "h": 0.275,
-              "id": "repo-city-docs-architecture-md",
+              "h": 0.291,
+              "id": "repo-city-docs-architecture-diagram-md",
               "kind": "file",
-              "label": "architecture.md",
-              "lines": 115,
-              "path": "docs/architecture.md",
+              "label": "architecture-diagr",
+              "lines": 60,
+              "path": "docs/architecture-diagram.md",
               "tone": "cyan",
               "touched": 0,
               "w": 0.024,
@@ -985,7 +959,7 @@
               "targetProp": "blocks[4].h"
             },
             {
-              "entityId": "repo:docs/architecture.md",
+              "entityId": "repo:docs/architecture-diagram.md",
               "entityKind": "repoEntry",
               "fieldPath": "entries[].visibleLineCount",
               "intent": "building height follows line, file, directory, and touched-file summaries",

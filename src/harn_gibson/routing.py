@@ -483,6 +483,7 @@ def stream_buffer_mutations(event: GibsonEvent, buffer: StreamBuffer) -> list[Sc
                 started_at_ms=event.timestamp_ms,
                 duration_ms=600,
                 props={"streamId": binding.stream_id, "sequence": event.sequence},
+                ttl_ms=1200,
             ),
         ),
     ]

@@ -11,6 +11,7 @@
     "animations": {
       "gibson1-cues": {
         "durationMs": 2600,
+        "expiresAtMs": 13100,
         "id": "gibson1-cues",
         "kind": "timeline_cue",
         "loop": false,
@@ -22,10 +23,12 @@
           "tone": "amber"
         },
         "startedAtMs": 9300,
-        "targetId": "status"
+        "targetId": "status",
+        "ttlMs": 3800
       },
       "gibson1-route-trace": {
         "durationMs": 2600,
+        "expiresAtMs": 13100,
         "id": "gibson1-route-trace",
         "kind": "route_trace",
         "loop": false,
@@ -82,7 +85,8 @@
           "tone": "amber"
         },
         "startedAtMs": 9300,
-        "targetId": "gibson1-route"
+        "targetId": "gibson1-route",
+        "ttlMs": 3800
       }
     },
     "log": [

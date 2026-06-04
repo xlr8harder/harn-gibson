@@ -56,9 +56,11 @@ class SceneAnimation:
     duration_ms: int
     loop: bool = False
     props: dict[str, Any] = field(default_factory=dict)
+    ttl_ms: int | None = None
+    expires_at_ms: int | None = None
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        payload = {
             "id": self.id,
             "targetId": self.target_id,
             "kind": self.kind,
@@ -67,6 +69,24 @@ class SceneAnimation:
             "loop": self.loop,
             "props": self.props,
         }
+        if self.ttl_ms is not None:
+            payload["ttlMs"] = self.ttl_ms
+        expiry_ms = self.expiry_ms
+        if expiry_ms is not None:
+            payload["expiresAtMs"] = expiry_ms
+        return payload
+
+    @property
+    def expiry_ms(self) -> int | None:
+        if self.expires_at_ms is not None:
+            return self.expires_at_ms
+        if self.ttl_ms is not None:
+            return self.started_at_ms + self.ttl_ms
+        return None
+
+    def is_expired(self, now_ms: int) -> bool:
+        expiry_ms = self.expiry_ms
+        return expiry_ms is not None and now_ms >= expiry_ms
 
 
 @dataclass(frozen=True, slots=True)
@@ -133,14 +153,27 @@ class SceneEngine:
         if reset:
             self.state = self._initial_scene_factory()
 
-    def apply(self, mutations: Iterable[SceneMutation | Mapping[str, Any]]) -> SceneState:
-        applied = False
+    def apply(
+        self,
+        mutations: Iterable[SceneMutation | Mapping[str, Any]],
+        *,
+        now_ms: int | None = None,
+    ) -> SceneState:
+        applied = bool(self._prune_expired_animations(now_ms))
         for mutation in mutations:
             self._apply(mutation_from_mapping(mutation) if isinstance(mutation, Mapping) else mutation)
+            applied = True
+        if self._prune_expired_animations(now_ms):
             applied = True
         if applied:
             self.state.revision += 1
         return self.state
+
+    def prune_expired_animations(self, now_ms: int | None, *, increment_revision: bool = True) -> tuple[str, ...]:
+        expired = self._prune_expired_animations(now_ms)
+        if expired and increment_revision:
+            self.state.revision += 1
+        return expired
 
     def _apply(self, mutation: SceneMutation) -> None:
         if mutation.op == "reset_scene":
@@ -198,6 +231,18 @@ class SceneEngine:
             "lastRenderIntent": rendered_intent,
             "renderIntents": history,
         }
+
+    def _prune_expired_animations(self, now_ms: int | None) -> tuple[str, ...]:
+        if now_ms is None:
+            return ()
+        expired = tuple(
+            animation_id
+            for animation_id, animation in self.state.animations.items()
+            if animation.is_expired(now_ms)
+        )
+        for animation_id in expired:
+            self.state.animations.pop(animation_id, None)
+        return expired
 
 
 def initial_scene(style_pack: Mapping[str, Any] | None = None) -> SceneState:
@@ -392,6 +437,7 @@ def default_mutations_for_event(event: GibsonEvent, decisions: Iterable[Mapping[
                 started_at_ms=event.timestamp_ms,
                 duration_ms=1600,
                 props={"phase": event.phase, "tone": tone, "sequence": event.sequence},
+                ttl_ms=2600,
             ),
         ),
     ]
@@ -431,14 +477,17 @@ def _primitive_from_mapping(value: Mapping[str, Any]) -> ScenePrimitive:
 
 
 def _animation_from_mapping(value: Mapping[str, Any]) -> SceneAnimation:
+    started_at_ms = int(value.get("startedAtMs", value.get("started_at_ms", 0)))
     return SceneAnimation(
         id=str(value["id"]),
         target_id=str(value.get("targetId", value.get("target_id"))),
         kind=str(value["kind"]),
-        started_at_ms=int(value.get("startedAtMs", value.get("started_at_ms", 0))),
+        started_at_ms=started_at_ms,
         duration_ms=int(value.get("durationMs", value.get("duration_ms", 0))),
         loop=bool(value.get("loop", False)),
         props=dict(value.get("props") or {}),
+        ttl_ms=_optional_int(value.get("ttlMs", value.get("ttl_ms", value.get("removeAfterMs")))),
+        expires_at_ms=_optional_int(value.get("expiresAtMs", value.get("expires_at_ms"))),
     )
 
 
@@ -538,6 +587,12 @@ def _trace_entry_for_event(event: GibsonEvent) -> dict[str, Any] | None:
 
 def _optional_str(value: Any) -> str | None:
     return value if isinstance(value, str) else None
+
+
+def _optional_int(value: Any) -> int | None:
+    if value is None:
+        return None
+    return int(value)
 
 
 def _require[T](value: T | None, message: str) -> T:

@@ -828,6 +828,19 @@ def _validate_start_animation(
                 value=animation.duration_ms,
             )
         )
+    expiry_ms = animation.expiry_ms
+    if expiry_ms is not None and expiry_ms <= animation.started_at_ms:
+        issues.append(
+            RenderPlanValidationIssue(
+                "warning",
+                "nonpositive_animation_ttl",
+                "animation ttl/expiresAtMs should keep the animation alive after startedAtMs",
+                step_index=step_index,
+                mutation_index=mutation_index,
+                target_id=animation.target_id,
+                value=expiry_ms,
+            )
+        )
     working_animations.add(animation.id)
 
 
@@ -1671,6 +1684,7 @@ class RenderPipeline:
             return []
         with self._lock:
             batch = RenderInputBatch.from_requests(requests, route=requests[-1].route)
+            self.scene.prune_expired_animations(batch.timeline.end_ms, increment_revision=False)
             context = self.context_builder.build(batch, self.scene.state, self.catalog)
             if self.context_recorder is not None:
                 self.context_recorder(context)
@@ -1695,7 +1709,8 @@ class RenderPipeline:
             if wait_ms > 0:
                 self._sleep(wait_ms / 1000)
             request = plan.request_for_step(step)
-            scene = self.scene.apply(step.mutations)
+            now_ms = max(request.event.timestamp_ms, render_input.timeline.start_ms + applied_offset_ms)
+            scene = self.scene.apply(step.mutations, now_ms=now_ms)
             update = render_update_payload(
                 plan,
                 step,
@@ -1800,7 +1815,7 @@ def _primitive_summary(primitive: Any, max_chars: int) -> dict[str, Any]:
 
 
 def _animation_summary(animation: Any) -> dict[str, Any]:
-    return {
+    summary = {
         "id": animation.id,
         "targetId": animation.target_id,
         "kind": animation.kind,
@@ -1808,6 +1823,13 @@ def _animation_summary(animation: Any) -> dict[str, Any]:
         "durationMs": animation.duration_ms,
         "loop": animation.loop,
     }
+    ttl_ms = getattr(animation, "ttl_ms", None)
+    expiry_ms = getattr(animation, "expiry_ms", None)
+    if ttl_ms is not None:
+        summary["ttlMs"] = ttl_ms
+    if expiry_ms is not None:
+        summary["expiresAtMs"] = expiry_ms
+    return summary
 
 
 def _visual_continuity_context(
@@ -2046,6 +2068,7 @@ def _repo_visual_mutations(context: RendererContext, event: GibsonEvent) -> tupl
                             "sequence": event.sequence,
                             "paths": touched_paths,
                         },
+                        ttl_ms=3400,
                     ),
                 ),
                 SceneMutation(
@@ -2062,6 +2085,7 @@ def _repo_visual_mutations(context: RendererContext, event: GibsonEvent) -> tupl
                             "sequence": event.sequence,
                             "paths": touched_paths,
                         },
+                        ttl_ms=3800,
                     ),
                 ),
             ]

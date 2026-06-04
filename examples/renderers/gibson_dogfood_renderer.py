@@ -1347,6 +1347,7 @@ def _camera_jolt_animation(sequence: int, timestamp_ms: int, phase: str) -> dict
             "kind": "camera_jolt",
             "startedAtMs": timestamp_ms,
             "durationMs": 1900,
+            "ttlMs": 3100,
             "props": {
                 "phase": phase,
                 "intensity": 0.58 + (sequence % 5) * 0.08,

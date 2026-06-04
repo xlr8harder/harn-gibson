@@ -314,7 +314,7 @@ def test_render_plan_validation_reports_scene_and_catalog_issues() -> None:
                     ),
                     SceneMutation(
                         "start_animation",
-                        animation=SceneAnimation("wormhole-1", "missing-vector", "wormhole", 10, 0),
+                        animation=SceneAnimation("wormhole-1", "missing-vector", "wormhole", 10, 0, ttl_ms=-1),
                     ),
                 ),
                 delay_ms=-2,
@@ -335,6 +335,7 @@ def test_render_plan_validation_reports_scene_and_catalog_issues() -> None:
         "event_index_out_of_range",
         "invalid_svg_symbol",
         "negative_timing",
+        "nonpositive_animation_ttl",
         "nonpositive_animation_duration",
         "patch_target_missing",
         "raw_svg_markup",
@@ -953,6 +954,8 @@ def test_gibson1_renderer_returns_coherent_valid_plan(tmp_path: Path) -> None:
         "src/app.py",
     ]
     assert scene.state.animations["gibson1-route-trace"].target_id == "gibson1-route"
+    assert scene.state.animations["gibson1-route-trace"].ttl_ms == 3800
+    assert scene.state.animations["gibson1-route-trace"].expiry_ms == 8900
     assert scene.state.animations["gibson1-route-trace"].props["points"][-1]["label"] == "APP.PY"
 
     styled_scene = SceneEngine()
@@ -1978,6 +1981,47 @@ def test_pipeline_calls_contextual_renderer_with_renderer_context() -> None:
     assert contexts[0].render_input["requests"][0]["event"]["eventType"] == "tool_call"
     assert result.updates[0]["renderPlan"]["metadata"] == {"renderer": "contextual", "contextMode": "compaction"}
     assert pipeline.context_builder.snapshot_history()[0]["renderer"] == "contextual"
+
+
+def test_pipeline_prunes_expired_animations_before_renderer_context() -> None:
+    contexts: list[RendererContext] = []
+
+    class ContextRenderer:
+        def render_with_context(
+            self,
+            requests: tuple[RenderRequest, ...],
+            _scene: object,
+            context: RendererContext,
+        ) -> RenderPlan:
+            contexts.append(context)
+            return RenderPlan(
+                tuple(requests),
+                (RenderStep((SceneMutation("append_log", entry={"pruned": True}),), event_index=0),),
+                {"renderer": "contextual"},
+            )
+
+    scene = SceneEngine()
+    scene.apply(
+        [
+            SceneMutation(
+                "start_animation",
+                animation=SceneAnimation("stale", "status", "pulse", 10, 20, ttl_ms=30),
+            )
+        ],
+        now_ms=20,
+    )
+    pipeline = RenderPipeline(
+        scene=scene,
+        buffer=EventBuffer(),
+        renderer=ContextRenderer(),  # type: ignore[arg-type]
+        mode="blocking",
+    )
+
+    result = pipeline.submit(RenderRequest(event(10, "tool_call")))
+
+    assert contexts[0].scene["animations"] == {}
+    assert contexts[0].visual_continuity["activeAnimationCount"] == 0
+    assert "stale" not in result.updates[0]["scene"]["animations"]
 
 
 def test_pipeline_async_worker_continues_until_stop_sentinel() -> None:
