@@ -15,6 +15,18 @@ The graphical server does not own the harn session. It displays normalized event
 
 The repository includes harn as a development dependency for one-command dogfooding, but the display server and extension modules are intentionally independent of harn's TUI implementation. A later package split can expose a web-only relay package and keep the harn CLI launcher as an optional integration layer.
 
+## Integration Layers
+
+There are three useful extension levels.
+
+The renderer layer decides what should happen. A renderer consumes normalized harn events, route/coalescing metadata, current scene state, recent visual continuity, project metadata, repo topology, touched files, style information, and the visual catalog, then returns a `RenderPlan`. Renderers can be in-process deterministic Python, an external JSON command, a prompt-command model wrapper, or a future provider-backed model adapter. This is the right level for product-specific behavior, different visual personalities, event-routing experiments, and AI-driven scene direction.
+
+The primitive layer decides what a scene can show. Browser primitives and animations are reusable scene vocabulary: `city_block`, `terminal_wall`, `signal_scope`, `svg_layer`, `data_rain`, `timeline_cue`, `route_trace`, and the rest of the catalog. A primitive should be browser-local, bounded, deterministic, and parameterized enough that many renderers can use it without authoring per-frame drawing instructions. This is the right level for adding a new visual toy, richer animation behavior, or a generic display building block.
+
+The display-backend layer decides where pixels or terminal cells are drawn. The browser/canvas backend is the only production backend today, but the scene protocol is not inherently web-only. A native app, terminal renderer, game engine, OpenGL scene, or remote wall display could consume the same scene snapshots and scene-update payloads, then implement the catalog it supports with its own drawing and input loop.
+
+The boundary between these layers is `SceneMutation`: renderers produce mutations against primitive props and animation records; display backends own drawing, timing loops, and viewport-specific behavior. That lets a user build a new renderer from existing Gibson primitives, add a primitive/effect that deterministic, hard-coded, and AI renderers can all target, or build a non-web display backend that implements the agreed primitive catalog or a declared subset.
+
 ## Browser Input
 
 The display server exposes:

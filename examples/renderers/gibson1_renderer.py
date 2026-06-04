@@ -176,19 +176,20 @@ def _upsert_repo_city(
 ) -> dict[str, Any]:
     touched_paths = [_text(item.get("path"), "") for item in touched]
     blocks: list[dict[str, Any]] = []
+    child_blocks: list[dict[str, Any]] = []
     for index, entry in enumerate(entries[:7]):
         path = _text(entry.get("path") or entry.get("name"), f"entry-{index}")
-        touched_count = sum(
-            1 for touched_path in touched_paths if touched_path == path or touched_path.startswith(f"{path}/")
-        )
+        touched_count = _touch_count(path, touched_paths)
         lines = _entry_line_count(entry)
+        x = round(0.18 + (index % 4) * 0.15, 3)
+        y = round(0.46 + (index // 4) * 0.10, 3)
         blocks.append(
             {
                 "id": f"gibson1-block-{index}",
                 "label": _path_label(path),
                 "path": path,
-                "x": round(0.18 + (index % 4) * 0.15, 3),
-                "y": round(0.46 + (index // 4) * 0.10, 3),
+                "x": x,
+                "y": y,
                 "w": 0.082,
                 "d": 0.088,
                 "h": round(0.10 + min(0.26, lines * 0.004 + touched_count * 0.08), 3),
@@ -198,6 +199,34 @@ def _upsert_repo_city(
                 "touched": touched_count,
             }
         )
+        for child_index, child in enumerate(_list(entry.get("children"))[:2]):
+            child_entry = _dict(child)
+            child_path = _text(child_entry.get("path") or child_entry.get("name"), "")
+            if not child_path:
+                continue
+            child_touched_count = _touch_count(child_path, touched_paths)
+            child_lines = _entry_line_count(child_entry)
+            child_blocks.append(
+                {
+                    "id": f"gibson1-block-{index}-child-{child_index}",
+                    "parentId": f"gibson1-block-{index}",
+                    "label": _path_label(child_path) if child_touched_count else "",
+                    "path": child_path,
+                    "x": round(x + 0.018 + child_index * 0.038, 3),
+                    "y": round(y + 0.042 + child_index * 0.014, 3),
+                    "w": 0.032,
+                    "d": 0.038,
+                    "h": round(0.055 + min(0.16, child_lines * 0.0028 + child_touched_count * 0.055), 3),
+                    "tone": "magenta"
+                    if child_touched_count
+                    else _entry_tone(_text(child_entry.get("kind"), "file"), tone, accent),
+                    "active": child_touched_count > 0,
+                    "kind": _text(child_entry.get("kind"), "entry"),
+                    "lines": child_lines,
+                    "touched": child_touched_count,
+                }
+            )
+    blocks.extend(child_blocks)
     if not blocks:
         blocks = [
             {
@@ -212,7 +241,10 @@ def _upsert_repo_city(
             }
             for index, label in enumerate(["HOOKS", _clip(event_type.upper(), 10), "RENDER", "SCENE"])
         ]
-    focus = next((block["id"] for block in blocks if block.get("active")), blocks[0]["id"])
+    focus = next(
+        (block["id"] for block in blocks if block.get("active") and block.get("parentId")),
+        next((block["id"] for block in blocks if block.get("active")), blocks[0]["id"]),
+    )
     return {
         "op": "upsert",
         "primitive": {
@@ -468,12 +500,16 @@ def _entry_tone(kind: str, tone: str, accent: str) -> str:
 
 
 def _entry_line_count(entry: dict[str, Any]) -> int:
-    for key in ("lineCount", "lines"):
+    for key in ("lineCount", "visibleLineCount", "lines"):
         value = entry.get(key)
         if isinstance(value, int) and not isinstance(value, bool):
             return max(0, value)
     children = _list(entry.get("children"))
     return sum(_entry_line_count(_dict(child)) for child in children[:8])
+
+
+def _touch_count(path: str, touched_paths: list[str]) -> int:
+    return sum(1 for touched_path in touched_paths if touched_path == path or touched_path.startswith(f"{path}/"))
 
 
 def _path_label(path: str) -> str:

@@ -133,11 +133,13 @@ Noisy event types can also be sampled before routing. This keeps one matching ev
 HARN_GIBSON_ROUTE_RULES='[{"eventType":"session_tree","route":"renderer_agent","sampleEvery":4,"fallbackRoute":"debug_only"}]'
 ```
 
-To dogfood the renderer-agent process boundary without a live model call, use one of the launcher presets or point the server at an external renderer command. The command receives `harn-gibson.external-renderer-request.v1` JSON on stdin and returns a render plan with `steps` on stdout. `examples/renderers/gibson1_renderer.py` is the default calmer hard-coded visualizer: it keeps status, a terminal board, repo city, signal scope, route trace, and low-opacity data rain coherent enough for everyday use while still reacting to event phase, touched files, repo topology, and coalesced timing:
+To dogfood the renderer-agent process boundary without a live model call, use one of the launcher presets or point the server at an external renderer command. The command receives `harn-gibson.external-renderer-request.v1` JSON on stdin and returns a render plan with `steps` on stdout. `examples/renderers/gibson1_renderer.py` is the default calmer hard-coded visualizer: it keeps status, a terminal board, depth-2 repo city, signal scope, route trace, and low-opacity data rain coherent enough for everyday use while still reacting to event phase, touched files, repo topology, and coalesced timing:
 
 ```bash
 uv run harn-gibson dogfood
 ```
+
+There are three integration levels. A renderer decides how events become scene mutations. A primitive/effect expands the visual vocabulary that renderers can target. A display backend consumes scene state and implements that vocabulary in a runtime; the current backend is browser/canvas, but a terminal, native, game-engine, or OpenGL backend can work if it implements the catalog or an advertised subset.
 
 `examples/renderers/gibson_dogfood_renderer.py` remains the dogfood showcase and stress renderer for live harn sessions; it reacts to event phase, event type, coalesced timing, touched files, repo topology, and the active style pack with a staged scene using the current cinematic primitive/effect set, including a project hologram, data vault, black-ICE barrier, control graph, opcode glyph layer, Hollywood terminal wall, access matrix, orbital uplink map, ICE mesh, command ribbon, touched-file spark field, data tunnel, wire terrain, signal scope, route trace, signal interference overlay, repo city, vector sigil, data rain, and persistent effects. Non-default styles alter the emitted renderer tones and intent metadata, so `--style mainframe`, `--style neon-noir`, or `--style satellite-uplink` changes the showcase plan as well as the browser shell:
 

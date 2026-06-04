@@ -881,6 +881,10 @@ def test_gibson1_renderer_returns_coherent_valid_plan(tmp_path: Path) -> None:
     assert repo_city.props["blocks"][1]["touched"] == 1
     assert 0.45 <= repo_city.props["blocks"][1]["y"] <= 0.65
     assert repo_city.props["blocks"][1]["h"] <= 0.32
+    city_blocks = {block["path"]: block for block in repo_city.props["blocks"]}
+    assert city_blocks["src/app.py"]["parentId"] == "gibson1-block-0"
+    assert city_blocks["src/app.py"]["lines"] == 2
+    assert city_blocks["tests/test_app.py"]["parentId"] == "gibson1-block-1"
     assert scene.state.primitives["gibson1-scope"].props["blips"][0]["label"] == "TEST-APP.PY"
     assert scene.state.primitives["gibson1-route"].props["focusHopId"] == "file-0"
     assert scene.state.animations["gibson1-route-trace"].target_id == "gibson1-route"

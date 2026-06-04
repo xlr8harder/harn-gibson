@@ -4,6 +4,18 @@ The renderer agent is the model-driven version of the current deterministic rend
 
 The server still uses the deterministic renderer by default. For dogfood and adapter work, it now has two optional process boundaries: an external render-plan command that receives raw renderer context, and a prompt-command model adapter that receives the exact provider-neutral messages a model would receive and returns model-style JSON text. Provider SDK wiring remains deferred, but the prompt, parse, validation, diagnostics, and fail-open path are now executable.
 
+## Integration Levels
+
+Most downstream work falls into one of three levels.
+
+Build a renderer when you want to decide how harn activity becomes a scene. The renderer gets events, coalesced timing, current scene/context, repo and touched-file summaries, style metadata, and the visual catalog, then returns `SceneMutation` steps in a `RenderPlan`. This can be deterministic Python, a hard-coded cinematic renderer, an external command, a prompt-command model wrapper, or a future provider-backed model renderer.
+
+Build a primitive or animation when you want to expand what every renderer can draw. Primitives are browser-rendered vocabulary with bounded props and local animation loops. Renderers should be able to say "show this repo district", "stream these terminal lines", or "run this route trace" without emitting per-frame pixels or raw SVG/HTML. New primitives belong in the catalog, browser renderer, validation rules, replay fixtures, screenshot checks, and renderer docs.
+
+Build a display backend when you want the scene somewhere other than the web canvas. The current server/browser pair is the first backend, but a non-web display can consume `SceneState` snapshots, published scene updates, replay timelines, or JSONL-derived replay output and implement the primitive catalog in another runtime. A backend may support the full catalog or clearly advertise a subset, but it should preserve the scene mutation contract so existing deterministic, hard-coded, and AI renderers can target it.
+
+The renderer layer composes and mutates; the primitive/backend layer renders and animates. These are public integration points, and they intentionally meet at the scene mutation contract.
+
 ## Render Plan Contract
 
 Renderer inputs use a generic render-input envelope. It preserves event timing so a 5-10 second renderer-agent turnaround can still produce a plan whose effects cover the same approximate interval:
@@ -84,7 +96,7 @@ Built-in trajectories create ignored bare workspaces, inject long prompts, set t
 
 For 15-20 minute captures, use `event-log-to-replay --split-every N --output-dir DIR --review-dir REVIEW` instead of one large fixture. It writes the split fixture directory and immediately builds a suite overview plus per-chunk frame players, renderer contexts, prompts, renderer chunks, render intents, final scenes, and result JSON. `replay-dir DIR --review-dir ...` can rerun that same review later. Suite result and review manifests include `trajectoryCoverage`, a compact signal/gap summary for commands, failed tool results, runtime errors, browser input, touched files, top-level repo spread, renderer routes/plans, visual anchors, active animations, effects, and screenshots. Use it as the quick first pass for deciding whether a capture is rich enough to promote into renderer-regression fixtures.
 
-`examples/renderers/gibson1_renderer.py` is the default calmer hard-coded renderer for normal dogfood watching. It is deterministic, uses real renderer context, and deliberately emits a smaller scene: status, terminal wall, repo city, signal scope, trace route, low-opacity data rain, and timeline/route animations.
+`examples/renderers/gibson1_renderer.py` is the default calmer hard-coded renderer for normal dogfood watching. It is deterministic, uses real renderer context, and deliberately emits a smaller scene: status, terminal wall, depth-2 repo city with compact child blocks, signal scope, trace route, low-opacity data rain, and timeline/route animations.
 
 `examples/renderers/gibson_dogfood_renderer.py` remains the showcase and stress renderer for live sessions. It is deterministic, but it uses real renderer context: event phase/type, coalesced timing, touched files, repo topology, and current style. Non-default styles alter its emitted tones and plan metadata before the browser renders the scene. It emits a staged scene with data rain, tunnel grids, wire landscapes, terminal walls, access matrices, orbital uplink maps, signal scopes, black-ICE barriers, trace routes, repo city blocks, structured SVG sigils, timeline cues, route-trace animations, camera paths, camera jolts, packet bursts, breach waves, scans, and extrusion. `examples/renderers/gibson_echo_renderer.py` remains the smallest external-renderer contract example.
 

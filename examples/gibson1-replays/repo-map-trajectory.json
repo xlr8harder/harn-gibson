@@ -47,8 +47,19 @@
         }
       },
       {
+        "path": "primitives.gibson1-repo-city.props.blocks",
+        "contains": {
+          "id": "gibson1-block-0-child-0",
+          "parentId": "gibson1-block-0",
+          "path": "docs/usage.md",
+          "tone": "magenta",
+          "active": true,
+          "touched": 1
+        }
+      },
+      {
         "path": "primitives.gibson1-repo-city.props.focusBlockId",
-        "equals": "gibson1-block-0"
+        "equals": "gibson1-block-0-child-0"
       },
       {
         "path": "primitives.gibson1-scope.kind",

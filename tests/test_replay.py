@@ -1737,19 +1737,24 @@ def test_checked_in_gibson1_replay_exercises_default_renderer() -> None:
     block_paths = {block["path"]: block for block in blocks}
 
     assert [step.kind for step in result.steps] == ["event"] * 4
-    assert len(result.expectations) == 17
+    assert len(result.expectations) == 18
     assert result.scene.primitives["status"].props["text"] == "gibson1::tool_result"
     assert result.scene.primitives["gibson1-terminal"].kind == "terminal_wall"
     assert result.scene.primitives["gibson1-terminal"].props["title"] == "GIBSON1 EVENT BOARD"
     assert result.scene.primitives["gibson1-terminal"].props["panels"][2]["title"] == "FILES"
     assert result.scene.primitives["gibson1-repo-city"].kind == "city_block"
-    assert result.scene.primitives["gibson1-repo-city"].props["focusBlockId"] == "gibson1-block-0"
+    assert result.scene.primitives["gibson1-repo-city"].props["focusBlockId"] == "gibson1-block-0-child-0"
     assert result.scene.primitives["gibson1-repo-city"].props["heightScale"] == 0.92
     assert len(result.scene.primitives["gibson1-repo-city"].props["cameraPath"]["keyframes"]) == 3
     assert block_paths["docs"]["tone"] == "magenta"
     assert block_paths["docs"]["touched"] == 1
     assert 0.45 <= block_paths["docs"]["y"] <= 0.65
     assert block_paths["docs"]["h"] <= 0.40
+    assert block_paths["docs/usage.md"]["parentId"] == "gibson1-block-0"
+    assert block_paths["docs/usage.md"]["tone"] == "magenta"
+    assert block_paths["docs/usage.md"]["touched"] == 1
+    assert block_paths["scripts/line_summary.py"]["parentId"] == "gibson1-block-2"
+    assert block_paths["src/repo_map"]["parentId"] == "gibson1-block-3"
     assert block_paths["src"]["touched"] == 1
     assert result.scene.primitives["gibson1-scope"].kind == "signal_scope"
     assert result.scene.primitives["gibson1-scope"].props["blips"][0]["label"] == "USAGE.MD"
@@ -1762,7 +1767,7 @@ def test_checked_in_gibson1_replay_exercises_default_renderer() -> None:
     assert suite.ok is True
     assert summary["fileCount"] == 1
     assert summary["stepCount"] == 4
-    assert summary["expectationCount"] == 17
+    assert summary["expectationCount"] == 18
     assert summary["rendererCounts"] == {"gibson1": 4}
     assert summary["routeCounts"] == {"renderer_agent": 4}
 
