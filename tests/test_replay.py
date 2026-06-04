@@ -22,6 +22,7 @@ from harn_gibson import (
     replay_render_intents_review_html,
     replay_review_bundle_index_html,
     replay_review_bundle_manifest,
+    replay_step_timing_summary,
     replay_suite_review_bundle_manifest,
     replay_suite_review_index_html,
     replay_timeline_from_result,
@@ -185,6 +186,26 @@ def test_replay_event_steps_file_io_and_writers(tmp_path: Path, monkeypatch: pyt
     assert result.to_dict()["steps"][0]["delayMsToNext"] == 1
     assert result.to_dict()["steps"][1]["route"] == "stream_buffer"
     assert result.to_dict()["steps"][1]["timestampMs"] == 1002
+    expected_timing = {
+        "stepCount": 2,
+        "timedStepCount": 2,
+        "untimedStepCount": 0,
+        "delayCount": 1,
+        "firstTimestampMs": 1001,
+        "lastTimestampMs": 1002,
+        "durationMs": 1,
+        "minTimestampMs": 1001,
+        "maxTimestampMs": 1002,
+        "totalDelayMs": 1,
+        "maxDelayMs": 1,
+    }
+    assert replay_step_timing_summary(result.steps) == expected_timing
+    assert replay_step_timing_summary(()) == {
+        "stepCount": 0,
+        "timedStepCount": 0,
+        "untimedStepCount": 0,
+        "delayCount": 0,
+    }
 
     scene_path = tmp_path / "out" / "scene.json"
     result_path = tmp_path / "out" / "result.json"
@@ -483,6 +504,7 @@ def test_replay_event_steps_file_io_and_writers(tmp_path: Path, monkeypatch: pyt
     assert timeline["schema"] == "harn-gibson.replay-timeline.v1"
     assert timeline["replayName"] == "event replay"
     assert timeline["stepCount"] == 2
+    assert timeline["timing"] == expected_timing
     assert timeline["frames"][0]["scene"]["schema"] == "harn-gibson.scene.v1"
     assert timeline["frames"][0]["step"]["timestampMs"] == 1001
     assert timeline["frames"][0]["step"]["delayMsToNext"] == 1
@@ -640,6 +662,9 @@ def test_replay_event_steps_file_io_and_writers(tmp_path: Path, monkeypatch: pyt
     assert 'id="timelineScrubber"' in review_html
     assert 'data-frame-select="1"' in review_html
     assert "delayMsToNext" in review_html
+    assert "timed 2 / 2" in review_html
+    assert "duration 1 ms" in review_html
+    assert "delays 1 / 1 ms" in review_html
     assert "timestamp <code>1001 ms</code>" in review_html
     assert "next <code>1 ms</code>" in review_html
     assert "setTimeout" in review_html
@@ -653,6 +678,14 @@ def test_replay_event_steps_file_io_and_writers(tmp_path: Path, monkeypatch: pyt
     )
     assert "event replay timeline review" in replay_frame_review_html(
         replay_frame_screenshot_manifest(framed, frame_screenshots)
+    )
+    assert "timing unavailable" in replay_frame_review_html(
+        {
+            "replayName": "bad timing",
+            "schema": "test",
+            "timing": {"timedStepCount": 1, "stepCount": "bad", "durationMs": False},
+            "frames": [],
+        }
     )
     relative_html = replay_frame_review_html(
         {
@@ -668,6 +701,7 @@ def test_replay_event_steps_file_io_and_writers(tmp_path: Path, monkeypatch: pyt
     assert 'relative/frame.png"' in relative_html
     assert 'src=""' in relative_html
     assert manifest["schema"] == "harn-gibson.replay-frame-screenshots.v1"
+    assert manifest["timing"] == expected_timing
     assert manifest["frames"][0]["step"]["timestampMs"] == 1001
     assert manifest["frames"][0]["step"]["delayMsToNext"] == 1
     assert manifest["frames"][1]["screenshot"]["canvasMetrics"] == {"nonblank": True}

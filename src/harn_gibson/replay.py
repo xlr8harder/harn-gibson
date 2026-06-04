@@ -1864,6 +1864,7 @@ def replay_timeline_from_result(result: ReplayResult) -> dict[str, Any]:
         "replaySchema": result.schema,
         "stepCount": len(result.steps),
         "frameCount": len(result.frames),
+        "timing": replay_step_timing_summary(result.steps),
         "frames": [frame.to_dict() for frame in result.frames],
         "metadata": result.metadata,
     }
@@ -2122,9 +2123,48 @@ def replay_frame_screenshot_manifest(
         "replaySchema": result.schema,
         "frameCount": len(result.frames),
         "screenshotCount": len(rendered_screenshots),
+        "timing": replay_step_timing_summary(screenshot.step for screenshot in rendered_screenshots),
         "frames": [screenshot.to_dict() for screenshot in rendered_screenshots],
         "metadata": result.metadata,
     }
+
+
+def replay_step_timing_summary(steps: Iterable[ReplayStepResult]) -> dict[str, Any]:
+    replay_steps = tuple(steps)
+    timestamps = [
+        step.timestamp_ms
+        for step in replay_steps
+        if step.timestamp_ms is not None
+    ]
+    delays = [
+        step.delay_ms_to_next
+        for step in replay_steps
+        if step.delay_ms_to_next is not None
+    ]
+    summary: dict[str, Any] = {
+        "stepCount": len(replay_steps),
+        "timedStepCount": len(timestamps),
+        "untimedStepCount": len(replay_steps) - len(timestamps),
+        "delayCount": len(delays),
+    }
+    if timestamps:
+        summary.update(
+            {
+                "firstTimestampMs": timestamps[0],
+                "lastTimestampMs": timestamps[-1],
+                "durationMs": max(0, timestamps[-1] - timestamps[0]),
+                "minTimestampMs": min(timestamps),
+                "maxTimestampMs": max(timestamps),
+            }
+        )
+    if delays:
+        summary.update(
+            {
+                "totalDelayMs": sum(delays),
+                "maxDelayMs": max(delays),
+            }
+        )
+    return summary
 
 
 def write_replay_frame_screenshot_manifest(
@@ -2146,6 +2186,7 @@ def replay_frame_review_html(manifest: Mapping[str, Any], *, output_path: str | 
     title = str(manifest.get("replayName") or "replay timeline")
     frame_count = escape(str(manifest.get("screenshotCount", len(rendered_frames))))
     schema = escape(str(manifest.get("schema", "")))
+    timing_text = _replay_frame_review_timing_text(manifest.get("timing"))
     player_frames = _replay_frame_review_player_frames(rendered_frames, output_path)
     player_data = _html_script_json(player_frames)
     initial_frame = player_frames[0] if player_frames else {}
@@ -2253,7 +2294,7 @@ def replay_frame_review_html(manifest: Mapping[str, Any], *, output_path: str | 
 <body>
   <header>
     <h1>{escape(title)} timeline review</h1>
-    <div class="meta">{frame_count} frames &middot; schema {schema}</div>
+    <div class="meta">{frame_count} frames &middot; {timing_text} &middot; schema {schema}</div>
   </header>
   <section class="player" aria-label="Replay timeline player">
     <figure class="active-frame">
@@ -3930,6 +3971,30 @@ def _replay_frame_review_card(position: int, frame: Mapping[str, Any], output_pa
     </figure>"""
 
 
+def _replay_frame_review_timing_text(value: Any) -> str:
+    if not isinstance(value, Mapping):
+        return "timing unavailable"
+    timed = value.get("timedStepCount")
+    total = value.get("stepCount")
+    duration = value.get("durationMs")
+    delay_total = value.get("totalDelayMs")
+    delay_count = value.get("delayCount")
+    parts: list[str] = []
+    if _is_int_like(timed) and _is_int_like(total):
+        parts.append(f"timed {int(timed)} / {int(total)}")
+    if _is_int_like(duration):
+        parts.append(f"duration {int(duration)} ms")
+    if _is_int_like(delay_total) and _is_int_like(delay_count):
+        parts.append(f"delays {int(delay_count)} / {int(delay_total)} ms")
+    if not parts:
+        return "timing unavailable"
+    return " &middot; ".join(escape(part) for part in parts)
+
+
+def _is_int_like(value: Any) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool)
+
+
 def _replay_frame_review_player_frames(
     frames: Iterable[Mapping[str, Any]],
     output_path: str | Path | None,
@@ -4066,6 +4131,7 @@ __all__ = [
     "replay_review_bundle_manifest",
     "replay_suite_review_bundle_manifest",
     "replay_suite_review_index_html",
+    "replay_step_timing_summary",
     "replay_timeline_from_result",
     "run_replay_data",
     "run_replay_file",

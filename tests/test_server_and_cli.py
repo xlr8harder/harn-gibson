@@ -9,6 +9,8 @@ from http.server import ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 
+import pytest
+
 from harn_gibson import (
     BrowserScreenshotResult,
     DeterministicSceneRenderer,
@@ -761,6 +763,9 @@ def test_cli_parser_and_run(monkeypatch: Any, capsys: Any) -> None:
     assert parsed_dogfood.browser is False
     assert parsed_dogfood.style == "neon-noir"
     assert parsed_dogfood.cwd == "work"
+    assert parsed_dogfood.renderer_preset == "gibson1"
+    assert parsed_dogfood.renderer_command is None
+    assert parsed_dogfood.renderer_timeout_ms == cli.DOGFOOD_CAPTURE_RENDERER_TIMEOUT_MS
     assert parsed_dogfood.harn_args == ["--", "-p", "hello"]
     parsed_capture = parser.parse_args(
         [
@@ -2514,10 +2519,11 @@ def test_cli_dogfood_reports_missing_harn(monkeypatch: Any, capsys: Any) -> None
 
     def fake_call(_command: list[str], env: dict[str, str]) -> int:
         assert env["HARN_GIBSON_ENDPOINT"] == "http://127.0.0.1:9877/events"
+        assert "gibson1_renderer.py" in env["HARN_GIBSON_RENDERER_COMMAND"]
         raise FileNotFoundError
 
     opened: list[str] = []
-    monkeypatch.setattr("harn_gibson.server.build_state_from_env", lambda: state)
+    monkeypatch.setattr("harn_gibson.server.build_state_from_env", lambda _env=None: state)
     monkeypatch.setattr("harn_gibson.server.create_server", lambda _host, _port, _state: FakeServer())
     monkeypatch.setattr(cli.webbrowser, "open", lambda url: opened.append(url))
     monkeypatch.setattr(cli.subprocess, "call", fake_call)
@@ -3026,6 +3032,100 @@ def test_cli_dogfood_capture_trajectory_helpers_reject_unknown() -> None:
         raise AssertionError("unknown trajectory prompt should fail")
 
 
+def test_cli_dogfood_renderer_preset_env_helpers() -> None:
+    env = {
+        "HARN_GIBSON_RENDERER_COMMAND": "ambient renderer",
+        "HARN_GIBSON_RENDERER_TIMEOUT_MS": "50",
+    }
+
+    assert (
+        cli._apply_dogfood_renderer_env(
+            env,
+            renderer_preset="gibson1",
+            renderer_command=None,
+            renderer_timeout_ms="1234",
+        )
+        is True
+    )
+    assert "gibson1_renderer.py" in env["HARN_GIBSON_RENDERER_COMMAND"]
+    assert env["HARN_GIBSON_RENDERER_TIMEOUT_MS"] == "1234"
+
+    preserved = {"HARN_GIBSON_RENDERER_COMMAND": "capture renderer"}
+    assert (
+        cli._apply_dogfood_renderer_env(
+            preserved,
+            renderer_preset="gibson1",
+            renderer_command=None,
+            renderer_timeout_ms="5678",
+            preserve_existing=True,
+        )
+        is True
+    )
+    assert preserved == {
+        "HARN_GIBSON_RENDERER_COMMAND": "capture renderer",
+        "HARN_GIBSON_RENDERER_TIMEOUT_MS": "5678",
+    }
+
+    disabled = {
+        "HARN_GIBSON_RENDERER_COMMAND": "ambient renderer",
+        "HARN_GIBSON_RENDERER_TIMEOUT_MS": "50",
+    }
+    assert (
+        cli._apply_dogfood_renderer_env(
+            disabled,
+            renderer_preset="none",
+            renderer_command=None,
+            renderer_timeout_ms="9999",
+        )
+        is True
+    )
+    assert "HARN_GIBSON_RENDERER_COMMAND" not in disabled
+    assert "HARN_GIBSON_RENDERER_TIMEOUT_MS" not in disabled
+    assert (
+        cli._apply_dogfood_renderer_env(
+            {},
+            renderer_preset="none",
+            renderer_command=None,
+            renderer_timeout_ms="9999",
+        )
+        is False
+    )
+
+    custom = {}
+    assert (
+        cli._apply_dogfood_renderer_env(
+            custom,
+            renderer_preset="dogfood",
+            renderer_command="python renderer.py",
+            renderer_timeout_ms="4321",
+        )
+        is True
+    )
+    assert custom == {
+        "HARN_GIBSON_RENDERER_COMMAND": "python renderer.py",
+        "HARN_GIBSON_RENDERER_TIMEOUT_MS": "4321",
+    }
+    stress = {}
+    assert (
+        cli._apply_dogfood_renderer_env(
+            stress,
+            renderer_preset="dogfood",
+            renderer_command=None,
+            renderer_timeout_ms="2222",
+        )
+        is True
+    )
+    assert "gibson_dogfood_renderer.py" in stress["HARN_GIBSON_RENDERER_COMMAND"]
+    assert stress["HARN_GIBSON_RENDERER_TIMEOUT_MS"] == "2222"
+    with pytest.raises(ValueError, match="unknown renderer preset"):
+        cli._apply_dogfood_renderer_env(
+            {},
+            renderer_preset="bad",
+            renderer_command=None,
+            renderer_timeout_ms="1",
+        )
+
+
 def test_cli_import_codex_auth_command(monkeypatch: Any, capsys: Any) -> None:
     class Result:
         available = True
@@ -3069,7 +3169,7 @@ def test_cli_dogfood_imports_auth_and_publishes_diagnostics(monkeypatch: Any, ca
         assert env["HARN_GIBSON_ENDPOINT"] == "http://127.0.0.1:9888/events"
         return 0
 
-    monkeypatch.setattr("harn_gibson.server.build_state_from_env", lambda: state)
+    monkeypatch.setattr("harn_gibson.server.build_state_from_env", lambda _env=None: state)
     monkeypatch.setattr("harn_gibson.server.create_server", lambda _host, _port, _state: FakeServer())
     monkeypatch.setattr(cli.webbrowser, "open", lambda _url: None)
     monkeypatch.setattr(cli.subprocess, "call", fake_call)
@@ -3097,7 +3197,7 @@ def test_cli_dogfood_holds_display_on_harn_error(monkeypatch: Any) -> None:
         def server_close(self) -> None:
             return None
 
-    monkeypatch.setattr("harn_gibson.server.build_state_from_env", lambda: state)
+    monkeypatch.setattr("harn_gibson.server.build_state_from_env", lambda _env=None: state)
     monkeypatch.setattr("harn_gibson.server.create_server", lambda _host, _port, _state: FakeServer())
     monkeypatch.setattr(cli.webbrowser, "open", lambda _url: None)
     monkeypatch.setattr(cli.subprocess, "call", lambda _command, env: 2)
@@ -3127,7 +3227,7 @@ def test_cli_dogfood_holds_display_on_missing_harn(monkeypatch: Any) -> None:
     def missing(_command: list[str], env: dict[str, str]) -> int:
         raise FileNotFoundError
 
-    monkeypatch.setattr("harn_gibson.server.build_state_from_env", lambda: state)
+    monkeypatch.setattr("harn_gibson.server.build_state_from_env", lambda _env=None: state)
     monkeypatch.setattr("harn_gibson.server.create_server", lambda _host, _port, _state: FakeServer())
     monkeypatch.setattr(cli.webbrowser, "open", lambda _url: None)
     monkeypatch.setattr(cli.subprocess, "call", missing)

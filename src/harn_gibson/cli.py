@@ -22,6 +22,7 @@ from harn_gibson.styles import style_pack_from_name, style_pack_ids
 
 DOGFOOD_CAPTURE_RENDERER_TIMEOUT_MS = "10000"
 DOGFOOD_CAPTURE_TRAJECTORY_SPLIT_EVERY = 200
+DOGFOOD_RENDERER_PRESETS = ("gibson1", "dogfood", "none")
 PROJECT_HARN_PROVIDER = "openai-codex"
 PROJECT_HARN_MODEL = "gpt-5.5"
 PROJECT_HARN_THINKING = "high"
@@ -71,6 +72,22 @@ def build_parser() -> argparse.ArgumentParser:
     dogfood.add_argument("--codex-auth-import", action=argparse.BooleanOptionalAction, default=True)
     dogfood.add_argument("--hold-on-error", action=argparse.BooleanOptionalAction, default=True)
     dogfood.add_argument("--style", choices=style_pack_ids(), default=None, help="display style pack")
+    dogfood.add_argument(
+        "--renderer-preset",
+        choices=DOGFOOD_RENDERER_PRESETS,
+        default="gibson1",
+        help="built-in renderer command to use for the display; --renderer-command overrides it",
+    )
+    dogfood.add_argument(
+        "--renderer-command",
+        default=None,
+        help="external renderer command for dogfood; overrides --renderer-preset",
+    )
+    dogfood.add_argument(
+        "--renderer-timeout-ms",
+        default=DOGFOOD_CAPTURE_RENDERER_TIMEOUT_MS,
+        help="external renderer timeout in milliseconds",
+    )
     dogfood.add_argument("harn_args", nargs=argparse.REMAINDER, help="arguments forwarded to harn after --")
 
     capture = subcommands.add_parser(
@@ -414,6 +431,9 @@ def run_dogfood(
     style: str | None = None,
     env_overrides: Mapping[str, str] | None = None,
     cwd: str | None = None,
+    renderer_preset: str = "gibson1",
+    renderer_command: str | None = None,
+    renderer_timeout_ms: str = DOGFOOD_CAPTURE_RENDERER_TIMEOUT_MS,
 ) -> int:
     from harn_gibson.server import build_state_from_env, create_server, publish_diagnostic_event
 
@@ -425,12 +445,20 @@ def run_dogfood(
     env = os.environ.copy()
     if env_overrides:
         env.update(env_overrides)
+    preserve_renderer_env = bool(env_overrides and "HARN_GIBSON_RENDERER_COMMAND" in env_overrides)
+    renderer_env_added = _apply_dogfood_renderer_env(
+        env,
+        renderer_preset=renderer_preset,
+        renderer_command=renderer_command,
+        renderer_timeout_ms=renderer_timeout_ms,
+        preserve_existing=preserve_renderer_env,
+    )
     if harn_cwd is not None:
         env.setdefault("HARN_GIBSON_PROJECT_ROOT", str(harn_cwd))
         env.setdefault("HARN_GIBSON_PROJECT_NAME", harn_cwd.name or "workspace")
     if style is not None:
         env["HARN_GIBSON_STYLE"] = style
-    state_needs_env = style is not None or env_overrides or harn_cwd is not None
+    state_needs_env = style is not None or env_overrides or harn_cwd is not None or renderer_env_added
     state = build_state_from_env(env) if state_needs_env else build_state_from_env()
     server = create_server(host, port, state)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -641,8 +669,46 @@ def _default_capture_event_log_path(*, prefix: str = "dogfood") -> Path:
 
 
 def _default_dogfood_renderer_command() -> str:
-    renderer_path = Path(__file__).resolve().parents[2] / "examples" / "renderers" / "gibson_dogfood_renderer.py"
+    renderer_path = _example_renderer_path("gibson_dogfood_renderer.py")
     return json.dumps([sys.executable, str(renderer_path)])
+
+
+def _default_gibson1_renderer_command() -> str:
+    renderer_path = _example_renderer_path("gibson1_renderer.py")
+    return json.dumps([sys.executable, str(renderer_path)])
+
+
+def _example_renderer_path(filename: str) -> Path:
+    return Path(__file__).resolve().parents[2] / "examples" / "renderers" / filename
+
+
+def _apply_dogfood_renderer_env(
+    env: dict[str, str],
+    *,
+    renderer_preset: str,
+    renderer_command: str | None,
+    renderer_timeout_ms: str,
+    preserve_existing: bool = False,
+) -> bool:
+    if renderer_command is not None:
+        env["HARN_GIBSON_RENDERER_COMMAND"] = renderer_command
+        env["HARN_GIBSON_RENDERER_TIMEOUT_MS"] = str(renderer_timeout_ms)
+        return True
+    if renderer_preset == "none":
+        removed = env.pop("HARN_GIBSON_RENDERER_COMMAND", None) is not None
+        env.pop("HARN_GIBSON_RENDERER_TIMEOUT_MS", None)
+        return removed
+    if preserve_existing:
+        env.setdefault("HARN_GIBSON_RENDERER_TIMEOUT_MS", str(renderer_timeout_ms))
+        return True
+    if renderer_preset == "gibson1":
+        env["HARN_GIBSON_RENDERER_COMMAND"] = _default_gibson1_renderer_command()
+    elif renderer_preset == "dogfood":
+        env["HARN_GIBSON_RENDERER_COMMAND"] = _default_dogfood_renderer_command()
+    else:
+        raise ValueError(f"unknown renderer preset: {renderer_preset}")
+    env["HARN_GIBSON_RENDERER_TIMEOUT_MS"] = str(renderer_timeout_ms)
+    return True
 
 
 def _capture_replay_command(
@@ -1116,6 +1182,9 @@ def run(argv: Sequence[str] | None = None) -> int:
             hold_on_error=args.hold_on_error,
             style=args.style,
             cwd=args.cwd,
+            renderer_preset=args.renderer_preset,
+            renderer_command=args.renderer_command,
+            renderer_timeout_ms=args.renderer_timeout_ms,
         )
     if args.command == "dogfood-capture":
         if args.list_trajectories:

@@ -809,6 +809,78 @@ def test_dogfood_showcase_renderer_returns_valid_event_reactive_plan(tmp_path: P
     assert uplink_scene.state.primitives["dogfood-black-ice"].props["accentTone"] == "red"
 
 
+def test_gibson1_renderer_returns_coherent_valid_plan(tmp_path: Path) -> None:
+    repo_root = tmp_path / "repo"
+    (repo_root / "src").mkdir(parents=True)
+    (repo_root / "tests").mkdir()
+    (repo_root / "src" / "app.py").write_text("print('hi')\nprint('there')\n", encoding="utf-8")
+    (repo_root / "tests" / "test_app.py").write_text("def test_app():\n    assert True\n", encoding="utf-8")
+    root = Path(__file__).resolve().parents[1]
+    scene = SceneEngine()
+    context_event = GibsonEvent.from_raw(
+        {
+            "type": "tool_result",
+            "toolName": "bash",
+            "input": {"command": "uv run pytest"},
+            "output": "tests/test_app.py passed",
+        },
+        51,
+        timestamp_ms=5100,
+        recent_context=("running project tests",),
+    )
+    batch = RenderInputBatch.from_requests((RenderRequest(context_event),))
+    context = RendererContextBuilder(RendererContextConfig(project_root=str(repo_root))).build(
+        batch,
+        scene.state,
+        pipeline_catalog(),
+    )
+    renderer = ExternalRenderer(
+        (sys.executable, str(root / "examples" / "renderers" / "gibson1_renderer.py")),
+        timeout_seconds=5,
+        renderer_id="fixture-gibson1",
+        catalog=pipeline_catalog(),
+    )
+
+    plan = renderer.render_with_context(batch.requests, scene.state, context)
+    issues = validate_render_plan(plan, scene.state, pipeline_catalog())
+    mutations = plan.steps[0].mutations
+    primitive_kinds = {mutation.primitive.id: mutation.primitive.kind for mutation in mutations if mutation.primitive}
+    animation_kinds = {mutation.animation.id: mutation.animation.kind for mutation in mutations if mutation.animation}
+
+    assert plan.metadata["renderer"] == "gibson1"
+    assert plan.metadata["mode"] == "usable-default"
+    assert plan.metadata["visualizer"] == "gibson1"
+    assert plan.metadata["touchedFileCount"] == 1
+    assert "renderPlanDiagnostics" not in plan.metadata
+    assert issues == ()
+    assert primitive_kinds == {
+        "gibson1-terminal": "terminal_wall",
+        "gibson1-repo-city": "city_block",
+        "gibson1-scope": "signal_scope",
+        "gibson1-route": "trace_route",
+        "gibson1-rain": "data_rain",
+    }
+    assert animation_kinds == {
+        "gibson1-cues": "timeline_cue",
+        "gibson1-route-trace": "route_trace",
+    }
+    assert all(not primitive_id.startswith("dogfood-") for primitive_id in primitive_kinds)
+
+    scene.apply(mutations)
+    assert scene.state.primitives["status"].props["text"] == "gibson1::tool_result"
+    assert scene.state.primitives["gibson1-terminal"].props["title"] == "GIBSON1 EVENT BOARD"
+    assert scene.state.primitives["gibson1-terminal"].props["panels"][1]["lines"] == ["uv run pytest"]
+    assert scene.state.primitives["gibson1-terminal"].props["panels"][3]["lines"] == [
+        "tests/test_app.py passed"
+    ]
+    assert scene.state.primitives["gibson1-repo-city"].props["focusBlockId"] == "gibson1-block-1"
+    assert scene.state.primitives["gibson1-repo-city"].props["blocks"][1]["path"] == "tests"
+    assert scene.state.primitives["gibson1-repo-city"].props["blocks"][1]["touched"] == 1
+    assert scene.state.primitives["gibson1-scope"].props["blips"][0]["label"] == "TEST-APP.PY"
+    assert scene.state.primitives["gibson1-route"].props["focusHopId"] == "file-0"
+    assert scene.state.animations["gibson1-route-trace"].target_id == "gibson1-route"
+
+
 def test_external_renderer_failures_become_trace_state(tmp_path: Path) -> None:
     failing = tmp_path / "failing_renderer.py"
     failing.write_text(
