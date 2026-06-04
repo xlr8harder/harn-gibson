@@ -844,6 +844,7 @@ def test_cli_parser_and_run(monkeypatch: Any, capsys: Any) -> None:
     assert parsed_capture_list.list_trajectories is True
     parsed_auth = parser.parse_args(["import-codex-auth", "--codex-auth", "codex.json", "--harn-auth", "harn.json"])
     assert parsed_auth.command == "import-codex-auth"
+    assert parser.parse_args(["backend-contract"]).command == "backend-contract"
     parsed_replay = parser.parse_args(
         [
             "replay",
@@ -1079,6 +1080,11 @@ def test_cli_parser_and_run(monkeypatch: Any, capsys: Any) -> None:
     assert parsed_event_log.screenshot_max_channel_min == 80
     assert cli.run(["extension-path"]) == 0
     assert capsys.readouterr().out.strip().endswith("extension.py")
+    assert cli.run(["backend-contract"]) == 0
+    contract = json.loads(capsys.readouterr().out)
+    assert contract["schema"] == "harn-gibson.display-backend-contract.v1"
+    assert contract["displayBackend"]["id"] == "browser-canvas"
+    assert "terminal_wall" in contract["supportedPrimitiveKinds"]
 
     calls: list[tuple[str, int]] = []
 

@@ -140,6 +140,8 @@ def build_parser() -> argparse.ArgumentParser:
     auth.add_argument("--codex-auth", default=None, help="path to Codex auth.json")
     auth.add_argument("--harn-auth", default=None, help="path to harn auth.json")
 
+    subcommands.add_parser("backend-contract", help="print the display backend contract JSON")
+
     replay = subcommands.add_parser("replay", help="replay harn events, render plans, or scene mutations")
     replay.add_argument("path", help="path to replay JSON")
     replay.add_argument("--output-scene", default=None, help="write final scene JSON to this path")
@@ -868,6 +870,15 @@ def run(argv: Sequence[str] | None = None) -> int:
         result = import_codex_auth(args.codex_auth, args.harn_auth)
         print(result.message)
         return 0 if result.available else 1
+    if args.command == "backend-contract":
+        from harn_gibson.server import GibsonServerState, backend_contract_payload
+
+        state = GibsonServerState()
+        try:
+            print(json.dumps(backend_contract_payload(state), indent=2, sort_keys=True))
+        finally:
+            state.pipeline.stop()
+        return 0
     if args.command == "watch-replay":
         return run_watch_replay(args)
     if args.command == "replay":
