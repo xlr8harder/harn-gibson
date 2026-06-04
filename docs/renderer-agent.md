@@ -46,6 +46,22 @@ Each step can include multiple scene mutations. Multiple steps let the renderer 
 
 Every applied plan is summarized as `harn-gibson.render-intent.v1` and stored in `scene.metadata.renderIntents`. The intent summary includes renderer name, human intent, event types, routes, timeline, effects, targets, and original plan metadata. Published scene updates also include the current `renderIntent`, which makes replay/debug inspection independent of renderer implementation details.
 
+For long dogfood sessions, tune renderer context budgets instead of changing prompt code:
+
+```bash
+HARN_GIBSON_RENDERER_COMPACTION_EVENTS=40
+HARN_GIBSON_RENDERER_MAX_RECENT_PLANS=6
+HARN_GIBSON_RENDERER_MAX_RECENT_LOG_ENTRIES=12
+HARN_GIBSON_RENDERER_MAX_PROP_PREVIEW_CHARS=240
+HARN_GIBSON_RENDERER_MAX_VISUAL_ANCHORS=16
+HARN_GIBSON_RENDERER_MAX_REPO_ENTRIES=64
+HARN_GIBSON_RENDERER_MAX_REPO_CHILDREN=8
+HARN_GIBSON_RENDERER_MAX_TOUCHED_FILES=24
+HARN_GIBSON_RENDERER_MAX_TOUCHED_PATH_CHARS=160
+```
+
+Lower values reduce prompt size and remote renderer latency; higher values give a model more scene continuity, repo topology, and touched-file evidence.
+
 ## External Renderer Command
 
 Set `HARN_GIBSON_RENDERER_COMMAND` to run a renderer as a subprocess. The command is parsed as a shell-style command string, or as a JSON array of argv strings when the value starts with `[`. `HARN_GIBSON_RENDERER_TIMEOUT_MS` controls the per-render timeout.

@@ -30,6 +30,7 @@ from harn_gibson.rendering import (
     RenderSubmitResult,
     _repo_file_line_count,
     coerce_batch_window_ms,
+    coerce_context_limit,
     coerce_render_mode,
     coerce_render_timing_mode,
     decisions_from_payload,
@@ -1837,4 +1838,9 @@ def test_render_update_and_coercion_helpers() -> None:
     assert coerce_batch_window_ms("12") == 12
     assert coerce_batch_window_ms("-1") == 0
     assert coerce_batch_window_ms("bad") == 40
+    assert coerce_context_limit(None, 7) == 7
+    assert coerce_context_limit("12", 7) == 12
+    assert coerce_context_limit("-3", 7) == 0
+    assert coerce_context_limit("0", 7, minimum=1) == 1
+    assert coerce_context_limit("bad", 7) == 7
     assert decisions_from_payload({"decisions": [{"a": 1}, "bad", {"b": 2}]}) == ({"a": 1}, {"b": 2})

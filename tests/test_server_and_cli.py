@@ -40,6 +40,7 @@ from harn_gibson.server import (
     project_name_from_env,
     project_root_from_env,
     publish_diagnostic_event,
+    renderer_context_config_from_env,
     renderer_interest_from_env,
     route_rules_from_env,
     submit_event_to_renderer,
@@ -557,6 +558,27 @@ def test_build_state_from_env(tmp_path: Path) -> None:
         }
     )
     derived_project_state = build_state_from_env({"HARN_GIBSON_PROJECT_ROOT": str(project_root)})
+    context_state = build_state_from_env(
+        {
+            "HARN_GIBSON_RENDERER_COMPACTION_EVENTS": "9",
+            "HARN_GIBSON_RENDERER_MAX_RECENT_PLANS": "3",
+            "HARN_GIBSON_RENDERER_MAX_RECENT_LOG_ENTRIES": "4",
+            "HARN_GIBSON_RENDERER_MAX_PROP_PREVIEW_CHARS": "80",
+            "HARN_GIBSON_RENDERER_MAX_VISUAL_ANCHORS": "5",
+            "HARN_GIBSON_RENDERER_MAX_VISUAL_RECENT_ITEMS": "6",
+            "HARN_GIBSON_RENDERER_MAX_REPO_ENTRIES": "7",
+            "HARN_GIBSON_RENDERER_MAX_REPO_CHILDREN": "2",
+            "HARN_GIBSON_RENDERER_MAX_TOUCHED_FILES": "8",
+            "HARN_GIBSON_RENDERER_MAX_TOUCHED_PATH_CHARS": "40",
+        }
+    )
+    clamped_context = renderer_context_config_from_env(
+        {
+            "HARN_GIBSON_RENDERER_COMPACTION_EVENTS": "0",
+            "HARN_GIBSON_RENDERER_MAX_RECENT_PLANS": "-5",
+            "HARN_GIBSON_RENDERER_MAX_REPO_ENTRIES": "bad",
+        }
+    )
 
     assert state.pipeline.mode == "async"
     assert state.pipeline.batch_window_ms == 5
@@ -573,6 +595,20 @@ def test_build_state_from_env(tmp_path: Path) -> None:
     assert project_state.pipeline.context_builder.config.project_root == str(project_root)
     assert project_state.pipeline.context_builder.config.project_name == "tiny dogfood"
     assert derived_project_state.pipeline.context_builder.config.project_name == "tiny-project"
+    context_config = context_state.pipeline.context_builder.config
+    assert context_config.compaction_interval_events == 9
+    assert context_config.max_recent_plans == 3
+    assert context_config.max_recent_log_entries == 4
+    assert context_config.max_prop_preview_chars == 80
+    assert context_config.max_visual_anchors == 5
+    assert context_config.max_visual_recent_items == 6
+    assert context_config.max_repo_entries == 7
+    assert context_config.max_repo_children_per_dir == 2
+    assert context_config.max_touched_files == 8
+    assert context_config.max_touched_path_chars == 40
+    assert clamped_context.compaction_interval_events == 1
+    assert clamped_context.max_recent_plans == 0
+    assert clamped_context.max_repo_entries == 64
     assert project_root_from_env(None) is None
     assert project_root_from_env("   ") is None
     assert project_root_from_env(str(project_root)) == str(project_root)
@@ -585,6 +621,7 @@ def test_build_state_from_env(tmp_path: Path) -> None:
     model_renderer_state.pipeline.stop()
     project_state.pipeline.stop()
     derived_project_state.pipeline.stop()
+    context_state.pipeline.stop()
 
 
 def test_renderer_interest_from_env_and_build_state() -> None:

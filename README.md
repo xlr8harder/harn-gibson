@@ -102,6 +102,19 @@ HARN_GIBSON_PROJECT_NAME=my-project        # display name in renderer context
 
 Immediate timing keeps dogfood and replay runs responsive while still honoring explicit `delayMs`. Scheduled timing treats `startOffsetMs` as an absolute offset inside the coalesced render batch, which is useful for async renderer-agent plans that want a 5-10 second visual playback window after harn has already continued.
 
+Renderer context budgets can be tuned for long sessions:
+
+```bash
+HARN_GIBSON_RENDERER_COMPACTION_EVENTS=40      # full context cadence
+HARN_GIBSON_RENDERER_MAX_RECENT_PLANS=6        # visual history retained between turns
+HARN_GIBSON_RENDERER_MAX_REPO_ENTRIES=64       # top-level repo entries sampled
+HARN_GIBSON_RENDERER_MAX_REPO_CHILDREN=8       # visible children per directory
+HARN_GIBSON_RENDERER_MAX_TOUCHED_FILES=24      # touched-file batch size
+HARN_GIBSON_RENDERER_MAX_PROP_PREVIEW_CHARS=240
+```
+
+Lower limits keep renderer prompts small for fast model turnaround; higher limits give the renderer more continuity, topology, and touched-file evidence.
+
 Renderer event interest can also be narrowed with JSON. Events outside the interest fall back locally instead of going to the renderer:
 
 ```bash

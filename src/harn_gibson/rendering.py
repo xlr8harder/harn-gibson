@@ -2720,3 +2720,12 @@ def coerce_batch_window_ms(value: str | None) -> int:
         return max(0, int(value))
     except ValueError:
         return 40
+
+
+def coerce_context_limit(value: str | None, default: int, *, minimum: int = 0) -> int:
+    if value is None:
+        return default
+    try:
+        return max(minimum, int(value))
+    except ValueError:
+        return default

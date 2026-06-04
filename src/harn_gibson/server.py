@@ -6,7 +6,8 @@ import json
 import queue
 import threading
 import time
-from dataclasses import dataclass, field
+from collections.abc import Mapping
+from dataclasses import dataclass, field, replace
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from os import environ
@@ -28,6 +29,7 @@ from harn_gibson.rendering import (
     RenderTimingMode,
     SceneRenderer,
     coerce_batch_window_ms,
+    coerce_context_limit,
     coerce_render_mode,
     coerce_render_timing_mode,
     decisions_from_payload,
@@ -66,6 +68,7 @@ class GibsonServerState:
     renderer: SceneRenderer = field(default_factory=DeterministicSceneRenderer)
     project_name: str = "harn-gibson"
     project_root: str | None = None
+    renderer_context_config: RendererContextConfig = field(default_factory=RendererContextConfig)
     pipeline: RenderPipeline = field(init=False)
 
     def __post_init__(self) -> None:
@@ -76,19 +79,19 @@ class GibsonServerState:
         renderer_interest = self.renderer_interest or renderer_event_interest_from_renderer(self.renderer)
         if renderer_interest is not None and self.router.renderer_interest is None:
             self.router.renderer_interest = renderer_interest
+        context_config = replace(
+            self.renderer_context_config,
+            project_name=self.project_name,
+            project_root=self.project_root,
+            display_style=self.style_pack.id,
+            style_pack=style_payload,
+        )
         self.pipeline = RenderPipeline(
             scene=self.scene,
             buffer=self.buffer,
             renderer=self.renderer,
             catalog=self.catalog,
-            context_builder=RendererContextBuilder(
-                RendererContextConfig(
-                    project_name=self.project_name,
-                    project_root=self.project_root,
-                    display_style=self.style_pack.id,
-                    style_pack=style_payload,
-                )
-            ),
+            context_builder=RendererContextBuilder(context_config),
             mode=self.render_mode,
             batch_window_ms=self.render_batch_window_ms,
             timing_mode=self.render_timing_mode,
@@ -227,6 +230,7 @@ def build_state_from_env(env: dict[str, str] | None = None) -> GibsonServerState
         style_pack=style_pack_from_name(source.get("HARN_GIBSON_STYLE")),
         project_name=project_name_from_env(source.get("HARN_GIBSON_PROJECT_NAME"), project_root),
         project_root=project_root,
+        renderer_context_config=renderer_context_config_from_env(source),
     )
 
 
@@ -242,6 +246,53 @@ def project_name_from_env(value: str | None, project_root: str | None) -> str:
     if project_root:
         return str(Path(project_root).expanduser().resolve().name or "workspace")
     return "harn-gibson"
+
+
+def renderer_context_config_from_env(source: Mapping[str, str]) -> RendererContextConfig:
+    defaults = RendererContextConfig()
+    return RendererContextConfig(
+        compaction_interval_events=coerce_context_limit(
+            source.get("HARN_GIBSON_RENDERER_COMPACTION_EVENTS"),
+            defaults.compaction_interval_events,
+            minimum=1,
+        ),
+        max_recent_plans=coerce_context_limit(
+            source.get("HARN_GIBSON_RENDERER_MAX_RECENT_PLANS"),
+            defaults.max_recent_plans,
+        ),
+        max_recent_log_entries=coerce_context_limit(
+            source.get("HARN_GIBSON_RENDERER_MAX_RECENT_LOG_ENTRIES"),
+            defaults.max_recent_log_entries,
+        ),
+        max_prop_preview_chars=coerce_context_limit(
+            source.get("HARN_GIBSON_RENDERER_MAX_PROP_PREVIEW_CHARS"),
+            defaults.max_prop_preview_chars,
+        ),
+        max_visual_anchors=coerce_context_limit(
+            source.get("HARN_GIBSON_RENDERER_MAX_VISUAL_ANCHORS"),
+            defaults.max_visual_anchors,
+        ),
+        max_visual_recent_items=coerce_context_limit(
+            source.get("HARN_GIBSON_RENDERER_MAX_VISUAL_RECENT_ITEMS"),
+            defaults.max_visual_recent_items,
+        ),
+        max_repo_entries=coerce_context_limit(
+            source.get("HARN_GIBSON_RENDERER_MAX_REPO_ENTRIES"),
+            defaults.max_repo_entries,
+        ),
+        max_repo_children_per_dir=coerce_context_limit(
+            source.get("HARN_GIBSON_RENDERER_MAX_REPO_CHILDREN"),
+            defaults.max_repo_children_per_dir,
+        ),
+        max_touched_files=coerce_context_limit(
+            source.get("HARN_GIBSON_RENDERER_MAX_TOUCHED_FILES"),
+            defaults.max_touched_files,
+        ),
+        max_touched_path_chars=coerce_context_limit(
+            source.get("HARN_GIBSON_RENDERER_MAX_TOUCHED_PATH_CHARS"),
+            defaults.max_touched_path_chars,
+        ),
+    )
 
 
 def route_rules_from_env(value: str | None) -> tuple[EventRouteRule, ...]:
@@ -4960,6 +5011,7 @@ __all__ = [
     "make_handler",
     "publish_diagnostic_event",
     "renderer_interest_from_env",
+    "renderer_context_config_from_env",
     "route_rules_from_env",
     "run_server",
     "submit_event_to_renderer",
