@@ -2159,6 +2159,55 @@ def test_cli_dogfood_launches_display_browser_and_harn(monkeypatch: Any, capsys:
     assert "harn-gibson display: http://127.0.0.1:9876" in capsys.readouterr().err
 
 
+def test_cli_dogfood_smoke_starts_real_server_on_dynamic_port(tmp_path: Path, capsys: Any) -> None:
+    probe_script = tmp_path / "fake_harn_probe.py"
+    probe_output = tmp_path / "probe.json"
+    probe_script.write_text(
+        """
+from __future__ import annotations
+
+import json
+import os
+import sys
+import urllib.request
+
+endpoint = os.environ["HARN_GIBSON_ENDPOINT"]
+input_endpoint = os.environ["HARN_GIBSON_INPUT_ENDPOINT"]
+if not endpoint.endswith("/events"):
+    raise SystemExit("unexpected endpoint")
+base = endpoint[: -len("/events")]
+with urllib.request.urlopen(base + "/health", timeout=2) as response:
+    health = json.loads(response.read().decode("utf-8"))
+Path = __import__("pathlib").Path
+Path(sys.argv[1]).write_text(
+    json.dumps({"base": base, "endpoint": endpoint, "inputEndpoint": input_endpoint, "health": health}),
+    encoding="utf-8",
+)
+""".lstrip(),
+        encoding="utf-8",
+    )
+
+    assert (
+        cli.run_dogfood(
+            port=0,
+            harn_bin=sys.executable,
+            harn_args=[str(probe_script), str(probe_output)],
+            launch_browser=False,
+            codex_auth_import=False,
+            hold_on_error=False,
+        )
+        == 0
+    )
+
+    payload = json.loads(probe_output.read_text(encoding="utf-8"))
+    assert payload["base"].startswith("http://127.0.0.1:")
+    assert payload["endpoint"] == payload["base"] + "/events"
+    assert payload["inputEndpoint"] == payload["base"] + "/input/next"
+    assert payload["health"]["ok"] is True
+    assert payload["health"]["sceneRevision"] == 0
+    assert "harn-gibson display: http://127.0.0.1:" in capsys.readouterr().err
+
+
 def test_cli_dogfood_reports_missing_harn(monkeypatch: Any, capsys: Any) -> None:
     state = GibsonServerState()
 
