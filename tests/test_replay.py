@@ -34,6 +34,7 @@ from harn_gibson.replay import (
     ReplaySuiteResult,
     _replay_data_event_summary,
     _replay_result_render_summary,
+    _replay_scene_visual_continuity_summary,
     capture_replay_frame_screenshots,
     compare_replay_baseline,
     discover_replay_files,
@@ -72,7 +73,7 @@ from harn_gibson.replay import (
     write_replay_timeline,
     write_scene,
 )
-from harn_gibson.scene import SceneMutation, SceneState
+from harn_gibson.scene import SceneAnimation, SceneMutation, ScenePrimitive, SceneState
 from harn_gibson.server import GibsonServerState, build_state_from_env
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -1432,6 +1433,53 @@ def test_checked_in_dogfood_runtime_replay_exercises_failure_scene() -> None:
 def test_checked_in_dogfood_replay_suite_summarizes_trajectory_coverage() -> None:
     suite = run_replay_suite(EXAMPLE_DOGFOOD_REPLAYS, state_factory=dogfood_renderer_state)
     payload = suite.to_dict()
+    dogfood_visual_summary = {
+        "anchors": [
+            "dogfood-city",
+            "dogfood-command-ribbon",
+            "dogfood-control-graph",
+            "dogfood-file-sparks",
+            "dogfood-hologram",
+            "dogfood-ice-mesh",
+            "dogfood-opcodes",
+            "dogfood-rain",
+            "dogfood-route",
+            "dogfood-scope",
+            "dogfood-sigil",
+            "dogfood-tunnel",
+        ],
+        "effects": [
+            "patch",
+            "append_log",
+            "primitive:data_rain",
+            "primitive:glyph_layer",
+            "primitive:tunnel_grid",
+            "primitive:mesh",
+            "primitive:signal_scope",
+            "primitive:node_graph",
+            "primitive:trace_route",
+            "primitive:city_block",
+            "primitive:particle_field",
+            "primitive:hologram",
+        ],
+        "maxActiveAnimationCount": 7,
+        "maxVisualAnchorCount": 13,
+        "renderers": ["gibson-dogfood-showcase"],
+        "targets": [
+            "status",
+            "dogfood-rain",
+            "dogfood-opcodes",
+            "dogfood-tunnel",
+            "dogfood-ice-mesh",
+            "dogfood-scope",
+            "dogfood-control-graph",
+            "dogfood-route",
+            "dogfood-city",
+            "dogfood-file-sparks",
+            "dogfood-hologram",
+            "dogfood-command-ribbon",
+        ],
+    }
 
     assert suite.ok is True
     assert payload["summary"] == {
@@ -1466,6 +1514,7 @@ def test_checked_in_dogfood_replay_suite_summarizes_trajectory_coverage() -> Non
         "screenshotCount": 0,
         "screenshotExpectationCount": 0,
         "stepCount": 12,
+        "visualContinuitySummary": dogfood_visual_summary,
     }
     assert payload["files"][0]["eventSummary"]["eventTypeCounts"] == {
         "browser_input": 1,
@@ -1475,6 +1524,7 @@ def test_checked_in_dogfood_replay_suite_summarizes_trajectory_coverage() -> Non
         "tool_result": 1,
     }
     assert payload["files"][1]["rendererCounts"] == {"gibson-dogfood-showcase": 7}
+    assert payload["files"][1]["visualContinuitySummary"] == dogfood_visual_summary
 
 
 def test_replay_raw_events_render_plans_and_mutations() -> None:
@@ -2035,6 +2085,50 @@ def test_replay_suite_summary_helpers_handle_sparse_shapes() -> None:
         "rendererCounts": {"model": 1, "no-route": 1},
         "routeCounts": {"list_route": 1, "string_route": 1},
     }
+
+
+def test_replay_scene_visual_continuity_summary_covers_scene_state() -> None:
+    scene = SceneState(metadata={"stylePack": {"motifs": ["meta-grid", 7]}})
+    scene.primitives["city"] = ScenePrimitive("city", "city_block", "stage", {"label": "CITY"})
+    scene.primitives["status"] = ScenePrimitive("status", "status", "mast", {"text": "ok"})
+    scene.animations["empty-target"] = SceneAnimation("empty-target", "", "hold", 0, 1000)
+    scene.animations["scan"] = SceneAnimation("scan", "city", "scan", 0, 1000)
+    scene.metadata["renderIntents"] = [
+        {"renderer": "model", "effects": ["primitive:city_block"], "targets": ["city"]},
+        {"renderer": "", "effects": "bad", "targets": "bad"},
+    ]
+
+    assert _replay_scene_visual_continuity_summary(scene) == {
+        "anchors": ["city"],
+        "effects": ["primitive:city_block", "animation:hold", "animation:scan"],
+        "maxActiveAnimationCount": 2,
+        "maxVisualAnchorCount": 1,
+        "renderers": ["model"],
+        "styleMotifs": ["meta-grid", "7"],
+        "targets": ["city"],
+    }
+
+    stage_fallback = SceneState(metadata={"stylePack": {"motifs": "bad"}})
+    stage_fallback.primitives["stage"] = ScenePrimitive(
+        "stage",
+        "viewport",
+        "root",
+        {"stylePack": {"motifs": ["stage-grid"]}},
+    )
+    assert _replay_scene_visual_continuity_summary(stage_fallback) == {"styleMotifs": ["stage-grid"]}
+
+    unstyled = SceneState(metadata={"stylePack": {"motifs": "bad"}})
+    unstyled.primitives["stage"] = ScenePrimitive("stage", "viewport", "root", {})
+    assert _replay_scene_visual_continuity_summary(unstyled) == {}
+    bad_stage_style = SceneState()
+    bad_stage_style.primitives["stage"] = ScenePrimitive(
+        "stage",
+        "viewport",
+        "root",
+        {"stylePack": {"motifs": "bad"}},
+    )
+    assert _replay_scene_visual_continuity_summary(bad_stage_style) == {}
+    assert _replay_scene_visual_continuity_summary(SceneState()) == {}
 
 
 def test_replay_raw_event_without_decisions_and_empty_plan() -> None:

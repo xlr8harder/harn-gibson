@@ -188,6 +188,7 @@ class ReplayFileResult:
     event_summary: dict[str, Any] = field(default_factory=dict)
     route_counts: dict[str, int] = field(default_factory=dict)
     renderer_counts: dict[str, int] = field(default_factory=dict)
+    visual_continuity_summary: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         payload: dict[str, Any] = {
@@ -220,6 +221,8 @@ class ReplayFileResult:
         if self.renderer_counts:
             payload["renderers"] = sorted(self.renderer_counts)
             payload["rendererCounts"] = dict(sorted(self.renderer_counts.items()))
+        if self.visual_continuity_summary:
+            payload["visualContinuitySummary"] = self.visual_continuity_summary
         return payload
 
 
@@ -326,6 +329,7 @@ def run_replay_suite(
         event_summary: dict[str, Any] = {}
         route_counts: dict[str, int] = {}
         renderer_counts: dict[str, int] = {}
+        visual_continuity_summary: dict[str, Any] = {}
         screenshot_expectations: tuple[ReplayExpectationResult, ...] = ()
         screenshot_failures: tuple[ReplayExpectationResult, ...] = ()
         try:
@@ -335,6 +339,7 @@ def run_replay_suite(
             render_summary = _replay_result_render_summary(result)
             route_counts = render_summary["routeCounts"]
             renderer_counts = render_summary["rendererCounts"]
+            visual_continuity_summary = _replay_scene_visual_continuity_summary(result.scene)
             if screenshot_root is not None:
                 screenshot = _capture_suite_screenshot(
                     root,
@@ -382,6 +387,7 @@ def run_replay_suite(
                     event_summary=event_summary,
                     route_counts=route_counts,
                     renderer_counts=renderer_counts,
+                    visual_continuity_summary=visual_continuity_summary,
                 )
             )
         else:
@@ -406,6 +412,7 @@ def run_replay_suite(
                     event_summary=event_summary,
                     route_counts=route_counts,
                     renderer_counts=renderer_counts,
+                    visual_continuity_summary=visual_continuity_summary,
                 )
             )
         finally:
@@ -456,6 +463,11 @@ def _replay_suite_result_summary(files: Sequence[ReplayFileResult]) -> dict[str,
     if renderer_counts:
         summary["renderers"] = sorted(renderer_counts)
         summary["rendererCounts"] = renderer_counts
+    visual_continuity_summary = _merge_visual_continuity_summaries(
+        result.visual_continuity_summary for result in file_results
+    )
+    if visual_continuity_summary:
+        summary["visualContinuitySummary"] = visual_continuity_summary
     return summary
 
 
@@ -528,6 +540,60 @@ def _replay_result_render_summary(result: ReplayResult) -> dict[str, dict[str, i
         "routeCounts": dict(sorted(route_counts.items())),
         "rendererCounts": dict(sorted(renderer_counts.items())),
     }
+
+
+def _replay_scene_visual_continuity_summary(scene: SceneState) -> dict[str, Any]:
+    anchors = [
+        primitive.id
+        for primitive in sorted(scene.primitives.values(), key=lambda item: item.id)
+        if primitive.region == "stage"
+    ]
+    active_animation_targets = sorted(
+        {animation.target_id for animation in scene.animations.values() if animation.target_id}
+    )
+    active_animation_effects = [
+        f"animation:{animation.kind}" for animation in sorted(scene.animations.values(), key=lambda item: item.id)
+    ]
+    effects: list[str] = []
+    targets: list[str] = []
+    renderers: list[str] = []
+    for intent in _render_intents_from_scene_metadata(scene.metadata):
+        renderer = intent.get("renderer")
+        if isinstance(renderer, str) and renderer:
+            _append_bounded_unique(renderers, renderer)
+        _extend_bounded_unique(effects, intent.get("effects"))
+        _extend_bounded_unique(targets, intent.get("targets"))
+    _extend_bounded_unique(effects, active_animation_effects)
+    _extend_bounded_unique(targets, active_animation_targets)
+    return _merge_visual_continuity_summaries(
+        (
+            {
+                "maxVisualAnchorCount": len(anchors),
+                "maxActiveAnimationCount": len(scene.animations),
+                "anchors": anchors,
+                "effects": effects,
+                "targets": targets,
+                "renderers": renderers,
+                "styleMotifs": _scene_style_motifs(scene),
+            },
+        )
+    )
+
+
+def _scene_style_motifs(scene: SceneState) -> list[str]:
+    metadata_style = scene.metadata.get("stylePack")
+    if isinstance(metadata_style, Mapping):
+        motifs = metadata_style.get("motifs")
+        if isinstance(motifs, list):
+            return _string_list(motifs)
+    stage = scene.primitives.get("stage")
+    if stage is not None:
+        stage_style = stage.props.get("stylePack")
+        if isinstance(stage_style, Mapping):
+            motifs = stage_style.get("motifs")
+            if isinstance(motifs, list):
+                return _string_list(motifs)
+    return []
 
 
 def _merge_replay_event_summaries(summaries: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
