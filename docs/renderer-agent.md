@@ -240,9 +240,10 @@ The renderer agent should not receive a full new transcript on every event. Use 
 - Bounded repo topology: project root name, top-level directories/files, and an optional clipped file-tree sample.
 - Touched files: recent file paths from harn/tool events or coalesced batches, with operation hints when available.
 - World model: durable per-file activity plus structured change, command, health, and outcome facts with provenance, schema `harn-gibson.world-model.v1`.
+- World bindings: optional `props.worldBindings` entries on scene primitives, schema `harn-gibson.world-binding.v1`, declaring which project/world fact a visual property follows.
 - Recent harn events: the newest event batch plus short summaries of recent prior events.
 - Recent visualization context: recent render intents, render plans, and active animations/effects.
-- Visual continuity: compact anchors for currently visible stage objects, active animations, recent targets/effects, and style motifs.
+- Visual continuity: compact anchors for currently visible stage objects, active animations, world-binding counts/summaries, recent targets/effects, and style motifs.
 
 The executable fixture for this is `RendererContext`. A renderer that only implements `render(requests, scene)` receives the existing deterministic-compatible call shape. A renderer that implements `render_with_context(requests, scene, context)` receives a `harn-gibson.renderer-context.v1` object with project metadata, bounded repo topology, touched-file summaries, world-model facts, catalog data, scene context, render input, recent agent context, visualization history, visual-continuity anchors, and compaction metadata. `context.project.displayStyle` is the selected style id and `context.project.stylePack` is a `harn-gibson.style-pack.v1` payload with tones, canvas backdrop settings, CSS variables, and motifs.
 
@@ -261,7 +262,7 @@ After enough events or token growth, do a renderer compaction:
 
 The first renderer context is a compaction context. Later contexts are rolling summaries until the configured event interval is reached, at which point the next context includes the full scene again. This gives a future model renderer a predictable place to refresh state without forcing every event batch to resend the whole display state.
 
-`context.visualContinuity` is always compact, even during compaction turns. It includes `anchors` for visible stage primitives, whether each anchor is currently animated, active animation summaries including `timeline_cue` cue labels and `route_trace` waypoint ids/labels, recent effects/targets from render-intent history, and style motifs. Use it to preserve visual motifs and avoid recreating the same objects under new ids just because a rolling context omitted the full scene.
+`context.visualContinuity` is always compact, even during compaction turns. It includes `anchors` for visible stage primitives, whether each anchor is currently animated, active animation summaries including `timeline_cue` cue labels and `route_trace` waypoint ids/labels, compact `worldBindings` for anchored primitives, a total `worldBindingCount`, recent effects/targets from render-intent history, and style motifs. Use it to preserve visual motifs and avoid recreating the same objects under new ids just because a rolling context omitted the full scene.
 
 This mirrors harn session compaction, but it is separate from the primary agent conversation. The renderer agent owns visual continuity; harn owns task state.
 
@@ -278,6 +279,31 @@ Use `harn-gibson replay --output-render-intents intents.json --render-intent-rev
 Streaming deltas need special handling before a remote renderer agent is added. `message_update` and similar stream events should update local stream buffers or named text primitives with throttled display refreshes. The renderer agent should receive coarse stream milestones or compact summaries, not every streaming delta as a separate model turn.
 
 Repo topology follows the same rule. The current context includes a bounded top-level directory/file sample from `HARN_GIBSON_PROJECT_ROOT` and a coalesced `touchedFiles` list extracted from path-like event payload fields and command strings. `context.project.worldModel` accumulates touched-file activity, command/change facts, health checkpoints, and outcomes across renderer batches, while `touchedFiles` remains the bounded current batch. `dogfood --cwd PATH` sets that project root to the harn target workspace automatically, and `HARN_GIBSON_PROJECT_NAME` can override the display name. Runtime/auth-looking paths, virtualenvs, env files, caches, and test artifacts are omitted. The deterministic renderer already turns this context into a `repo-map` `node_graph`, a `repo-city` `city_block` mapped from the visible depth-2 repo sample, and, when files are touched, `repo-touch-field` particles plus repo-city extrusion; the hard-coded dogfood renderer also maps the same sample into a `wire_landscape` terrain plane with touched peaks, a `terminal_wall` file panel, an `access_matrix`, and an `orbital_map` uplink. City district and terrain peak height are based on bounded line-count metadata plus visible file/directory counts, while touched paths select and recolor the matching district, child block, peak, panel, access cell, or uplink node. The line counts are numeric metadata only; file contents are not included in renderer context. `city_block.cameraPath` accepts bounded transform keyframes so the browser can add slow camera drift over filesystem districts without changing the underlying scene. A future renderer can use the same context to create richer directory graphs, edited-file pulses, health beacons, terrain flyovers, terminal panel banks, uplink maps, or flythrough paths without receiving file contents or a full repository listing every turn.
+
+Scene primitives can declare how visuals are bound to durable facts without making the browser interpret those facts directly:
+
+```json
+{
+  "props": {
+    "worldBindings": [
+      {
+        "schema": "harn-gibson.world-binding.v1",
+        "entityId": "file:src/repo_map/cli.py",
+        "entityKind": "file",
+        "fieldPath": "entities.files[].activityCount",
+        "targetProp": "blocks[3].h",
+        "source": "worldModel",
+        "relationship": "scales",
+        "intent": "building height follows accumulated file activity"
+      }
+    ]
+  }
+}
+```
+
+`entityId`, `fieldPath`, and `targetProp` are the required core. `entityKind`, `source`, `relationship`, `intent`, `targetId`, and a bounded `transform` preview are optional. The context builder normalizes and bounds these entries before including them in rolling scene summaries and visual-continuity anchors. Malformed bindings are ignored rather than rejecting a plan; this metadata is for continuity and renderer/back-end interpretation, not for direct code execution.
+
+Shell-command path extraction uses shell tokenization before repo-path normalization so quoted `sed`/`perl` edit programs such as `s/return 2/return 0/` are not mistaken for files. `sed -i` and `perl -i` style commands are also treated as conservative edit signals by the world model, producing bounded `change` facts for the touched files even when exact line deltas are not available.
 
 ## Visual Catalog
 

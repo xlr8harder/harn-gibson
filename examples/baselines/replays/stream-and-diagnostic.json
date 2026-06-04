@@ -551,7 +551,7 @@
               "id": "repo-city-docs",
               "kind": "dir",
               "label": "docs",
-              "lines": 992,
+              "lines": 1018,
               "path": "docs",
               "tone": "green",
               "touched": 0,
@@ -743,7 +743,7 @@
               "id": "repo-city-src",
               "kind": "dir",
               "label": "src",
-              "lines": 3315,
+              "lines": 3327,
               "path": "src",
               "tone": "green",
               "touched": 0,
@@ -759,7 +759,7 @@
               "id": "repo-city-src-harn_gibson",
               "kind": "dir",
               "label": "harn_gibson",
-              "lines": 3315,
+              "lines": 3327,
               "path": "src/harn_gibson",
               "tone": "green",
               "touched": 0,
@@ -932,7 +932,129 @@
           ],
           "layout": "repo-bfs-depth-2",
           "rootName": "harn-gibson",
-          "touchedFiles": []
+          "touchedFiles": [],
+          "worldBindings": [
+            {
+              "entityId": "repo:.",
+              "entityKind": "repoEntry",
+              "fieldPath": "entries[].visibleLineCount",
+              "intent": "building height follows line, file, directory, and touched-file summaries",
+              "relationship": "scales",
+              "schema": "harn-gibson.world-binding.v1",
+              "source": "repoTopology",
+              "targetProp": "blocks[0].h"
+            },
+            {
+              "entityId": "repo:docs",
+              "entityKind": "repoEntry",
+              "fieldPath": "entries[].visibleLineCount",
+              "intent": "building height follows line, file, directory, and touched-file summaries",
+              "relationship": "scales",
+              "schema": "harn-gibson.world-binding.v1",
+              "source": "repoTopology",
+              "targetProp": "blocks[1].h"
+            },
+            {
+              "entityId": "repo:docs/integration",
+              "entityKind": "repoEntry",
+              "fieldPath": "entries[].visibleLineCount",
+              "intent": "building height follows line, file, directory, and touched-file summaries",
+              "relationship": "scales",
+              "schema": "harn-gibson.world-binding.v1",
+              "source": "repoTopology",
+              "targetProp": "blocks[2].h"
+            },
+            {
+              "entityId": "repo:docs/1.0-feature-set.md",
+              "entityKind": "repoEntry",
+              "fieldPath": "entries[].visibleLineCount",
+              "intent": "building height follows line, file, directory, and touched-file summaries",
+              "relationship": "scales",
+              "schema": "harn-gibson.world-binding.v1",
+              "source": "repoTopology",
+              "targetProp": "blocks[3].h"
+            },
+            {
+              "entityId": "repo:docs/1.0-release-audit.md",
+              "entityKind": "repoEntry",
+              "fieldPath": "entries[].visibleLineCount",
+              "intent": "building height follows line, file, directory, and touched-file summaries",
+              "relationship": "scales",
+              "schema": "harn-gibson.world-binding.v1",
+              "source": "repoTopology",
+              "targetProp": "blocks[4].h"
+            },
+            {
+              "entityId": "repo:docs/architecture.md",
+              "entityKind": "repoEntry",
+              "fieldPath": "entries[].visibleLineCount",
+              "intent": "building height follows line, file, directory, and touched-file summaries",
+              "relationship": "scales",
+              "schema": "harn-gibson.world-binding.v1",
+              "source": "repoTopology",
+              "targetProp": "blocks[5].h"
+            },
+            {
+              "entityId": "repo:examples",
+              "entityKind": "repoEntry",
+              "fieldPath": "entries[].visibleLineCount",
+              "intent": "building height follows line, file, directory, and touched-file summaries",
+              "relationship": "scales",
+              "schema": "harn-gibson.world-binding.v1",
+              "source": "repoTopology",
+              "targetProp": "blocks[6].h"
+            },
+            {
+              "entityId": "repo:examples/baselines",
+              "entityKind": "repoEntry",
+              "fieldPath": "entries[].visibleLineCount",
+              "intent": "building height follows line, file, directory, and touched-file summaries",
+              "relationship": "scales",
+              "schema": "harn-gibson.world-binding.v1",
+              "source": "repoTopology",
+              "targetProp": "blocks[7].h"
+            },
+            {
+              "entityId": "repo:examples/dogfood-replays",
+              "entityKind": "repoEntry",
+              "fieldPath": "entries[].visibleLineCount",
+              "intent": "building height follows line, file, directory, and touched-file summaries",
+              "relationship": "scales",
+              "schema": "harn-gibson.world-binding.v1",
+              "source": "repoTopology",
+              "targetProp": "blocks[8].h"
+            },
+            {
+              "entityId": "repo:examples/dogfood-workspaces",
+              "entityKind": "repoEntry",
+              "fieldPath": "entries[].visibleLineCount",
+              "intent": "building height follows line, file, directory, and touched-file summaries",
+              "relationship": "scales",
+              "schema": "harn-gibson.world-binding.v1",
+              "source": "repoTopology",
+              "targetProp": "blocks[9].h"
+            },
+            {
+              "entityId": "repo:examples/gibson1-replays",
+              "entityKind": "repoEntry",
+              "fieldPath": "entries[].visibleLineCount",
+              "intent": "building height follows line, file, directory, and touched-file summaries",
+              "relationship": "scales",
+              "schema": "harn-gibson.world-binding.v1",
+              "source": "repoTopology",
+              "targetProp": "blocks[10].h"
+            },
+            {
+              "entityId": "repo:scripts",
+              "entityKind": "repoEntry",
+              "fieldPath": "entries[].visibleLineCount",
+              "intent": "building height follows line, file, directory, and touched-file summaries",
+              "relationship": "scales",
+              "schema": "harn-gibson.world-binding.v1",
+              "source": "repoTopology",
+              "targetProp": "blocks[11].h"
+            }
+          ]
         },
         "region": "stage"
       },
@@ -1056,7 +1178,99 @@
             }
           ],
           "rootName": "harn-gibson",
-          "touchedFiles": []
+          "touchedFiles": [],
+          "worldBindings": [
+            {
+              "entityId": "repo:.",
+              "entityKind": "repoRoot",
+              "fieldPath": "rootName",
+              "intent": "root graph label follows the sampled project root",
+              "relationship": "labels",
+              "schema": "harn-gibson.world-binding.v1",
+              "source": "repoTopology",
+              "targetProp": "nodes[0].label"
+            },
+            {
+              "entityId": "repo:docs",
+              "entityKind": "repoEntry",
+              "fieldPath": "entries[].path",
+              "intent": "graph node label follows sampled repo entry",
+              "relationship": "labels",
+              "schema": "harn-gibson.world-binding.v1",
+              "source": "repoTopology",
+              "targetProp": "nodes[1].label"
+            },
+            {
+              "entityId": "repo:examples",
+              "entityKind": "repoEntry",
+              "fieldPath": "entries[].path",
+              "intent": "graph node label follows sampled repo entry",
+              "relationship": "labels",
+              "schema": "harn-gibson.world-binding.v1",
+              "source": "repoTopology",
+              "targetProp": "nodes[2].label"
+            },
+            {
+              "entityId": "repo:scripts",
+              "entityKind": "repoEntry",
+              "fieldPath": "entries[].path",
+              "intent": "graph node label follows sampled repo entry",
+              "relationship": "labels",
+              "schema": "harn-gibson.world-binding.v1",
+              "source": "repoTopology",
+              "targetProp": "nodes[3].label"
+            },
+            {
+              "entityId": "repo:src",
+              "entityKind": "repoEntry",
+              "fieldPath": "entries[].path",
+              "intent": "graph node label follows sampled repo entry",
+              "relationship": "labels",
+              "schema": "harn-gibson.world-binding.v1",
+              "source": "repoTopology",
+              "targetProp": "nodes[4].label"
+            },
+            {
+              "entityId": "repo:tests",
+              "entityKind": "repoEntry",
+              "fieldPath": "entries[].path",
+              "intent": "graph node label follows sampled repo entry",
+              "relationship": "labels",
+              "schema": "harn-gibson.world-binding.v1",
+              "source": "repoTopology",
+              "targetProp": "nodes[5].label"
+            },
+            {
+              "entityId": "repo:.gitignore",
+              "entityKind": "repoEntry",
+              "fieldPath": "entries[].path",
+              "intent": "graph node label follows sampled repo entry",
+              "relationship": "labels",
+              "schema": "harn-gibson.world-binding.v1",
+              "source": "repoTopology",
+              "targetProp": "nodes[6].label"
+            },
+            {
+              "entityId": "repo:pyproject.toml",
+              "entityKind": "repoEntry",
+              "fieldPath": "entries[].path",
+              "intent": "graph node label follows sampled repo entry",
+              "relationship": "labels",
+              "schema": "harn-gibson.world-binding.v1",
+              "source": "repoTopology",
+              "targetProp": "nodes[7].label"
+            },
+            {
+              "entityId": "repo:README.md",
+              "entityKind": "repoEntry",
+              "fieldPath": "entries[].path",
+              "intent": "graph node label follows sampled repo entry",
+              "relationship": "labels",
+              "schema": "harn-gibson.world-binding.v1",
+              "source": "repoTopology",
+              "targetProp": "nodes[8].label"
+            }
+          ]
         },
         "region": "stage"
       },

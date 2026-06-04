@@ -22,6 +22,8 @@ RENDERER_SYSTEM_PROMPT = (
     "terminal walls, access matrices, camera-drifting city_block districts, "
     "data rain, and structured svg_layer keyframes, path morphs, filters, or clips when they make the scene "
     "feel cinematic. "
+    "When a visual property follows a durable repo or world-model fact, attach props.worldBindings entries using "
+    "the harn-gibson.world-binding.v1 schema so later turns can preserve that mapping. "
     "Use only structured svg_layer data; never emit raw SVG markup, HTML, scripts, event handlers, "
     "foreignObject, or external references. If unsure, produce a small safe plan with status/log updates "
     "plus one visible primitive "
@@ -107,6 +109,7 @@ def _context_metadata(context: Mapping[str, Any]) -> dict[str, Any]:
         },
         "requestCount": len(request_items),
         "visualAnchorCount": _coerce_int(visual_continuity.get("anchorCount"), 0),
+        "worldBindingCount": _coerce_int(visual_continuity.get("worldBindingCount"), 0),
         "activeAnimationCount": _coerce_int(visual_continuity.get("activeAnimationCount"), 0),
         "contextChars": len(_json_text(context)),
     }

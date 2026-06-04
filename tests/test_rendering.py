@@ -47,6 +47,7 @@ from harn_gibson.rendering import (
 from harn_gibson.scene import SceneAnimation, SceneEngine, SceneMutation, ScenePrimitive
 from harn_gibson.sinks import EventBuffer
 from harn_gibson.styles import style_pack_from_name
+from harn_gibson.world_bindings import WORLD_BINDING_SCHEMA
 
 
 def event(sequence: int = 1, event_type: str = "input") -> GibsonEvent:
@@ -87,6 +88,32 @@ def test_touched_files_context_from_events_uses_default_config() -> None:
         "count": 1,
         "truncated": False,
     }
+
+
+def test_touched_files_context_skips_sed_and_perl_program_fragments() -> None:
+    touched = touched_files_context_from_events(
+        (
+            GibsonEvent.from_raw(
+                {
+                    "type": "tool_call",
+                    "toolName": "bash",
+                    "input": {
+                        "command": (
+                            "sed -i 's/return 2/return 0/' src/repo_map/cli.py && "
+                            "perl -pi -e 's/foo/bar/' tests/test_cli.py"
+                        )
+                    },
+                },
+                8,
+                timestamp_ms=80,
+            ),
+        )
+    )
+
+    assert [item["path"] for item in touched["files"]] == ["src/repo_map/cli.py", "tests/test_cli.py"]
+    assert all(item["sources"] == ["input.command"] for item in touched["files"])
+    assert "s/return" not in {item["path"] for item in touched["files"]}
+    assert "2/return" not in {item["path"] for item in touched["files"]}
 
 
 def test_render_request_step_and_plan_helpers() -> None:
@@ -1043,6 +1070,14 @@ def test_deterministic_renderer_adds_repo_graph_from_context(tmp_path: Path) -> 
     assert {node["id"] for node in repo_map.props["nodes"]} >= {"repo-root", "repo:src", "repo:docs", "touch:0"}
     assert next(node for node in repo_map.props["nodes"] if node["id"] == "repo:README-link.md")["tone"] == "amber"
     assert repo_map.props["touchedFiles"][0]["path"] == "src/harn_gibson/rendering.py"
+    assert repo_map.props["worldBindings"][0]["schema"] == WORLD_BINDING_SCHEMA
+    assert repo_map.props["worldBindings"][0]["entityId"] == "repo:."
+    assert any(
+        binding["entityId"] == "file:src/harn_gibson/rendering.py"
+        and binding["source"] == "worldModel"
+        and binding["relationship"] == "highlights"
+        for binding in repo_map.props["worldBindings"]
+    )
     fallback_edge = next(edge for edge in repo_map.props["edges"] if edge["target"] == "touch:2")
     assert fallback_edge["source"] == "repo-root"
     assert repo_city is not None
@@ -1063,11 +1098,28 @@ def test_deterministic_renderer_adds_repo_graph_from_context(tmp_path: Path) -> 
     assert city_blocks["repo-city-README-link-md"]["lines"] == 0
     assert repo_city.props["cameraPath"]["keyframes"][1]["scale"] == 1.043
     assert repo_city.props["cameraPath"]["durationMs"] == 7600
+    city_height_binding = next(
+        binding for binding in repo_city.props["worldBindings"] if binding["entityId"] == "repo:src/harn_gibson"
+    )
+    assert city_height_binding["targetProp"].startswith("blocks[")
+    assert city_height_binding["targetProp"].endswith("].h")
+    assert city_height_binding["source"] == "repoTopology"
+    assert any(
+        binding["entityId"] == "file:src/harn_gibson/rendering.py"
+        and binding["targetProp"] == "focusBlockId"
+        and binding["relationship"] == "focuses"
+        for binding in repo_city.props["worldBindings"]
+    )
     assert touch_field is not None
     assert touch_field.props["paths"] == [
         "src/harn_gibson/rendering.py",
         "docs/renderer-agent.md",
         "tests/test_rendering.py",
+    ]
+    assert [binding["targetProp"] for binding in touch_field.props["worldBindings"]] == [
+        "paths[0]",
+        "paths[1]",
+        "paths[2]",
     ]
     assert repo_animation is not None
     assert repo_animation.target_id == "repo-map"
@@ -1252,7 +1304,21 @@ def test_renderer_context_builder_compaction_rolling_and_history(tmp_path: Path)
                     "continuity-graph",
                     "node_graph",
                     "stage",
-                    {"tone": "cyan", "focusNodeId": "renderer", "label": "context-map"},
+                    {
+                        "tone": "cyan",
+                        "focusNodeId": "renderer",
+                        "label": "context-map",
+                        "worldBindings": [
+                            {
+                                "entityId": "file:src/harn_gibson/rendering.py",
+                                "entityKind": "file",
+                                "fieldPath": "activityCount",
+                                "targetProp": "nodes[1].tone",
+                                "source": "worldModel",
+                                "relationship": "highlights",
+                            }
+                        ],
+                    },
                 ),
             ),
             SceneMutation(
@@ -1340,6 +1406,7 @@ def test_renderer_context_builder_compaction_rolling_and_history(tmp_path: Path)
     assert compaction.to_dict()["schema"] == "harn-gibson.renderer-context.v1"
     assert compaction.project["schemas"]["rendererContext"] == "harn-gibson.renderer-context.v1"
     assert compaction.project["schemas"]["repoTopology"] == "harn-gibson.repo-topology.v1"
+    assert compaction.project["schemas"]["worldBinding"] == "harn-gibson.world-binding.v1"
     assert compaction.project["schemas"]["worldModel"] == "harn-gibson.world-model.v1"
     assert compaction.project["displayStyle"] == "mainframe"
     assert compaction.project["stylePack"] == {"id": "mainframe", "motifs": ["phosphor-grid"]}
@@ -1429,6 +1496,7 @@ def test_renderer_context_builder_compaction_rolling_and_history(tmp_path: Path)
     assert compaction.visual_continuity["mode"] == "compaction"
     assert compaction.visual_continuity["sceneRevision"] == scene.state.revision
     assert compaction.visual_continuity["style"] == {"id": "mainframe", "motifs": ["phosphor-grid"]}
+    assert compaction.visual_continuity["worldBindingCount"] == 1
     assert compaction.visual_continuity["activeAnimationCount"] == 5
     cue_summary = next(item for item in compaction.visual_continuity["activeAnimations"] if item["id"] == "cue-1")
     assert cue_summary["kind"] == "timeline_cue"
@@ -1454,6 +1522,9 @@ def test_renderer_context_builder_compaction_rolling_and_history(tmp_path: Path)
     graph_anchor = next(item for item in compaction.visual_continuity["anchors"] if item["id"] == "continuity-graph")
     assert graph_anchor["focus"] == "renderer"
     assert graph_anchor["tone"] == "cyan"
+    assert graph_anchor["worldBindingCount"] == 1
+    assert graph_anchor["worldBindings"][0]["targetId"] == "continuity-graph"
+    assert graph_anchor["worldBindings"][0]["relationship"] == "highlights"
     stream_anchor = next(item for item in compaction.visual_continuity["anchors"] if item["id"] == "assistant-stream")
     assert stream_anchor["animated"] is True
     assert stream_anchor["isStreaming"] is True
@@ -1485,6 +1556,9 @@ def test_renderer_context_builder_compaction_rolling_and_history(tmp_path: Path)
     stream_summary = next(item for item in rolling.scene["primitives"] if item["id"] == "assistant-stream")
     assert stream_summary["propsPreview"]["text"] == ["abcde...", {"nested": "zyxwv..."}]
     assert stream_summary["propsPreview"]["isStreaming"] is True
+    graph_summary = next(item for item in rolling.scene["primitives"] if item["id"] == "continuity-graph")
+    assert graph_summary["worldBindingCount"] == 1
+    assert graph_summary["worldBindings"][0]["entityId"] == "file:src/harn_gibson/rendering.py"
     assert rolling.visualization_context[0]["renderer"] == "first"
     assert rolling.visualization_context[0]["intent"] == "visualize tool_call"
     assert rolling.visualization_context[0]["renderIntent"]["renderer"] == "first"

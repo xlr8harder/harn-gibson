@@ -130,6 +130,13 @@ from harn_gibson.styles import (
     style_pack_from_name,
     style_pack_ids,
 )
+from harn_gibson.world_bindings import (
+    WORLD_BINDING_SCHEMA,
+    WORLD_BINDINGS_PROP,
+    normalize_world_bindings,
+    world_binding,
+    world_bindings_from_props,
+)
 from harn_gibson.world_model import (
     WORLD_MODEL_SCHEMA,
     ChangeObservation,
@@ -202,6 +209,8 @@ __all__ = [
     "StreamBinding",
     "TimelineWindow",
     "VisualCatalog",
+    "WORLD_BINDINGS_PROP",
+    "WORLD_BINDING_SCHEMA",
     "WORLD_MODEL_SCHEMA",
     "ChangeObservation",
     "ChangeWorldEntity",
@@ -230,6 +239,7 @@ __all__ = [
     "load_hook_module",
     "model_renderer_from_env",
     "model_renderer_request_payload",
+    "normalize_world_bindings",
     "outcome_from_event",
     "parse_renderer_command",
     "phase_for_event",
@@ -284,4 +294,6 @@ __all__ = [
     "to_jsonable",
     "validate_render_plan",
     "visual_catalog_payload",
+    "world_binding",
+    "world_bindings_from_props",
 ]

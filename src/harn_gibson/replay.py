@@ -30,6 +30,7 @@ from harn_gibson.rendering import (
 from harn_gibson.scene import SceneMutation, SceneState, mutation_from_mapping, scene_state_from_mapping
 from harn_gibson.server import GibsonServerState, event_from_payload, submit_event_to_renderer
 from harn_gibson.styles import style_pack_from_name
+from harn_gibson.world_bindings import world_bindings_from_props
 
 ReplayStepKind = Literal["event", "raw_event", "render_plan", "mutations"]
 ReplayExpectationOp = Literal["equals", "contains", "exists", "min", "max"]
@@ -685,6 +686,10 @@ def _replay_scene_visual_continuity_summary(scene: SceneState) -> dict[str, Any]
         for primitive in sorted(scene.primitives.values(), key=lambda item: item.id)
         if primitive.region == "stage"
     ]
+    world_binding_count = sum(
+        len(world_bindings_from_props(primitive.props, target_id=primitive.id, max_bindings=32))
+        for primitive in scene.primitives.values()
+    )
     active_animation_targets = sorted(
         {animation.target_id for animation in scene.animations.values() if animation.target_id}
     )
@@ -706,6 +711,7 @@ def _replay_scene_visual_continuity_summary(scene: SceneState) -> dict[str, Any]
         (
             {
                 "maxVisualAnchorCount": len(anchors),
+                "maxWorldBindingCount": world_binding_count,
                 "maxActiveAnimationCount": len(scene.animations),
                 "anchors": anchors,
                 "effects": effects,
@@ -3452,6 +3458,7 @@ def _renderer_context_chunk_summary(
     context_chars = 0
     request_count = 0
     visual_anchor_count = 0
+    world_binding_count = 0
     active_animation_count = 0
     for prompt in prompts:
         metadata = prompt["metadata"]
@@ -3467,6 +3474,7 @@ def _renderer_context_chunk_summary(
         context_chars += _coerce_int(metadata["contextChars"], 0)
         request_count += _coerce_int(metadata["requestCount"], 0)
         visual_anchor_count = max(visual_anchor_count, _coerce_int(metadata.get("visualAnchorCount"), 0))
+        world_binding_count = max(world_binding_count, _coerce_int(metadata.get("worldBindingCount"), 0))
         active_animation_count = max(active_animation_count, _coerce_int(metadata.get("activeAnimationCount"), 0))
     start_ms = min(starts)
     end_ms = max(ends)
@@ -3484,6 +3492,7 @@ def _renderer_context_chunk_summary(
         "messageChars": message_chars,
         "contextChars": context_chars,
         "visualAnchorCount": visual_anchor_count,
+        "worldBindingCount": world_binding_count,
         "activeAnimationCount": active_animation_count,
         **_renderer_context_chunk_continuity_summary(contexts),
     }
@@ -3525,6 +3534,7 @@ def _renderer_chunks_continuity_summary(chunks: Any) -> dict[str, Any]:
     return _merge_visual_continuity_summaries(
         {
             "maxVisualAnchorCount": _coerce_int(chunk.get("visualAnchorCount"), 0),
+            "maxWorldBindingCount": _coerce_int(chunk.get("worldBindingCount"), 0),
             "maxActiveAnimationCount": _coerce_int(chunk.get("activeAnimationCount"), 0),
             "anchors": chunk.get("continuityAnchors"),
             "effects": chunk.get("continuityEffects"),
@@ -3543,9 +3553,11 @@ def _merge_visual_continuity_summaries(summaries: Iterable[Mapping[str, Any]]) -
     renderers: list[str] = []
     motifs: list[str] = []
     max_visual_anchor_count = 0
+    max_world_binding_count = 0
     max_active_animation_count = 0
     for summary in summaries:
         max_visual_anchor_count = max(max_visual_anchor_count, _int_value(summary.get("maxVisualAnchorCount")))
+        max_world_binding_count = max(max_world_binding_count, _int_value(summary.get("maxWorldBindingCount")))
         max_active_animation_count = max(max_active_animation_count, _int_value(summary.get("maxActiveAnimationCount")))
         _extend_bounded_unique(anchors, summary.get("anchors"))
         _extend_bounded_unique(effects, summary.get("effects"))
@@ -3555,6 +3567,8 @@ def _merge_visual_continuity_summaries(summaries: Iterable[Mapping[str, Any]]) -
     payload: dict[str, Any] = {}
     if max_visual_anchor_count:
         payload["maxVisualAnchorCount"] = max_visual_anchor_count
+    if max_world_binding_count:
+        payload["maxWorldBindingCount"] = max_world_binding_count
     if max_active_animation_count:
         payload["maxActiveAnimationCount"] = max_active_animation_count
     if anchors:

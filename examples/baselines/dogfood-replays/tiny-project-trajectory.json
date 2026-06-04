@@ -654,7 +654,7 @@
             "intent": "stage tool_call as a Hollywood terminal intrusion",
             "phase": "before",
             "renderer": "gibson-dogfood-showcase",
-            "touchedFileCount": 4
+            "touchedFileCount": 3
           },
           "mutationCount": 28,
           "renderer": "gibson-dogfood-showcase",

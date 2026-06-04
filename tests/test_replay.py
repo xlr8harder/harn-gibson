@@ -153,6 +153,7 @@ def test_renderer_prompt_metadata_handles_sparse_context() -> None:
     assert prompt["metadata"]["routes"] == ["renderer_agent", "direct_scene"]
     assert prompt["metadata"]["timeline"] == {"startMs": 0, "endMs": 0, "durationMs": 12}
     assert prompt["metadata"]["displayStyle"] == "gibson"
+    assert prompt["metadata"]["worldBindingCount"] == 0
 
 
 def test_replay_event_steps_file_io_and_writers(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -259,6 +260,9 @@ def test_replay_event_steps_file_io_and_writers(tmp_path: Path, monkeypatch: pyt
     assert context_payload["contexts"][0]["context"]["project"]["schemas"]["worldModel"] == (
         "harn-gibson.world-model.v1"
     )
+    assert context_payload["contexts"][0]["context"]["project"]["schemas"]["worldBinding"] == (
+        "harn-gibson.world-binding.v1"
+    )
     assert context_result.to_dict()["rendererContexts"][0]["index"] == 0
     prompts_path = tmp_path / "out" / "renderer-prompts.json"
     prompts_review_path = tmp_path / "out" / "renderer-prompts.html"
@@ -277,6 +281,7 @@ def test_replay_event_steps_file_io_and_writers(tmp_path: Path, monkeypatch: pyt
     assert prompt["metadata"]["routes"] == ["renderer_agent"]
     assert prompt["metadata"]["displayStyle"] == "gibson"
     assert prompt["metadata"]["visualAnchorCount"] >= 1
+    assert prompt["metadata"]["worldBindingCount"] >= 0
     assert prompt["metadata"]["activeAnimationCount"] >= 0
     assert prompt["messages"][0]["role"] == "system"
     assert "harn-gibson.render-plan.v1" in prompt["messages"][0]["content"]
@@ -292,6 +297,7 @@ def test_replay_event_steps_file_io_and_writers(tmp_path: Path, monkeypatch: pyt
     second_context["mode"] = "rolling"
     second_context["renderInput"]["timeline"] = {"startMs": 2000, "endMs": 2400, "durationMs": 400}
     second_context["visualContinuity"]["anchorCount"] = 12
+    second_context["visualContinuity"]["worldBindingCount"] = 4
     second_context["visualContinuity"]["activeAnimationCount"] = 7
     second_context["visualContinuity"]["anchors"] = [
         {"id": "persisted-city", "kind": "city_block"},
@@ -331,6 +337,7 @@ def test_replay_event_steps_file_io_and_writers(tmp_path: Path, monkeypatch: pyt
     assert chunks["chunks"][0]["requestCount"] == 2
     assert chunks["chunks"][0]["timeline"] == {"startMs": 1001, "endMs": 2400, "durationMs": 1399}
     assert chunks["chunks"][0]["visualAnchorCount"] == 12
+    assert chunks["chunks"][0]["worldBindingCount"] == 4
     assert chunks["chunks"][0]["activeAnimationCount"] == 7
     assert "persisted-city" in chunks["chunks"][0]["continuityAnchors"]
     assert chunks["chunks"][0]["continuityEffects"] == ["scan", "breach_wave"]
@@ -1989,7 +1996,7 @@ def test_checked_in_dogfood_replay_suite_summarizes_trajectory_coverage() -> Non
         "failedToolResultCount": 3,
         "runtimeErrorCount": 1,
         "browserInputCount": 2,
-        "touchedFileCount": 12,
+        "touchedFileCount": 10,
         "topLevelAreaCount": 7,
         "topLevelAreas": ["README.md", "docs", "fixtures", "pyproject.toml", "scripts", "src", "tests"],
         "routes": ["renderer_agent"],
@@ -2032,14 +2039,14 @@ def test_checked_in_dogfood_replay_suite_summarizes_trajectory_coverage() -> Non
         "toolCounts": {"bash": 14},
         "toolNames": ["bash"],
     }
-    assert touched_files["count"] == 12
+    assert touched_files["count"] == 10
     assert touched_files["topLevelCounts"] == {
         "README.md": 1,
         "docs": 1,
         "fixtures": 1,
         "pyproject.toml": 1,
         "scripts": 1,
-        "src": 6,
+        "src": 4,
         "tests": 1,
     }
     assert touched_files["paths"] == [
@@ -2048,10 +2055,8 @@ def test_checked_in_dogfood_replay_suite_summarizes_trajectory_coverage() -> Non
         "fixtures/tasks.txt",
         "pyproject.toml",
         "scripts/line_summary.py",
-        "src/repo_map",
         "src/repo_map/__init__.py",
         "src/repo_map/cli.py",
-        "src/tiny_tasks",
         "src/tiny_tasks/__init__.py",
         "src/tiny_tasks/cli.py",
         "tests/test_cli.py",
@@ -2073,7 +2078,7 @@ def test_checked_in_dogfood_replay_suite_summarizes_trajectory_coverage() -> Non
         "fixtures": 1,
         "pyproject.toml": 1,
         "scripts": 1,
-        "src": 3,
+            "src": 2,
         "tests": 1,
     }
     assert payload["files"][1]["eventSummary"]["eventTypeCounts"] == {
@@ -3119,7 +3124,21 @@ def test_replay_suite_summary_helpers_handle_sparse_shapes() -> None:
 
 def test_replay_scene_visual_continuity_summary_covers_scene_state() -> None:
     scene = SceneState(metadata={"stylePack": {"motifs": ["meta-grid", 7]}})
-    scene.primitives["city"] = ScenePrimitive("city", "city_block", "stage", {"label": "CITY"})
+    scene.primitives["city"] = ScenePrimitive(
+        "city",
+        "city_block",
+        "stage",
+        {
+            "label": "CITY",
+            "worldBindings": [
+                {
+                    "entityId": "file:src/app.py",
+                    "fieldPath": "activityCount",
+                    "targetProp": "blocks[0].h",
+                }
+            ],
+        },
+    )
     scene.primitives["status"] = ScenePrimitive("status", "status", "mast", {"text": "ok"})
     scene.animations["empty-target"] = SceneAnimation("empty-target", "", "hold", 0, 1000)
     scene.animations["scan"] = SceneAnimation("scan", "city", "scan", 0, 1000)
@@ -3133,6 +3152,7 @@ def test_replay_scene_visual_continuity_summary_covers_scene_state() -> None:
         "effects": ["primitive:city_block", "animation:hold", "animation:scan"],
         "maxActiveAnimationCount": 2,
         "maxVisualAnchorCount": 1,
+        "maxWorldBindingCount": 1,
         "renderers": ["model"],
         "styleMotifs": ["meta-grid", "7"],
         "targets": ["city"],

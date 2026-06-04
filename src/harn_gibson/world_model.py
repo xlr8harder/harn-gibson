@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from typing import Any, Literal
 
 from harn_gibson.events import GibsonEvent
+from harn_gibson.shell_commands import shell_command_has_in_place_edit
 
 WorldFactSource = Literal["observed", "inferred", "assumed", "stale"]
 WORLD_MODEL_SCHEMA = "harn-gibson.world-model.v1"
@@ -659,6 +660,9 @@ def _change_delta_from_event(event: GibsonEvent) -> dict[str, Any] | None:
         written = _write_text_delta_from_payload(event.payload)
         if written is not None:
             return written
+    shell_edit = _shell_in_place_edit_delta_from_payload(event.payload)
+    if shell_edit is not None:
+        return shell_edit
     return None
 
 
@@ -762,6 +766,16 @@ def _write_text_delta_from_payload(payload: Mapping[str, Any]) -> dict[str, Any]
     return None
 
 
+def _shell_in_place_edit_delta_from_payload(payload: Mapping[str, Any]) -> dict[str, Any] | None:
+    found = _command_text_from_value(payload, ())
+    if found is None:
+        return None
+    command, source = found
+    if not shell_command_has_in_place_edit(command):
+        return None
+    return {"source": f"{_clip_text(source, _MAX_CHANGE_SOURCE_CHARS)}.inPlaceEdit", "addedLines": 1, "removedLines": 1}
+
+
 def _write_text_item(value: Any, key_path: tuple[str, ...]) -> tuple[str, str] | None:
     if isinstance(value, Mapping):
         for key, child in value.items():
@@ -851,6 +865,8 @@ def _change_operation(event: GibsonEvent, touch: Mapping[str, Any]) -> str:
     if "patch" in tool_name:
         return "patch"
     if "edit" in tool_name or "replace" in tool_name:
+        return "edit"
+    if _shell_in_place_edit_delta_from_payload(event.payload) is not None:
         return "edit"
     operation = touch.get("operation")
     if isinstance(operation, str) and operation:

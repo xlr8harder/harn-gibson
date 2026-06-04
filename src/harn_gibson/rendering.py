@@ -23,8 +23,10 @@ from harn_gibson.scene import (
     default_mutations_for_event,
     scene_update_payload,
 )
+from harn_gibson.shell_commands import shell_command_path_candidates
 from harn_gibson.sinks import EventBuffer
 from harn_gibson.styles import style_pack_from_name
+from harn_gibson.world_bindings import WORLD_BINDING_SCHEMA, world_binding, world_bindings_from_props
 from harn_gibson.world_model import WORLD_MODEL_SCHEMA, WorldModel
 
 RenderMode = Literal["blocking", "async"]
@@ -403,6 +405,7 @@ class RendererContextBuilder:
                 "repoTopology": "harn-gibson.repo-topology.v1",
                 "scene": "harn-gibson.scene.v1",
                 "touchedFiles": "harn-gibson.touched-files.v1",
+                "worldBinding": WORLD_BINDING_SCHEMA,
                 "worldModel": WORLD_MODEL_SCHEMA,
             },
             "repoTopology": repo_topology,
@@ -1757,7 +1760,13 @@ def _primitive_summary(primitive: Any, max_chars: int) -> dict[str, Any]:
         for key, value in sorted(primitive.props.items())
         if key in {"text", "title", "phase", "tone", "streamId", "isStreaming"}
     }
-    return {
+    world_bindings = world_bindings_from_props(
+        primitive.props,
+        target_id=primitive.id,
+        max_bindings=4,
+        max_text_chars=max(64, max_chars),
+    )
+    summary = {
         "id": primitive.id,
         "kind": primitive.kind,
         "region": primitive.region,
@@ -1765,6 +1774,10 @@ def _primitive_summary(primitive: Any, max_chars: int) -> dict[str, Any]:
         "propsPreview": props_preview,
         "children": list(primitive.children),
     }
+    if world_bindings:
+        summary["worldBindingCount"] = len(world_bindings)
+        summary["worldBindings"] = list(world_bindings)
+    return summary
 
 
 def _animation_summary(animation: Any) -> dict[str, Any]:
@@ -1791,6 +1804,10 @@ def _visual_continuity_context(
         for primitive in sorted(scene.primitives.values(), key=lambda item: item.id)
         if primitive.region == "stage"
     ][: max(0, config.max_visual_anchors)]
+    world_binding_count = sum(
+        len(world_bindings_from_props(primitive.props, target_id=primitive.id, max_bindings=32))
+        for primitive in scene.primitives.values()
+    )
     recent_effects: list[str] = []
     recent_targets: list[str] = []
     recent_renderers: list[str] = []
@@ -1813,6 +1830,7 @@ def _visual_continuity_context(
         },
         "anchorCount": len(anchors),
         "anchors": anchors,
+        "worldBindingCount": world_binding_count,
         "activeAnimationCount": len(scene.animations),
         "activeAnimations": [
             _visual_animation_summary(animation, config.max_prop_preview_chars)
@@ -1849,6 +1867,15 @@ def _visual_anchor_summary(
         summary["focus"] = _clip_preview(focus, max_chars)
     if props.get("isStreaming") is not None:
         summary["isStreaming"] = bool(props.get("isStreaming"))
+    world_bindings = world_bindings_from_props(
+        props,
+        target_id=primitive.id,
+        max_bindings=4,
+        max_text_chars=max(64, max_chars),
+    )
+    if world_bindings:
+        summary["worldBindingCount"] = len(world_bindings)
+        summary["worldBindings"] = list(world_bindings)
     return summary
 
 
@@ -1971,6 +1998,18 @@ def _repo_visual_mutations(context: RendererContext, event: GibsonEvent) -> tupl
                             "blend": "screen",
                             "seed": event.sequence + len(touched_paths),
                             "paths": touched_paths,
+                            "worldBindings": [
+                                world_binding(
+                                    f"file:{path}",
+                                    "entities.files[].activityCount",
+                                    f"paths[{index}]",
+                                    entity_kind="file",
+                                    source="worldModel",
+                                    relationship="emits",
+                                    intent="particles mark recent file activity",
+                                )
+                                for index, path in enumerate(touched_paths[:6])
+                            ],
                         },
                     ),
                 ),
@@ -2078,6 +2117,7 @@ def _repo_graph_props(
         "touchedFiles": [dict(item) for item in touched_files],
         "eventSequence": event.sequence,
         "labels": [root_name, f"{len(touched_files)} touched"],
+        "worldBindings": _repo_graph_world_bindings(repo_entries, touched_files),
     }
 
 
@@ -2147,7 +2187,84 @@ def _repo_city_props(
         "touchedFiles": [dict(item) for item in touched_files],
         "eventSequence": event.sequence,
         "cameraPath": _repo_city_camera_path(event, len(touched_paths)),
+        "worldBindings": _repo_city_world_bindings(blocks, touched_paths),
     }
+
+
+def _repo_graph_world_bindings(
+    repo_entries: Sequence[Mapping[str, Any]],
+    touched_files: Sequence[Mapping[str, Any]],
+) -> list[dict[str, Any]]:
+    bindings = [
+        world_binding(
+            "repo:.",
+            "rootName",
+            "nodes[0].label",
+            entity_kind="repoRoot",
+            source="repoTopology",
+            relationship="labels",
+            intent="root graph label follows the sampled project root",
+        )
+    ]
+    for index, entry in enumerate(repo_entries[:8], start=1):
+        path = str(entry.get("path") or entry.get("name") or f"entry-{index}")
+        bindings.append(
+            world_binding(
+                f"repo:{path}",
+                "entries[].path",
+                f"nodes[{index}].label",
+                entity_kind="repoEntry",
+                source="repoTopology",
+                relationship="labels",
+                intent="graph node label follows sampled repo entry",
+            )
+        )
+    node_offset = 1 + min(len(repo_entries), 8)
+    for index, item in enumerate(touched_files[:4]):
+        path = str(item.get("path") or f"touch-{index}")
+        bindings.append(
+            world_binding(
+                f"file:{path}",
+                "entities.files[].activityCount",
+                f"nodes[{node_offset + index}].tone",
+                entity_kind="file",
+                source="worldModel",
+                relationship="highlights",
+                intent="touched-file node tone follows accumulated file activity",
+            )
+        )
+    return bindings
+
+
+def _repo_city_world_bindings(
+    blocks: Sequence[Mapping[str, Any]],
+    touched_paths: Sequence[str],
+) -> list[dict[str, Any]]:
+    bindings = [
+        world_binding(
+            f"repo:{block.get('path') or '.'}",
+            "entries[].visibleLineCount",
+            f"blocks[{index}].h",
+            entity_kind="repoEntry",
+            source="repoTopology",
+            relationship="scales",
+            intent="building height follows line, file, directory, and touched-file summaries",
+        )
+        for index, block in enumerate(blocks[:12])
+    ]
+    bindings.extend(
+        world_binding(
+            f"file:{path}",
+            "entities.files[].activityCount",
+            "focusBlockId",
+            entity_kind="file",
+            source="worldModel",
+            relationship="focuses",
+            intent="city focus follows the current touched file",
+        )
+        for path in touched_paths[:4]
+    )
+    return bindings
 
 
 def _repo_city_camera_path(event: GibsonEvent, touched_count: int) -> dict[str, Any]:
@@ -2338,7 +2455,6 @@ _PATH_KEYS = {
     "targetPath",
 }
 _COMMAND_KEYS = {"cmd", "command", "shellCommand"}
-_COMMAND_PATH_PATTERN = re.compile(r"(?<![A-Za-z0-9_./-])(?:\.{0,2}/)?[A-Za-z0-9_.@+-]+(?:/[A-Za-z0-9_.@+-]+)+")
 _MAX_REPO_LINE_COUNT_BYTES = 256_000
 
 
@@ -2578,8 +2694,8 @@ def _collect_command_paths(
     paths: list[tuple[str, str]],
     source: str,
 ) -> None:
-    for match in _COMMAND_PATH_PATTERN.finditer(command):
-        normalized = _normalize_repo_path(match.group(0), config)
+    for candidate in shell_command_path_candidates(command):
+        normalized = _normalize_repo_path(candidate, config)
         if normalized is not None:
             paths.append((normalized, source))
 

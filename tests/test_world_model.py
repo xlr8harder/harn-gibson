@@ -369,6 +369,51 @@ def test_world_model_tracks_structured_change_facts() -> None:
     assert changes_from_event(no_delta, ({"path": "src/noop.py"},), None) == ()
 
 
+def test_world_model_tracks_shell_in_place_edit_changes() -> None:
+    sed_call = GibsonEvent.from_raw(
+        {
+            "type": "tool_call",
+            "toolName": "bash",
+            "input": {"command": "sed -i 's/return 2/return 0/' src/repo_map/cli.py"},
+        },
+        9,
+        timestamp_ms=900,
+    )
+    read_only_sed = GibsonEvent.from_raw(
+        {
+            "type": "tool_call",
+            "toolName": "bash",
+            "input": {"command": "sed 's/return 2/return 0/' src/repo_map/cli.py"},
+        },
+        10,
+        timestamp_ms=1000,
+    )
+    touched_files = {
+        "files": [
+            {
+                "path": "src/repo_map/cli.py",
+                "operation": "bash:before",
+                "firstSequence": 9,
+                "lastSequence": 9,
+            }
+        ]
+    }
+    model = WorldModel()
+
+    model.apply_batch((sed_call, read_only_sed), touched_files)
+    changes = model.to_dict()["entities"]["changes"]
+
+    assert len(changes) == 1
+    assert changes[0]["path"] == "src/repo_map/cli.py"
+    assert changes[0]["operation"] == "edit"
+    assert changes[0]["source"] == "input.command.inPlaceEdit"
+    assert changes[0]["status"] == "planned"
+    assert changes[0]["addedLines"] == 1
+    assert changes[0]["removedLines"] == 1
+    assert changes[0]["magnitudeLines"] == 2
+    assert changes_from_event(read_only_sed, ({"path": "src/repo_map/cli.py"},), None) == ()
+
+
 def test_world_model_change_facts_handle_optional_shapes() -> None:
     model = WorldModel()
     custom = GibsonEvent.from_raw(
