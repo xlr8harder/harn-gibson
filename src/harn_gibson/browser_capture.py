@@ -64,6 +64,8 @@ CANVAS_METRICS_SCRIPT = """canvas => {
   };
 }"""
 
+CAPTURE_READY_TIMEOUT_MS = 15_000
+
 
 def resolve_playwright_factory() -> PlaywrightFactory:
     try:
@@ -94,13 +96,14 @@ def capture_scene_screenshot(
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     actual_host, actual_port = server.server_address
-    url = f"http://{actual_host}:{actual_port}"
+    url = f"http://{actual_host}:{actual_port}?capture=1"
     try:
         with factory() as driver:
             browser = driver.chromium.launch()
             try:
                 page = browser.new_page(viewport={"width": width, "height": height})
                 page.goto(url, wait_until="domcontentloaded")
+                page.wait_for_function("window.__gibsonCaptureReady === true", timeout=CAPTURE_READY_TIMEOUT_MS)
                 if wait_ms > 0:
                     page.wait_for_timeout(wait_ms)
                 canvas_metrics = capture_canvas_metrics(page)

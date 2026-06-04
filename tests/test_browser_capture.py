@@ -8,6 +8,7 @@ from typing import Any
 import pytest
 
 from harn_gibson.browser_capture import (
+    CAPTURE_READY_TIMEOUT_MS,
     BrowserScreenshotResult,
     capture_canvas_metrics,
     capture_scene_screenshot,
@@ -35,6 +36,9 @@ class FakePage:
 
     def goto(self, url: str, wait_until: str) -> None:
         self.calls.append(("goto", (url, wait_until)))
+
+    def wait_for_function(self, expression: str, *, timeout: int) -> None:
+        self.calls.append(("wait_for_function", (expression, timeout)))
 
     def wait_for_timeout(self, wait_ms: int) -> None:
         self.calls.append(("wait_for_timeout", wait_ms))
@@ -135,6 +139,8 @@ def test_capture_scene_screenshot_serves_scene_with_fake_browser(tmp_path: Path)
     }
     assert output.read_bytes() == b"fake replay screenshot"
     assert ("new_page", {"width": 640, "height": 480}) in calls
+    assert any(call[0] == "goto" and str(call[1][0]).endswith("?capture=1") for call in calls)
+    assert ("wait_for_function", ("window.__gibsonCaptureReady === true", CAPTURE_READY_TIMEOUT_MS)) in calls
     assert ("locator", "#grid") in calls
     assert any(call[0] == "evaluate" for call in calls)
     assert ("screenshot", (output, False)) in calls

@@ -71,6 +71,7 @@ def test_http_server_routes() -> None:
     server, base = start_server()
     try:
         assert request_text(f"{base}/")[0:2] == (200, "text/html; charset=utf-8")
+        assert request_text(f"{base}/?capture=1")[0:2] == (200, "text/html; charset=utf-8")
         assert "GIBSON LINK" in request_text(f"{base}/index.html")[2]
         assert "Tracebacks" in request_text(f"{base}/index.html")[2]
         assert "Render Intents" in request_text(f"{base}/index.html")[2]
@@ -97,6 +98,7 @@ def test_http_server_routes() -> None:
             "deliveredInputs": 0,
         }
         assert json.loads(request_text(f"{base}/scene")[2])["schema"] == "harn-gibson.scene.v1"
+        assert json.loads(request_text(f"{base}/scene?capture=1")[2])["schema"] == "harn-gibson.scene.v1"
         catalog = json.loads(request_text(f"{base}/catalog")[2])
         assert catalog["schema"] == "harn-gibson.visual-catalog.v1"
         assert any(entry["id"] == "text_stream" for entry in catalog["primitives"])
@@ -107,7 +109,7 @@ def test_http_server_routes() -> None:
         assert json.loads(request_text(f"{base}/events", b'{"sequence":1}')[2]) == {
             "error": "event payload missing eventType"
         }
-        assert request_text(f"{base}/input/next")[0:2] == (204, "")
+        assert request_text(f"{base}/input/next?poll=1")[0:2] == (204, "")
         assert json.loads(request_text(f"{base}/input", b"{")[2]) == {"error": "invalid json"}
         assert json.loads(request_text(f"{base}/input", b"[]")[2]) == {"error": "input payload must be an object"}
         assert json.loads(request_text(f"{base}/input", b'{"message":1}')[2]) == {"error": "message must be a string"}
@@ -125,7 +127,7 @@ def test_http_server_routes() -> None:
             "summary": "interactive input: hi",
             "payload": {"type": "input", "text": "hi", "source": "interactive"},
         }
-        status, _content_type, body = request_text(f"{base}/events", json.dumps(payload).encode("utf-8"))
+        status, _content_type, body = request_text(f"{base}/events?capture=1", json.dumps(payload).encode("utf-8"))
         assert status == 202
         assert json.loads(body) == {"ok": True, "renderMode": "blocking", "sceneRevision": 1}
         scene = json.loads(request_text(f"{base}/scene")[2])
@@ -148,7 +150,7 @@ def test_http_server_routes() -> None:
         assert health["inputBridge"]["pollCount"] == 1
 
         status, _content_type, body = request_text(
-            f"{base}/input",
+            f"{base}/input?capture=1",
             json.dumps({"message": " launch sequence ", "deliverAs": "steer"}).encode("utf-8"),
         )
         accepted = json.loads(body)

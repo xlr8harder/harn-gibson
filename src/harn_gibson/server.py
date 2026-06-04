@@ -12,6 +12,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from os import environ
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 from harn_gibson.catalog import VisualCatalog, default_visual_catalog
 from harn_gibson.events import GibsonEvent, diagnostic_event
@@ -270,25 +271,26 @@ def make_handler(state: GibsonServerState) -> type[BaseHTTPRequestHandler]:
         server_version = "harn-gibson/0.1"
 
         def do_GET(self) -> None:
-            if self.path in {"/", "/index.html"}:
+            request_path = urlsplit(self.path).path
+            if request_path in {"/", "/index.html"}:
                 self._write(HTTPStatus.OK, HTML, "text/html; charset=utf-8")
                 return
-            if self.path == "/assets/app.css":
+            if request_path == "/assets/app.css":
                 self._write(HTTPStatus.OK, CSS, "text/css; charset=utf-8")
                 return
-            if self.path == "/assets/app.js":
+            if request_path == "/assets/app.js":
                 self._write(HTTPStatus.OK, JS, "application/javascript; charset=utf-8")
                 return
-            if self.path == "/healthz":
+            if request_path == "/healthz":
                 self._json(HTTPStatus.OK, health_payload(state))
                 return
-            if self.path == "/scene":
+            if request_path == "/scene":
                 self._json(HTTPStatus.OK, state.scene.state.to_dict())
                 return
-            if self.path == "/catalog":
+            if request_path == "/catalog":
                 self._json(HTTPStatus.OK, state.catalog.to_dict())
                 return
-            if self.path == "/input/next":
+            if request_path == "/input/next":
                 item = state.inputs.pop()
                 state.input_bridge.record_input_poll(delivered=item is not None)
                 if item is None:
@@ -296,16 +298,17 @@ def make_handler(state: GibsonServerState) -> type[BaseHTTPRequestHandler]:
                     return
                 self._json(HTTPStatus.OK, item.to_dict())
                 return
-            if self.path == "/events":  # pragma: no cover
+            if request_path == "/events":  # pragma: no cover
                 self._stream_events()  # pragma: no cover
                 return  # pragma: no cover
             self._json(HTTPStatus.NOT_FOUND, {"error": "not found"})
 
         def do_POST(self) -> None:
-            if self.path == "/events":
+            request_path = urlsplit(self.path).path
+            if request_path == "/events":
                 self._handle_event_post()
                 return
-            if self.path == "/input":
+            if request_path == "/input":
                 self._handle_input_post()
                 return
             self._json(HTTPStatus.NOT_FOUND, {"error": "not found"})
@@ -1046,6 +1049,11 @@ const DEFAULT_STYLE_PACK = {
 let lastQueuedInputId = null;
 let currentScene = null;
 let currentStylePack = DEFAULT_STYLE_PACK;
+const queryParams = new URLSearchParams(location.search);
+const captureMode = queryParams.get("capture") === "1";
+let drawScheduled = false;
+let captureDrawsRemaining = 0;
+if (captureMode) window.__gibsonCaptureReady = false;
 
 debugToggle.addEventListener("click", () => {
   const expanded = document.body.classList.toggle("debug-open");
@@ -1096,7 +1104,22 @@ function resize() {
 addEventListener("resize", resize);
 resize();
 
+function scheduleDraw() {
+  if (drawScheduled) return;
+  drawScheduled = true;
+  requestAnimationFrame(draw);
+}
+
+function markSceneDirty(drawCount = 1) {
+  if (captureMode) {
+    window.__gibsonCaptureReady = false;
+    captureDrawsRemaining = Math.max(captureDrawsRemaining, drawCount);
+  }
+  scheduleDraw();
+}
+
 function draw() {
+  drawScheduled = false;
   const w = canvas.width;
   const h = canvas.height;
   const now = performance.now();
@@ -1109,9 +1132,18 @@ function draw() {
   ctx.restore();
   drawSceneAnimations(currentScene, w, h, now);
   drawPulses(w, h);
-  requestAnimationFrame(draw);
+  if (captureMode) {
+    if (captureDrawsRemaining > 0) captureDrawsRemaining -= 1;
+    if (captureDrawsRemaining > 0) {
+      scheduleDraw();
+    } else if (currentScene) {
+      window.__gibsonCaptureReady = true;
+    }
+  } else {
+    scheduleDraw();
+  }
 }
-draw();
+markSceneDirty();
 
 function drawBackdrop(w, h, now) {
   const canvasStyle = currentStylePack.canvas || DEFAULT_STYLE_PACK.canvas;
@@ -4387,6 +4419,7 @@ function renderScene(scene) {
     signalTitle.textContent = latest.title || latest.eventType || "SIGNAL";
     signalSummary.textContent = latest.summary || `${latest.phase || "event"}:${latest.eventType || "unknown"}`;
   }
+  markSceneDirty();
 }
 
 function stylePackFromScene(scene) {

@@ -14,7 +14,7 @@ Run all tests:
 uv run pytest
 ```
 
-Screenshots from the browser integration test are written under `test-artifacts/screenshots/`. Replay screenshot capture also records canvas metrics, rejects blank canvas output by default, and can apply fixture-level `screenshotExpect` checks against those metrics.
+Screenshots from the browser integration test are written under `test-artifacts/screenshots/`. Replay screenshot capture also records canvas metrics, rejects blank canvas output by default, and can apply fixture-level `screenshotExpect` checks against those metrics. The replay screenshot path loads the display with `?capture=1`, renders only when scene state changes, and waits for `window.__gibsonCaptureReady` before reading canvas metrics so review bundles do not depend on an endlessly animated browser loop.
 
 Replay fixtures can also render their final scene through the browser display. The browser integration suite renders the checked-in replay fixtures, verifies nonblank canvas metrics, checks non-default style packs, and inspects the `hologram` projection state, `signal_scope` radar/waveform state, `tunnel_grid` corridor state, `trace_route` packet state, `city_block` camera state, `svg_layer` structured vector render state including path morph counts, sampled vector keyframe state, vector filter/clip effect state, `timeline_cue`, `breach_wave`, `camera_jolt`, and `camera_path` animation state, plus `data_rain` glyph-curtain state used by the primitive gallery:
 
