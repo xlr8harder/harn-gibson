@@ -2046,6 +2046,7 @@ def replay_review_bundle_manifest(
     render_intents = replay_render_intents_from_result(result)
     renderer_prompts = replay_renderer_prompts_from_result(result)
     renderer_chunks = replay_renderer_chunks_from_result(result, chunk_size=render_chunk_size)
+    render_summary = _replay_result_render_summary(result)
     manifest = {
         "schema": "harn-gibson.replay-review-bundle.v1",
         "replayName": result.name,
@@ -2062,6 +2063,14 @@ def replay_review_bundle_manifest(
         "artifacts": dict(artifacts),
         "metadata": result.metadata,
     }
+    route_counts = render_summary["routeCounts"]
+    if route_counts:
+        manifest["routes"] = sorted(route_counts)
+        manifest["routeCounts"] = route_counts
+    renderer_counts = render_summary["rendererCounts"]
+    if renderer_counts:
+        manifest["renderers"] = sorted(renderer_counts)
+        manifest["rendererCounts"] = renderer_counts
     capture_summary = result.metadata.get("captureSummary") if isinstance(result.metadata, Mapping) else None
     if isinstance(capture_summary, Mapping):
         manifest["captureSummary"] = dict(capture_summary)
@@ -2262,9 +2271,12 @@ def write_replay_suite_review_bundle(
         relative_path = _suite_review_relative_path(root, replay_file)
         bundle_dir = review_path / "files" / Path(relative_path).with_suffix("")
         state = state_factory() if state_factory is not None else GibsonServerState(style_pack=style_pack)
+        event_summary: dict[str, Any] = {}
         try:
-            result = run_replay_file(
-                replay_file,
+            replay_data = load_replay_file(replay_file)
+            event_summary = _replay_data_event_summary(replay_data)
+            result = run_replay_data(
+                replay_data,
                 state,
                 capture_frames=True,
                 capture_renderer_contexts=True,
@@ -2281,18 +2293,30 @@ def write_replay_suite_review_bundle(
                 screenshots,
                 render_chunk_size=render_chunk_size,
             )
-            entries.append(_replay_suite_review_entry(review_path, relative_path, bundle_dir, bundle_manifest))
-        except ReplayExpectationError as error:
             entries.append(
-                {
-                    "path": relative_path,
-                    "ok": False,
-                    "error": str(error),
-                    "expectationFailures": [failure.to_dict() for failure in error.failures],
-                }
+                _replay_suite_review_entry(
+                    review_path,
+                    relative_path,
+                    bundle_dir,
+                    bundle_manifest,
+                    event_summary=event_summary,
+                )
             )
+        except ReplayExpectationError as error:
+            entry: dict[str, Any] = {
+                "path": relative_path,
+                "ok": False,
+                "error": str(error),
+                "expectationFailures": [failure.to_dict() for failure in error.failures],
+            }
+            if event_summary:
+                entry["eventSummary"] = event_summary
+            entries.append(entry)
         except Exception as error:
-            entries.append({"path": relative_path, "ok": False, "error": str(error)})
+            entry = {"path": relative_path, "ok": False, "error": str(error)}
+            if event_summary:
+                entry["eventSummary"] = event_summary
+            entries.append(entry)
         finally:
             state.pipeline.stop()
     manifest = replay_suite_review_bundle_manifest(
@@ -2325,6 +2349,7 @@ def replay_suite_review_bundle_manifest(
         "artifacts": {"overview": "index.html", "manifest": "manifest.json", "files": "files/"},
         "files": rendered_entries,
     }
+    manifest["summary"] = _replay_suite_review_summary(rendered_entries)
     if isinstance(split_manifest, Mapping):
         manifest["splitManifest"] = dict(split_manifest)
         capture_summary = split_manifest.get("captureSummary")
@@ -2460,6 +2485,8 @@ def _replay_suite_review_entry(
     relative_path: str,
     bundle_dir: Path,
     bundle_manifest: Mapping[str, Any],
+    *,
+    event_summary: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     bundle_index = _relative_artifact_path(review_path, bundle_dir / "index.html")
     entry: dict[str, Any] = {
@@ -2476,6 +2503,16 @@ def _replay_suite_review_entry(
         "promptCount": bundle_manifest.get("promptCount", 0),
         "chunkCount": bundle_manifest.get("chunkCount", 0),
     }
+    if event_summary:
+        entry["eventSummary"] = dict(event_summary)
+    route_counts = bundle_manifest.get("routeCounts")
+    if isinstance(route_counts, Mapping):
+        entry["routes"] = sorted(str(key) for key in route_counts if isinstance(key, str) and key)
+        entry["routeCounts"] = dict(route_counts)
+    renderer_counts = bundle_manifest.get("rendererCounts")
+    if isinstance(renderer_counts, Mapping):
+        entry["renderers"] = sorted(str(key) for key in renderer_counts if isinstance(key, str) and key)
+        entry["rendererCounts"] = dict(renderer_counts)
     metadata = bundle_manifest.get("metadata")
     if isinstance(metadata, Mapping) and isinstance(metadata.get("eventLogChunk"), Mapping):
         entry["eventLogChunk"] = dict(metadata["eventLogChunk"])
@@ -2502,6 +2539,42 @@ def _load_split_manifest(root: Path) -> dict[str, Any] | None:
 
 def _relative_artifact_path(root: Path, path: Path) -> str:
     return os.path.relpath(path, root).replace(os.sep, "/")
+
+
+def _replay_suite_review_summary(entries: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+    rendered_entries = tuple(entries)
+    summary: dict[str, Any] = {
+        "fileCount": len(rendered_entries),
+        "okCount": sum(1 for entry in rendered_entries if entry.get("ok")),
+        "failedCount": sum(1 for entry in rendered_entries if not entry.get("ok")),
+        "stepCount": sum(_int_value(entry.get("stepCount")) for entry in rendered_entries),
+        "frameCount": sum(_int_value(entry.get("frameCount")) for entry in rendered_entries),
+        "screenshotCount": sum(_int_value(entry.get("screenshotCount")) for entry in rendered_entries),
+        "contextCount": sum(_int_value(entry.get("contextCount")) for entry in rendered_entries),
+        "intentCount": sum(_int_value(entry.get("intentCount")) for entry in rendered_entries),
+        "promptCount": sum(_int_value(entry.get("promptCount")) for entry in rendered_entries),
+        "chunkCount": sum(_int_value(entry.get("chunkCount")) for entry in rendered_entries),
+    }
+    event_summary = _merge_replay_event_summaries(
+        entry.get("eventSummary") for entry in rendered_entries if isinstance(entry.get("eventSummary"), Mapping)
+    )
+    if event_summary:
+        summary["eventSummary"] = event_summary
+    route_counts = _merge_count_mappings(
+        entry.get("routeCounts") for entry in rendered_entries if isinstance(entry.get("routeCounts"), Mapping)
+    )
+    if route_counts:
+        summary["routes"] = sorted(route_counts)
+        summary["routeCounts"] = route_counts
+    renderer_counts = _merge_count_mappings(
+        entry.get("rendererCounts")
+        for entry in rendered_entries
+        if isinstance(entry.get("rendererCounts"), Mapping)
+    )
+    if renderer_counts:
+        summary["renderers"] = sorted(renderer_counts)
+        summary["rendererCounts"] = renderer_counts
+    return summary
 
 
 def _replay_suite_review_metric_items(manifest: Mapping[str, Any]) -> tuple[tuple[str, Any], ...]:
@@ -2535,6 +2608,22 @@ def _replay_suite_review_metric_items(manifest: Mapping[str, Any]) -> tuple[tupl
         sources = _joined_summary_values(capture_summary.get("sources"))
         if sources:
             items.append(("captured sources", sources))
+    summary = manifest.get("summary")
+    if isinstance(summary, Mapping):
+        event_summary = summary.get("eventSummary")
+        if isinstance(event_summary, Mapping):
+            event_types = _joined_summary_values(event_summary.get("eventTypes"))
+            if event_types:
+                items.append(("reviewed event types", event_types))
+            phases = _joined_summary_values(event_summary.get("phases"))
+            if phases:
+                items.append(("reviewed phases", phases))
+        routes = _joined_summary_values(summary.get("routes"))
+        if routes:
+            items.append(("reviewed routes", routes))
+        renderers = _joined_summary_values(summary.get("renderers"))
+        if renderers:
+            items.append(("reviewed renderers", renderers))
     return tuple(items)
 
 
@@ -2570,6 +2659,17 @@ def _replay_suite_review_file_card(file: Mapping[str, Any]) -> str:
         f"contexts {escape(str(file.get('contextCount', 0)))}",
         f"prompts {escape(str(file.get('promptCount', 0)))}",
     ]
+    event_summary = file.get("eventSummary")
+    if isinstance(event_summary, Mapping):
+        event_types = _joined_summary_values(event_summary.get("eventTypes"))
+        if event_types:
+            summary_parts.append(f"events {escape(event_types)}")
+    routes = _joined_summary_values(file.get("routes"))
+    if routes:
+        summary_parts.append(f"routes {escape(routes)}")
+    renderers = _joined_summary_values(file.get("renderers"))
+    if renderers:
+        summary_parts.append(f"renderers {escape(renderers)}")
     if chunk_text:
         summary_parts.append(chunk_text)
     summary = " / ".join(summary_parts)

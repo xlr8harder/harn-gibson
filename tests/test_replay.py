@@ -497,6 +497,13 @@ def test_replay_event_steps_file_io_and_writers(tmp_path: Path, monkeypatch: pyt
     )
     assert "Replay Result JSON" not in replay_review_bundle_index_html({"artifacts": "bad"})
     assert replay_review_bundle_manifest(bundle_result, (), {})["screenshotCount"] == 0
+    no_route_manifest = replay_review_bundle_manifest(
+        ReplayResult(schema="test", name="no route bundle", steps=(), scene=SceneState()),
+        (),
+        {},
+    )
+    assert "routeCounts" not in no_route_manifest
+    assert "rendererCounts" not in no_route_manifest
     sparse_bundle_index = replay_review_bundle_index_html(
         {
             "captureSummary": {
@@ -586,10 +593,30 @@ def test_replay_suite_review_bundle(tmp_path: Path, monkeypatch: pytest.MonkeyPa
         encoding="utf-8",
     )
     replay_dir.joinpath("chunk-0002.json").write_text(
-        json.dumps({"name": "bad chunk", "steps": [], "expect": {"sceneRevision": 1}}),
+        json.dumps(
+            {
+                "name": "bad expectation chunk",
+                "steps": [{"type": "event", "event": event_payload(2, "tool_result", {"toolName": "bash"})}],
+                "expect": {"sceneRevision": 0},
+            }
+        ),
         encoding="utf-8",
     )
-    replay_dir.joinpath("chunk-0003.json").write_text("[not-json", encoding="utf-8")
+    replay_dir.joinpath("chunk-0003.json").write_text(
+        json.dumps(
+            {
+                "name": "bad plan chunk",
+                "steps": [
+                    {
+                        "type": "render_plan",
+                        "requests": [{"event": event_payload(3, "browser_input", {"message": "steer"})}],
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    replay_dir.joinpath("chunk-0004.json").write_text("[not-json", encoding="utf-8")
     calls: list[tuple[str, int, int, int]] = []
 
     def fake_capture(
@@ -631,22 +658,60 @@ def test_replay_suite_review_bundle(tmp_path: Path, monkeypatch: pytest.MonkeyPa
     assert calls == [("chunk one", 1, 320, 240)]
     assert suite_manifest["schema"] == "harn-gibson.replay-suite-review.v1"
     assert suite_manifest["ok"] is False
-    assert suite_manifest["total"] == 3
-    assert suite_manifest["failed"] == 2
+    assert suite_manifest["total"] == 4
+    assert suite_manifest["failed"] == 3
     assert suite_manifest["renderChunkSize"] == 2
     assert suite_manifest["captureSummary"]["durationMs"] == 4200
+    assert suite_manifest["summary"] == {
+        "chunkCount": 1,
+        "contextCount": 1,
+        "eventSummary": {
+            "durationMs": 2,
+            "eventCount": 3,
+            "eventTypeCounts": {"browser_input": 1, "tool_call": 1, "tool_result": 1},
+            "eventTypes": ["browser_input", "tool_call", "tool_result"],
+            "firstSequence": 1,
+            "firstTimestampMs": 1001,
+            "lastSequence": 3,
+            "lastTimestampMs": 1003,
+            "phaseCounts": {"after": 1, "before": 1, "lifecycle": 1},
+            "phases": ["after", "before", "lifecycle"],
+            "sourceCounts": {"unit": 3},
+            "sources": ["unit"],
+        },
+        "failedCount": 3,
+        "fileCount": 4,
+        "frameCount": 1,
+        "intentCount": 1,
+        "okCount": 1,
+        "promptCount": 1,
+        "rendererCounts": {"deterministic": 1},
+        "renderers": ["deterministic"],
+        "routeCounts": {"renderer_agent": 1},
+        "routes": ["renderer_agent"],
+        "screenshotCount": 1,
+        "stepCount": 1,
+    }
     assert suite_manifest["splitManifest"]["schema"] == "harn-gibson.event-log-split.v1"
     assert suite_manifest["files"][0]["path"] == "chunk-0001.json"
     assert suite_manifest["files"][0]["ok"] is True
     assert suite_manifest["files"][0]["review"] == "files/chunk-0001/index.html"
     assert suite_manifest["files"][0]["eventLogChunk"]["chunkIndex"] == 1
+    assert suite_manifest["files"][0]["eventSummary"]["eventTypeCounts"] == {"tool_call": 1}
+    assert suite_manifest["files"][0]["routeCounts"] == {"renderer_agent": 1}
+    assert suite_manifest["files"][0]["rendererCounts"] == {"deterministic": 1}
     assert suite_manifest["files"][0]["screenshotCount"] == 1
     assert suite_manifest["files"][1]["path"] == "chunk-0002.json"
     assert suite_manifest["files"][1]["ok"] is False
     assert "replay expectations failed" in suite_manifest["files"][1]["error"]
+    assert suite_manifest["files"][1]["eventSummary"]["eventTypeCounts"] == {"tool_result": 1}
     assert suite_manifest["files"][2]["path"] == "chunk-0003.json"
     assert suite_manifest["files"][2]["ok"] is False
-    assert "Expecting value" in suite_manifest["files"][2]["error"]
+    assert "render_plan replay step must include steps list" in suite_manifest["files"][2]["error"]
+    assert suite_manifest["files"][2]["eventSummary"]["eventTypeCounts"] == {"browser_input": 1}
+    assert suite_manifest["files"][3]["path"] == "chunk-0004.json"
+    assert suite_manifest["files"][3]["ok"] is False
+    assert "Expecting value" in suite_manifest["files"][3]["error"]
     assert manifest_file == suite_manifest
     assert (review_dir / "files" / "chunk-0001" / "index.html").exists()
     assert (review_dir / "files" / "chunk-0001" / "frames" / "manifest.json").exists()
@@ -654,15 +719,20 @@ def test_replay_suite_review_bundle(tmp_path: Path, monkeypatch: pytest.MonkeyPa
     assert "chunk-0001.json" in html
     assert "files/chunk-0001/index.html" in html
     assert "chunk-0002.json" in html
+    assert "chunk-0003.json" in html
+    assert "chunk-0004.json" in html
     assert "captured duration" in html
     assert "4200 ms" in html
+    assert "reviewed event types" in html
+    assert "renderer_agent" in html
+    assert "deterministic" in html
     assert "window.__gibsonReplaySuiteReview" in html
 
 
 def test_replay_suite_review_bundle_fallbacks(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     replay_path = tmp_path / "single.json"
     replay_path.write_text(
-        json.dumps({"name": "single", "steps": [{"type": "mutations", "mutations": []}]}),
+        json.dumps({"name": "single", "steps": []}),
         encoding="utf-8",
     )
     invalid_manifest_dir = tmp_path / "invalid-manifest"
@@ -677,6 +747,12 @@ def test_replay_suite_review_bundle_fallbacks(tmp_path: Path, monkeypatch: pytes
     wrong_manifest_dir.joinpath("manifest.json").write_text(json.dumps({"schema": "wrong"}), encoding="utf-8")
     wrong_manifest_dir.joinpath("ok.json").write_text(
         json.dumps({"name": "wrong manifest fixture", "steps": [{"type": "mutations", "mutations": []}]}),
+        encoding="utf-8",
+    )
+    empty_expectation_dir = tmp_path / "empty-expectation"
+    empty_expectation_dir.mkdir()
+    empty_expectation_dir.joinpath("empty-failure.json").write_text(
+        json.dumps({"name": "empty expectation failure", "steps": [], "expect": {"sceneRevision": 1}}),
         encoding="utf-8",
     )
 
@@ -708,12 +784,17 @@ def test_replay_suite_review_bundle_fallbacks(tmp_path: Path, monkeypatch: pytes
     single_manifest = write_replay_suite_review_bundle(tmp_path / "single-review", replay_path)
     invalid_manifest = write_replay_suite_review_bundle(tmp_path / "invalid-review", invalid_manifest_dir)
     wrong_manifest = write_replay_suite_review_bundle(tmp_path / "wrong-review", wrong_manifest_dir)
+    empty_expectation_manifest = write_replay_suite_review_bundle(
+        tmp_path / "empty-expectation-review",
+        empty_expectation_dir,
+    )
     empty_index = replay_suite_review_index_html(replay_suite_review_bundle_manifest(tmp_path, []))
     malformed_summary_manifest = replay_suite_review_bundle_manifest(
         tmp_path,
         [],
         split_manifest={"schema": "harn-gibson.event-log-split.v1", "captureSummary": "bad"},
     )
+    empty_manifest = replay_suite_review_bundle_manifest(tmp_path, [])
     sparse_index = replay_suite_review_index_html(
         {
             "files": "bad",
@@ -723,21 +804,49 @@ def test_replay_suite_review_bundle_fallbacks(tmp_path: Path, monkeypatch: pytes
                 "phases": [],
                 "sources": [None, ""],
             },
+            "summary": {
+                "eventSummary": {"eventTypes": "bad", "phases": []},
+                "routes": "bad",
+                "renderers": [],
+            },
+        }
+    )
+    sparse_file_index = replay_suite_review_index_html(
+        {
+            "files": [
+                {
+                    "path": "sparse.json",
+                    "ok": True,
+                    "eventSummary": {"eventTypes": []},
+                    "routes": [],
+                    "renderers": [],
+                }
+            ]
         }
     )
 
     assert single_manifest["files"][0]["path"] == "single.json"
     assert single_manifest["files"][0]["review"] == "files/single/index.html"
+    assert "routeCounts" not in single_manifest["files"][0]
+    assert "routeCounts" not in single_manifest["summary"]
     assert "splitManifest" not in single_manifest
     assert "splitManifest" not in invalid_manifest
     assert "splitManifest" not in wrong_manifest
+    assert empty_expectation_manifest["files"][0]["ok"] is False
+    assert "eventSummary" not in empty_expectation_manifest["files"][0]
     assert malformed_summary_manifest["splitManifest"]["captureSummary"] == "bad"
     assert "captureSummary" not in malformed_summary_manifest
+    assert empty_manifest["summary"]["fileCount"] == 0
     assert "No replay files were reviewed" in empty_index
     assert "captured duration" not in sparse_index
     assert "captured event types" not in sparse_index
     assert "captured phases" not in sparse_index
     assert "captured sources" not in sparse_index
+    assert "reviewed event types" not in sparse_index
+    assert "reviewed phases" not in sparse_index
+    assert "reviewed routes" not in sparse_index
+    assert "reviewed renderers" not in sparse_index
+    assert "events " not in sparse_file_index
 
 
 def test_replay_data_from_event_log(tmp_path: Path) -> None:
