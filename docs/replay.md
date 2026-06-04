@@ -171,6 +171,17 @@ uv run harn-gibson replay-dir examples/gibson1-replays \
   --screenshot-dir test-artifacts/replays/gibson1-screenshots
 ```
 
+The same fixture is also checked under the `mainframe` style pack so the calmer renderer's style-aware tones are covered by final-scene baselines and browser screenshots:
+
+```bash
+uv run harn-gibson replay-dir examples/gibson1-replays \
+  --style mainframe \
+  --renderer-command 'uv run python examples/renderers/gibson1_renderer.py' \
+  --renderer-timeout-ms 10000 \
+  --baseline-dir examples/baselines/gibson1-mainframe-replays \
+  --screenshot-dir test-artifacts/replays/gibson1-mainframe-screenshots
+```
+
 The hard-coded `gibson_dogfood_renderer.py` remains the showcase and stress renderer for live harn use before the renderer-agent backend is good enough. The checked-in `examples/dogfood-replays/` fixtures exercise that renderer against fixture workspaces under `examples/dogfood-workspaces/`, giving the showcase renderer committed trajectories for project bootstrapping, runtime diagnostics, failed tests, browser steering input, repo-topology, touched-file signals, active style packs, and the project hologram/data-vault/black-ICE/data-tunnel/wire-terrain/terminal-wall/access-matrix/orbital-map/ICE-mesh/control-graph/glyph-layer/ribbon/repo-city/spark-field/route-trace/signal-interference scene. A useful future fixture workflow is to run `uv run harn-gibson dogfood-capture --trajectory tiny-project` for a general bootstrap capture and `uv run harn-gibson dogfood-capture --trajectory repo-map` for a topology-heavy capture, then convert those event trajectories into split replay directories and browser screenshots. Several such trajectories should become regression inputs for event coalescing, renderer timing, touched-file visualization, route-trace timing, wire-terrain mapping, style-pack rendering, and visual continuity.
 
 ## Baseline Review

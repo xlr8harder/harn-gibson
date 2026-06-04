@@ -67,6 +67,13 @@ run uv run harn-gibson replay-dir examples/gibson1-replays \
   --baseline-dir examples/baselines/gibson1-replays \
   --screenshot-dir "$ARTIFACT_DIR/gibson1-screenshots" \
   --output-result "$ARTIFACT_DIR/gibson1-suite.json"
+run uv run harn-gibson replay-dir examples/gibson1-replays \
+  --style mainframe \
+  --renderer-command "$GIBSON1_RENDERER_COMMAND" \
+  --renderer-timeout-ms 10000 \
+  --baseline-dir examples/baselines/gibson1-mainframe-replays \
+  --screenshot-dir "$ARTIFACT_DIR/gibson1-mainframe-screenshots" \
+  --output-result "$ARTIFACT_DIR/gibson1-mainframe-suite.json"
 run uv run harn-gibson replay-dir examples/dogfood-replays \
   --renderer-command "$DOGFOOD_RENDERER_COMMAND" \
   --renderer-timeout-ms 10000 \

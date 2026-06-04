@@ -100,6 +100,18 @@ def gibson1_renderer_state() -> GibsonServerState:
     )
 
 
+def gibson1_mainframe_renderer_state() -> GibsonServerState:
+    return build_state_from_env(
+        {
+            "HARN_GIBSON_RENDERER_COMMAND": json.dumps(
+                ["uv", "run", "python", str(ROOT / "examples" / "renderers" / "gibson1_renderer.py")]
+            ),
+            "HARN_GIBSON_RENDERER_TIMEOUT_MS": "10000",
+            "HARN_GIBSON_STYLE": "mainframe",
+        }
+    )
+
+
 def dogfood_renderer_state() -> GibsonServerState:
     return build_state_from_env(
         {
@@ -1779,6 +1791,26 @@ def test_checked_in_gibson1_replay_exercises_default_renderer() -> None:
     assert summary["expectationCount"] == 20
     assert summary["rendererCounts"] == {"gibson1": 4}
     assert summary["routeCounts"] == {"renderer_agent": 4}
+
+
+def test_checked_in_gibson1_replay_exercises_mainframe_style() -> None:
+    state = gibson1_mainframe_renderer_state()
+    try:
+        result = run_replay_file(EXAMPLE_GIBSON1_REPLAYS / "repo-map-trajectory.json", state)
+    finally:
+        state.pipeline.stop()
+
+    intent_metadata = result.scene.metadata["lastRenderIntent"]["metadata"]
+
+    assert result.scene.metadata["displayStyle"] == "mainframe"
+    assert result.scene.primitives["stage"].props["theme"] == "mainframe"
+    assert result.scene.primitives["status"].props["tone"] == "amber"
+    assert result.scene.primitives["gibson1-rain"].props["tone"] == "amber"
+    assert result.scene.primitives["gibson1-rain"].props["accentTone"] == "green"
+    assert result.scene.primitives["gibson1-repo-terrain"].props["accentTone"] == "green"
+    assert result.scene.primitives["gibson1-route"].props["accentTone"] == "green"
+    assert intent_metadata["displayStyle"] == "mainframe"
+    assert intent_metadata["styleMotifs"] == ["phosphor-grid", "audit-frames", "amber-alerts"]
 
 
 def test_checked_in_dogfood_replay_exercises_showcase_renderer() -> None:

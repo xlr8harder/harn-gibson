@@ -26,6 +26,8 @@ def test_acceptance_script_dry_run_lists_release_gates() -> None:
     assert "+ uv run harn-gibson dogfood --harn-bin true" in output
     assert "+ uv run harn-gibson replay-dir examples/replays" in output
     assert "+ uv run harn-gibson replay-dir examples/gibson1-replays" in output
+    assert "--style mainframe" in output
+    assert "examples/baselines/gibson1-mainframe-replays" in output
     assert "+ uv run harn-gibson replay-dir examples/dogfood-replays" in output
     assert "+ git diff --check" in output
     assert "+ bash -c 'secret pattern scan'" in output
