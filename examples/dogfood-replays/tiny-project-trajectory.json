@@ -22,6 +22,10 @@
         "contains": "4 touched"
       },
       {
+        "path": "primitives.dogfood-landscape.kind",
+        "equals": "wire_landscape"
+      },
+      {
         "path": "primitives.dogfood-opcodes.kind",
         "equals": "glyph_layer"
       },

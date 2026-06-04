@@ -28,6 +28,17 @@
         }
       },
       {
+        "path": "primitives.dogfood-landscape.kind",
+        "equals": "wire_landscape"
+      },
+      {
+        "path": "primitives.dogfood-landscape.props.peaks",
+        "contains": {
+          "path": "docs",
+          "touched": 1
+        }
+      },
+      {
         "path": "primitives.dogfood-file-sparks.props.label",
         "equals": "7 TOUCHED FILES"
       },

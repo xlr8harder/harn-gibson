@@ -47,6 +47,7 @@ def main() -> None:
         _upsert_data_rain(event_type, summary, tone, accent, sequence),
         _upsert_opcode_glyphs(event_type, summary, tone, accent, sequence, touched),
         _upsert_tunnel(event_type, tone, accent, sequence, touched),
+        _upsert_wire_landscape(entries, touched, event_type, tone, accent, sequence),
         _upsert_data_vault(project_name, event_type, tone, accent, sequence, touched, entries),
         _upsert_black_ice(event_type, phase, tone, accent, sequence, touched),
         _upsert_ice_mesh(event_type, phase, tone, accent, sequence, touched),
@@ -224,6 +225,81 @@ def _upsert_tunnel(
                 "opacity": 0.74,
                 "label": _clip(event_type.upper().replace("_", " "), 22),
                 "seed": sequence + 13,
+            },
+        },
+    }
+
+
+def _upsert_wire_landscape(
+    entries: list[dict[str, Any]],
+    touched: list[dict[str, Any]],
+    event_type: str,
+    tone: str,
+    accent: str,
+    sequence: int,
+) -> dict[str, Any]:
+    touched_paths = [_text(item.get("path"), "") for item in touched]
+    peaks: list[dict[str, Any]] = []
+    for index, entry in enumerate(entries[:8]):
+        path = _text(entry.get("path") or entry.get("name"), f"entry-{index}")
+        children = _list(entry.get("children"))
+        line_count = _entry_line_count(entry)
+        touched_count = sum(
+            1 for touched_path in touched_paths if touched_path == path or touched_path.startswith(f"{path}/")
+        )
+        peaks.append(
+            {
+                "id": f"terrain-{index}",
+                "label": _path_label(path),
+                "x": round(0.10 + (index % 4) * 0.25, 3),
+                "z": round(0.26 + (index // 4) * 0.34, 3),
+                "height": round(
+                    0.22 + min(0.88, len(children) * 0.055 + min(0.48, line_count * 0.007) + touched_count * 0.22),
+                    3,
+                ),
+                "radius": round(0.18 + min(0.12, len(children) * 0.012 + touched_count * 0.02), 3),
+                "tone": "magenta" if touched_count else _entry_tone(_text(entry.get("kind"), "dir"), tone, accent),
+                "path": path,
+                "lines": line_count,
+                "touched": touched_count,
+            }
+        )
+    if not peaks:
+        labels = ["HOOK", event_type.upper()[:8], "RENDER", "SCENE"]
+        peaks = [
+            {
+                "id": f"terrain-fallback-{index}",
+                "label": label,
+                "x": round(0.16 + index * 0.22, 3),
+                "z": round(0.28 + (index % 2) * 0.32, 3),
+                "height": round(0.28 + index * 0.10, 3),
+                "radius": 0.20,
+                "tone": tone if index % 2 else accent,
+            }
+            for index, label in enumerate(labels)
+        ]
+    return {
+        "op": "upsert",
+        "primitive": {
+            "id": "dogfood-landscape",
+            "kind": "wire_landscape",
+            "region": "stage",
+            "props": {
+                "label": "REPO TERRAIN",
+                "position": {"x": 0.50, "y": 0.66},
+                "size": {"w": 0.88, "h": 0.48},
+                "rows": 12 + min(10, len(entries)),
+                "columns": 18 + min(14, len(entries) * 2),
+                "depth": 0.96,
+                "height": round(0.32 + min(0.18, len(touched) * 0.018), 3),
+                "peaks": peaks,
+                "focusPeakId": _terrain_focus(peaks),
+                "packets": 34 + min(68, len(touched) * 8 + len(entries) * 3),
+                "speed": 0.62,
+                "tone": tone,
+                "accentTone": accent,
+                "opacity": 0.66,
+                "seed": sequence + len(entries) * 13 + len(touched) * 31,
             },
         },
     }
@@ -1080,6 +1156,13 @@ def _city_focus(blocks: list[dict[str, Any]]) -> str:
         if block.get("touched"):
             return _text(block.get("id"), "dogfood-city-core")
     return _text(blocks[min(1, len(blocks) - 1)].get("id"), "dogfood-city-core")
+
+
+def _terrain_focus(peaks: list[dict[str, Any]]) -> str:
+    for peak in peaks:
+        if peak.get("touched"):
+            return _text(peak.get("id"), "terrain-0")
+    return _text(peaks[min(1, len(peaks) - 1)].get("id"), "terrain-0")
 
 
 def _entry_index_for_path(entries: list[dict[str, Any]], path: str) -> int | None:

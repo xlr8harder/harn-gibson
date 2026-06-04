@@ -264,6 +264,7 @@
           "primitive:data_rain",
           "primitive:glyph_layer",
           "primitive:tunnel_grid",
+          "primitive:wire_landscape",
           "primitive:data_vault",
           "primitive:black_ice",
           "primitive:mesh",
@@ -295,7 +296,7 @@
           "renderer": "gibson-dogfood-showcase",
           "touchedFileCount": 1
         },
-        "mutationCount": 24,
+        "mutationCount": 25,
         "renderer": "gibson-dogfood-showcase",
         "requestCount": 1,
         "routes": [
@@ -308,6 +309,7 @@
           "dogfood-rain",
           "dogfood-opcodes",
           "dogfood-tunnel",
+          "dogfood-landscape",
           "dogfood-vault",
           "dogfood-black-ice",
           "dogfood-ice-mesh",
@@ -333,6 +335,7 @@
             "primitive:data_rain",
             "primitive:glyph_layer",
             "primitive:tunnel_grid",
+            "primitive:wire_landscape",
             "primitive:data_vault",
             "primitive:black_ice",
             "primitive:mesh",
@@ -364,7 +367,7 @@
             "renderer": "gibson-dogfood-showcase",
             "touchedFileCount": 0
           },
-          "mutationCount": 24,
+          "mutationCount": 25,
           "renderer": "gibson-dogfood-showcase",
           "requestCount": 1,
           "routes": [
@@ -377,6 +380,7 @@
             "dogfood-rain",
             "dogfood-opcodes",
             "dogfood-tunnel",
+            "dogfood-landscape",
             "dogfood-vault",
             "dogfood-black-ice",
             "dogfood-ice-mesh",
@@ -401,6 +405,7 @@
             "primitive:data_rain",
             "primitive:glyph_layer",
             "primitive:tunnel_grid",
+            "primitive:wire_landscape",
             "primitive:data_vault",
             "primitive:black_ice",
             "primitive:mesh",
@@ -431,7 +436,7 @@
             "renderer": "gibson-dogfood-showcase",
             "touchedFileCount": 1
           },
-          "mutationCount": 23,
+          "mutationCount": 24,
           "renderer": "gibson-dogfood-showcase",
           "requestCount": 1,
           "routes": [
@@ -444,6 +449,7 @@
             "dogfood-rain",
             "dogfood-opcodes",
             "dogfood-tunnel",
+            "dogfood-landscape",
             "dogfood-vault",
             "dogfood-black-ice",
             "dogfood-ice-mesh",
@@ -468,6 +474,7 @@
             "primitive:data_rain",
             "primitive:glyph_layer",
             "primitive:tunnel_grid",
+            "primitive:wire_landscape",
             "primitive:data_vault",
             "primitive:black_ice",
             "primitive:mesh",
@@ -499,7 +506,7 @@
             "renderer": "gibson-dogfood-showcase",
             "touchedFileCount": 2
           },
-          "mutationCount": 24,
+          "mutationCount": 25,
           "renderer": "gibson-dogfood-showcase",
           "requestCount": 1,
           "routes": [
@@ -512,6 +519,7 @@
             "dogfood-rain",
             "dogfood-opcodes",
             "dogfood-tunnel",
+            "dogfood-landscape",
             "dogfood-vault",
             "dogfood-black-ice",
             "dogfood-ice-mesh",
@@ -536,6 +544,7 @@
             "primitive:data_rain",
             "primitive:glyph_layer",
             "primitive:tunnel_grid",
+            "primitive:wire_landscape",
             "primitive:data_vault",
             "primitive:black_ice",
             "primitive:mesh",
@@ -566,7 +575,7 @@
             "renderer": "gibson-dogfood-showcase",
             "touchedFileCount": 0
           },
-          "mutationCount": 23,
+          "mutationCount": 24,
           "renderer": "gibson-dogfood-showcase",
           "requestCount": 1,
           "routes": [
@@ -579,6 +588,7 @@
             "dogfood-rain",
             "dogfood-opcodes",
             "dogfood-tunnel",
+            "dogfood-landscape",
             "dogfood-vault",
             "dogfood-black-ice",
             "dogfood-ice-mesh",
@@ -603,6 +613,7 @@
             "primitive:data_rain",
             "primitive:glyph_layer",
             "primitive:tunnel_grid",
+            "primitive:wire_landscape",
             "primitive:data_vault",
             "primitive:black_ice",
             "primitive:mesh",
@@ -634,7 +645,7 @@
             "renderer": "gibson-dogfood-showcase",
             "touchedFileCount": 1
           },
-          "mutationCount": 24,
+          "mutationCount": 25,
           "renderer": "gibson-dogfood-showcase",
           "requestCount": 1,
           "routes": [
@@ -647,6 +658,7 @@
             "dogfood-rain",
             "dogfood-opcodes",
             "dogfood-tunnel",
+            "dogfood-landscape",
             "dogfood-vault",
             "dogfood-black-ice",
             "dogfood-ice-mesh",
@@ -1187,6 +1199,84 @@
               -0.06
             ]
           ]
+        },
+        "region": "stage"
+      },
+      "dogfood-landscape": {
+        "children": [],
+        "id": "dogfood-landscape",
+        "kind": "wire_landscape",
+        "props": {
+          "accentTone": "white",
+          "columns": 26,
+          "depth": 0.96,
+          "focusPeakId": "terrain-0",
+          "height": 0.338,
+          "label": "REPO TERRAIN",
+          "opacity": 0.66,
+          "packets": 54,
+          "peaks": [
+            {
+              "height": 0.495,
+              "id": "terrain-0",
+              "label": "src",
+              "lines": 0,
+              "path": "src",
+              "radius": 0.212,
+              "tone": "magenta",
+              "touched": 1,
+              "x": 0.1,
+              "z": 0.26
+            },
+            {
+              "height": 0.31,
+              "id": "terrain-1",
+              "label": "tests",
+              "lines": 5,
+              "path": "tests",
+              "radius": 0.192,
+              "tone": "magenta",
+              "touched": 0,
+              "x": 0.35,
+              "z": 0.26
+            },
+            {
+              "height": 0.276,
+              "id": "terrain-2",
+              "label": "pyproject.to",
+              "lines": 8,
+              "path": "pyproject.toml",
+              "radius": 0.18,
+              "tone": "green",
+              "touched": 0,
+              "x": 0.6,
+              "z": 0.26
+            },
+            {
+              "height": 0.262,
+              "id": "terrain-3",
+              "label": "README.md",
+              "lines": 6,
+              "path": "README.md",
+              "radius": 0.18,
+              "tone": "green",
+              "touched": 0,
+              "x": 0.85,
+              "z": 0.26
+            }
+          ],
+          "position": {
+            "x": 0.5,
+            "y": 0.66
+          },
+          "rows": 16,
+          "seed": 88,
+          "size": {
+            "h": 0.48,
+            "w": 0.88
+          },
+          "speed": 0.62,
+          "tone": "magenta"
         },
         "region": "stage"
       },

@@ -18,6 +18,10 @@
         "contains": "1 touched"
       },
       {
+        "path": "primitives.dogfood-landscape.kind",
+        "equals": "wire_landscape"
+      },
+      {
         "path": "primitives.dogfood-file-sparks.props.label",
         "equals": "1 TOUCHED FILES"
       },

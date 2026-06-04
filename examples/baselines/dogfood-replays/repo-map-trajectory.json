@@ -300,6 +300,7 @@
           "primitive:data_rain",
           "primitive:glyph_layer",
           "primitive:tunnel_grid",
+          "primitive:wire_landscape",
           "primitive:data_vault",
           "primitive:black_ice",
           "primitive:mesh",
@@ -331,7 +332,7 @@
           "renderer": "gibson-dogfood-showcase",
           "touchedFileCount": 7
         },
-        "mutationCount": 24,
+        "mutationCount": 25,
         "renderer": "gibson-dogfood-showcase",
         "requestCount": 1,
         "routes": [
@@ -344,6 +345,7 @@
           "dogfood-rain",
           "dogfood-opcodes",
           "dogfood-tunnel",
+          "dogfood-landscape",
           "dogfood-vault",
           "dogfood-black-ice",
           "dogfood-ice-mesh",
@@ -369,6 +371,7 @@
             "primitive:data_rain",
             "primitive:glyph_layer",
             "primitive:tunnel_grid",
+            "primitive:wire_landscape",
             "primitive:data_vault",
             "primitive:black_ice",
             "primitive:mesh",
@@ -399,7 +402,7 @@
             "renderer": "gibson-dogfood-showcase",
             "touchedFileCount": 0
           },
-          "mutationCount": 23,
+          "mutationCount": 24,
           "renderer": "gibson-dogfood-showcase",
           "requestCount": 1,
           "routes": [
@@ -412,6 +415,7 @@
             "dogfood-rain",
             "dogfood-opcodes",
             "dogfood-tunnel",
+            "dogfood-landscape",
             "dogfood-vault",
             "dogfood-black-ice",
             "dogfood-ice-mesh",
@@ -436,6 +440,7 @@
             "primitive:data_rain",
             "primitive:glyph_layer",
             "primitive:tunnel_grid",
+            "primitive:wire_landscape",
             "primitive:data_vault",
             "primitive:black_ice",
             "primitive:mesh",
@@ -466,7 +471,7 @@
             "renderer": "gibson-dogfood-showcase",
             "touchedFileCount": 1
           },
-          "mutationCount": 23,
+          "mutationCount": 24,
           "renderer": "gibson-dogfood-showcase",
           "requestCount": 1,
           "routes": [
@@ -479,6 +484,7 @@
             "dogfood-rain",
             "dogfood-opcodes",
             "dogfood-tunnel",
+            "dogfood-landscape",
             "dogfood-vault",
             "dogfood-black-ice",
             "dogfood-ice-mesh",
@@ -503,6 +509,7 @@
             "primitive:data_rain",
             "primitive:glyph_layer",
             "primitive:tunnel_grid",
+            "primitive:wire_landscape",
             "primitive:data_vault",
             "primitive:black_ice",
             "primitive:mesh",
@@ -534,7 +541,7 @@
             "renderer": "gibson-dogfood-showcase",
             "touchedFileCount": 8
           },
-          "mutationCount": 24,
+          "mutationCount": 25,
           "renderer": "gibson-dogfood-showcase",
           "requestCount": 1,
           "routes": [
@@ -547,6 +554,7 @@
             "dogfood-rain",
             "dogfood-opcodes",
             "dogfood-tunnel",
+            "dogfood-landscape",
             "dogfood-vault",
             "dogfood-black-ice",
             "dogfood-ice-mesh",
@@ -571,6 +579,7 @@
             "primitive:data_rain",
             "primitive:glyph_layer",
             "primitive:tunnel_grid",
+            "primitive:wire_landscape",
             "primitive:data_vault",
             "primitive:black_ice",
             "primitive:mesh",
@@ -601,7 +610,7 @@
             "renderer": "gibson-dogfood-showcase",
             "touchedFileCount": 1
           },
-          "mutationCount": 23,
+          "mutationCount": 24,
           "renderer": "gibson-dogfood-showcase",
           "requestCount": 1,
           "routes": [
@@ -614,6 +623,7 @@
             "dogfood-rain",
             "dogfood-opcodes",
             "dogfood-tunnel",
+            "dogfood-landscape",
             "dogfood-vault",
             "dogfood-black-ice",
             "dogfood-ice-mesh",
@@ -638,6 +648,7 @@
             "primitive:data_rain",
             "primitive:glyph_layer",
             "primitive:tunnel_grid",
+            "primitive:wire_landscape",
             "primitive:data_vault",
             "primitive:black_ice",
             "primitive:mesh",
@@ -669,7 +680,7 @@
             "renderer": "gibson-dogfood-showcase",
             "touchedFileCount": 2
           },
-          "mutationCount": 24,
+          "mutationCount": 25,
           "renderer": "gibson-dogfood-showcase",
           "requestCount": 1,
           "routes": [
@@ -682,6 +693,7 @@
             "dogfood-rain",
             "dogfood-opcodes",
             "dogfood-tunnel",
+            "dogfood-landscape",
             "dogfood-vault",
             "dogfood-black-ice",
             "dogfood-ice-mesh",
@@ -706,6 +718,7 @@
             "primitive:data_rain",
             "primitive:glyph_layer",
             "primitive:tunnel_grid",
+            "primitive:wire_landscape",
             "primitive:data_vault",
             "primitive:black_ice",
             "primitive:mesh",
@@ -736,7 +749,7 @@
             "renderer": "gibson-dogfood-showcase",
             "touchedFileCount": 1
           },
-          "mutationCount": 23,
+          "mutationCount": 24,
           "renderer": "gibson-dogfood-showcase",
           "requestCount": 1,
           "routes": [
@@ -749,6 +762,7 @@
             "dogfood-rain",
             "dogfood-opcodes",
             "dogfood-tunnel",
+            "dogfood-landscape",
             "dogfood-vault",
             "dogfood-black-ice",
             "dogfood-ice-mesh",
@@ -773,6 +787,7 @@
             "primitive:data_rain",
             "primitive:glyph_layer",
             "primitive:tunnel_grid",
+            "primitive:wire_landscape",
             "primitive:data_vault",
             "primitive:black_ice",
             "primitive:mesh",
@@ -803,7 +818,7 @@
             "renderer": "gibson-dogfood-showcase",
             "touchedFileCount": 0
           },
-          "mutationCount": 23,
+          "mutationCount": 24,
           "renderer": "gibson-dogfood-showcase",
           "requestCount": 1,
           "routes": [
@@ -816,6 +831,7 @@
             "dogfood-rain",
             "dogfood-opcodes",
             "dogfood-tunnel",
+            "dogfood-landscape",
             "dogfood-vault",
             "dogfood-black-ice",
             "dogfood-ice-mesh",
@@ -840,6 +856,7 @@
             "primitive:data_rain",
             "primitive:glyph_layer",
             "primitive:tunnel_grid",
+            "primitive:wire_landscape",
             "primitive:data_vault",
             "primitive:black_ice",
             "primitive:mesh",
@@ -871,7 +888,7 @@
             "renderer": "gibson-dogfood-showcase",
             "touchedFileCount": 7
           },
-          "mutationCount": 24,
+          "mutationCount": 25,
           "renderer": "gibson-dogfood-showcase",
           "requestCount": 1,
           "routes": [
@@ -884,6 +901,7 @@
             "dogfood-rain",
             "dogfood-opcodes",
             "dogfood-tunnel",
+            "dogfood-landscape",
             "dogfood-vault",
             "dogfood-black-ice",
             "dogfood-ice-mesh",
@@ -1547,6 +1565,120 @@
               -0.06
             ]
           ]
+        },
+        "region": "stage"
+      },
+      "dogfood-landscape": {
+        "children": [],
+        "id": "dogfood-landscape",
+        "kind": "wire_landscape",
+        "props": {
+          "accentTone": "white",
+          "columns": 32,
+          "depth": 0.96,
+          "focusPeakId": "terrain-0",
+          "height": 0.446,
+          "label": "REPO TERRAIN",
+          "opacity": 0.66,
+          "packets": 102,
+          "peaks": [
+            {
+              "height": 0.698,
+              "id": "terrain-0",
+              "label": "docs",
+              "lines": 29,
+              "path": "docs",
+              "radius": 0.212,
+              "tone": "magenta",
+              "touched": 1,
+              "x": 0.1,
+              "z": 0.26
+            },
+            {
+              "height": 0.551,
+              "id": "terrain-1",
+              "label": "fixtures",
+              "lines": 8,
+              "path": "fixtures",
+              "radius": 0.212,
+              "tone": "magenta",
+              "touched": 1,
+              "x": 0.35,
+              "z": 0.26
+            },
+            {
+              "height": 0.614,
+              "id": "terrain-2",
+              "label": "scripts",
+              "lines": 17,
+              "path": "scripts",
+              "radius": 0.212,
+              "tone": "magenta",
+              "touched": 1,
+              "x": 0.6,
+              "z": 0.26
+            },
+            {
+              "height": 0.495,
+              "id": "terrain-3",
+              "label": "src",
+              "lines": 0,
+              "path": "src",
+              "radius": 0.212,
+              "tone": "magenta",
+              "touched": 1,
+              "x": 0.85,
+              "z": 0.26
+            },
+            {
+              "height": 0.747,
+              "id": "terrain-4",
+              "label": "tests",
+              "lines": 36,
+              "path": "tests",
+              "radius": 0.212,
+              "tone": "magenta",
+              "touched": 1,
+              "x": 0.1,
+              "z": 0.6
+            },
+            {
+              "height": 0.545,
+              "id": "terrain-5",
+              "label": "pyproject.to",
+              "lines": 15,
+              "path": "pyproject.toml",
+              "radius": 0.2,
+              "tone": "magenta",
+              "touched": 1,
+              "x": 0.35,
+              "z": 0.6
+            },
+            {
+              "height": 0.566,
+              "id": "terrain-6",
+              "label": "README.md",
+              "lines": 18,
+              "path": "README.md",
+              "radius": 0.2,
+              "tone": "magenta",
+              "touched": 1,
+              "x": 0.6,
+              "z": 0.6
+            }
+          ],
+          "position": {
+            "x": 0.5,
+            "y": 0.66
+          },
+          "rows": 19,
+          "seed": 316,
+          "size": {
+            "h": 0.48,
+            "w": 0.88
+          },
+          "speed": 0.62,
+          "tone": "magenta"
         },
         "region": "stage"
       },

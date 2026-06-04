@@ -43,6 +43,10 @@
       {"path": "primitives.gallery-tunnel.kind", "equals": "tunnel_grid"},
       {"path": "primitives.gallery-tunnel.props.rings", "equals": 14},
       {"path": "primitives.gallery-tunnel.props.packets", "equals": 44},
+      {"path": "primitives.gallery-landscape.kind", "equals": "wire_landscape"},
+      {"path": "primitives.gallery-landscape.props.rows", "equals": 13},
+      {"path": "primitives.gallery-landscape.props.peaks.2.label", "equals": "GIBSON"},
+      {"path": "primitives.gallery-landscape.props.focusPeakId", "equals": "gibson"},
       {"path": "primitives.gallery-city.kind", "equals": "city_block"},
       {"path": "primitives.gallery-city.props.cameraPath.keyframes.1.scale", "equals": 1.04},
       {"path": "primitives.gallery-trace.kind", "equals": "trace_route"},
@@ -86,7 +90,7 @@
             "phase": "lifecycle",
             "eventType": "primitive_gallery",
             "title": "Primitive gallery",
-            "summary": "mesh, signal scope, tunnel grid, vector paths, vector symbols, city blocks, graphs, ribbons, glyphs, data rain, particles, stream panel"
+            "summary": "mesh, signal scope, tunnel grid, wire landscape, vector paths, vector symbols, city blocks, graphs, ribbons, glyphs, data rain, particles, stream panel"
           }
         },
         {
@@ -260,6 +264,36 @@
               "opacity": 0.68,
               "seed": 611,
               "blend": "screen"
+            }
+          }
+        },
+        {
+          "op": "upsert",
+          "primitive": {
+            "id": "gallery-landscape",
+            "kind": "wire_landscape",
+            "region": "stage",
+            "props": {
+              "label": "WIRE TERRAIN",
+              "position": {"x": 0.52, "y": 0.65},
+              "size": {"w": 0.86, "h": 0.46},
+              "rows": 13,
+              "columns": 20,
+              "depth": 1.02,
+              "height": 0.36,
+              "focusPeakId": "gibson",
+              "packets": 32,
+              "speed": 0.68,
+              "tone": "cyan",
+              "accentTone": "magenta",
+              "opacity": 0.66,
+              "seed": 727,
+              "peaks": [
+                {"id": "local", "label": "LOCAL", "x": 0.12, "z": 0.34, "height": 0.28, "radius": 0.18, "tone": "green"},
+                {"id": "ice", "label": "ICE", "x": 0.38, "z": 0.48, "height": 0.62, "radius": 0.20, "tone": "amber"},
+                {"id": "gibson", "label": "GIBSON", "x": 0.62, "z": 0.42, "height": 0.88, "radius": 0.23, "tone": "magenta"},
+                {"id": "fs", "label": "FS", "x": 0.82, "z": 0.66, "height": 0.42, "radius": 0.18, "tone": "cyan"}
+              ]
             }
           }
         },

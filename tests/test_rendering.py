@@ -703,6 +703,7 @@ def test_dogfood_showcase_renderer_returns_valid_event_reactive_plan(tmp_path: P
         "dogfood-rain": "data_rain",
         "dogfood-opcodes": "glyph_layer",
         "dogfood-tunnel": "tunnel_grid",
+        "dogfood-landscape": "wire_landscape",
         "dogfood-vault": "data_vault",
         "dogfood-black-ice": "black_ice",
         "dogfood-ice-mesh": "mesh",
@@ -724,6 +725,10 @@ def test_dogfood_showcase_renderer_returns_valid_event_reactive_plan(tmp_path: P
     assert scene.state.primitives["dogfood-city"].props["blocks"][1]["path"] == "docs"
     assert scene.state.primitives["dogfood-city"].props["blocks"][1]["lines"] == 1
     assert scene.state.primitives["dogfood-city"].props["blocks"][1]["h"] == 0.271
+    assert scene.state.primitives["dogfood-landscape"].props["rows"] >= 14
+    assert scene.state.primitives["dogfood-landscape"].props["focusPeakId"] == "terrain-0"
+    assert scene.state.primitives["dogfood-landscape"].props["peaks"][0]["label"] == "docs"
+    assert scene.state.primitives["dogfood-landscape"].props["peaks"][0]["touched"] == 1
     assert scene.state.primitives["dogfood-file-sparks"].props["label"] == "3 TOUCHED FILES"
     assert len(scene.state.primitives["dogfood-file-sparks"].props["emitters"]) == 3
     assert scene.state.primitives["dogfood-ice-mesh"].props["label"] == "ICE TOOL RESULT"

@@ -1490,6 +1490,7 @@ function drawScenePrimitives(scene, w, h, now) {
   const orderedKinds = [
     "data_rain",
     "tunnel_grid",
+    "wire_landscape",
     "particle_field",
     "data_vault",
     "black_ice",
@@ -1516,6 +1517,7 @@ function drawPrimitive(primitive, w, h, now) {
   if (primitive.kind === "hologram") drawHologram(primitive, w, h, now);
   if (primitive.kind === "signal_scope") drawSignalScope(primitive, w, h, now);
   if (primitive.kind === "tunnel_grid") drawTunnelGrid(primitive, w, h, now);
+  if (primitive.kind === "wire_landscape") drawWireLandscape(primitive, w, h, now);
   if (primitive.kind === "data_vault") drawDataVault(primitive, w, h, now);
   if (primitive.kind === "black_ice") drawBlackIce(primitive, w, h, now);
   if (primitive.kind === "svg_layer") drawSvgLayer(primitive, w, h, now);
@@ -3388,6 +3390,215 @@ function drawTunnelGrid(primitive, w, h, now) {
     ctx.fillText(String(props.label).slice(0, 24), center.x, center.y - height * 0.51);
   }
 
+  ctx.restore();
+}
+
+function wireLandscapeRect(props, w, h) {
+  const size = props.size && typeof props.size === "object" ? props.size : {};
+  const position = normalizedPoint(props.position || {x: 0.5, y: 0.62}, w, h);
+  const width = clamp(finiteNumber(size.w ?? size.width ?? props.width, 0.82), 0.08, 1.8) * w;
+  const height = clamp(finiteNumber(size.h ?? size.height ?? props.height, 0.48), 0.08, 1.4) * h;
+  return {
+    x: position.x - width * 0.5,
+    y: position.y - height * 0.5,
+    width,
+    height,
+    centerX: position.x,
+  };
+}
+
+function wireLandscapePeaks(props) {
+  const rawPeaks = Array.isArray(props.peaks) ? props.peaks : [];
+  return rawPeaks
+    .filter((peak) => peak && typeof peak === "object")
+    .slice(0, 32)
+    .map((peak, index) => ({
+      ...peak,
+      id: String(peak.id || `peak-${index}`),
+      label: peak.label || peak.id || `PEAK ${index + 1}`,
+      x: clamp(finiteNumber(peak.x, (index + 1) / Math.max(2, rawPeaks.length + 1)), 0, 1),
+      z: clamp(finiteNumber(peak.z ?? peak.y, 0.5), 0, 1),
+      height: clamp(finiteNumber(peak.height ?? peak.h, 0.5), 0, 1.8),
+      radius: clamp(finiteNumber(peak.radius, 0.22), 0.05, 0.7),
+      tone: peak.tone || props.accentTone || props.accent || "magenta",
+    }));
+}
+
+function wireLandscapeHeightAt(x, z, peaks, seed) {
+  let height = 0.035 + seededUnit(seed + x * 19.7 + z * 31.1) * 0.055;
+  height += (Math.sin((x * 5.6 + z * 3.1 + seed * 0.03) * Math.PI) + 1) * 0.035;
+  for (const peak of peaks) {
+    const distance = Math.hypot((x - peak.x) * 1.35, z - peak.z);
+    const influence = clamp(1 - distance / peak.radius, 0, 1);
+    height += peak.height * influence * influence;
+  }
+  return clamp(height, 0, 1.8);
+}
+
+function wireLandscapePoint(rect, props, x, z, heightValue, now) {
+  const depth = clamp(finiteNumber(props.depth, 0.82), 0.2, 2.2);
+  const heightScale = clamp(finiteNumber(props.height, 0.30), 0.04, 0.9);
+  const speed = Math.max(0, finiteNumber(props.speed, 0.55));
+  const perspective = 0.34 + z * (0.58 + depth * 0.18);
+  const baseY = rect.y + rect.height * (0.15 + z * 0.76);
+  const drift = Math.sin(now * speed * 0.00055 + x * 8.4 + z * 4.8) * rect.height * 0.006;
+  return {
+    x: rect.centerX + (x - 0.5) * rect.width * perspective,
+    y: baseY - heightValue * rect.height * heightScale * (0.55 + z * 0.60) + drift,
+    z,
+    height: heightValue,
+  };
+}
+
+function wireLandscapeGrid(props, rect, rows, columns, peaks, seed, now) {
+  const grid = [];
+  for (let row = 0; row < rows; row++) {
+    const z = rows <= 1 ? 0 : row / (rows - 1);
+    const points = [];
+    for (let column = 0; column < columns; column++) {
+      const x = columns <= 1 ? 0.5 : column / (columns - 1);
+      const heightValue = wireLandscapeHeightAt(x, z, peaks, seed);
+      points.push(wireLandscapePoint(rect, props, x, z, heightValue, now));
+    }
+    grid.push(points);
+  }
+  return grid;
+}
+
+function drawWireLandscapeLine(points, tone, alpha, width) {
+  if (points.length < 2) return;
+  ctx.beginPath();
+  ctx.moveTo(points[0].x, points[0].y);
+  for (const point of points.slice(1)) ctx.lineTo(point.x, point.y);
+  ctx.strokeStyle = toneColor(tone, alpha);
+  ctx.lineWidth = Math.max(0.45, width * devicePixelRatio);
+  ctx.stroke();
+}
+
+function drawWireLandscape(primitive, w, h, now) {
+  const props = primitive.props || {};
+  const rect = wireLandscapeRect(props, w, h);
+  const rows = Math.max(2, Math.min(28, Math.floor(finiteNumber(props.rows, 12))));
+  const columns = Math.max(2, Math.min(40, Math.floor(finiteNumber(props.columns, 18))));
+  const peaks = wireLandscapePeaks(props);
+  const packetCount = Math.max(0, Math.min(120, Math.floor(finiteNumber(props.packets, 30))));
+  const seed = finiteNumber(props.seed, 0);
+  const tone = props.tone || "cyan";
+  const accentTone = props.accentTone || props.accent || "magenta";
+  const opacity = clamp(finiteNumber(props.opacity, 0.72), 0, 1);
+  const focusPeakId = props.focusPeakId ? String(props.focusPeakId) : (peaks[0]?.id || null);
+  const speed = Math.max(0, finiteNumber(props.speed, 0.55));
+  const grid = wireLandscapeGrid(props, rect, rows, columns, peaks, seed, now);
+  const hasLabels = Boolean(props.label) || peaks.some((peak) => Boolean(peak.label));
+
+  if (typeof window !== "undefined") {
+    window.__gibsonWireLandscapeState = window.__gibsonWireLandscapeState || {};
+    window.__gibsonWireLandscapeState[primitive.id] = {
+      rowCount: rows,
+      columnCount: columns,
+      peakCount: peaks.length,
+      packetCount,
+      focusPeakId,
+      tone,
+      accentTone,
+      hasLabels,
+    };
+  }
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(
+    rect.x - 10 * devicePixelRatio,
+    rect.y - rect.height * 0.25,
+    rect.width + 20 * devicePixelRatio,
+    rect.height * 1.35,
+  );
+  ctx.clip();
+  ctx.globalCompositeOperation = props.blend === "source-over" ? "source-over" : "screen";
+  ctx.globalAlpha *= opacity;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.shadowColor = toneColor(tone, 0.55);
+  ctx.shadowBlur = 11 * devicePixelRatio;
+
+  for (let row = 0; row < rows; row++) {
+    const z = rows <= 1 ? 0 : row / (rows - 1);
+    drawWireLandscapeLine(grid[row], row % 4 === 0 ? accentTone : tone, 0.12 + z * 0.34, 0.65 + z * 0.85);
+  }
+  for (let column = 0; column < columns; column++) {
+    const points = grid.map((row) => row[column]);
+    drawWireLandscapeLine(points, column % 5 === 0 ? "white" : tone, column % 5 === 0 ? 0.22 : 0.15, 0.65);
+  }
+
+  ctx.setLineDash([10 * devicePixelRatio, 14 * devicePixelRatio]);
+  ctx.lineDashOffset = -now * speed * 0.024;
+  for (let rail = 0; rail < Math.min(5, columns); rail++) {
+    const column = Math.round((rail / Math.max(1, Math.min(5, columns) - 1)) * (columns - 1));
+    const points = grid.map((row) => row[column]);
+    drawWireLandscapeLine(points, rail % 2 ? accentTone : "white", 0.18, 0.72);
+  }
+  ctx.setLineDash([]);
+
+  for (let packet = 0; packet < packetCount; packet++) {
+    const lane = packet % Math.max(1, columns);
+    const rowProgress = (
+      now * speed * 0.00016
+      + packet / Math.max(1, packetCount)
+      + seededUnit(seed + packet * 3.7) * 0.06
+    ) % 1;
+    const z = clamp(rowProgress, 0, 1);
+    const x = columns <= 1 ? 0.5 : lane / (columns - 1);
+    const heightValue = wireLandscapeHeightAt(x, z, peaks, seed);
+    const point = wireLandscapePoint(rect, props, x, z, heightValue, now);
+    const packetTone = packet % 6 === 0 ? accentTone : (packet % 3 === 0 ? "white" : tone);
+    const radius = (1.4 + z * 3.4 + seededUnit(seed + packet * 5.3) * 1.6) * devicePixelRatio;
+    ctx.shadowColor = toneColor(packetTone, 0.84);
+    ctx.shadowBlur = (7 + z * 12) * devicePixelRatio;
+    ctx.fillStyle = toneColor(packetTone, 0.30 + z * 0.42);
+    ctx.beginPath();
+    ctx.arc(point.x, point.y, radius, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  for (const [index, peak] of peaks.entries()) {
+    const point = wireLandscapePoint(
+      rect,
+      props,
+      peak.x,
+      peak.z,
+      wireLandscapeHeightAt(peak.x, peak.z, peaks, seed),
+      now,
+    );
+    const focus = peak.id === focusPeakId;
+    const pulse = 1 + Math.sin(now * 0.004 + seed + index) * 0.12;
+    const radius = (focus ? 8.5 : 5.2) * pulse * devicePixelRatio;
+    ctx.shadowColor = toneColor(peak.tone, focus ? 0.92 : 0.62);
+    ctx.shadowBlur = (focus ? 18 : 10) * devicePixelRatio;
+    ctx.fillStyle = toneColor(peak.tone, focus ? 0.42 : 0.24);
+    ctx.strokeStyle = toneColor("white", focus ? 0.68 : 0.36);
+    ctx.lineWidth = Math.max(0.8, (focus ? 1.6 : 0.9) * devicePixelRatio);
+    ctx.beginPath();
+    ctx.arc(point.x, point.y, radius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    if (peak.label) {
+      ctx.font = `${9.5 * devicePixelRatio}px ui-monospace, monospace`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "bottom";
+      ctx.fillStyle = toneColor("white", focus ? 0.86 : 0.62);
+      ctx.fillText(String(peak.label).slice(0, 14), point.x, point.y - radius - 4 * devicePixelRatio);
+    }
+  }
+
+  if (props.label) {
+    ctx.font = `${12 * devicePixelRatio}px ui-monospace, monospace`;
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = toneColor("white", 0.76);
+    ctx.shadowColor = toneColor(accentTone, 0.62);
+    ctx.shadowBlur = 7 * devicePixelRatio;
+    ctx.fillText(String(props.label).slice(0, 28), rect.x + 8 * devicePixelRatio, rect.y + 12 * devicePixelRatio);
+  }
   ctx.restore();
 }
 

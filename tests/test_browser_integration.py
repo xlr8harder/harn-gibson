@@ -303,6 +303,7 @@ def test_browser_display_renders_vector_symbols_and_data_rain() -> None:
                 page.wait_for_function("window.__gibsonBlackIceState?.['gallery-black-ice']?.columnCount === 13")
                 page.wait_for_function("window.__gibsonSignalScopeState?.['gallery-scope']?.blipCount === 3")
                 page.wait_for_function("window.__gibsonTunnelState?.['gallery-tunnel']?.packetCount === 44")
+                page.wait_for_function("window.__gibsonWireLandscapeState?.['gallery-landscape']?.peakCount === 4")
                 page.wait_for_function("window.__gibsonCityState?.['gallery-city']?.cameraKeyframeCount === 3")
                 page.wait_for_function("window.__gibsonDataRainState?.['gallery-rain']?.visibleColumns > 0")
                 page.wait_for_function("window.__gibsonTraceRouteState?.['gallery-trace']?.packetCount === 18")
@@ -329,6 +330,9 @@ def test_browser_display_renders_vector_symbols_and_data_rain() -> None:
                 )
                 tunnel_state = page.evaluate(
                     """() => window.__gibsonTunnelState["gallery-tunnel"]"""
+                )
+                wire_landscape_state = page.evaluate(
+                    """() => window.__gibsonWireLandscapeState["gallery-landscape"]"""
                 )
                 city_state = page.evaluate(
                     """() => window.__gibsonCityState["gallery-city"]"""
@@ -427,6 +431,16 @@ def test_browser_display_renders_vector_symbols_and_data_rain() -> None:
                     "phase": tunnel_state["phase"],
                 }
                 assert 0 <= tunnel_state["phase"] <= 1
+                assert wire_landscape_state == {
+                    "rowCount": 13,
+                    "columnCount": 20,
+                    "peakCount": 4,
+                    "packetCount": 32,
+                    "focusPeakId": "gibson",
+                    "tone": "cyan",
+                    "accentTone": "magenta",
+                    "hasLabels": True,
+                }
                 assert city_state["blockCount"] == 4
                 assert city_state["focusBlockId"] == "core-2"
                 assert city_state["cameraKeyframeCount"] == 3

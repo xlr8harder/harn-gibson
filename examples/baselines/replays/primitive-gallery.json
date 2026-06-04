@@ -25,7 +25,7 @@
         "eventType": "primitive_gallery",
         "phase": "lifecycle",
         "sequence": 900,
-        "summary": "mesh, signal scope, tunnel grid, vector paths, vector symbols, city blocks, graphs, ribbons, glyphs, data rain, particles, stream panel",
+        "summary": "mesh, signal scope, tunnel grid, wire landscape, vector paths, vector symbols, city blocks, graphs, ribbons, glyphs, data rain, particles, stream panel",
         "title": "Primitive gallery"
       }
     ],
@@ -40,6 +40,7 @@
           "primitive:black_ice",
           "primitive:mesh",
           "primitive:tunnel_grid",
+          "primitive:wire_landscape",
           "primitive:svg_layer",
           "primitive:city_block",
           "primitive:trace_route",
@@ -59,7 +60,7 @@
           "renderer": "replay",
           "stepType": "mutations"
         },
-        "mutationCount": 18,
+        "mutationCount": 19,
         "renderer": "replay",
         "requestCount": 1,
         "routes": [
@@ -75,6 +76,7 @@
           "gallery-black-ice",
           "gallery-mesh",
           "gallery-tunnel",
+          "gallery-landscape",
           "gallery-vector",
           "gallery-city",
           "gallery-trace",
@@ -100,6 +102,7 @@
             "primitive:black_ice",
             "primitive:mesh",
             "primitive:tunnel_grid",
+            "primitive:wire_landscape",
             "primitive:svg_layer",
             "primitive:city_block",
             "primitive:trace_route",
@@ -119,7 +122,7 @@
             "renderer": "replay",
             "stepType": "mutations"
           },
-          "mutationCount": 18,
+          "mutationCount": 19,
           "renderer": "replay",
           "requestCount": 1,
           "routes": [
@@ -135,6 +138,7 @@
             "gallery-black-ice",
             "gallery-mesh",
             "gallery-tunnel",
+            "gallery-landscape",
             "gallery-vector",
             "gallery-city",
             "gallery-trace",
@@ -391,6 +395,72 @@
           "scan": true,
           "seed": 17,
           "spin": 0.74,
+          "tone": "cyan"
+        },
+        "region": "stage"
+      },
+      "gallery-landscape": {
+        "children": [],
+        "id": "gallery-landscape",
+        "kind": "wire_landscape",
+        "props": {
+          "accentTone": "magenta",
+          "columns": 20,
+          "depth": 1.02,
+          "focusPeakId": "gibson",
+          "height": 0.36,
+          "label": "WIRE TERRAIN",
+          "opacity": 0.66,
+          "packets": 32,
+          "peaks": [
+            {
+              "height": 0.28,
+              "id": "local",
+              "label": "LOCAL",
+              "radius": 0.18,
+              "tone": "green",
+              "x": 0.12,
+              "z": 0.34
+            },
+            {
+              "height": 0.62,
+              "id": "ice",
+              "label": "ICE",
+              "radius": 0.2,
+              "tone": "amber",
+              "x": 0.38,
+              "z": 0.48
+            },
+            {
+              "height": 0.88,
+              "id": "gibson",
+              "label": "GIBSON",
+              "radius": 0.23,
+              "tone": "magenta",
+              "x": 0.62,
+              "z": 0.42
+            },
+            {
+              "height": 0.42,
+              "id": "fs",
+              "label": "FS",
+              "radius": 0.18,
+              "tone": "cyan",
+              "x": 0.82,
+              "z": 0.66
+            }
+          ],
+          "position": {
+            "x": 0.52,
+            "y": 0.65
+          },
+          "rows": 13,
+          "seed": 727,
+          "size": {
+            "h": 0.46,
+            "w": 0.86
+          },
+          "speed": 0.68,
           "tone": "cyan"
         },
         "region": "stage"
