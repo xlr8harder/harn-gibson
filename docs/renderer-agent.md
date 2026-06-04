@@ -59,10 +59,12 @@ uv run harn-gibson dogfood --style satellite-uplink
 For longer live sessions that should become replay fixtures, prefer the capture wrapper:
 
 ```bash
+uv run harn-gibson dogfood-capture --list-trajectories
 uv run harn-gibson dogfood-capture --trajectory tiny-project --style satellite-uplink
+uv run harn-gibson dogfood-capture --trajectory repo-map --style satellite-uplink
 ```
 
-The built-in trajectory creates an ignored bare workspace, injects the long tiny-project prompt, sets the showcase renderer, records normalized JSONL under ignored artifacts by default, and prints the matching split `event-log-to-replay --review-dir ... --output-result ...` command when harn exits, including the captured workspace's `--project-root` and `--project-name`. The prompt template asks for git setup, file creation, tests, fixes, and commits so the captured trajectory exercises more than streaming text. For custom prompts or workspace reuse, pass `--cwd PATH --split-every N -- -p "$(cat your-prompt.md)"` instead.
+Built-in trajectories create ignored bare workspaces, inject long prompts, set the showcase renderer, record normalized JSONL under ignored artifacts by default, and print the matching split `event-log-to-replay --review-dir ... --output-result ...` command when harn exits, including the captured workspace's `--project-root` and `--project-name`. `tiny-project` is the general bootstrap path; `repo-map` is aimed at depth-2 repo topology, line-count variation, and touched-file batches for repo-city renderer work. For custom prompts or workspace reuse, pass `--cwd PATH --split-every N -- -p "$(cat your-prompt.md)"` instead.
 
 For 15-20 minute captures, use `event-log-to-replay --split-every N --output-dir DIR --review-dir REVIEW` instead of one large fixture. It writes the split fixture directory and immediately builds a suite overview plus per-chunk frame players, renderer contexts, prompts, renderer chunks, render intents, final scenes, and result JSON. `replay-dir DIR --review-dir ...` can rerun that same review later.
 

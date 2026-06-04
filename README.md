@@ -137,10 +137,12 @@ uv run harn-gibson dogfood-capture -- -p "bootstrap a tiny project here"
 For 15-20 minute captures, ask the wrapper to print the split-review follow-up directly:
 
 ```bash
+uv run harn-gibson dogfood-capture --list-trajectories
 uv run harn-gibson dogfood-capture --trajectory tiny-project
+uv run harn-gibson dogfood-capture --trajectory repo-map
 ```
 
-That preset creates an ignored bare workspace under `test-artifacts/dogfood-workspaces/`, injects [examples/prompts/dogfood-tiny-project.md](examples/prompts/dogfood-tiny-project.md), captures to `test-artifacts/captures/`, defaults the follow-up review to split fixtures, and leaves the raw JSONL out of git. To customize the workspace or prompt while keeping the same capture path:
+Built-in presets create ignored bare workspaces under `test-artifacts/dogfood-workspaces/`, inject prompt templates from `examples/prompts/`, capture to `test-artifacts/captures/`, default the follow-up review to split fixtures, and leave raw JSONL out of git. `tiny-project` is the general bootstrap trajectory; `repo-map` is aimed at depth-2 repo topology, varied line counts, and touched-file animation coverage. To customize the workspace or prompt while keeping the same capture path:
 
 ```bash
 mkdir -p test-artifacts/dogfood-workspaces/custom-tiny-project
@@ -188,7 +190,7 @@ HARN_GIBSON_EVENT_LOG=.harn-gibson.jsonl \
 harn --no-extensions -e .harn/extensions/gibson.py
 ```
 
-A useful capture workflow is to run `uv run harn-gibson dogfood-capture --trajectory tiny-project`. It asks harn to initialize git, create files for a tiny project, run tests, make commits, introduce and fix a failure, and summarize status. Those longer captured trajectories should become the basis for future renderer-regression fixtures and screenshot reviews.
+A useful capture workflow is to run `uv run harn-gibson dogfood-capture --trajectory tiny-project` or `--trajectory repo-map`. The presets ask harn to initialize git, create project files, run tests, make commits, introduce and fix a failure, and summarize status. `repo-map` adds a deliberate depth-2 directory spread so renderer-regression fixtures can exercise repo-city height, area, and touched-file effects. Those longer captured trajectories should become the basis for future renderer-regression fixtures and screenshot reviews.
 
 Convert a captured event log into a replay fixture:
 

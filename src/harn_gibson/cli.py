@@ -12,6 +12,7 @@ import threading
 import time
 import webbrowser
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from pathlib import Path
 
 from harn_gibson.auth import import_codex_auth
@@ -19,11 +20,36 @@ from harn_gibson.extension import extension_path
 from harn_gibson.styles import style_pack_from_name, style_pack_ids
 
 DOGFOOD_CAPTURE_RENDERER_TIMEOUT_MS = "10000"
-DOGFOOD_CAPTURE_TRAJECTORIES = ("tiny-project",)
 DOGFOOD_CAPTURE_TRAJECTORY_SPLIT_EVERY = 200
 PROJECT_HARN_PROVIDER = "openai-codex"
 PROJECT_HARN_MODEL = "gpt-5.5"
 PROJECT_HARN_THINKING = "high"
+
+
+@dataclass(frozen=True)
+class DogfoodCaptureTrajectory:
+    identifier: str
+    prompt_filename: str
+    description: str
+    split_every: int = DOGFOOD_CAPTURE_TRAJECTORY_SPLIT_EVERY
+
+    @property
+    def prompt_path(self) -> Path:
+        return Path(__file__).resolve().parents[2] / "examples" / "prompts" / self.prompt_filename
+
+
+DOGFOOD_CAPTURE_TRAJECTORIES: dict[str, DogfoodCaptureTrajectory] = {
+    "tiny-project": DogfoodCaptureTrajectory(
+        "tiny-project",
+        "dogfood-tiny-project.md",
+        "bootstrap a small Python CLI project with tests, commits, a failure, and a fix",
+    ),
+    "repo-map": DogfoodCaptureTrajectory(
+        "repo-map",
+        "dogfood-repo-map.md",
+        "build a depth-2 repository map with touched files across multiple top-level areas",
+    ),
+}
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -80,8 +106,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="print a split replay-review command with at most this many events per fixture",
     )
     capture.add_argument(
+        "--list-trajectories",
+        action="store_true",
+        help="print built-in long capture trajectory presets and exit",
+    )
+    capture.add_argument(
         "--trajectory",
-        choices=DOGFOOD_CAPTURE_TRAJECTORIES,
+        choices=_dogfood_capture_trajectory_ids(),
         default=None,
         help="apply a built-in long capture trajectory preset",
     )
@@ -492,14 +523,13 @@ def _prepare_dogfood_capture_options(
 ) -> tuple[Path | None, list[str], str | None, int | None]:
     if trajectory is None:
         return _coerce_harn_cwd(cwd), list(harn_args), event_log, split_every
-    if trajectory not in DOGFOOD_CAPTURE_TRAJECTORIES:
-        raise ValueError(f"unknown dogfood capture trajectory: {trajectory}")
+    preset = _dogfood_capture_trajectory(trajectory)
     harn_cwd = _prepare_dogfood_trajectory_workspace(trajectory, cwd)
     capture_harn_args = list(harn_args)
     if not _has_forwarded_harn_args(capture_harn_args):
         capture_harn_args = ["--", "-p", _dogfood_trajectory_prompt(trajectory)]
     capture_event_log = event_log if event_log is not None else str(_default_capture_event_log_path(prefix=trajectory))
-    capture_split_every = split_every if split_every is not None else DOGFOOD_CAPTURE_TRAJECTORY_SPLIT_EVERY
+    capture_split_every = split_every if split_every is not None else preset.split_every
     return harn_cwd, capture_harn_args, capture_event_log, capture_split_every
 
 
@@ -518,10 +548,25 @@ def _has_forwarded_harn_args(harn_args: Sequence[str]) -> bool:
 
 
 def _dogfood_trajectory_prompt(trajectory: str) -> str:
-    if trajectory != "tiny-project":
-        raise ValueError(f"unknown dogfood capture trajectory: {trajectory}")
-    prompt_path = Path(__file__).resolve().parents[2] / "examples" / "prompts" / "dogfood-tiny-project.md"
-    return prompt_path.read_text(encoding="utf-8")
+    return _dogfood_capture_trajectory(trajectory).prompt_path.read_text(encoding="utf-8")
+
+
+def _dogfood_capture_trajectory(trajectory: str) -> DogfoodCaptureTrajectory:
+    try:
+        return DOGFOOD_CAPTURE_TRAJECTORIES[trajectory]
+    except KeyError as error:
+        raise ValueError(f"unknown dogfood capture trajectory: {trajectory}") from error
+
+
+def _dogfood_capture_trajectory_ids() -> tuple[str, ...]:
+    return tuple(DOGFOOD_CAPTURE_TRAJECTORIES)
+
+
+def _dogfood_capture_trajectory_listing() -> str:
+    lines = ["available dogfood capture trajectories:"]
+    for trajectory in DOGFOOD_CAPTURE_TRAJECTORIES.values():
+        lines.append(f"  {trajectory.identifier:<12} {trajectory.description}")
+    return "\n".join(lines)
 
 
 def _default_capture_event_log_path(*, prefix: str = "dogfood") -> Path:
@@ -916,6 +961,9 @@ def run(argv: Sequence[str] | None = None) -> int:
             cwd=args.cwd,
         )
     if args.command == "dogfood-capture":
+        if args.list_trajectories:
+            print(_dogfood_capture_trajectory_listing())
+            return 0
         return run_dogfood_capture(
             host=args.host,
             port=args.port,

@@ -741,6 +741,7 @@ def test_cli_parser_and_run(monkeypatch: Any, capsys: Any) -> None:
             "1234",
             "--split-every",
             "200",
+            "--list-trajectories",
             "--trajectory",
             "tiny-project",
             "--",
@@ -756,8 +757,12 @@ def test_cli_parser_and_run(monkeypatch: Any, capsys: Any) -> None:
     assert parsed_capture.renderer_command == "python renderer.py"
     assert parsed_capture.renderer_timeout_ms == "1234"
     assert parsed_capture.split_every == 200
+    assert parsed_capture.list_trajectories is True
     assert parsed_capture.trajectory == "tiny-project"
     assert parsed_capture.harn_args == ["--", "-p", "capture"]
+    parsed_capture_list = parser.parse_args(["dogfood-capture", "--list-trajectories"])
+    assert parsed_capture_list.command == "dogfood-capture"
+    assert parsed_capture_list.list_trajectories is True
     parsed_auth = parser.parse_args(["import-codex-auth", "--codex-auth", "codex.json", "--harn-auth", "harn.json"])
     assert parsed_auth.command == "import-codex-auth"
     parsed_replay = parser.parse_args(
@@ -2565,6 +2570,28 @@ def test_cli_dogfood_capture_split_hint(
     assert "--split-every must be positive" in capsys.readouterr().err
 
 
+def test_cli_dogfood_capture_lists_trajectory_presets(
+    monkeypatch: Any,
+    capsys: Any,
+) -> None:
+    dogfood_called = False
+
+    def fake_run_dogfood(**_kwargs: Any) -> int:
+        nonlocal dogfood_called
+        dogfood_called = True
+        return 0
+
+    monkeypatch.setattr(cli, "run_dogfood", fake_run_dogfood)
+
+    assert cli.run(["dogfood-capture", "--list-trajectories"]) == 0
+    assert dogfood_called is False
+    stdout = capsys.readouterr().out
+    assert "available dogfood capture trajectories:" in stdout
+    assert "tiny-project" in stdout
+    assert "repo-map" in stdout
+    assert "depth-2 repository map" in stdout
+
+
 def test_cli_dogfood_capture_trajectory_preset_creates_workspace_and_prompt(
     monkeypatch: Any,
     tmp_path: Path,
@@ -2607,6 +2634,50 @@ def test_cli_dogfood_capture_trajectory_preset_creates_workspace_and_prompt(
     assert "--split-every 200" in stderr
     assert f"--project-root {workspace}" in stderr
     assert "--project-name tiny-project-20260604-001122" in stderr
+
+
+def test_cli_dogfood_capture_repo_map_trajectory_uses_repo_topology_prompt(
+    monkeypatch: Any,
+    tmp_path: Path,
+    capsys: Any,
+) -> None:
+    dogfood_calls: list[dict[str, Any]] = []
+
+    def fake_run_dogfood(**kwargs: Any) -> int:
+        dogfood_calls.append(kwargs)
+        return 0
+
+    monkeypatch.setattr(cli, "run_dogfood", fake_run_dogfood)
+    monkeypatch.setattr(cli.time, "strftime", lambda _format: "20260604-004455")
+    monkeypatch.chdir(tmp_path)
+
+    assert (
+        cli.run(
+            [
+                "dogfood-capture",
+                "--trajectory",
+                "repo-map",
+                "--no-browser",
+                "--no-codex-auth-import",
+                "--no-hold-on-error",
+            ]
+        )
+        == 0
+    )
+    workspace = tmp_path / "test-artifacts" / "dogfood-workspaces" / "repo-map-20260604-004455"
+    event_log = tmp_path / "test-artifacts" / "captures" / "repo-map-20260604-004455.jsonl"
+    assert workspace.is_dir()
+    assert dogfood_calls[0]["cwd"] == str(workspace)
+    assert dogfood_calls[0]["harn_args"][:2] == ["--", "-p"]
+    assert "depth-2 project layout" in dogfood_calls[0]["harn_args"][2]
+    assert "line-count summary" in dogfood_calls[0]["harn_args"][2]
+    assert dogfood_calls[0]["env_overrides"]["HARN_GIBSON_EVENT_LOG"] == str(event_log)
+    stderr = capsys.readouterr().err
+    assert "harn-gibson capture trajectory: repo-map" in stderr
+    assert f"--output-dir {event_log.with_suffix('.replays')}" in stderr
+    assert "--split-every 200" in stderr
+    assert f"--project-root {workspace}" in stderr
+    assert "--project-name repo-map-20260604-004455" in stderr
 
 
 def test_cli_dogfood_capture_trajectory_respects_overrides(
@@ -2738,6 +2809,10 @@ def test_cli_dogfood_capture_trajectory_helpers_reject_unknown() -> None:
     assert cli._has_forwarded_harn_args([]) is False
     assert cli._has_forwarded_harn_args(["--"]) is False
     assert cli._has_forwarded_harn_args(["--", "-p", "prompt"]) is True
+    assert cli._dogfood_capture_trajectory_ids() == ("tiny-project", "repo-map")
+    assert "repo-map" in cli._dogfood_capture_trajectory_listing()
+    assert cli._dogfood_capture_trajectory("repo-map").prompt_path.name == "dogfood-repo-map.md"
+    assert "depth-2 project layout" in cli._dogfood_trajectory_prompt("repo-map")
     try:
         cli._prepare_dogfood_capture_options(
             trajectory="unknown",
