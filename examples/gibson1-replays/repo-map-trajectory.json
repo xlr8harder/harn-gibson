@@ -123,6 +123,39 @@
         }
       },
       {
+        "path": "primitives.gibson1-world-map.kind",
+        "equals": "spatial_map"
+      },
+      {
+        "path": "primitives.gibson1-world-map.props.focusObjectId",
+        "equals": "file:docs/usage.md"
+      },
+      {
+        "path": "primitives.gibson1-world-map.props.objects",
+        "contains": {
+          "entityId": "file:docs/usage.md",
+          "path": "docs/usage.md",
+          "tone": "magenta",
+          "active": true
+        }
+      },
+      {
+        "path": "primitives.gibson1-world-map.props.edges",
+        "contains": {
+          "source": "file:tests/test_cli.py",
+          "target": "file:src/repo_map/cli.py",
+          "label": "TESTS"
+        }
+      },
+      {
+        "path": "primitives.gibson1-world-map.props.worldBindings",
+        "contains": {
+          "entityId": "file:docs/usage.md",
+          "targetProp": "objects[0].mass",
+          "source": "worldModel"
+        }
+      },
+      {
         "path": "primitives.gibson1-rain.kind",
         "equals": "data_rain"
       },

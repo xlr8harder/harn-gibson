@@ -884,6 +884,7 @@ def test_gibson1_renderer_returns_coherent_valid_plan(tmp_path: Path) -> None:
     assert plan.metadata["semanticGraph"] is True
     assert plan.metadata["semanticNodeCount"] == 6
     assert plan.metadata["semanticEdgeCount"] == 1
+    assert plan.metadata["spatialMap"] is True
     assert "displayStyle" not in plan.metadata
     assert "renderPlanDiagnostics" not in plan.metadata
     assert issues == ()
@@ -893,6 +894,7 @@ def test_gibson1_renderer_returns_coherent_valid_plan(tmp_path: Path) -> None:
         "gibson1-repo-city": "city_block",
         "gibson1-scope": "signal_scope",
         "gibson1-route": "trace_route",
+        "gibson1-world-map": "spatial_map",
         "gibson1-rain": "data_rain",
     }
     assert animation_kinds == {
@@ -954,6 +956,32 @@ def test_gibson1_renderer_returns_coherent_valid_plan(tmp_path: Path) -> None:
     assert [hop["path"] for hop in route.props["hops"] if hop["id"].startswith("semantic-")] == [
         "tests/test_app.py",
         "src/app.py",
+    ]
+    world_map = scene.state.primitives["gibson1-world-map"]
+    assert world_map.props["focusObjectId"] == "file:tests/test_app.py"
+    assert world_map.props["layout"] == "world-model"
+    assert world_map.props["projection"] == "isometric"
+    assert world_map.props["objects"][0]["entityId"] == "file:tests/test_app.py"
+    assert world_map.props["objects"][0]["path"] == "tests/test_app.py"
+    assert world_map.props["objects"][0]["entityKind"] == "file"
+    assert world_map.props["objects"][0]["semanticDegree"] == 1
+    assert world_map.props["objects"][0]["mass"] == 0.655
+    assert world_map.props["objects"][1]["entityKind"] == "health"
+    assert world_map.props["objects"][1]["health"] == "ok"
+    assert world_map.props["edges"] == [
+        {
+            "source": "file:tests/test_app.py",
+            "target": "health:command:51",
+            "label": "HEALTH",
+            "tone": "green",
+            "active": False,
+            "flow": True,
+        }
+    ]
+    assert [binding["targetProp"] for binding in world_map.props["worldBindings"]] == [
+        "objects[0].mass",
+        "objects[0].tone",
+        "objects[1].tone",
     ]
     assert scene.state.animations["gibson1-route-trace"].target_id == "gibson1-route"
     assert scene.state.animations["gibson1-route-trace"].ttl_ms == 3800

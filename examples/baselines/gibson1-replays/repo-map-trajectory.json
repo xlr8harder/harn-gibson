@@ -194,6 +194,7 @@
           "primitive:city_block",
           "primitive:signal_scope",
           "primitive:trace_route",
+          "primitive:spatial_map",
           "primitive:data_rain",
           "animation:timeline_cue",
           "animation:route_trace",
@@ -215,10 +216,11 @@
           "semanticEdgeCount": 9,
           "semanticGraph": true,
           "semanticNodeCount": 15,
+          "spatialMap": true,
           "touchedFileCount": 3,
           "visualizer": "gibson1"
         },
-        "mutationCount": 12,
+        "mutationCount": 13,
         "renderer": "gibson1",
         "requestCount": 1,
         "routes": [
@@ -233,6 +235,7 @@
           "gibson1-repo-city",
           "gibson1-scope",
           "gibson1-route",
+          "gibson1-world-map",
           "gibson1-rain"
         ],
         "timeline": {
@@ -249,6 +252,7 @@
             "primitive:city_block",
             "primitive:signal_scope",
             "primitive:trace_route",
+            "primitive:spatial_map",
             "primitive:data_rain",
             "animation:timeline_cue",
             "animation:route_trace",
@@ -269,10 +273,11 @@
             "semanticEdgeCount": 9,
             "semanticGraph": true,
             "semanticNodeCount": 15,
+            "spatialMap": true,
             "touchedFileCount": 0,
             "visualizer": "gibson1"
           },
-          "mutationCount": 11,
+          "mutationCount": 12,
           "renderer": "gibson1",
           "requestCount": 1,
           "routes": [
@@ -287,6 +292,7 @@
             "gibson1-repo-city",
             "gibson1-scope",
             "gibson1-route",
+            "gibson1-world-map",
             "gibson1-rain"
           ],
           "timeline": {
@@ -302,6 +308,7 @@
             "primitive:city_block",
             "primitive:signal_scope",
             "primitive:trace_route",
+            "primitive:spatial_map",
             "primitive:data_rain",
             "animation:timeline_cue",
             "animation:route_trace",
@@ -322,10 +329,11 @@
             "semanticEdgeCount": 9,
             "semanticGraph": true,
             "semanticNodeCount": 15,
+            "spatialMap": true,
             "touchedFileCount": 0,
             "visualizer": "gibson1"
           },
-          "mutationCount": 11,
+          "mutationCount": 12,
           "renderer": "gibson1",
           "requestCount": 1,
           "routes": [
@@ -340,6 +348,7 @@
             "gibson1-repo-city",
             "gibson1-scope",
             "gibson1-route",
+            "gibson1-world-map",
             "gibson1-rain"
           ],
           "timeline": {
@@ -355,6 +364,7 @@
             "primitive:city_block",
             "primitive:signal_scope",
             "primitive:trace_route",
+            "primitive:spatial_map",
             "primitive:data_rain",
             "animation:timeline_cue",
             "animation:route_trace",
@@ -376,10 +386,11 @@
             "semanticEdgeCount": 9,
             "semanticGraph": true,
             "semanticNodeCount": 15,
+            "spatialMap": true,
             "touchedFileCount": 4,
             "visualizer": "gibson1"
           },
-          "mutationCount": 12,
+          "mutationCount": 13,
           "renderer": "gibson1",
           "requestCount": 1,
           "routes": [
@@ -394,6 +405,7 @@
             "gibson1-repo-city",
             "gibson1-scope",
             "gibson1-route",
+            "gibson1-world-map",
             "gibson1-rain"
           ],
           "timeline": {
@@ -409,6 +421,7 @@
             "primitive:city_block",
             "primitive:signal_scope",
             "primitive:trace_route",
+            "primitive:spatial_map",
             "primitive:data_rain",
             "animation:timeline_cue",
             "animation:route_trace",
@@ -430,10 +443,11 @@
             "semanticEdgeCount": 9,
             "semanticGraph": true,
             "semanticNodeCount": 15,
+            "spatialMap": true,
             "touchedFileCount": 3,
             "visualizer": "gibson1"
           },
-          "mutationCount": 12,
+          "mutationCount": 13,
           "renderer": "gibson1",
           "requestCount": 1,
           "routes": [
@@ -448,6 +462,7 @@
             "gibson1-repo-city",
             "gibson1-scope",
             "gibson1-route",
+            "gibson1-world-map",
             "gibson1-rain"
           ],
           "timeline": {
@@ -1268,6 +1283,223 @@
           "speed": 0.42,
           "title": "GIBSON1 EVENT BOARD",
           "tone": "magenta"
+        },
+        "region": "stage"
+      },
+      "gibson1-world-map": {
+        "children": [],
+        "id": "gibson1-world-map",
+        "kind": "spatial_map",
+        "props": {
+          "accentTone": "cyan",
+          "edges": [
+            {
+              "active": true,
+              "flow": true,
+              "label": "TESTS",
+              "source": "file:tests/test_cli.py",
+              "target": "file:src/repo_map/cli.py",
+              "tone": "green"
+            },
+            {
+              "active": false,
+              "flow": true,
+              "label": "IMPORTS",
+              "source": "file:tests/test_cli.py",
+              "target": "file:src/repo_map/cli.py",
+              "tone": "cyan"
+            }
+          ],
+          "focusObjectId": "file:docs/usage.md",
+          "label": "WORLD MODEL",
+          "labels": true,
+          "layout": "world-model",
+          "objects": [
+            {
+              "active": true,
+              "activityCount": 2,
+              "confidence": 1.0,
+              "entityId": "file:docs/usage.md",
+              "entityKind": "file",
+              "label": "USAGE.MD",
+              "mass": 0.74,
+              "path": "docs/usage.md",
+              "semanticDegree": 0,
+              "status": "ok",
+              "tone": "magenta",
+              "x": 0.18,
+              "y": 0.34,
+              "z": 0.26
+            },
+            {
+              "active": true,
+              "activityCount": 2,
+              "confidence": 1.0,
+              "entityId": "file:src/repo_map/cli.py",
+              "entityKind": "file",
+              "label": "CLI.PY",
+              "mass": 0.95,
+              "path": "src/repo_map/cli.py",
+              "semanticDegree": 9,
+              "status": "ok",
+              "tone": "magenta",
+              "x": 0.468,
+              "y": 0.35,
+              "z": 0.494
+            },
+            {
+              "active": true,
+              "activityCount": 1,
+              "confidence": 1.0,
+              "entityId": "file:scripts/line_summary.py",
+              "entityKind": "file",
+              "label": "LINE-SUMM...",
+              "mass": 0.62,
+              "path": "scripts/line_summary.py",
+              "semanticDegree": 0,
+              "status": "ok",
+              "tone": "magenta",
+              "x": 0.78,
+              "y": 0.326,
+              "z": 0.26
+            },
+            {
+              "active": false,
+              "activityCount": 1,
+              "confidence": 1.0,
+              "entityId": "file:README.md",
+              "entityKind": "file",
+              "label": "README.MD",
+              "mass": 0.4,
+              "path": "README.md",
+              "semanticDegree": 0,
+              "status": "ok",
+              "tone": "green",
+              "x": 0.18,
+              "y": 0.7,
+              "z": 0.14
+            },
+            {
+              "active": false,
+              "activityCount": 1,
+              "confidence": 1.0,
+              "entityId": "file:tests/test_cli.py",
+              "entityKind": "file",
+              "label": "TEST-CLI.PY",
+              "mass": 0.645,
+              "path": "tests/test_cli.py",
+              "semanticDegree": 7,
+              "status": "ok",
+              "tone": "green",
+              "x": 0.492,
+              "y": 0.742,
+              "z": 0.322
+            }
+          ],
+          "opacity": 0.68,
+          "position": {
+            "x": 0.8,
+            "y": 0.48
+          },
+          "projection": "isometric",
+          "seed": 119,
+          "size": {
+            "h": 0.24,
+            "w": 0.28
+          },
+          "tone": "magenta",
+          "worldBindings": [
+            {
+              "entityId": "file:docs/usage.md",
+              "entityKind": "file",
+              "fieldPath": "entities.files[].activityCount",
+              "intent": "activity gives world objects visual mass",
+              "relationship": "scales",
+              "source": "worldModel",
+              "targetProp": "objects[0].mass"
+            },
+            {
+              "entityId": "file:docs/usage.md",
+              "entityKind": "file",
+              "fieldPath": "entities.files[].lastOutcome.status",
+              "intent": "observed outcomes color file objects",
+              "relationship": "colors",
+              "source": "worldModel",
+              "targetProp": "objects[0].tone"
+            },
+            {
+              "entityId": "file:src/repo_map/cli.py",
+              "entityKind": "file",
+              "fieldPath": "entities.files[].activityCount",
+              "intent": "activity gives world objects visual mass",
+              "relationship": "scales",
+              "source": "worldModel",
+              "targetProp": "objects[1].mass"
+            },
+            {
+              "entityId": "file:src/repo_map/cli.py",
+              "entityKind": "file",
+              "fieldPath": "entities.files[].lastOutcome.status",
+              "intent": "observed outcomes color file objects",
+              "relationship": "colors",
+              "source": "worldModel",
+              "targetProp": "objects[1].tone"
+            },
+            {
+              "entityId": "file:scripts/line_summary.py",
+              "entityKind": "file",
+              "fieldPath": "entities.files[].activityCount",
+              "intent": "activity gives world objects visual mass",
+              "relationship": "scales",
+              "source": "worldModel",
+              "targetProp": "objects[2].mass"
+            },
+            {
+              "entityId": "file:scripts/line_summary.py",
+              "entityKind": "file",
+              "fieldPath": "entities.files[].lastOutcome.status",
+              "intent": "observed outcomes color file objects",
+              "relationship": "colors",
+              "source": "worldModel",
+              "targetProp": "objects[2].tone"
+            },
+            {
+              "entityId": "file:README.md",
+              "entityKind": "file",
+              "fieldPath": "entities.files[].activityCount",
+              "intent": "activity gives world objects visual mass",
+              "relationship": "scales",
+              "source": "worldModel",
+              "targetProp": "objects[3].mass"
+            },
+            {
+              "entityId": "file:README.md",
+              "entityKind": "file",
+              "fieldPath": "entities.files[].lastOutcome.status",
+              "intent": "observed outcomes color file objects",
+              "relationship": "colors",
+              "source": "worldModel",
+              "targetProp": "objects[3].tone"
+            },
+            {
+              "entityId": "file:tests/test_cli.py",
+              "entityKind": "file",
+              "fieldPath": "entities.files[].activityCount",
+              "intent": "activity gives world objects visual mass",
+              "relationship": "scales",
+              "source": "worldModel",
+              "targetProp": "objects[4].mass"
+            },
+            {
+              "entityId": "file:tests/test_cli.py",
+              "entityKind": "file",
+              "fieldPath": "entities.files[].lastOutcome.status",
+              "intent": "observed outcomes color file objects",
+              "relationship": "colors",
+              "source": "worldModel",
+              "targetProp": "objects[4].tone"
+            }
+          ]
         },
         "region": "stage"
       },

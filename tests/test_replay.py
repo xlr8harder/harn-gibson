@@ -1779,7 +1779,7 @@ def test_checked_in_gibson1_replay_exercises_default_renderer() -> None:
     terrain_paths = {peak["path"]: peak for peak in terrain_peaks}
 
     assert [step.kind for step in result.steps] == ["event"] * 4
-    assert len(result.expectations) == 30
+    assert len(result.expectations) == 35
     assert result.scene.primitives["status"].props["text"] == "gibson1::tool_result"
     assert result.scene.primitives["gibson1-terminal"].kind == "terminal_wall"
     assert result.scene.primitives["gibson1-terminal"].props["title"] == "GIBSON1 EVENT BOARD"
@@ -1823,6 +1823,15 @@ def test_checked_in_gibson1_replay_exercises_default_renderer() -> None:
     assert first_semantic_link["source"] == "semantic-0"
     assert first_semantic_link["target"] == "semantic-1"
     assert first_semantic_link["relationship"] == "tests"
+    world_map = result.scene.primitives["gibson1-world-map"]
+    assert world_map.kind == "spatial_map"
+    assert world_map.props["focusObjectId"] == "file:docs/usage.md"
+    assert world_map.props["objects"][0]["entityId"] == "file:docs/usage.md"
+    assert world_map.props["objects"][0]["active"] is True
+    assert world_map.props["objects"][1]["entityId"] == "file:src/repo_map/cli.py"
+    assert world_map.props["objects"][1]["semanticDegree"] == 9
+    assert world_map.props["edges"][0]["label"] == "TESTS"
+    assert world_map.props["worldBindings"][0]["targetProp"] == "objects[0].mass"
     assert result.scene.primitives["gibson1-rain"].kind == "data_rain"
     assert result.scene.animations["gibson1-cues"].kind == "timeline_cue"
     assert result.scene.animations["gibson1-route-trace"].target_id == "gibson1-route"
@@ -1835,10 +1844,11 @@ def test_checked_in_gibson1_replay_exercises_default_renderer() -> None:
     assert result.scene.metadata["lastRenderIntent"]["renderer"] == "gibson1"
     assert result.scene.metadata["lastRenderIntent"]["metadata"]["semanticGraph"] is True
     assert result.scene.metadata["lastRenderIntent"]["metadata"]["semanticEdgeCount"] == 9
+    assert result.scene.metadata["lastRenderIntent"]["metadata"]["spatialMap"] is True
     assert suite.ok is True
     assert summary["fileCount"] == 1
     assert summary["stepCount"] == 4
-    assert summary["expectationCount"] == 30
+    assert summary["expectationCount"] == 35
     assert summary["rendererCounts"] == {"gibson1": 4}
     assert summary["routeCounts"] == {"renderer_agent": 4}
 

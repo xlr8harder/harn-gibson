@@ -50,6 +50,7 @@ def main() -> None:
         _upsert_repo_city(entries, touched, semantic, event_type, tone, accent, sequence),
         _upsert_signal_scope(event_type, phase, touched, tone, accent, sequence),
         _upsert_trace_route(event_type, phase, touched, semantic, tone, accent, sequence),
+        _upsert_world_spatial_map(context, touched, semantic, event_type, tone, accent, sequence),
         _upsert_data_rain(event_type, summary, tone, accent, sequence),
         _timeline_cue(event_type, phase, sequence, timestamp_ms, duration_ms, tone, accent),
         _route_trace_animation(event_type, phase, touched, semantic, sequence, timestamp_ms, duration_ms, tone, accent),
@@ -69,6 +70,7 @@ def main() -> None:
         "semanticGraph": semantic["available"],
         "semanticNodeCount": len(semantic["nodes"]),
         "semanticEdgeCount": len(semantic["edges"]),
+        "spatialMap": True,
         "projectName": project_name,
     }
     if display_style != "gibson":
@@ -616,6 +618,117 @@ def _upsert_trace_route(
     }
 
 
+def _upsert_world_spatial_map(
+    context: dict[str, Any],
+    touched: list[dict[str, Any]],
+    semantic: dict[str, Any],
+    event_type: str,
+    tone: str,
+    accent: str,
+    sequence: int,
+) -> dict[str, Any]:
+    world = _world_model(context)
+    touched_paths = [_display_repo_path(_text(item.get("path"), "")) for item in touched]
+    file_entities = _world_file_entities(world)
+    health_entities = _world_health_entities(world)
+    prioritized_files = _prioritized_world_files(file_entities, touched_paths)
+    objects: list[dict[str, Any]] = []
+    for index, file_entity in enumerate(prioritized_files[:5]):
+        path = _display_repo_path(_text(file_entity.get("path"), ""))
+        if not path:
+            continue
+        semantic_summary = _semantic_path_summary(path, semantic)
+        touched_count = _touch_count(path, touched_paths)
+        active = touched_count > 0 or index == 0
+        last_outcome = _dict(file_entity.get("lastOutcome"))
+        objects.append(
+            {
+                "entityId": f"file:{path}",
+                "entityKind": "file",
+                "path": path,
+                "label": _path_label(path),
+                "x": round(0.18 + (index % 3) * 0.30 + semantic_summary["xBias"], 3),
+                "y": round(0.34 + (index // 3) * 0.36 + semantic_summary["yBias"], 3),
+                "z": round(0.14 + min(0.42, semantic_summary["degree"] * 0.026 + touched_count * 0.12), 3),
+                "mass": _world_file_mass(file_entity, semantic_summary, touched_count),
+                "tone": _world_file_tone(file_entity, semantic_summary, active, tone, accent),
+                "active": active,
+                "confidence": _world_confidence(file_entity),
+                "status": _text(last_outcome.get("status"), ""),
+                "activityCount": _int(file_entity.get("activityCount"), 0),
+                "semanticDegree": semantic_summary["degree"],
+            }
+        )
+    for index, health_entity in enumerate(health_entities[:2]):
+        status = _text(health_entity.get("status"), "unknown")
+        objects.append(
+            {
+                "entityId": _text(health_entity.get("id"), f"health:{index}"),
+                "entityKind": "health",
+                "label": _clip(_text(health_entity.get("category"), "health").upper(), 12),
+                "x": round(0.78 + index * 0.10, 3),
+                "y": 0.30,
+                "z": 0.20,
+                "mass": 0.58 if status == "ok" else 0.78,
+                "health": status,
+                "tone": "green" if status == "ok" else "red" if status == "error" else "amber",
+                "active": status != "ok",
+                "confidence": _world_confidence(health_entity),
+            }
+        )
+    if not objects:
+        objects = [
+            {
+                "entityId": "renderer:gibson1",
+                "entityKind": "renderer",
+                "label": "GIBSON1",
+                "x": 0.34,
+                "y": 0.48,
+                "z": 0.18,
+                "mass": 0.52,
+                "tone": tone,
+                "active": True,
+                "confidence": 1.0,
+            },
+            {
+                "entityId": f"event:{event_type}",
+                "entityKind": "event",
+                "label": _clip(event_type.upper().replace("_", "-"), 12),
+                "x": 0.66,
+                "y": 0.40,
+                "z": 0.12,
+                "mass": 0.44,
+                "tone": accent,
+                "confidence": 0.72,
+            },
+        ]
+    focus = _spatial_focus_object(objects, touched_paths)
+    return {
+        "op": "upsert",
+        "primitive": {
+            "id": "gibson1-world-map",
+            "kind": "spatial_map",
+            "region": "stage",
+            "props": {
+                "label": "WORLD MODEL",
+                "position": {"x": 0.80, "y": 0.48},
+                "size": {"w": 0.28, "h": 0.24},
+                "layout": "world-model",
+                "projection": "isometric",
+                "focusObjectId": focus,
+                "objects": objects,
+                "edges": _spatial_edges(objects, semantic, touched_paths, tone, accent),
+                "worldBindings": _spatial_world_bindings(objects),
+                "tone": tone,
+                "accentTone": accent,
+                "opacity": 0.68,
+                "labels": True,
+                "seed": sequence + len(objects) * 23,
+            },
+        },
+    }
+
+
 def _upsert_data_rain(event_type: str, summary: str, tone: str, accent: str, sequence: int) -> dict[str, Any]:
     return {
         "op": "upsert",
@@ -987,6 +1100,182 @@ def _semantic_route_edges(semantic: dict[str, Any], touched: list[dict[str, Any]
     return _unique_semantic_edges(sorted(edges, key=_semantic_edge_sort_key))[:8]
 
 
+def _world_model(context: dict[str, Any]) -> dict[str, Any]:
+    return _dict(_dict(context.get("project")).get("worldModel"))
+
+
+def _world_entities(world: dict[str, Any], key: str) -> list[dict[str, Any]]:
+    return [_dict(item) for item in _list(_dict(world.get("entities")).get(key))]
+
+
+def _world_file_entities(world: dict[str, Any]) -> list[dict[str, Any]]:
+    return _world_entities(world, "files")
+
+
+def _world_health_entities(world: dict[str, Any]) -> list[dict[str, Any]]:
+    return _world_entities(world, "health")
+
+
+def _prioritized_world_files(files: list[dict[str, Any]], touched_paths: list[str]) -> list[dict[str, Any]]:
+    return sorted(
+        files,
+        key=lambda item: (
+            -_touch_count(_display_repo_path(_text(item.get("path"), "")), touched_paths),
+            -_int(item.get("lastSequence"), 0),
+            -_int(item.get("activityCount"), 0),
+            _display_repo_path(_text(item.get("path"), "")),
+        ),
+    )
+
+
+def _world_file_mass(file_entity: dict[str, Any], semantic_summary: dict[str, Any], touched_count: int) -> float:
+    activity = _int(file_entity.get("activityCount"), 0)
+    degree = _int(semantic_summary.get("degree"), 0)
+    return round(min(0.95, 0.28 + activity * 0.12 + touched_count * 0.22 + degree * 0.035), 3)
+
+
+def _world_file_tone(
+    file_entity: dict[str, Any],
+    semantic_summary: dict[str, Any],
+    active: bool,
+    tone: str,
+    accent: str,
+) -> str:
+    status = _text(_dict(file_entity.get("lastOutcome")).get("status"), "")
+    if status == "error":
+        return "red"
+    if active:
+        return "magenta"
+    if status == "ok":
+        return "green"
+    role = _text(semantic_summary.get("role"), "")
+    if role == "test":
+        return "green"
+    if role == "source":
+        return accent
+    return tone
+
+
+def _world_confidence(entity: dict[str, Any]) -> float:
+    confidence = _dict(entity.get("provenance")).get("confidence")
+    if isinstance(confidence, int | float) and not isinstance(confidence, bool):
+        return round(max(0.0, min(1.0, float(confidence))), 3)
+    return 0.85
+
+
+def _spatial_focus_object(objects: list[dict[str, Any]], touched_paths: list[str]) -> str:
+    for item in objects:
+        path = _text(item.get("path"), "")
+        if path and _touch_count(path, touched_paths):
+            return _text(item.get("entityId"), _text(item.get("id"), ""))
+    for item in objects:
+        if item.get("active"):
+            return _text(item.get("entityId"), _text(item.get("id"), ""))
+    return _text(objects[0].get("entityId"), _text(objects[0].get("id"), "")) if objects else ""
+
+
+def _spatial_edges(
+    objects: list[dict[str, Any]],
+    semantic: dict[str, Any],
+    touched_paths: list[str],
+    tone: str,
+    accent: str,
+) -> list[dict[str, Any]]:
+    object_by_path = {_text(item.get("path"), ""): item for item in objects if _text(item.get("path"), "")}
+    object_by_entity = {_text(item.get("entityId"), ""): item for item in objects if _text(item.get("entityId"), "")}
+    edges: list[dict[str, Any]] = []
+    for edge in _semantic_route_edges(semantic, [{"path": path} for path in touched_paths])[:6]:
+        source_entity = _text(edge.get("source"), "")
+        target_entity = _text(edge.get("target"), "")
+        if source_entity not in object_by_entity or target_entity not in object_by_entity:
+            continue
+        relationship = _text(edge.get("relationship"), "imports")
+        edges.append(
+            {
+                "source": source_entity,
+                "target": target_entity,
+                "label": relationship.upper(),
+                "tone": "green" if relationship == "tests" else accent,
+                "active": relationship == "tests",
+                "flow": True,
+            }
+        )
+    active_files = [
+        item
+        for item in objects
+        if _text(item.get("entityKind"), "") == "file" and _touch_count(_text(item.get("path"), ""), touched_paths)
+    ]
+    health = next((item for item in objects if _text(item.get("entityKind"), "") == "health"), None)
+    if health and active_files:
+        edges.append(
+            {
+                "source": _text(active_files[0].get("entityId"), ""),
+                "target": _text(health.get("entityId"), ""),
+                "label": "HEALTH",
+                "tone": "red" if health.get("health") == "error" else "green",
+                "active": health.get("health") != "ok",
+                "flow": True,
+            }
+        )
+    if not edges and len(object_by_path) >= 2:
+        values = list(object_by_path.values())
+        edges.append(
+            {
+                "source": _text(values[0].get("entityId"), ""),
+                "target": _text(values[1].get("entityId"), ""),
+                "label": "CONTEXT",
+                "tone": tone,
+                "flow": False,
+            }
+        )
+    return edges[:8]
+
+
+def _spatial_world_bindings(objects: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    bindings: list[dict[str, Any]] = []
+    for index, item in enumerate(objects[:8]):
+        entity_id = _text(item.get("entityId"), "")
+        if not entity_id:
+            continue
+        entity_kind = _text(item.get("entityKind"), "unknown")
+        if entity_kind == "file":
+            bindings.append(
+                {
+                    "entityId": entity_id,
+                    "entityKind": "file",
+                    "fieldPath": "entities.files[].activityCount",
+                    "targetProp": f"objects[{index}].mass",
+                    "source": "worldModel",
+                    "relationship": "scales",
+                    "intent": "activity gives world objects visual mass",
+                }
+            )
+            bindings.append(
+                {
+                    "entityId": entity_id,
+                    "entityKind": "file",
+                    "fieldPath": "entities.files[].lastOutcome.status",
+                    "targetProp": f"objects[{index}].tone",
+                    "source": "worldModel",
+                    "relationship": "colors",
+                    "intent": "observed outcomes color file objects",
+                }
+            )
+        elif entity_kind == "health":
+            bindings.append(
+                {
+                    "entityId": entity_id,
+                    "entityKind": "health",
+                    "fieldPath": "entities.health[].status",
+                    "targetProp": f"objects[{index}].tone",
+                    "source": "worldModel",
+                    "relationship": "colors",
+                    "intent": "test/build status colors health objects",
+                }
+            )
+    return bindings[:12]
+
+
 def _unique_semantic_edges(edges: list[dict[str, Any]]) -> list[dict[str, Any]]:
     seen: set[tuple[str, str, str]] = set()
     unique = []
@@ -1117,8 +1406,12 @@ def _touch_count(path: str, touched_paths: list[str]) -> int:
 
 
 def _path_label(path: str) -> str:
-    tail = (path.rstrip("/").rsplit("/", 1)[-1] or path).split()[0]
+    tail = (_display_repo_path(path).rstrip("/").rsplit("/", 1)[-1] or path).split()[0]
     return _clip(tail.upper().replace("_", "-"), 12)
+
+
+def _display_repo_path(path: str) -> str:
+    return path.split()[0].strip(",:;") if path else ""
 
 
 def _dict(value: Any) -> dict[str, Any]:
