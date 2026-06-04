@@ -67,7 +67,7 @@ uv run harn-gibson dogfood-capture \
   -- -p "$(cat examples/prompts/dogfood-tiny-project.md)"
 ```
 
-It sets the showcase renderer, runs harn in the target project directory with this repo's extension/model defaults injected explicitly, records normalized JSONL under ignored artifacts by default, and prints the matching split `event-log-to-replay --review-dir ...` command when harn exits, including the captured workspace's `--project-root` and `--project-name`. The prompt template asks for git setup, file creation, tests, fixes, and commits so the captured trajectory exercises more than streaming text.
+It sets the showcase renderer, runs harn in the target project directory with this repo's extension/model defaults injected explicitly, records normalized JSONL under ignored artifacts by default, and prints the matching split `event-log-to-replay --review-dir ... --output-result ...` command when harn exits, including the captured workspace's `--project-root` and `--project-name`. The prompt template asks for git setup, file creation, tests, fixes, and commits so the captured trajectory exercises more than streaming text.
 
 For 15-20 minute captures, use `event-log-to-replay --split-every N --output-dir DIR --review-dir REVIEW` instead of one large fixture. It writes the split fixture directory and immediately builds a suite overview plus per-chunk frame players, renderer contexts, prompts, renderer chunks, render intents, final scenes, and result JSON. `replay-dir DIR --review-dir ...` can rerun that same review later.
 

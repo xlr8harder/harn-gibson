@@ -882,6 +882,8 @@ def test_cli_parser_and_run(monkeypatch: Any, capsys: Any) -> None:
             "fixture.json",
             "--output-dir",
             "split-fixtures",
+            "--output-result",
+            "result.json",
             "--name",
             "captured",
             "--review-dir",
@@ -916,6 +918,7 @@ def test_cli_parser_and_run(monkeypatch: Any, capsys: Any) -> None:
     assert parsed_event_log.path == "events.jsonl"
     assert parsed_event_log.output == "fixture.json"
     assert parsed_event_log.output_dir == "split-fixtures"
+    assert parsed_event_log.output_result == "result.json"
     assert parsed_event_log.name == "captured"
     assert parsed_event_log.review_dir == "review"
     assert parsed_event_log.screenshot_width == 640
@@ -1786,6 +1789,7 @@ def test_cli_replay_dir_reports_failures(tmp_path: Any, capsys: Any) -> None:
 def test_cli_event_log_to_replay_writes_and_prints(tmp_path: Any, capsys: Any) -> None:
     event_log = tmp_path / "events.jsonl"
     output = tmp_path / "fixtures" / "captured.json"
+    result_path = tmp_path / "results" / "captured-result.json"
     event_log.write_text(
         json.dumps(
             {
@@ -1810,6 +1814,8 @@ def test_cli_event_log_to_replay_writes_and_prints(tmp_path: Any, capsys: Any) -
                 str(event_log),
                 "--output",
                 str(output),
+                "--output-result",
+                str(result_path),
                 "--name",
                 "captured dogfood",
                 "--visual-fixture",
@@ -1821,8 +1827,12 @@ def test_cli_event_log_to_replay_writes_and_prints(tmp_path: Any, capsys: Any) -
         )
         == 0
     )
-    assert capsys.readouterr().out.strip() == f"wrote replay fixture: {output} (1 events)"
+    assert capsys.readouterr().out.splitlines() == [
+        f"wrote replay fixture: {output} (1 events)",
+        f"wrote event-log replay result: {result_path}",
+    ]
     written = json.loads(output.read_text(encoding="utf-8"))
+    result = json.loads(result_path.read_text(encoding="utf-8"))
     assert written["name"] == "captured dogfood"
     assert written["metadata"]["eventCount"] == 1
     assert written["metadata"]["redaction"] == {"enabled": True, "count": 0}
@@ -1833,6 +1843,9 @@ def test_cli_event_log_to_replay_writes_and_prints(tmp_path: Any, capsys: Any) -
         {"path": "canvasMetrics.maxChannelTotal", "min": 90},
     ]
     assert written["steps"][0]["event"]["eventType"] == "message_update"
+    assert result["schema"] == "harn-gibson.replay-result.v1"
+    assert result["name"] == "captured dogfood"
+    assert result["metadata"]["captureSummary"]["eventTypes"] == ["message_update"]
 
     assert cli.run(["event-log-to-replay", str(event_log)]) == 0
     printed = json.loads(capsys.readouterr().out)
@@ -1843,6 +1856,7 @@ def test_cli_event_log_to_replay_writes_and_prints(tmp_path: Any, capsys: Any) -
 def test_cli_event_log_to_replay_writes_split_chunks(tmp_path: Any, capsys: Any) -> None:
     event_log = tmp_path / "events.jsonl"
     output_dir = tmp_path / "split"
+    result_path = tmp_path / "results" / "split-result.json"
     events = [
         {
             "sequence": index,
@@ -1865,6 +1879,8 @@ def test_cli_event_log_to_replay_writes_split_chunks(tmp_path: Any, capsys: Any)
                 str(event_log),
                 "--output-dir",
                 str(output_dir),
+                "--output-result",
+                str(result_path),
                 "--split-every",
                 "2",
                 "--name",
@@ -1882,10 +1898,12 @@ def test_cli_event_log_to_replay_writes_split_chunks(tmp_path: Any, capsys: Any)
         f"wrote replay fixture chunk: {first_path} (2 events)",
         f"wrote replay fixture chunk: {second_path} (1 events)",
         f"wrote event-log split manifest: {manifest_path} (2 chunks, 3 events)",
+        f"wrote event-log split replay result: {result_path}",
     ]
     first = json.loads(first_path.read_text(encoding="utf-8"))
     second = json.loads(second_path.read_text(encoding="utf-8"))
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    result = json.loads(result_path.read_text(encoding="utf-8"))
     assert first["name"] == "captured dogfood chunk 1/2"
     assert first["metadata"]["eventLogChunk"]["endEventOffset"] == 1
     assert first["metadata"]["redaction"] == {"enabled": True, "count": 0}
@@ -1899,6 +1917,31 @@ def test_cli_event_log_to_replay_writes_split_chunks(tmp_path: Any, capsys: Any)
     assert [entry["path"] for entry in manifest["fixtures"]] == [
         "captured-dogfood-0001.json",
         "captured-dogfood-0002.json",
+    ]
+    assert result["schema"] == "harn-gibson.replay-suite-result.v1"
+    assert result["total"] == 2
+    assert result["summary"]["eventSummary"]["eventTypeCounts"] == {"tool_call": 3}
+
+    output_dir_without_result = tmp_path / "split-without-result"
+    assert (
+        cli.run(
+            [
+                "event-log-to-replay",
+                str(event_log),
+                "--output-dir",
+                str(output_dir_without_result),
+                "--split-every",
+                "2",
+                "--name",
+                "captured dogfood",
+            ]
+        )
+        == 0
+    )
+    assert capsys.readouterr().out.splitlines() == [
+        f"wrote replay fixture chunk: {output_dir_without_result / 'captured-dogfood-0001.json'} (2 events)",
+        f"wrote replay fixture chunk: {output_dir_without_result / 'captured-dogfood-0002.json'} (1 events)",
+        f"wrote event-log split manifest: {output_dir_without_result / 'manifest.json'} (2 chunks, 3 events)",
     ]
 
 
@@ -2015,6 +2058,40 @@ def test_cli_event_log_to_replay_split_writes_review_bundle(
         f"wrote event-log split review bundle: {review_dir} (2 chunks, 0 failed)",
     ]
 
+    output_dir_with_result = tmp_path / "split-with-result"
+    review_dir_with_result = tmp_path / "review-with-result"
+    result_path = tmp_path / "results" / "split-review-result.json"
+    assert (
+        cli.run(
+            [
+                "event-log-to-replay",
+                str(event_log),
+                "--output-dir",
+                str(output_dir_with_result),
+                "--split-every",
+                "2",
+                "--name",
+                "captured dogfood",
+                "--visual-fixture",
+                "--review-dir",
+                str(review_dir_with_result),
+                "--output-result",
+                str(result_path),
+            ]
+        )
+        == 0
+    )
+    result_payload = json.loads(result_path.read_text(encoding="utf-8"))
+    assert result_payload["schema"] == "harn-gibson.replay-suite-result.v1"
+    assert result_payload["total"] == 2
+    assert capsys.readouterr().out.splitlines() == [
+        f"wrote replay fixture chunk: {output_dir_with_result / 'captured-dogfood-0001.json'} (2 events)",
+        f"wrote replay fixture chunk: {output_dir_with_result / 'captured-dogfood-0002.json'} (1 events)",
+        f"wrote event-log split manifest: {output_dir_with_result / 'manifest.json'} (2 chunks, 3 events)",
+        f"wrote event-log split review bundle: {review_dir_with_result} (2 chunks, 0 failed)",
+        f"wrote event-log split replay result: {result_path}",
+    ]
+
 
 def test_cli_event_log_to_replay_writes_review_bundle(
     tmp_path: Any,
@@ -2023,6 +2100,7 @@ def test_cli_event_log_to_replay_writes_review_bundle(
 ) -> None:
     event_log = tmp_path / "events.jsonl"
     output = tmp_path / "fixtures" / "captured.json"
+    result_output = tmp_path / "fixtures" / "captured-result.json"
     review_dir = tmp_path / "review"
     calls: list[tuple[int, int, Path, int, int]] = []
     event_log.write_text(
@@ -2063,6 +2141,8 @@ def test_cli_event_log_to_replay_writes_review_bundle(
                 str(event_log),
                 "--output",
                 str(output),
+                "--output-result",
+                str(result_output),
                 "--name",
                 "captured dogfood",
                 "--review-dir",
@@ -2081,6 +2161,7 @@ def test_cli_event_log_to_replay_writes_review_bundle(
 
     manifest = json.loads((review_dir / "manifest.json").read_text(encoding="utf-8"))
     result = json.loads((review_dir / "result.json").read_text(encoding="utf-8"))
+    result_artifact = json.loads(result_output.read_text(encoding="utf-8"))
     frame_manifest = json.loads((review_dir / "frames" / "manifest.json").read_text(encoding="utf-8"))
     assert calls == [(1, 1, review_dir / "frames", 640, 480)]
     assert manifest["replayName"] == "captured dogfood"
@@ -2088,11 +2169,13 @@ def test_cli_event_log_to_replay_writes_review_bundle(
     assert manifest["screenshotCount"] == 1
     assert result["metadata"]["captureSummary"]["eventTypes"] == ["tool_call"]
     assert result["metadata"]["visualFixture"] is True
+    assert result_artifact == result
     assert frame_manifest["screenshotCount"] == 1
     assert (review_dir / "index.html").exists()
     assert capsys.readouterr().out.splitlines() == [
         f"wrote replay fixture: {output} (1 events)",
         f"wrote event-log review bundle: {review_dir} (1 frames)",
+        f"wrote event-log replay result: {result_output}",
     ]
 
 
@@ -2422,6 +2505,7 @@ def test_cli_dogfood_capture_sets_env_and_replay_hint(
     assert "harn-gibson capture renderer: python renderer.py" in stderr
     assert "uv run harn-gibson event-log-to-replay" in stderr
     assert f"--output {event_log.with_suffix('.replay.json')}" in stderr
+    assert f"--output-result {event_log.with_suffix('.result.json')}" in stderr
     assert "--redact-sensitive" in stderr
     assert f"--review-dir {event_log.with_name('events-review')}" in stderr
     assert "--renderer-command 'python renderer.py'" in stderr
@@ -2465,6 +2549,7 @@ def test_cli_dogfood_capture_split_hint(
     stderr = capsys.readouterr().err
     assert f"--output-dir {event_log.with_suffix('.replays')}" in stderr
     assert "--split-every 200" in stderr
+    assert f"--output-result {event_log.with_suffix('.result.json')}" in stderr
     assert f"--review-dir {event_log.with_name('long-events-review')}" in stderr
     assert f"--output {event_log.with_suffix('.replay.json')}" not in stderr
 

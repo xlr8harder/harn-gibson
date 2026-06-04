@@ -134,6 +134,11 @@ def build_parser() -> argparse.ArgumentParser:
     event_log.add_argument("path", help="path to a normalized harn-gibson JSONL event log")
     event_log.add_argument("--output", "-o", default=None, help="write replay fixture JSON to this path")
     event_log.add_argument("--output-dir", default=None, help="write split replay fixtures to this directory")
+    event_log.add_argument(
+        "--output-result",
+        default=None,
+        help="write replay result JSON for converted logs, or replay suite result JSON for split logs",
+    )
     event_log.add_argument("--name", default=None, help="fixture name; defaults to the event log filename")
     event_log.add_argument("--review-dir", default=None, help="write a complete replay review bundle for this log")
     event_log.add_argument("--screenshot-width", type=int, default=1280, help="review screenshot viewport width")
@@ -479,6 +484,7 @@ def _capture_replay_command(
 ) -> str:
     fixture_output = event_log_path.with_suffix(".replay.json")
     split_output_dir = event_log_path.with_suffix(".replays")
+    result_output = event_log_path.with_suffix(".result.json")
     review_dir = event_log_path.with_name(f"{event_log_path.stem}-review")
     command = [
         "uv",
@@ -491,6 +497,7 @@ def _capture_replay_command(
         command.extend(["--output", str(fixture_output)])
     else:
         command.extend(["--output-dir", str(split_output_dir), "--split-every", str(split_every)])
+    command.extend(["--output-result", str(result_output)])
     command.extend(
         [
             "--visual-fixture",
@@ -508,6 +515,12 @@ def _capture_replay_command(
     if project_root is not None:
         command.extend(["--project-root", str(project_root), "--project-name", project_root.name or "workspace"])
     return " ".join(shlex.quote(part) for part in command)
+
+
+def _write_json_file(path: str | Path, payload: Mapping[str, object]) -> None:
+    output = Path(path)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 
 
 def _hold_display_on_error(display_url: str) -> None:  # pragma: no cover - manual recovery loop
@@ -705,8 +718,10 @@ def run(argv: Sequence[str] | None = None) -> int:
             capture_replay_frame_screenshots,
             replay_data_from_event_log,
             run_replay_data,
+            run_replay_suite,
             split_replay_data_from_event_log,
             split_replay_fixture_filename,
+            write_replay_result,
             write_replay_review_bundle,
             write_replay_suite_review_bundle,
         )
@@ -760,7 +775,19 @@ def run(argv: Sequence[str] | None = None) -> int:
                     f"wrote event-log split review bundle: {args.review_dir} "
                     f"({review_manifest['total']} chunks, {review_manifest['failed']} failed)"
                 )
+                if args.output_result:
+                    result = run_replay_suite(output_dir, style=args.style, state_factory=state_factory)
+                    _write_json_file(args.output_result, result.to_dict())
+                    print(f"wrote event-log split replay result: {args.output_result}")
                 return 0 if review_manifest["ok"] else 1
+            if args.output_result:
+                state_factory = (
+                    (lambda: _replay_state_from_args(args)) if _explicit_replay_state_env_from_args(args) else None
+                )
+                result = run_replay_suite(output_dir, style=args.style, state_factory=state_factory)
+                _write_json_file(args.output_result, result.to_dict())
+                print(f"wrote event-log split replay result: {args.output_result}")
+                return 0 if result.ok else 1
             return 0
         if args.output_dir is not None:
             print("--output-dir requires --split-every", file=sys.stderr)
@@ -781,30 +808,40 @@ def run(argv: Sequence[str] | None = None) -> int:
             print(f"wrote replay fixture: {args.output} ({len(fixture['steps'])} events)")
         else:
             print(text, end="")
+        replay_result = None
         if args.review_dir:
             replay_state = _replay_state_from_args(args)
             try:
-                result = run_replay_data(
+                replay_result = run_replay_data(
                     fixture,
                     replay_state,
                     capture_frames=True,
                     capture_renderer_contexts=True,
                 )
                 screenshots = capture_replay_frame_screenshots(
-                    result,
+                    replay_result,
                     Path(args.review_dir) / "frames",
                     width=args.screenshot_width,
                     height=args.screenshot_height,
                 )
                 write_replay_review_bundle(
                     args.review_dir,
-                    result,
+                    replay_result,
                     screenshots,
                     render_chunk_size=args.render_chunk_size,
                 )
                 print(f"wrote event-log review bundle: {args.review_dir} ({len(screenshots)} frames)")
             finally:
                 replay_state.pipeline.stop()
+        if args.output_result:
+            if replay_result is None:
+                replay_state = _replay_state_from_args(args)
+                try:
+                    replay_result = run_replay_data(fixture, replay_state)
+                finally:
+                    replay_state.pipeline.stop()
+            write_replay_result(args.output_result, replay_result)
+            print(f"wrote event-log replay result: {args.output_result}")
         return 0
     if args.command == "dogfood":
         return run_dogfood(

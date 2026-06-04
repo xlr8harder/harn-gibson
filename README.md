@@ -189,12 +189,13 @@ Convert a captured event log into a replay fixture:
 ```bash
 uv run harn-gibson event-log-to-replay .harn-gibson.jsonl \
   --output examples/replays/captured-session.json \
+  --output-result test-artifacts/replays/captured-session-result.json \
   --visual-fixture \
   --review-dir test-artifacts/replays/captured-session-review \
   --renderer-command 'uv run python examples/renderers/gibson_dogfood_renderer.py'
 ```
 
-`--visual-fixture` adds capture-summary metadata plus conservative screenshot expectations, so the converted trajectory can be run through `replay-dir --screenshot-dir` as a visual regression input. Conversion records redaction metadata with an enabled flag and replacement count. `--review-dir` replays the converted log immediately, captures per-step browser frames, renderer contexts, prompts, chunks, render intents, and writes an HTML review bundle.
+`--visual-fixture` adds capture-summary metadata plus conservative screenshot expectations, so the converted trajectory can be run through `replay-dir --screenshot-dir` as a visual regression input. Conversion records redaction metadata with an enabled flag and replacement count. `--output-result` writes the replay result JSON produced from the converted fixture. `--review-dir` replays the converted log immediately, captures per-step browser frames, renderer contexts, prompts, chunks, render intents, and writes an HTML review bundle.
 
 For long captures, split the event log into a replay fixture directory:
 
@@ -202,6 +203,7 @@ For long captures, split the event log into a replay fixture directory:
 uv run harn-gibson event-log-to-replay .harn-gibson.jsonl \
   --output-dir test-artifacts/replays/captured-session-split \
   --split-every 200 \
+  --output-result test-artifacts/replays/captured-session-split-result.json \
   --visual-fixture \
   --review-dir test-artifacts/replays/captured-session-split-review \
   --project-root test-artifacts/dogfood-workspaces/tiny-project

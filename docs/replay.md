@@ -52,13 +52,14 @@ When `HARN_GIBSON_EVENT_LOG` is set directly, the harn extension writes the same
 ```bash
 uv run harn-gibson event-log-to-replay .harn-gibson.jsonl \
   --output examples/replays/captured-session.json \
+  --output-result test-artifacts/replays/captured-session-result.json \
   --name "captured dogfood session" \
   --visual-fixture \
   --review-dir test-artifacts/replays/captured-session-review \
   --renderer-command 'uv run python examples/renderers/gibson_dogfood_renderer.py'
 ```
 
-Without `--output`, the fixture JSON is printed to stdout. The generated fixture uses `event` steps so hook decisions and renderer routing are replayed through the same path as live display events. Fixture metadata includes `redaction.enabled` and `redaction.count` so promoted captures can be audited for scrubbed values. `--visual-fixture` adds capture-summary metadata plus `screenshotExpect` checks for nonblank browser output, `canvasMetrics.litRatio >= 0.02`, and `canvasMetrics.maxChannelTotal >= 60`; use `--screenshot-lit-min` and `--screenshot-max-channel-min` to tune those thresholds for a specific long capture. `--review-dir` immediately replays the converted log, captures frame screenshots, renderer contexts, provider-neutral prompts, renderer chunks, render intents, and writes the same HTML review bundle as `harn-gibson replay --review-dir`. The bundle manifest and overview page promote capture duration, event types, phases, and sources when capture-summary metadata is present, which makes longer dogfood trajectories easier to compare at a glance.
+Without `--output`, the fixture JSON is printed to stdout. The generated fixture uses `event` steps so hook decisions and renderer routing are replayed through the same path as live display events. Fixture metadata includes `redaction.enabled` and `redaction.count` so promoted captures can be audited for scrubbed values. `--visual-fixture` adds capture-summary metadata plus `screenshotExpect` checks for nonblank browser output, `canvasMetrics.litRatio >= 0.02`, and `canvasMetrics.maxChannelTotal >= 60`; use `--screenshot-lit-min` and `--screenshot-max-channel-min` to tune those thresholds for a specific long capture. `--output-result` replays the converted fixture and writes `harn-gibson.replay-result.v1` JSON, reusing the review replay when `--review-dir` is also present. `--review-dir` immediately replays the converted log, captures frame screenshots, renderer contexts, provider-neutral prompts, renderer chunks, render intents, and writes the same HTML review bundle as `harn-gibson replay --review-dir`. The bundle manifest and overview page promote capture duration, event types, phases, and sources when capture-summary metadata is present, which makes longer dogfood trajectories easier to compare at a glance.
 
 Long captures can be split into smaller replay fixtures:
 
@@ -66,12 +67,13 @@ Long captures can be split into smaller replay fixtures:
 uv run harn-gibson event-log-to-replay .harn-gibson.jsonl \
   --output-dir test-artifacts/replays/captured-session-split \
   --split-every 200 \
+  --output-result test-artifacts/replays/captured-session-split-result.json \
   --name "captured dogfood session" \
   --visual-fixture \
   --review-dir test-artifacts/replays/captured-session-split-review
 ```
 
-Split mode writes `manifest.json` plus numbered replay fixtures such as `captured-dogfood-session-0001.json`. Each fixture has `metadata.eventLogChunk` with the chunk index, total chunk count, event offsets, and total capture size; each visual fixture also carries chunk-level capture-summary metadata and screenshot expectations. The split manifest has schema `harn-gibson.event-log-split.v1`, the full capture summary, and the relative fixture filenames. `--split-every` requires `--output-dir` and does not combine with `--output`. When `--review-dir` is present, conversion immediately replays the generated split directory, captures per-chunk browser frames, renderer contexts, prompts, renderer chunks, render intents, final scenes, and result JSON, then writes a suite overview. You can also run `replay-dir` on the generated directory later:
+Split mode writes `manifest.json` plus numbered replay fixtures such as `captured-dogfood-session-0001.json`. Each fixture has `metadata.eventLogChunk` with the chunk index, total chunk count, event offsets, and total capture size; each visual fixture also carries chunk-level capture-summary metadata and screenshot expectations. The split manifest has schema `harn-gibson.event-log-split.v1`, the full capture summary, and the relative fixture filenames. `--split-every` requires `--output-dir` and does not combine with `--output`. `--output-result` replays the generated directory and writes `harn-gibson.replay-suite-result.v1` JSON for quick CI or trajectory auditing. When `--review-dir` is present, conversion immediately replays the generated split directory, captures per-chunk browser frames, renderer contexts, prompts, renderer chunks, render intents, final scenes, and result JSON, then writes a suite overview. You can also run `replay-dir` on the generated directory later:
 
 ```bash
 uv run harn-gibson replay-dir test-artifacts/replays/captured-session-split \
