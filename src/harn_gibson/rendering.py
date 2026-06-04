@@ -12,6 +12,7 @@ from math import isfinite
 from pathlib import Path, PurePosixPath
 from typing import Any, Literal, Protocol
 
+from harn_gibson.attention import AGENT_ATTENTION_SCHEMA, agent_attention_from_context
 from harn_gibson.catalog import VisualCatalog, default_visual_catalog
 from harn_gibson.events import GibsonEvent
 from harn_gibson.scene import (
@@ -393,12 +394,14 @@ class RendererContextBuilder:
         style_pack = self.config.style_pack or style_pack_from_name(self.config.display_style).to_dict()
         repo_topology = _repo_topology_context(self.config)
         touched_files = _touched_files_context(batch, self.config)
+        world_model = self._world_model_context(batch, touched_files)
         return {
             "name": self.config.project_name,
             "displayStyle": self.config.display_style,
             "stylePack": style_pack,
             "schemas": {
                 "catalog": "harn-gibson.visual-catalog.v1",
+                "agentAttention": AGENT_ATTENTION_SCHEMA,
                 "rendererContext": "harn-gibson.renderer-context.v1",
                 "renderInput": "harn-gibson.render-input.v1",
                 "renderPlan": "harn-gibson.render-plan.v1",
@@ -410,7 +413,12 @@ class RendererContextBuilder:
             },
             "repoTopology": repo_topology,
             "touchedFiles": touched_files,
-            "worldModel": self._world_model_context(batch, touched_files),
+            "worldModel": world_model,
+            "agentAttention": agent_attention_from_context(
+                tuple(request.event for request in batch.requests),
+                touched_files,
+                world_model,
+            ),
         }
 
     def _world_model_context(self, batch: RenderInputBatch, touched_files: Mapping[str, Any]) -> dict[str, Any]:

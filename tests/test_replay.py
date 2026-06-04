@@ -153,6 +153,8 @@ def test_renderer_prompt_metadata_handles_sparse_context() -> None:
     assert prompt["metadata"]["routes"] == ["renderer_agent", "direct_scene"]
     assert prompt["metadata"]["timeline"] == {"startMs": 0, "endMs": 0, "durationMs": 12}
     assert prompt["metadata"]["displayStyle"] == "gibson"
+    assert prompt["metadata"]["attentionAction"] == "unknown"
+    assert prompt["metadata"]["attentionFocusCount"] == 0
     assert prompt["metadata"]["worldBindingCount"] == 0
 
 
@@ -263,6 +265,9 @@ def test_replay_event_steps_file_io_and_writers(tmp_path: Path, monkeypatch: pyt
     assert context_payload["contexts"][0]["context"]["project"]["schemas"]["worldBinding"] == (
         "harn-gibson.world-binding.v1"
     )
+    assert context_payload["contexts"][0]["context"]["project"]["schemas"]["agentAttention"] == (
+        "harn-gibson.agent-attention.v1"
+    )
     assert context_result.to_dict()["rendererContexts"][0]["index"] == 0
     prompts_path = tmp_path / "out" / "renderer-prompts.json"
     prompts_review_path = tmp_path / "out" / "renderer-prompts.html"
@@ -280,6 +285,8 @@ def test_replay_event_steps_file_io_and_writers(tmp_path: Path, monkeypatch: pyt
     assert prompt["metadata"]["eventTypes"] == ["tool_call"]
     assert prompt["metadata"]["routes"] == ["renderer_agent"]
     assert prompt["metadata"]["displayStyle"] == "gibson"
+    assert prompt["metadata"]["attentionAction"] == "command"
+    assert prompt["metadata"]["attentionFocusCount"] == 0
     assert prompt["metadata"]["visualAnchorCount"] >= 1
     assert prompt["metadata"]["worldBindingCount"] >= 0
     assert prompt["metadata"]["activeAnimationCount"] >= 0

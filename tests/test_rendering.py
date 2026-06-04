@@ -1404,6 +1404,7 @@ def test_renderer_context_builder_compaction_rolling_and_history(tmp_path: Path)
     assert isinstance(compaction, RendererContext)
     assert compaction.mode == "compaction"
     assert compaction.to_dict()["schema"] == "harn-gibson.renderer-context.v1"
+    assert compaction.project["schemas"]["agentAttention"] == "harn-gibson.agent-attention.v1"
     assert compaction.project["schemas"]["rendererContext"] == "harn-gibson.renderer-context.v1"
     assert compaction.project["schemas"]["repoTopology"] == "harn-gibson.repo-topology.v1"
     assert compaction.project["schemas"]["worldBinding"] == "harn-gibson.world-binding.v1"
@@ -1489,6 +1490,19 @@ def test_renderer_context_builder_compaction_rolling_and_history(tmp_path: Path)
     )
     assert compaction.project["worldModel"]["entities"]["health"][0]["category"] == "test"
     assert compaction.project["worldModel"]["entities"]["health"][0]["sourceCommandId"] == "command:9"
+    assert compaction.project["agentAttention"]["schema"] == "harn-gibson.agent-attention.v1"
+    assert compaction.project["agentAttention"]["action"]["kind"] == "verify"
+    assert compaction.project["agentAttention"]["objective"] == {
+        "text": "Verify current work: uv run pytest tests/test_rendering.py docs/renderer-agent.md",
+        "source": "command",
+    }
+    assert compaction.project["agentAttention"]["focus"]["primaryPath"] == "src/harn_gibson/rendering.py"
+    assert compaction.project["agentAttention"]["focus"]["paths"] == [
+        "src/harn_gibson/rendering.py",
+        "tests/test_rendering.py",
+    ]
+    assert compaction.project["agentAttention"]["healthFocus"]["category"] == "test"
+    assert compaction.project["agentAttention"]["signals"] == ["currentEvent", "touchedFiles", "worldModel"]
     assert compaction.catalog["schema"] == "harn-gibson.visual-catalog.v1"
     assert compaction.scene["schema"] == "harn-gibson.scene.v1"
     assert compaction.recent_agent_context == ("agent saw tool call", "grid was pulsing")

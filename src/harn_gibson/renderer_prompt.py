@@ -85,6 +85,9 @@ def renderer_prompt_messages_payload(context: Mapping[str, Any]) -> dict[str, An
 
 def _context_metadata(context: Mapping[str, Any]) -> dict[str, Any]:
     project = _mapping(context.get("project"))
+    agent_attention = _mapping(project.get("agentAttention"))
+    attention_action = _mapping(agent_attention.get("action"))
+    attention_focus = _mapping(agent_attention.get("focus"))
     visual_continuity = _mapping(context.get("visualContinuity"))
     render_input = _mapping(context.get("renderInput"))
     timeline = _mapping(render_input.get("timeline"))
@@ -98,8 +101,11 @@ def _context_metadata(context: Mapping[str, Any]) -> dict[str, Any]:
         event = _mapping(request.get("event"))
         _append_unique(event_types, str(event.get("eventType") or "unknown"))
         _append_unique(routes, str(request.get("route") or render_input.get("route") or "renderer_agent"))
+    focus_paths = attention_focus.get("paths")
     return {
         "displayStyle": str(project.get("displayStyle") or "gibson"),
+        "attentionAction": str(attention_action.get("kind") or "unknown"),
+        "attentionFocusCount": len(focus_paths if isinstance(focus_paths, list) else []),
         "eventTypes": event_types,
         "routes": routes,
         "timeline": {

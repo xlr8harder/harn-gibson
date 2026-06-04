@@ -240,6 +240,7 @@ The renderer agent should not receive a full new transcript on every event. Use 
 - Bounded repo topology: project root name, top-level directories/files, and an optional clipped file-tree sample.
 - Touched files: recent file paths from harn/tool events or coalesced batches, with operation hints when available.
 - World model: durable per-file activity plus structured change, command, health, and outcome facts with provenance, schema `harn-gibson.world-model.v1`.
+- Agent attention: inferred current action, objective hint, focus paths/entities, and health focus, schema `harn-gibson.agent-attention.v1`.
 - World bindings: optional `props.worldBindings` entries on scene primitives, schema `harn-gibson.world-binding.v1`, declaring which project/world fact a visual property follows.
 - Recent harn events: the newest event batch plus short summaries of recent prior events.
 - Recent visualization context: recent render intents, render plans, and active animations/effects.
@@ -251,7 +252,9 @@ The executable fixture for this is `RendererContext`. A renderer that only imple
 
 The world model is the first framework-owned perception layer. `RendererContextBuilder` folds normalized harn events plus the current touched-file batch into an event-sourced `harn-gibson.world-model.v1` payload at `context.project.worldModel`. The first version tracks file entities, command entities, change entities, health entities, activity counts, phases, operation hints, source fields, command previews, command start/result pairing when possible, command status/duration, touched command paths, bounded added/removed line counts from structured edit/write/diff fields, test/build health checkpoints derived from command text, last observed outcome, recent tool/runtime outcomes, revision, truncation, and provenance. File, command, change, and outcome facts are observed. Health category is inferred from observed command text, while health status is copied from the observed command state or command outcome.
 
-This is intentionally narrower than the long-term Gibson-world vision. It does not yet model symbols, imports, test-to-code relationships, semantic agent intent, attention, stale/reconciled facts, or full semantic diffs beyond observed structured tool fields. Those should be added as enrichable perception facts behind the same contract, not as one-off renderer prompt decoration.
+This is intentionally narrower than the long-term Gibson-world vision. It does not yet model symbols, imports, test-to-code relationships, full semantic agent plans, stale/reconciled facts, or full semantic diffs beyond observed structured tool fields. Those should be added as enrichable perception facts behind the same contract, not as one-off renderer prompt decoration.
+
+`context.project.agentAttention` is the first narrow attention layer. It is inferred from the current render batch, touched files, and world-model health, and it is deliberately labeled as inferred provenance rather than observed task state. The payload includes an `action` such as `verify`, `build`, `edit`, `inspect`, `checkpoint`, `diagnose`, `follow_user`, `respond`, or `command`; an optional objective string; bounded focus paths/entities; optional health focus; and the signals used to infer it. This gives renderers enough context to aim cameras, route packets, or label HUD objectives around what the agent appears to be doing without asking them to re-derive intent from raw event payloads.
 
 After enough events or token growth, do a renderer compaction:
 
