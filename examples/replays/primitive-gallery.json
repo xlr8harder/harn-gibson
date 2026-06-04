@@ -34,6 +34,9 @@
       {"path": "primitives.gallery-vault.kind", "equals": "data_vault"},
       {"path": "primitives.gallery-vault.props.locks", "equals": 5},
       {"path": "primitives.gallery-vault.props.packets", "equals": 36},
+      {"path": "primitives.gallery-black-ice.kind", "equals": "black_ice"},
+      {"path": "primitives.gallery-black-ice.props.columns", "equals": 13},
+      {"path": "primitives.gallery-black-ice.props.breach", "equals": 0.58},
       {"path": "primitives.gallery-scope.kind", "equals": "signal_scope"},
       {"path": "primitives.gallery-scope.props.blips.1.label", "equals": "ICE"},
       {"path": "primitives.gallery-scope.props.waveforms.0.label", "equals": "CPU"},
@@ -160,6 +163,32 @@
               "packets": 36,
               "spin": 0.68,
               "seed": 404
+            }
+          }
+        },
+        {
+          "op": "upsert",
+          "primitive": {
+            "id": "gallery-black-ice",
+            "kind": "black_ice",
+            "region": "stage",
+            "props": {
+              "label": "BLACK ICE",
+              "position": {"x": 0.51, "y": 0.42},
+              "size": {"w": 0.42, "h": 0.26},
+              "columns": 13,
+              "rows": 6,
+              "depth": 0.34,
+              "breach": 0.58,
+              "breachPosition": {"x": 0.54, "y": 0.48},
+              "fractures": 26,
+              "sentries": 7,
+              "sweep": true,
+              "sweepSpeed": 0.92,
+              "tone": "cyan",
+              "accentTone": "magenta",
+              "opacity": 0.78,
+              "seed": 515
             }
           }
         },

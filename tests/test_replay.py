@@ -1425,7 +1425,7 @@ def test_checked_in_replay_fixtures_cover_agent_and_renderer_sides() -> None:
     assert renderer_result.scene.primitives["decision-log"].props["text"][0]["renderer"] == "fixture"
 
     assert [step.kind for step in gallery_result.steps] == ["mutations"]
-    assert len(gallery_result.expectations) == 47
+    assert len(gallery_result.expectations) == 50
     assert gallery_result.scene.primitives["gallery-mesh"].kind == "mesh"
     assert gallery_result.scene.primitives["gallery-tunnel"].kind == "tunnel_grid"
     assert gallery_result.scene.primitives["gallery-tunnel"].props["rings"] == 14
@@ -1456,6 +1456,9 @@ def test_checked_in_replay_fixtures_cover_agent_and_renderer_sides() -> None:
     assert gallery_result.scene.primitives["gallery-vault"].kind == "data_vault"
     assert gallery_result.scene.primitives["gallery-vault"].props["locks"] == 5
     assert gallery_result.scene.primitives["gallery-vault"].props["packets"] == 36
+    assert gallery_result.scene.primitives["gallery-black-ice"].kind == "black_ice"
+    assert gallery_result.scene.primitives["gallery-black-ice"].props["columns"] == 13
+    assert gallery_result.scene.primitives["gallery-black-ice"].props["breach"] == 0.58
     assert gallery_result.scene.primitives["gallery-scope"].kind == "signal_scope"
     assert gallery_result.scene.primitives["gallery-scope"].props["blips"][1]["label"] == "ICE"
     assert gallery_result.scene.primitives["gallery-scope"].props["waveforms"][0]["label"] == "CPU"
@@ -1519,13 +1522,14 @@ def test_checked_in_dogfood_replay_exercises_showcase_renderer() -> None:
         state.pipeline.stop()
 
     assert [step.kind for step in result.steps] == ["event"] * 7
-    assert len(result.expectations) == 16
+    assert len(result.expectations) == 17
     assert result.scene.primitives["status"].props["text"] == "dogfood::tool_result"
     assert result.scene.primitives["dogfood-city"].kind == "city_block"
     assert result.scene.primitives["dogfood-city"].props["labels"] == ["DOGFOOD CITY", "4 touched"]
     assert result.scene.primitives["dogfood-opcodes"].kind == "glyph_layer"
     assert result.scene.primitives["dogfood-control-graph"].kind == "node_graph"
     assert result.scene.primitives["dogfood-ice-mesh"].kind == "mesh"
+    assert result.scene.primitives["dogfood-black-ice"].kind == "black_ice"
     assert result.scene.primitives["dogfood-vault"].kind == "data_vault"
     assert result.scene.primitives["dogfood-command-ribbon"].kind == "ribbon"
     assert result.scene.primitives["dogfood-file-sparks"].kind == "particle_field"
@@ -1545,12 +1549,13 @@ def test_checked_in_dogfood_runtime_replay_exercises_failure_scene() -> None:
         state.pipeline.stop()
 
     assert [step.kind for step in result.steps] == ["event"] * 5
-    assert len(result.expectations) == 14
+    assert len(result.expectations) == 15
     assert result.scene.primitives["status"].props["text"] == "dogfood::runtime_error"
     assert result.scene.primitives["dogfood-city"].props["labels"] == ["DOGFOOD CITY", "1 touched"]
     assert result.scene.primitives["dogfood-opcodes"].kind == "glyph_layer"
     assert result.scene.primitives["dogfood-control-graph"].kind == "node_graph"
     assert result.scene.primitives["dogfood-vault"].kind == "data_vault"
+    assert result.scene.primitives["dogfood-black-ice"].props["breach"] == 0.64
     assert result.scene.primitives["dogfood-file-sparks"].props["label"] == "1 TOUCHED FILES"
     assert result.scene.primitives["dogfood-route"].props["focusHopId"] == "target-0"
     assert result.scene.animations["dogfood-breach"].kind == "breach_wave"
@@ -1567,12 +1572,13 @@ def test_checked_in_dogfood_repo_map_replay_exercises_topology_scene() -> None:
     blocks = result.scene.primitives["dogfood-city"].props["blocks"]
     block_paths = {block["path"]: block for block in blocks}
     assert [step.kind for step in result.steps] == ["event"] * 8
-    assert len(result.expectations) == 15
+    assert len(result.expectations) == 16
     assert result.scene.primitives["status"].props["text"] == "dogfood::tool_result"
     assert result.scene.primitives["dogfood-city"].props["labels"] == ["DOGFOOD CITY", "7 touched"]
     assert result.scene.primitives["dogfood-file-sparks"].props["label"] == "7 TOUCHED FILES"
     assert result.scene.primitives["dogfood-hologram"].props["label"] == "REPO-MAP"
     assert result.scene.primitives["dogfood-vault"].props["label"] == "REPO-MAP"
+    assert result.scene.primitives["dogfood-black-ice"].props["sentries"] == 13
     assert block_paths["README.md"]["tone"] == "magenta"
     assert block_paths["docs"]["lines"] >= 20
     assert block_paths["tests"]["lines"] >= 30
@@ -1587,6 +1593,7 @@ def test_checked_in_dogfood_replay_suite_summarizes_trajectory_coverage() -> Non
     payload = suite.to_dict()
     dogfood_visual_summary = {
         "anchors": [
+            "dogfood-black-ice",
             "dogfood-city",
             "dogfood-command-ribbon",
             "dogfood-control-graph",
@@ -1598,7 +1605,6 @@ def test_checked_in_dogfood_replay_suite_summarizes_trajectory_coverage() -> Non
             "dogfood-route",
             "dogfood-scope",
             "dogfood-sigil",
-            "dogfood-tunnel",
         ],
         "effects": [
             "patch",
@@ -1607,15 +1613,15 @@ def test_checked_in_dogfood_replay_suite_summarizes_trajectory_coverage() -> Non
             "primitive:glyph_layer",
             "primitive:tunnel_grid",
             "primitive:data_vault",
+            "primitive:black_ice",
             "primitive:mesh",
             "primitive:signal_scope",
             "primitive:node_graph",
             "primitive:trace_route",
             "primitive:city_block",
-            "primitive:particle_field",
         ],
         "maxActiveAnimationCount": 7,
-        "maxVisualAnchorCount": 14,
+        "maxVisualAnchorCount": 15,
         "renderers": ["gibson-dogfood-showcase"],
         "targets": [
             "status",
@@ -1623,13 +1629,13 @@ def test_checked_in_dogfood_replay_suite_summarizes_trajectory_coverage() -> Non
             "dogfood-opcodes",
             "dogfood-tunnel",
             "dogfood-vault",
+            "dogfood-black-ice",
             "dogfood-ice-mesh",
             "dogfood-scope",
             "dogfood-control-graph",
             "dogfood-route",
             "dogfood-city",
             "dogfood-file-sparks",
-            "dogfood-hologram",
         ],
     }
 
@@ -1641,7 +1647,7 @@ def test_checked_in_dogfood_replay_suite_summarizes_trajectory_coverage() -> Non
     assert summary["okCount"] == 3
     assert summary["failedCount"] == 0
     assert summary["stepCount"] == 20
-    assert summary["expectationCount"] == 45
+    assert summary["expectationCount"] == 48
     assert summary["rendererCounts"] == {"gibson-dogfood-showcase": 20}
     assert summary["routeCounts"] == {"renderer_agent": 20}
     assert summary["screenshotCount"] == 0

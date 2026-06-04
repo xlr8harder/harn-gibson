@@ -34,6 +34,10 @@
         "equals": "mesh"
       },
       {
+        "path": "primitives.dogfood-black-ice.kind",
+        "equals": "black_ice"
+      },
+      {
         "path": "primitives.dogfood-vault.kind",
         "equals": "data_vault"
       },

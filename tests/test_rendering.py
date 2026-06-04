@@ -704,6 +704,7 @@ def test_dogfood_showcase_renderer_returns_valid_event_reactive_plan(tmp_path: P
         "dogfood-opcodes": "glyph_layer",
         "dogfood-tunnel": "tunnel_grid",
         "dogfood-vault": "data_vault",
+        "dogfood-black-ice": "black_ice",
         "dogfood-ice-mesh": "mesh",
         "dogfood-scope": "signal_scope",
         "dogfood-control-graph": "node_graph",
@@ -725,6 +726,8 @@ def test_dogfood_showcase_renderer_returns_valid_event_reactive_plan(tmp_path: P
     assert scene.state.primitives["dogfood-file-sparks"].props["label"] == "3 TOUCHED FILES"
     assert len(scene.state.primitives["dogfood-file-sparks"].props["emitters"]) == 3
     assert scene.state.primitives["dogfood-ice-mesh"].props["label"] == "ICE TOOL RESULT"
+    assert scene.state.primitives["dogfood-black-ice"].props["label"] == "BLACK ICE AFTER"
+    assert scene.state.primitives["dogfood-black-ice"].props["breach"] == 0.64
     assert scene.state.primitives["dogfood-vault"].props["locks"] == 11
     assert scene.state.primitives["dogfood-vault"].props["packets"] > 32
     assert scene.state.primitives["dogfood-opcodes"].props["density"] == 0.295
@@ -752,6 +755,7 @@ def test_dogfood_showcase_renderer_returns_valid_event_reactive_plan(tmp_path: P
     assert styled_scene.state.primitives["dogfood-rain"].props["tone"] == "amber"
     assert styled_scene.state.primitives["dogfood-rain"].props["accentTone"] == "green"
     assert styled_scene.state.primitives["dogfood-ice-mesh"].props["material"] == "amber"
+    assert styled_scene.state.primitives["dogfood-black-ice"].props["tone"] == "red"
 
     uplink_scene = SceneEngine()
     uplink_context = RendererContextBuilder(
@@ -770,6 +774,7 @@ def test_dogfood_showcase_renderer_returns_valid_event_reactive_plan(tmp_path: P
     assert uplink_scene.state.primitives["dogfood-rain"].props["tone"] == "amber"
     assert uplink_scene.state.primitives["dogfood-rain"].props["accentTone"] == "red"
     assert uplink_scene.state.primitives["dogfood-ice-mesh"].props["material"] == "amber"
+    assert uplink_scene.state.primitives["dogfood-black-ice"].props["accentTone"] == "red"
 
 
 def test_external_renderer_failures_become_trace_state(tmp_path: Path) -> None:

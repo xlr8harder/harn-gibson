@@ -300,6 +300,7 @@ def test_browser_display_renders_vector_symbols_and_data_rain() -> None:
                 page.wait_for_function("window.__gibsonVectorEffectState?.['gallery-vector']?.filterCount === 2")
                 page.wait_for_function("window.__gibsonHologramState?.['gallery-hologram']?.ringCount === 6")
                 page.wait_for_function("window.__gibsonDataVaultState?.['gallery-vault']?.lockCount === 5")
+                page.wait_for_function("window.__gibsonBlackIceState?.['gallery-black-ice']?.columnCount === 13")
                 page.wait_for_function("window.__gibsonSignalScopeState?.['gallery-scope']?.blipCount === 3")
                 page.wait_for_function("window.__gibsonTunnelState?.['gallery-tunnel']?.packetCount === 44")
                 page.wait_for_function("window.__gibsonCityState?.['gallery-city']?.cameraKeyframeCount === 3")
@@ -319,6 +320,9 @@ def test_browser_display_renders_vector_symbols_and_data_rain() -> None:
                 )
                 data_vault_state = page.evaluate(
                     """() => window.__gibsonDataVaultState["gallery-vault"]"""
+                )
+                black_ice_state = page.evaluate(
+                    """() => window.__gibsonBlackIceState["gallery-black-ice"]"""
                 )
                 signal_scope_state = page.evaluate(
                     """() => window.__gibsonSignalScopeState["gallery-scope"]"""
@@ -389,6 +393,17 @@ def test_browser_display_renders_vector_symbols_and_data_rain() -> None:
                     "phase": data_vault_state["phase"],
                 }
                 assert 0 <= data_vault_state["phase"] <= 1
+                assert black_ice_state == {
+                    "columnCount": 13,
+                    "rowCount": 6,
+                    "fractureCount": 26,
+                    "sentryCount": 7,
+                    "breach": 0.58,
+                    "tone": "cyan",
+                    "accentTone": "magenta",
+                    "hasSweep": True,
+                    "hasLabel": True,
+                }
                 assert signal_scope_state == {
                     "mode": "hybrid",
                     "ringCount": 5,

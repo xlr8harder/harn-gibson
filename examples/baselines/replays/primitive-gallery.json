@@ -37,6 +37,7 @@
           "primitive:hologram",
           "primitive:signal_scope",
           "primitive:data_vault",
+          "primitive:black_ice",
           "primitive:mesh",
           "primitive:tunnel_grid",
           "primitive:svg_layer",
@@ -58,7 +59,7 @@
           "renderer": "replay",
           "stepType": "mutations"
         },
-        "mutationCount": 17,
+        "mutationCount": 18,
         "renderer": "replay",
         "requestCount": 1,
         "routes": [
@@ -71,6 +72,7 @@
           "gallery-hologram",
           "gallery-scope",
           "gallery-vault",
+          "gallery-black-ice",
           "gallery-mesh",
           "gallery-tunnel",
           "gallery-vector",
@@ -95,6 +97,7 @@
             "primitive:hologram",
             "primitive:signal_scope",
             "primitive:data_vault",
+            "primitive:black_ice",
             "primitive:mesh",
             "primitive:tunnel_grid",
             "primitive:svg_layer",
@@ -116,7 +119,7 @@
             "renderer": "replay",
             "stepType": "mutations"
           },
-          "mutationCount": 17,
+          "mutationCount": 18,
           "renderer": "replay",
           "requestCount": 1,
           "routes": [
@@ -129,6 +132,7 @@
             "gallery-hologram",
             "gallery-scope",
             "gallery-vault",
+            "gallery-black-ice",
             "gallery-mesh",
             "gallery-tunnel",
             "gallery-vector",
@@ -178,6 +182,39 @@
           "maxItems": 80
         },
         "region": "side"
+      },
+      "gallery-black-ice": {
+        "children": [],
+        "id": "gallery-black-ice",
+        "kind": "black_ice",
+        "props": {
+          "accentTone": "magenta",
+          "breach": 0.58,
+          "breachPosition": {
+            "x": 0.54,
+            "y": 0.48
+          },
+          "columns": 13,
+          "depth": 0.34,
+          "fractures": 26,
+          "label": "BLACK ICE",
+          "opacity": 0.78,
+          "position": {
+            "x": 0.51,
+            "y": 0.42
+          },
+          "rows": 6,
+          "seed": 515,
+          "sentries": 7,
+          "size": {
+            "h": 0.26,
+            "w": 0.42
+          },
+          "sweep": true,
+          "sweepSpeed": 0.92,
+          "tone": "cyan"
+        },
+        "region": "stage"
       },
       "gallery-city": {
         "children": [],

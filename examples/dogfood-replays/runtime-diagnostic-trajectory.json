@@ -42,6 +42,10 @@
         "equals": "data_vault"
       },
       {
+        "path": "primitives.dogfood-black-ice.props.breach",
+        "equals": 0.64
+      },
+      {
         "path": "primitives.dogfood-command-ribbon.kind",
         "equals": "ribbon"
       },

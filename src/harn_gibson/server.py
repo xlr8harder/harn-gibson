@@ -1492,6 +1492,7 @@ function drawScenePrimitives(scene, w, h, now) {
     "tunnel_grid",
     "particle_field",
     "data_vault",
+    "black_ice",
     "mesh",
     "city_block",
     "hologram",
@@ -1516,6 +1517,7 @@ function drawPrimitive(primitive, w, h, now) {
   if (primitive.kind === "signal_scope") drawSignalScope(primitive, w, h, now);
   if (primitive.kind === "tunnel_grid") drawTunnelGrid(primitive, w, h, now);
   if (primitive.kind === "data_vault") drawDataVault(primitive, w, h, now);
+  if (primitive.kind === "black_ice") drawBlackIce(primitive, w, h, now);
   if (primitive.kind === "svg_layer") drawSvgLayer(primitive, w, h, now);
   if (primitive.kind === "node_graph") drawNodeGraph(primitive, w, h);
   if (primitive.kind === "trace_route") drawTraceRoute(primitive, w, h, now);
@@ -2647,6 +2649,199 @@ function drawDataVault(primitive, w, h, now) {
     ctx.fillText(String(props.label).slice(0, 20), 0, -size * 1.18);
   }
 
+  ctx.restore();
+}
+
+function blackIceBreachPoint(props, left, top, width, height) {
+  const raw = props.breachPosition && typeof props.breachPosition === "object" ? props.breachPosition : {};
+  return {
+    x: left + clamp(finiteNumber(raw.x, 0.52), 0, 1) * width,
+    y: top + clamp(finiteNumber(raw.y, 0.50), 0, 1) * height,
+  };
+}
+
+function drawBlackIce(primitive, w, h, now) {
+  const props = primitive.props || {};
+  const center = normalizedPoint(props.position || {x: 0.52, y: 0.46}, w, h);
+  const size = props.size && typeof props.size === "object" ? props.size : {};
+  const width = clamp(finiteNumber(size.w ?? size.width ?? props.width, 0.46), 0.08, 1.6) * w;
+  const height = clamp(finiteNumber(size.h ?? size.height ?? props.height, 0.34), 0.06, 1.2) * h;
+  const columns = Math.max(4, Math.min(28, Math.floor(finiteNumber(props.columns, 12))));
+  const rows = Math.max(2, Math.min(16, Math.floor(finiteNumber(props.rows, 6))));
+  const fractureCount = Math.max(0, Math.min(80, Math.floor(finiteNumber(props.fractures, 14))));
+  const sentryCount = Math.max(0, Math.min(18, Math.floor(finiteNumber(props.sentries, 5))));
+  const breach = clamp(finiteNumber(props.breach ?? (props.open ? 0.54 : 0.18), 0.18), 0, 1);
+  const depth = clamp(finiteNumber(props.depth, 0.32), 0, 1.2);
+  const tone = props.tone || "cyan";
+  const accentTone = props.accentTone || props.accent || "magenta";
+  const opacity = clamp(finiteNumber(props.opacity, 0.84), 0, 1);
+  const seed = finiteNumber(props.seed, 0);
+  const sweepSpeed = finiteNumber(props.sweepSpeed, 0.82);
+  const sweep = props.sweep !== false;
+  const phase = ((now * 0.00018 * sweepSpeed + seed * 0.021) % 1 + 1) % 1;
+  const left = center.x - width * 0.5;
+  const top = center.y - height * 0.5;
+  const breachPoint = blackIceBreachPoint(props, left, top, width, height);
+  const cellWidth = width / columns;
+  const cellHeight = height / rows;
+
+  if (typeof window !== "undefined") {
+    window.__gibsonBlackIceState = window.__gibsonBlackIceState || {};
+    window.__gibsonBlackIceState[primitive.id] = {
+      columnCount: columns,
+      rowCount: rows,
+      fractureCount,
+      sentryCount,
+      breach: vectorRounded(breach),
+      tone,
+      accentTone,
+      hasSweep: sweep,
+      hasLabel: Boolean(props.label),
+    };
+  }
+
+  ctx.save();
+  ctx.globalCompositeOperation = props.blend === "source-over" ? "source-over" : "screen";
+  ctx.globalAlpha *= opacity;
+  ctx.lineJoin = "round";
+  ctx.lineCap = "round";
+  ctx.shadowColor = toneColor(tone, 0.72);
+  ctx.shadowBlur = 18 * devicePixelRatio;
+
+  const glow = ctx.createRadialGradient(breachPoint.x, breachPoint.y, 0, breachPoint.x, breachPoint.y, width * 0.52);
+  glow.addColorStop(0, toneColor(accentTone, 0.16 + breach * 0.16));
+  glow.addColorStop(0.5, toneColor(tone, 0.06));
+  glow.addColorStop(1, toneColor(tone, 0));
+  ctx.fillStyle = glow;
+  ctx.fillRect(left - width * 0.16, top - height * 0.18, width * 1.32, height * 1.36);
+
+  for (let row = 0; row < rows; row++) {
+    const rowDepth = rows <= 1 ? 0 : row / (rows - 1);
+    const skew = (rowDepth - 0.5) * width * depth * 0.18;
+    for (let column = 0; column < columns; column++) {
+      const index = row * columns + column;
+      const x0 = left + column * cellWidth + skew;
+      const x1 = x0 + cellWidth * (0.92 + seededUnit(seed + index * 2.1) * 0.12);
+      const y0 = top + row * cellHeight;
+      const y1 = y0 + cellHeight * (0.88 + seededUnit(seed + index * 3.7) * 0.15);
+      const centerX = (x0 + x1) * 0.5;
+      const centerY = (y0 + y1) * 0.5;
+      const distanceToBreach = Math.hypot((centerX - breachPoint.x) / width, (centerY - breachPoint.y) / height);
+      const breachActivity = clamp(1 - distanceToBreach / Math.max(0.12, 0.18 + breach * 0.32), 0, 1);
+      const panelTone = breachActivity > 0.32 ? accentTone : (index % 3 === 0 ? "white" : tone);
+      const jitter = Math.sin(now * 0.0011 + seed + index * 0.59) * cellHeight * 0.05;
+      const points = [
+        {x: x0 + cellWidth * 0.12, y: y0 + jitter},
+        {x: x1 - cellWidth * 0.05, y: y0 + cellHeight * 0.10 - jitter * 0.4},
+        {x: x1 - cellWidth * 0.14, y: y1 - cellHeight * 0.06},
+        {x: x0 + cellWidth * 0.04, y: y1 - cellHeight * 0.12 + jitter * 0.35},
+      ];
+      const fillAlpha = 0.055 + rowDepth * 0.034 + breachActivity * 0.18;
+      const strokeAlpha = 0.28 + breachActivity * 0.44 + (index % 5 === 0 ? 0.12 : 0);
+      drawPolygon(points, toneColor(panelTone, fillAlpha), toneColor(panelTone, strokeAlpha));
+      if ((index + Math.floor(phase * columns)) % 7 === 0) {
+        ctx.strokeStyle = toneColor(accentTone, 0.28 + breachActivity * 0.35);
+        ctx.lineWidth = Math.max(0.45, 0.8 * devicePixelRatio);
+        ctx.beginPath();
+        ctx.moveTo(points[0].x, (points[0].y + points[3].y) * 0.5);
+        ctx.lineTo(points[1].x, (points[1].y + points[2].y) * 0.5);
+        ctx.stroke();
+      }
+    }
+  }
+
+  ctx.strokeStyle = toneColor("white", 0.28 + breach * 0.18);
+  ctx.lineWidth = Math.max(0.7, 1.0 * devicePixelRatio);
+  for (let crack = 0; crack < fractureCount; crack++) {
+    const crackSeed = seed + crack * 9.17;
+    const angle = seededUnit(crackSeed) * Math.PI * 2;
+    const startRadius = (0.04 + seededUnit(crackSeed + 2.7) * 0.16) * Math.min(width, height);
+    const length = (0.05 + seededUnit(crackSeed + 5.3) * 0.22) * Math.min(width, height);
+    const x0 = breachPoint.x + Math.cos(angle) * startRadius;
+    const y0 = breachPoint.y + Math.sin(angle) * startRadius * 0.72;
+    const midX = x0 + Math.cos(angle + seededUnit(crackSeed + 1.2) * 0.72 - 0.36) * length * 0.55;
+    const midY = y0 + Math.sin(angle + seededUnit(crackSeed + 3.4) * 0.72 - 0.36) * length * 0.42;
+    const x1 = x0 + Math.cos(angle) * length;
+    const y1 = y0 + Math.sin(angle) * length * 0.72;
+    ctx.beginPath();
+    ctx.moveTo(x0, y0);
+    ctx.lineTo(midX, midY);
+    ctx.lineTo(x1, y1);
+    ctx.stroke();
+  }
+
+  if (breach > 0) {
+    const radius = Math.min(width, height) * (0.06 + breach * 0.16);
+    for (let ring = 0; ring < 4; ring++) {
+      const ringProgress = (phase + ring * 0.21) % 1;
+      ctx.strokeStyle = toneColor(ring % 2 ? accentTone : "white", (1 - ringProgress) * (0.24 + breach * 0.32));
+      ctx.lineWidth = Math.max(0.8, (1 + ring * 0.55) * devicePixelRatio);
+      ctx.setLineDash([
+        (10 + ring * 4) * devicePixelRatio,
+        (7 + ring * 2) * devicePixelRatio,
+      ]);
+      ctx.lineDashOffset = -now * 0.028 * (ring + 1);
+      ctx.beginPath();
+      ctx.ellipse(
+        breachPoint.x,
+        breachPoint.y,
+        radius * (1 + ringProgress * 1.4),
+        radius * (0.48 + ringProgress * 0.72),
+        0,
+        0,
+        Math.PI * 2,
+      );
+      ctx.stroke();
+    }
+    ctx.setLineDash([]);
+  }
+
+  if (sweep) {
+    const sweepX = left + width * phase;
+    const gradient = ctx.createLinearGradient(sweepX - width * 0.10, top, sweepX + width * 0.10, top + height);
+    gradient.addColorStop(0, toneColor(accentTone, 0));
+    gradient.addColorStop(0.5, toneColor(accentTone, 0.44));
+    gradient.addColorStop(1, toneColor("white", 0));
+    ctx.fillStyle = gradient;
+    ctx.fillRect(sweepX - width * 0.11, top - height * 0.05, width * 0.22, height * 1.10);
+    ctx.strokeStyle = toneColor("white", 0.64);
+    ctx.lineWidth = Math.max(0.7, 1.1 * devicePixelRatio);
+    ctx.beginPath();
+    ctx.moveTo(sweepX, top - height * 0.05);
+    ctx.lineTo(sweepX + depth * width * 0.08, top + height * 1.05);
+    ctx.stroke();
+  }
+
+  for (let sentry = 0; sentry < sentryCount; sentry++) {
+    const progress = sentryCount <= 1 ? 0 : sentry / (sentryCount - 1);
+    const side = sentry % 2;
+    const x = left + width * progress;
+    const y = side ? top + height * 1.06 : top - height * 0.06;
+    const lockSize = Math.max(5, Math.min(width, height) * (0.018 + seededUnit(seed + sentry * 4.4) * 0.014));
+    const pulse = 0.72 + Math.sin(now * 0.004 + seed + sentry) * 0.20;
+    const sentryTone = sentry % 3 === 0 ? accentTone : tone;
+    ctx.strokeStyle = toneColor(sentryTone, 0.42 + pulse * 0.28);
+    ctx.fillStyle = toneColor(sentryTone, 0.09 + pulse * 0.08);
+    ctx.lineWidth = Math.max(0.8, 1.1 * devicePixelRatio);
+    ctx.beginPath();
+    ctx.arc(x, y - lockSize * 0.42, lockSize * 0.58, Math.PI * 1.05, Math.PI * 1.95);
+    ctx.stroke();
+    ctx.fillRect(x - lockSize * 0.58, y - lockSize * 0.18, lockSize * 1.16, lockSize * 0.86);
+    ctx.strokeRect(x - lockSize * 0.58, y - lockSize * 0.18, lockSize * 1.16, lockSize * 0.86);
+  }
+
+  ctx.strokeStyle = toneColor(tone, 0.64);
+  ctx.lineWidth = Math.max(1, 1.4 * devicePixelRatio);
+  ctx.strokeRect(left, top, width, height);
+  if (props.label) {
+    ctx.font = `${11.5 * devicePixelRatio}px ui-monospace, monospace`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "bottom";
+    ctx.shadowColor = toneColor(accentTone, 0.82);
+    ctx.shadowBlur = 9 * devicePixelRatio;
+    ctx.fillStyle = toneColor("white", 0.84);
+    ctx.fillText(String(props.label).slice(0, 24), center.x, top - 8 * devicePixelRatio);
+  }
   ctx.restore();
 }
 

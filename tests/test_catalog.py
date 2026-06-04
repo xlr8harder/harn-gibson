@@ -41,6 +41,7 @@ def test_default_visual_catalog_has_generic_and_cinematic_building_blocks() -> N
         "signal_scope",
         "tunnel_grid",
         "data_vault",
+        "black_ice",
         "svg_layer",
         "data_rain",
         "particle_field",
@@ -130,6 +131,12 @@ def test_default_visual_catalog_has_generic_and_cinematic_building_blocks() -> N
     assert data_vault is not None
     assert {"layers", "rings", "panels", "locks", "packets", "spin", "label", "seed"} <= set(data_vault.props)
     assert {"gibson", "cinematic", "motion", "3d", "security"} <= set(data_vault.tags)
+    black_ice = catalog.entry("black_ice")
+    assert black_ice is not None
+    assert {"columns", "rows", "breach", "fractures", "sentries", "sweep", "label", "seed"} <= set(
+        black_ice.props
+    )
+    assert {"gibson", "cinematic", "security", "barrier", "motion"} <= set(black_ice.tags)
     trace_route = catalog.entry("trace_route")
     assert trace_route is not None
     assert {"hops", "links", "focusHopId", "packets", "speed", "label"} <= set(trace_route.props)

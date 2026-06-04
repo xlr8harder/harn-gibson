@@ -225,6 +225,7 @@
           "primitive:glyph_layer",
           "primitive:tunnel_grid",
           "primitive:data_vault",
+          "primitive:black_ice",
           "primitive:mesh",
           "primitive:signal_scope",
           "primitive:node_graph",
@@ -253,7 +254,7 @@
           "renderer": "gibson-dogfood-showcase",
           "touchedFileCount": 4
         },
-        "mutationCount": 22,
+        "mutationCount": 23,
         "renderer": "gibson-dogfood-showcase",
         "requestCount": 1,
         "routes": [
@@ -267,6 +268,7 @@
           "dogfood-opcodes",
           "dogfood-tunnel",
           "dogfood-vault",
+          "dogfood-black-ice",
           "dogfood-ice-mesh",
           "dogfood-scope",
           "dogfood-control-graph",
@@ -291,6 +293,7 @@
             "primitive:glyph_layer",
             "primitive:tunnel_grid",
             "primitive:data_vault",
+            "primitive:black_ice",
             "primitive:mesh",
             "primitive:signal_scope",
             "primitive:node_graph",
@@ -318,7 +321,7 @@
             "renderer": "gibson-dogfood-showcase",
             "touchedFileCount": 0
           },
-          "mutationCount": 21,
+          "mutationCount": 22,
           "renderer": "gibson-dogfood-showcase",
           "requestCount": 1,
           "routes": [
@@ -332,6 +335,7 @@
             "dogfood-opcodes",
             "dogfood-tunnel",
             "dogfood-vault",
+            "dogfood-black-ice",
             "dogfood-ice-mesh",
             "dogfood-scope",
             "dogfood-control-graph",
@@ -355,6 +359,7 @@
             "primitive:glyph_layer",
             "primitive:tunnel_grid",
             "primitive:data_vault",
+            "primitive:black_ice",
             "primitive:mesh",
             "primitive:signal_scope",
             "primitive:node_graph",
@@ -382,7 +387,7 @@
             "renderer": "gibson-dogfood-showcase",
             "touchedFileCount": 0
           },
-          "mutationCount": 21,
+          "mutationCount": 22,
           "renderer": "gibson-dogfood-showcase",
           "requestCount": 1,
           "routes": [
@@ -396,6 +401,7 @@
             "dogfood-opcodes",
             "dogfood-tunnel",
             "dogfood-vault",
+            "dogfood-black-ice",
             "dogfood-ice-mesh",
             "dogfood-scope",
             "dogfood-control-graph",
@@ -419,6 +425,7 @@
             "primitive:glyph_layer",
             "primitive:tunnel_grid",
             "primitive:data_vault",
+            "primitive:black_ice",
             "primitive:mesh",
             "primitive:signal_scope",
             "primitive:node_graph",
@@ -447,7 +454,7 @@
             "renderer": "gibson-dogfood-showcase",
             "touchedFileCount": 0
           },
-          "mutationCount": 22,
+          "mutationCount": 23,
           "renderer": "gibson-dogfood-showcase",
           "requestCount": 1,
           "routes": [
@@ -461,6 +468,7 @@
             "dogfood-opcodes",
             "dogfood-tunnel",
             "dogfood-vault",
+            "dogfood-black-ice",
             "dogfood-ice-mesh",
             "dogfood-scope",
             "dogfood-control-graph",
@@ -484,6 +492,7 @@
             "primitive:glyph_layer",
             "primitive:tunnel_grid",
             "primitive:data_vault",
+            "primitive:black_ice",
             "primitive:mesh",
             "primitive:signal_scope",
             "primitive:node_graph",
@@ -511,7 +520,7 @@
             "renderer": "gibson-dogfood-showcase",
             "touchedFileCount": 4
           },
-          "mutationCount": 21,
+          "mutationCount": 22,
           "renderer": "gibson-dogfood-showcase",
           "requestCount": 1,
           "routes": [
@@ -525,6 +534,7 @@
             "dogfood-opcodes",
             "dogfood-tunnel",
             "dogfood-vault",
+            "dogfood-black-ice",
             "dogfood-ice-mesh",
             "dogfood-scope",
             "dogfood-control-graph",
@@ -548,6 +558,7 @@
             "primitive:glyph_layer",
             "primitive:tunnel_grid",
             "primitive:data_vault",
+            "primitive:black_ice",
             "primitive:mesh",
             "primitive:signal_scope",
             "primitive:node_graph",
@@ -576,7 +587,7 @@
             "renderer": "gibson-dogfood-showcase",
             "touchedFileCount": 1
           },
-          "mutationCount": 22,
+          "mutationCount": 23,
           "renderer": "gibson-dogfood-showcase",
           "requestCount": 1,
           "routes": [
@@ -590,6 +601,7 @@
             "dogfood-opcodes",
             "dogfood-tunnel",
             "dogfood-vault",
+            "dogfood-black-ice",
             "dogfood-ice-mesh",
             "dogfood-scope",
             "dogfood-control-graph",
@@ -613,6 +625,7 @@
             "primitive:glyph_layer",
             "primitive:tunnel_grid",
             "primitive:data_vault",
+            "primitive:black_ice",
             "primitive:mesh",
             "primitive:signal_scope",
             "primitive:node_graph",
@@ -640,7 +653,7 @@
             "renderer": "gibson-dogfood-showcase",
             "touchedFileCount": 2
           },
-          "mutationCount": 21,
+          "mutationCount": 22,
           "renderer": "gibson-dogfood-showcase",
           "requestCount": 1,
           "routes": [
@@ -654,6 +667,7 @@
             "dogfood-opcodes",
             "dogfood-tunnel",
             "dogfood-vault",
+            "dogfood-black-ice",
             "dogfood-ice-mesh",
             "dogfood-scope",
             "dogfood-control-graph",
@@ -677,6 +691,7 @@
             "primitive:glyph_layer",
             "primitive:tunnel_grid",
             "primitive:data_vault",
+            "primitive:black_ice",
             "primitive:mesh",
             "primitive:signal_scope",
             "primitive:node_graph",
@@ -705,7 +720,7 @@
             "renderer": "gibson-dogfood-showcase",
             "touchedFileCount": 4
           },
-          "mutationCount": 22,
+          "mutationCount": 23,
           "renderer": "gibson-dogfood-showcase",
           "requestCount": 1,
           "routes": [
@@ -719,6 +734,7 @@
             "dogfood-opcodes",
             "dogfood-tunnel",
             "dogfood-vault",
+            "dogfood-black-ice",
             "dogfood-ice-mesh",
             "dogfood-scope",
             "dogfood-control-graph",
@@ -746,6 +762,39 @@
           "text": "[]"
         },
         "region": "side"
+      },
+      "dogfood-black-ice": {
+        "children": [],
+        "id": "dogfood-black-ice",
+        "kind": "black_ice",
+        "props": {
+          "accentTone": "white",
+          "breach": 0.64,
+          "breachPosition": {
+            "x": 0.52,
+            "y": 0.48
+          },
+          "columns": 18,
+          "depth": 0.36,
+          "fractures": 39,
+          "label": "BLACK ICE AFTER",
+          "opacity": 0.78,
+          "position": {
+            "x": 0.54,
+            "y": 0.43
+          },
+          "rows": 8,
+          "seed": 166,
+          "sentries": 10,
+          "size": {
+            "h": 0.34,
+            "w": 0.54
+          },
+          "sweep": true,
+          "sweepSpeed": 0.92,
+          "tone": "red"
+        },
+        "region": "stage"
       },
       "dogfood-city": {
         "children": [],

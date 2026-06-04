@@ -52,6 +52,10 @@
         "equals": "data_vault"
       },
       {
+        "path": "primitives.dogfood-black-ice.props.sentries",
+        "equals": 13
+      },
+      {
         "path": "primitives.dogfood-route.props.focusHopId",
         "equals": "target-0"
       },

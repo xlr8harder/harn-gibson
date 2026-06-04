@@ -48,6 +48,7 @@ def main() -> None:
         _upsert_opcode_glyphs(event_type, summary, tone, accent, sequence, touched),
         _upsert_tunnel(event_type, tone, accent, sequence, touched),
         _upsert_data_vault(project_name, event_type, tone, accent, sequence, touched, entries),
+        _upsert_black_ice(event_type, phase, tone, accent, sequence, touched),
         _upsert_ice_mesh(event_type, phase, tone, accent, sequence, touched),
         _upsert_scope(event_type, phase, tone, accent, sequence, touched),
         _upsert_control_graph(event_type, phase, tone, accent, sequence, touched),
@@ -370,6 +371,44 @@ def _upsert_ice_mesh(
                 "spin": 0.52 if phase == "after" else 0.32,
                 "label": _clip(f"ICE {event_type.upper().replace('_', ' ')}", 18),
                 "seed": sequence + 37,
+            },
+        },
+    }
+
+
+def _upsert_black_ice(
+    event_type: str,
+    phase: str,
+    tone: str,
+    accent: str,
+    sequence: int,
+    touched: list[dict[str, Any]],
+) -> dict[str, Any]:
+    danger = phase == "after" or "error" in event_type or "fail" in event_type
+    breach = 0.64 if danger else 0.26 + min(0.24, len(touched) * 0.035)
+    return {
+        "op": "upsert",
+        "primitive": {
+            "id": "dogfood-black-ice",
+            "kind": "black_ice",
+            "region": "stage",
+            "props": {
+                "position": {"x": 0.54, "y": 0.43},
+                "size": {"w": 0.54, "h": 0.34},
+                "columns": 11 + min(9, len(touched) + sequence % 4),
+                "rows": 5 + min(5, len(touched) // 2 + sequence % 3),
+                "depth": 0.36,
+                "breach": round(breach, 3),
+                "breachPosition": {"x": 0.52, "y": 0.48},
+                "fractures": 12 + min(46, len(touched) * 5 + sequence % 8),
+                "sentries": 4 + min(10, len(touched) + (2 if danger else 0)),
+                "sweep": True,
+                "sweepSpeed": 0.80 + (sequence % 5) * 0.06,
+                "tone": "red" if danger and tone != "red" else tone,
+                "accentTone": accent,
+                "opacity": 0.78,
+                "label": _clip(f"BLACK ICE {phase.upper()}", 20),
+                "seed": sequence + len(touched) * 23 + 67,
             },
         },
     }
