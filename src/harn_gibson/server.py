@@ -1494,6 +1494,7 @@ function drawScenePrimitives(scene, w, h, now) {
     "particle_field",
     "data_vault",
     "black_ice",
+    "access_matrix",
     "mesh",
     "city_block",
     "hologram",
@@ -1521,6 +1522,7 @@ function drawPrimitive(primitive, w, h, now) {
   if (primitive.kind === "wire_landscape") drawWireLandscape(primitive, w, h, now);
   if (primitive.kind === "data_vault") drawDataVault(primitive, w, h, now);
   if (primitive.kind === "black_ice") drawBlackIce(primitive, w, h, now);
+  if (primitive.kind === "access_matrix") drawAccessMatrix(primitive, w, h, now);
   if (primitive.kind === "svg_layer") drawSvgLayer(primitive, w, h, now);
   if (primitive.kind === "node_graph") drawNodeGraph(primitive, w, h);
   if (primitive.kind === "trace_route") drawTraceRoute(primitive, w, h, now);
@@ -2700,6 +2702,179 @@ function drawHologram(primitive, w, h, now) {
     ctx.fillStyle = toneColor("white", 0.86);
     ctx.shadowBlur = 8 * devicePixelRatio;
     ctx.fillText(String(props.label).slice(0, 18), 0, -scale * 0.92);
+  }
+
+  ctx.restore();
+}
+
+function accessMatrixRect(props, w, h) {
+  const size = props.size && typeof props.size === "object" ? props.size : {};
+  const position = props.position && typeof props.position === "object" ? props.position : {x: 0.5, y: 0.5};
+  const width = clamp(finiteNumber(size.w ?? size.width ?? props.width, 0.34), 0.08, 1.2) * w;
+  const height = clamp(finiteNumber(size.h ?? size.height ?? props.height, 0.24), 0.06, 0.9) * h;
+  const x = finiteNumber(position.x, 0.5) * w - width * 0.5;
+  const y = finiteNumber(position.y, 0.5) * h - height * 0.5;
+  return {x, y, width, height};
+}
+
+function accessMatrixCells(props, rows, columns) {
+  const capacity = rows * columns;
+  const rawCells = Array.isArray(props.cells) && props.cells.length
+    ? props.cells
+    : Array.from({length: capacity}, (_, index) => ({
+      id: `cell-${index}`,
+      value: ((index % columns) + 1) / Math.max(1, columns),
+      active: index % 7 === 0,
+      locked: index % 5 === 0,
+    }));
+  return rawCells
+    .filter((cell) => cell && typeof cell === "object")
+    .slice(0, capacity)
+    .map((cell, index) => {
+      const row = Math.floor(clamp(finiteNumber(cell.row ?? cell.r, Math.floor(index / columns)), 0, rows - 1));
+      const columnValue = finiteNumber(cell.column ?? cell.col ?? cell.c, index % columns);
+      const column = Math.floor(clamp(columnValue, 0, columns - 1));
+      const value = clamp(
+        finiteNumber(cell.value ?? cell.level ?? cell.intensity, cell.active ? 1 : 0.42),
+        0,
+        1
+      );
+      const id = String(cell.id || `cell-${index}`);
+      return {
+        ...cell,
+        id,
+        row,
+        column,
+        value,
+        label: String(cell.label || cell.name || id).slice(0, 10),
+      };
+    });
+}
+
+function drawAccessMatrix(primitive, w, h, now) {
+  const props = primitive.props || {};
+  const rows = Math.max(1, Math.min(10, Math.floor(finiteNumber(props.rows, 4))));
+  const columns = Math.max(1, Math.min(14, Math.floor(finiteNumber(props.columns, 6))));
+  const cells = accessMatrixCells(props, rows, columns);
+  const rect = accessMatrixRect(props, w, h);
+  const tone = props.tone || "cyan";
+  const accentTone = props.accentTone || props.accent || "magenta";
+  const opacity = clamp(finiteNumber(props.opacity, 0.76), 0, 1);
+  const speed = Math.max(0, finiteNumber(props.speed, 0.72));
+  const seed = finiteNumber(props.seed, 0);
+  const hasSweep = props.sweep !== false;
+  const hasLabels = props.labels !== false;
+  const focusCellId = props.focusCellId || props.focusId || "";
+  const activeCount = cells.filter((cell) => cell.active || cell.id === focusCellId).length;
+  const lockedCount = cells.filter((cell) => cell.locked).length;
+  const breachedCount = cells.filter((cell) => cell.breached || cell.breach).length;
+  const gap = Math.max(2, 3.2 * devicePixelRatio);
+  const headerHeight = props.label ? 18 * devicePixelRatio : 6 * devicePixelRatio;
+  const gridX = rect.x + 7 * devicePixelRatio;
+  const gridY = rect.y + headerHeight + 4 * devicePixelRatio;
+  const gridWidth = rect.width - 14 * devicePixelRatio;
+  const gridHeight = rect.height - headerHeight - 11 * devicePixelRatio;
+  const cellWidth = Math.max(4 * devicePixelRatio, (gridWidth - gap * (columns - 1)) / columns);
+  const cellHeight = Math.max(4 * devicePixelRatio, (gridHeight - gap * (rows - 1)) / rows);
+
+  if (typeof window !== "undefined") {
+    window.__gibsonAccessMatrixState = window.__gibsonAccessMatrixState || {};
+    window.__gibsonAccessMatrixState[primitive.id] = {
+      rowCount: rows,
+      columnCount: columns,
+      cellCount: cells.length,
+      activeCount,
+      lockedCount,
+      breachedCount,
+      focusCellId: focusCellId || null,
+      tone,
+      accentTone,
+      hasSweep,
+      hasLabels,
+    };
+  }
+
+  ctx.save();
+  ctx.globalCompositeOperation = props.blend === "source-over" ? "source-over" : "screen";
+  ctx.lineJoin = "round";
+  ctx.lineCap = "round";
+  ctx.shadowColor = toneColor(tone, 0.48 * opacity);
+  ctx.shadowBlur = 14 * devicePixelRatio;
+  ctx.fillStyle = toneColor("white", 0.018 * opacity);
+  ctx.fillRect(rect.x, rect.y, rect.width, rect.height);
+  ctx.strokeStyle = toneColor(tone, 0.28 * opacity);
+  ctx.lineWidth = Math.max(1, 1.1 * devicePixelRatio);
+  ctx.strokeRect(rect.x, rect.y, rect.width, rect.height);
+
+  if (props.label) {
+    ctx.font = `${9.5 * devicePixelRatio}px ui-monospace, monospace`;
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = toneColor("white", 0.72 * opacity);
+    ctx.fillText(String(props.label).slice(0, 24), rect.x + 7 * devicePixelRatio, rect.y + 10 * devicePixelRatio);
+  }
+
+  for (const [index, cell] of cells.entries()) {
+    const x = gridX + cell.column * (cellWidth + gap);
+    const y = gridY + cell.row * (cellHeight + gap);
+    const focused = cell.id === focusCellId;
+    const active = Boolean(cell.active || focused);
+    const breached = Boolean(cell.breached || cell.breach);
+    const locked = Boolean(cell.locked);
+    const cellTone = breached ? "red" : (cell.tone || (active ? accentTone : tone));
+    const pulse = 0.5 + Math.sin(now * 0.004 * speed + seed + index * 0.83) * 0.5;
+    const activity = clamp(cell.value + (active ? 0.24 : 0) + (focused ? 0.20 : 0), 0, 1);
+    const alpha = (0.08 + activity * 0.30 + pulse * (active ? 0.18 : 0.04)) * opacity;
+    ctx.fillStyle = toneColor(cellTone, alpha);
+    ctx.fillRect(x, y, cellWidth, cellHeight);
+    ctx.strokeStyle = toneColor(cellTone, (0.20 + activity * 0.42) * opacity);
+    ctx.lineWidth = Math.max(0.7, (0.8 + (focused ? 0.8 : 0)) * devicePixelRatio);
+    ctx.strokeRect(x, y, cellWidth, cellHeight);
+
+    if (locked) {
+      const lockX = x + cellWidth * 0.50;
+      const lockY = y + cellHeight * 0.42;
+      ctx.strokeStyle = toneColor("white", (0.28 + activity * 0.42) * opacity);
+      ctx.lineWidth = Math.max(0.7, 0.9 * devicePixelRatio);
+      ctx.strokeRect(lockX - cellWidth * 0.16, lockY, cellWidth * 0.32, cellHeight * 0.22);
+      ctx.beginPath();
+      ctx.arc(lockX, lockY, Math.min(cellWidth, cellHeight) * 0.14, Math.PI, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    if (breached) {
+      ctx.strokeStyle = toneColor("white", (0.42 + pulse * 0.36) * opacity);
+      ctx.lineWidth = Math.max(0.8, 1.15 * devicePixelRatio);
+      ctx.beginPath();
+      ctx.moveTo(x + cellWidth * 0.22, y + cellHeight * 0.22);
+      ctx.lineTo(x + cellWidth * 0.78, y + cellHeight * 0.78);
+      ctx.moveTo(x + cellWidth * 0.78, y + cellHeight * 0.22);
+      ctx.lineTo(x + cellWidth * 0.22, y + cellHeight * 0.78);
+      ctx.stroke();
+    }
+
+    if (hasLabels && cell.label && cellWidth > 28 * devicePixelRatio && cellHeight > 16 * devicePixelRatio) {
+      const labelFontSize = Math.max(
+        6 * devicePixelRatio,
+        Math.min(8.5 * devicePixelRatio, cellHeight * 0.22)
+      );
+      ctx.font = `${labelFontSize}px ui-monospace, monospace`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "bottom";
+      ctx.fillStyle = toneColor("white", (0.34 + activity * 0.34) * opacity);
+      ctx.fillText(cell.label, x + cellWidth * 0.5, y + cellHeight - 3 * devicePixelRatio);
+    }
+  }
+
+  if (hasSweep) {
+    const sweep = (now * 0.00020 * speed + seed * 0.011) % 1;
+    const sweepX = gridX + sweep * gridWidth;
+    const gradient = ctx.createLinearGradient(sweepX - gridWidth * 0.18, 0, sweepX + gridWidth * 0.18, 0);
+    gradient.addColorStop(0, toneColor(accentTone, 0));
+    gradient.addColorStop(0.5, toneColor(accentTone, 0.34 * opacity));
+    gradient.addColorStop(1, toneColor(accentTone, 0));
+    ctx.fillStyle = gradient;
+    ctx.fillRect(sweepX - gridWidth * 0.18, gridY, gridWidth * 0.36, gridHeight);
   }
 
   ctx.restore();

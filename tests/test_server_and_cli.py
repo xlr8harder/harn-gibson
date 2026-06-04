@@ -873,6 +873,45 @@ def test_cli_parser_and_run(monkeypatch: Any, capsys: Any) -> None:
     assert parsed_replay.renderer_model_timeout_ms == "2500"
     assert parsed_replay.project_root == "workspace"
     assert parsed_replay.project_name == "tiny-project"
+    parsed_watch = parser.parse_args(
+        [
+            "watch-replay",
+            "fixture.json",
+            "--host",
+            "0.0.0.0",
+            "--port",
+            "8766",
+            "--no-browser",
+            "--no-hold",
+            "--start-delay-ms",
+            "250",
+            "--step-delay-ms",
+            "125",
+            "--style",
+            "satellite-uplink",
+            "--renderer-command",
+            "python renderer.py",
+            "--renderer-timeout-ms",
+            "1750",
+            "--project-root",
+            "workspace",
+            "--project-name",
+            "tiny-project",
+        ]
+    )
+    assert parsed_watch.command == "watch-replay"
+    assert parsed_watch.path == "fixture.json"
+    assert parsed_watch.host == "0.0.0.0"
+    assert parsed_watch.port == 8766
+    assert parsed_watch.browser is False
+    assert parsed_watch.hold is False
+    assert parsed_watch.start_delay_ms == 250
+    assert parsed_watch.step_delay_ms == 125
+    assert parsed_watch.style == "satellite-uplink"
+    assert parsed_watch.renderer_command == "python renderer.py"
+    assert parsed_watch.renderer_timeout_ms == "1750"
+    assert parsed_watch.project_root == "workspace"
+    assert parsed_watch.project_name == "tiny-project"
     parsed_replay_dir = parser.parse_args(
         [
             "replay-dir",
@@ -991,6 +1030,90 @@ def test_cli_parser_and_run(monkeypatch: Any, capsys: Any) -> None:
     assert cli.run(["serve", "--host", "0.0.0.0", "--port", "9999", "--style", "mainframe"]) == 0
     assert cli.run([]) == 0
     assert calls == [("0.0.0.0", 9999, "mainframe"), ("127.0.0.1", 8765, None)]
+    monkeypatch.setattr(cli, "run_watch_replay", lambda args: 42)
+    assert cli.run(["watch-replay", "fixture.json", "--no-browser", "--no-hold"]) == 42
+
+
+def test_cli_watch_replay_runs_browser_playback(tmp_path: Path, monkeypatch: Any, capsys: Any) -> None:
+    replay_path = tmp_path / "watch.json"
+    replay_path.write_text(
+        json.dumps(
+            {
+                "name": "watch fixture",
+                "expect": {"sceneRevision": 1},
+                "steps": [
+                    {
+                        "type": "mutations",
+                        "mutations": [{"op": "patch", "targetId": "status", "props": {"text": "watching"}}],
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    opened: list[str] = []
+    held: list[str] = []
+    monkeypatch.setattr(cli.webbrowser, "open", opened.append)
+    monkeypatch.setattr(cli, "_hold_display", held.append)
+    args = cli.build_parser().parse_args(
+        [
+            "watch-replay",
+            str(replay_path),
+            "--start-delay-ms",
+            "0",
+            "--step-delay-ms",
+            "0",
+        ]
+    )
+
+    assert cli.run_watch_replay(args) == 0
+
+    captured = capsys.readouterr()
+    assert opened and opened[0].startswith("http://127.0.0.1:")
+    assert held == opened
+    assert "watch-replay 1/1: mutations, revision 1, updates 1" in captured.err
+    assert "watched 1 replay steps; scene revision 1" in captured.err
+
+
+def test_cli_watch_replay_error_paths(monkeypatch: Any, capsys: Any) -> None:
+    parser = cli.build_parser()
+    bad_start = parser.parse_args(["watch-replay", "fixture.json", "--start-delay-ms", "-1"])
+    bad_step = parser.parse_args(["watch-replay", "fixture.json", "--step-delay-ms", "-1"])
+
+    assert cli.run_watch_replay(bad_start) == 2
+    assert cli.run_watch_replay(bad_step) == 2
+
+    from harn_gibson.replay import ReplayExpectationError, ReplayExpectationResult
+
+    def fail_replay(*_args: Any, **_kwargs: Any) -> None:
+        raise ReplayExpectationError(
+            (
+                ReplayExpectationResult(
+                    path="revision",
+                    op="equals",
+                    passed=False,
+                    expected=2,
+                    actual=1,
+                    message="revision expected to equal 2, got 1",
+                ),
+            )
+        )
+
+    monkeypatch.setattr("harn_gibson.replay.play_replay_file", fail_replay)
+    failure_args = parser.parse_args(["watch-replay", "fixture.json", "--no-browser", "--no-hold"])
+    assert cli.run_watch_replay(failure_args) == 1
+
+    def interrupt_replay(*_args: Any, **_kwargs: Any) -> None:
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr("harn_gibson.replay.play_replay_file", interrupt_replay)
+    interrupt_args = parser.parse_args(["watch-replay", "fixture.json", "--no-browser", "--no-hold"])
+    assert cli.run_watch_replay(interrupt_args) == 130
+    captured = capsys.readouterr()
+    assert "--start-delay-ms must be non-negative" in captured.err
+    assert "--step-delay-ms must be non-negative" in captured.err
+    assert "revision expected to equal 2, got 1" in captured.err
+    assert "watch-replay interrupted" in captured.err
 
 
 def test_cli_replay_renderer_env_helpers(monkeypatch: Any) -> None:

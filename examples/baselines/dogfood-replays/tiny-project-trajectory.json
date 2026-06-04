@@ -314,6 +314,7 @@
           "primitive:data_rain",
           "primitive:glyph_layer",
           "primitive:terminal_wall",
+          "primitive:access_matrix",
           "primitive:tunnel_grid",
           "primitive:wire_landscape",
           "primitive:data_vault",
@@ -348,7 +349,7 @@
           "renderer": "gibson-dogfood-showcase",
           "touchedFileCount": 4
         },
-        "mutationCount": 27,
+        "mutationCount": 28,
         "renderer": "gibson-dogfood-showcase",
         "requestCount": 1,
         "routes": [
@@ -361,6 +362,7 @@
           "dogfood-rain",
           "dogfood-opcodes",
           "dogfood-terminal-wall",
+          "dogfood-access-matrix",
           "dogfood-tunnel",
           "dogfood-landscape",
           "dogfood-vault",
@@ -388,6 +390,7 @@
             "primitive:data_rain",
             "primitive:glyph_layer",
             "primitive:terminal_wall",
+            "primitive:access_matrix",
             "primitive:tunnel_grid",
             "primitive:wire_landscape",
             "primitive:data_vault",
@@ -421,7 +424,7 @@
             "renderer": "gibson-dogfood-showcase",
             "touchedFileCount": 0
           },
-          "mutationCount": 26,
+          "mutationCount": 27,
           "renderer": "gibson-dogfood-showcase",
           "requestCount": 1,
           "routes": [
@@ -434,6 +437,7 @@
             "dogfood-rain",
             "dogfood-opcodes",
             "dogfood-terminal-wall",
+            "dogfood-access-matrix",
             "dogfood-tunnel",
             "dogfood-landscape",
             "dogfood-vault",
@@ -460,6 +464,7 @@
             "primitive:data_rain",
             "primitive:glyph_layer",
             "primitive:terminal_wall",
+            "primitive:access_matrix",
             "primitive:tunnel_grid",
             "primitive:wire_landscape",
             "primitive:data_vault",
@@ -493,7 +498,7 @@
             "renderer": "gibson-dogfood-showcase",
             "touchedFileCount": 0
           },
-          "mutationCount": 26,
+          "mutationCount": 27,
           "renderer": "gibson-dogfood-showcase",
           "requestCount": 1,
           "routes": [
@@ -506,6 +511,7 @@
             "dogfood-rain",
             "dogfood-opcodes",
             "dogfood-terminal-wall",
+            "dogfood-access-matrix",
             "dogfood-tunnel",
             "dogfood-landscape",
             "dogfood-vault",
@@ -532,6 +538,7 @@
             "primitive:data_rain",
             "primitive:glyph_layer",
             "primitive:terminal_wall",
+            "primitive:access_matrix",
             "primitive:tunnel_grid",
             "primitive:wire_landscape",
             "primitive:data_vault",
@@ -566,7 +573,7 @@
             "renderer": "gibson-dogfood-showcase",
             "touchedFileCount": 0
           },
-          "mutationCount": 27,
+          "mutationCount": 28,
           "renderer": "gibson-dogfood-showcase",
           "requestCount": 1,
           "routes": [
@@ -579,6 +586,7 @@
             "dogfood-rain",
             "dogfood-opcodes",
             "dogfood-terminal-wall",
+            "dogfood-access-matrix",
             "dogfood-tunnel",
             "dogfood-landscape",
             "dogfood-vault",
@@ -605,6 +613,7 @@
             "primitive:data_rain",
             "primitive:glyph_layer",
             "primitive:terminal_wall",
+            "primitive:access_matrix",
             "primitive:tunnel_grid",
             "primitive:wire_landscape",
             "primitive:data_vault",
@@ -638,7 +647,7 @@
             "renderer": "gibson-dogfood-showcase",
             "touchedFileCount": 4
           },
-          "mutationCount": 26,
+          "mutationCount": 27,
           "renderer": "gibson-dogfood-showcase",
           "requestCount": 1,
           "routes": [
@@ -651,6 +660,7 @@
             "dogfood-rain",
             "dogfood-opcodes",
             "dogfood-terminal-wall",
+            "dogfood-access-matrix",
             "dogfood-tunnel",
             "dogfood-landscape",
             "dogfood-vault",
@@ -677,6 +687,7 @@
             "primitive:data_rain",
             "primitive:glyph_layer",
             "primitive:terminal_wall",
+            "primitive:access_matrix",
             "primitive:tunnel_grid",
             "primitive:wire_landscape",
             "primitive:data_vault",
@@ -711,7 +722,7 @@
             "renderer": "gibson-dogfood-showcase",
             "touchedFileCount": 1
           },
-          "mutationCount": 27,
+          "mutationCount": 28,
           "renderer": "gibson-dogfood-showcase",
           "requestCount": 1,
           "routes": [
@@ -724,6 +735,7 @@
             "dogfood-rain",
             "dogfood-opcodes",
             "dogfood-terminal-wall",
+            "dogfood-access-matrix",
             "dogfood-tunnel",
             "dogfood-landscape",
             "dogfood-vault",
@@ -750,6 +762,7 @@
             "primitive:data_rain",
             "primitive:glyph_layer",
             "primitive:terminal_wall",
+            "primitive:access_matrix",
             "primitive:tunnel_grid",
             "primitive:wire_landscape",
             "primitive:data_vault",
@@ -783,7 +796,7 @@
             "renderer": "gibson-dogfood-showcase",
             "touchedFileCount": 2
           },
-          "mutationCount": 26,
+          "mutationCount": 27,
           "renderer": "gibson-dogfood-showcase",
           "requestCount": 1,
           "routes": [
@@ -796,6 +809,7 @@
             "dogfood-rain",
             "dogfood-opcodes",
             "dogfood-terminal-wall",
+            "dogfood-access-matrix",
             "dogfood-tunnel",
             "dogfood-landscape",
             "dogfood-vault",
@@ -822,6 +836,7 @@
             "primitive:data_rain",
             "primitive:glyph_layer",
             "primitive:terminal_wall",
+            "primitive:access_matrix",
             "primitive:tunnel_grid",
             "primitive:wire_landscape",
             "primitive:data_vault",
@@ -856,7 +871,7 @@
             "renderer": "gibson-dogfood-showcase",
             "touchedFileCount": 4
           },
-          "mutationCount": 27,
+          "mutationCount": 28,
           "renderer": "gibson-dogfood-showcase",
           "requestCount": 1,
           "routes": [
@@ -869,6 +884,7 @@
             "dogfood-rain",
             "dogfood-opcodes",
             "dogfood-terminal-wall",
+            "dogfood-access-matrix",
             "dogfood-tunnel",
             "dogfood-landscape",
             "dogfood-vault",
@@ -900,6 +916,106 @@
           "text": "[]"
         },
         "region": "side"
+      },
+      "dogfood-access-matrix": {
+        "children": [],
+        "id": "dogfood-access-matrix",
+        "kind": "access_matrix",
+        "props": {
+          "accentTone": "white",
+          "cells": [
+            {
+              "active": false,
+              "column": 0,
+              "id": "hook",
+              "label": "HOOK",
+              "row": 0,
+              "tone": "green",
+              "value": 0.72
+            },
+            {
+              "active": true,
+              "column": 1,
+              "id": "event",
+              "label": "TOOL_RES",
+              "row": 0,
+              "tone": "magenta",
+              "value": 0.84
+            },
+            {
+              "breached": true,
+              "column": 2,
+              "id": "render",
+              "label": "RENDER",
+              "locked": false,
+              "row": 0,
+              "tone": "white",
+              "value": 0.78
+            },
+            {
+              "active": true,
+              "breached": true,
+              "column": 3,
+              "id": "file-0",
+              "label": "README.md",
+              "locked": false,
+              "row": 0,
+              "tone": "magenta",
+              "value": 0.52
+            },
+            {
+              "active": true,
+              "breached": false,
+              "column": 4,
+              "id": "file-1",
+              "label": "pyproject.to",
+              "locked": false,
+              "row": 0,
+              "tone": "white",
+              "value": 0.545
+            },
+            {
+              "active": true,
+              "breached": false,
+              "column": 0,
+              "id": "file-2",
+              "label": "cli.py",
+              "locked": false,
+              "row": 1,
+              "tone": "magenta",
+              "value": 0.57
+            },
+            {
+              "active": true,
+              "breached": false,
+              "column": 1,
+              "id": "file-3",
+              "label": "test_cli.py",
+              "locked": false,
+              "row": 1,
+              "tone": "white",
+              "value": 0.595
+            }
+          ],
+          "columns": 5,
+          "focusCellId": "file-0",
+          "label": "ACCESS MATRIX",
+          "opacity": 0.72,
+          "position": {
+            "x": 0.79,
+            "y": 0.5
+          },
+          "rows": 3,
+          "seed": 159,
+          "size": {
+            "h": 0.25,
+            "w": 0.32
+          },
+          "speed": 0.78,
+          "sweep": true,
+          "tone": "red"
+        },
+        "region": "stage"
       },
       "dogfood-black-ice": {
         "children": [],

@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import time
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from copy import deepcopy
 from dataclasses import dataclass, field, replace
@@ -315,6 +316,72 @@ def run_replay_file(
         state,
         capture_frames=capture_frames,
         capture_renderer_contexts=capture_renderer_contexts,
+    )
+
+
+ReplayProgressCallback = Callable[[ReplayStepResult, int, int, SceneState], None]
+
+
+def play_replay_file(
+    path: str | Path,
+    state: GibsonServerState | None = None,
+    *,
+    start_delay_ms: int = 0,
+    step_delay_ms: int = 900,
+    progress: ReplayProgressCallback | None = None,
+    sleep_fn: Callable[[float], None] = time.sleep,
+) -> ReplayResult:
+    return play_replay_data(
+        load_replay_file(path),
+        state,
+        start_delay_ms=start_delay_ms,
+        step_delay_ms=step_delay_ms,
+        progress=progress,
+        sleep_fn=sleep_fn,
+    )
+
+
+def play_replay_data(
+    data: Mapping[str, Any],
+    state: GibsonServerState | None = None,
+    *,
+    start_delay_ms: int = 0,
+    step_delay_ms: int = 900,
+    progress: ReplayProgressCallback | None = None,
+    sleep_fn: Callable[[float], None] = time.sleep,
+) -> ReplayResult:
+    replay_state = state or GibsonServerState()
+    _apply_replay_project_metadata(replay_state, data)
+    schema = str(data.get("schema") or "harn-gibson.replay.v1")
+    name = str(data.get("name") or "unnamed replay")
+    steps = data.get("steps")
+    if not isinstance(steps, list):
+        raise ValueError("replay must contain a steps list")
+
+    results: list[ReplayStepResult] = []
+    if start_delay_ms > 0:
+        sleep_fn(start_delay_ms / 1000)
+    for index, step in enumerate(steps):
+        if not isinstance(step, Mapping):
+            raise ValueError(f"replay step {index} must be an object")
+        result = _run_step(index, step, replay_state)
+        results.append(result)
+        if progress is not None:
+            progress(result, index + 1, len(steps), replay_state.scene.state)
+        if index < len(steps) - 1 and step_delay_ms > 0:
+            sleep_fn(step_delay_ms / 1000)
+
+    expectations = evaluate_replay_expectations(replay_state.scene.state, data.get("expect"))
+    failures = tuple(expectation for expectation in expectations if not expectation.passed)
+    if failures:
+        raise ReplayExpectationError(failures)
+    return ReplayResult(
+        schema=schema,
+        name=name,
+        steps=tuple(results),
+        scene=replay_state.scene.state,
+        metadata=dict(data.get("metadata") or {}),
+        expectations=expectations,
     )
 
 
@@ -3784,6 +3851,8 @@ __all__ = [
     "evaluate_screenshot_expectations",
     "load_replay_file",
     "mutations_from_value",
+    "play_replay_data",
+    "play_replay_file",
     "render_plan_from_mapping",
     "render_request_from_mapping",
     "render_step_from_mapping",

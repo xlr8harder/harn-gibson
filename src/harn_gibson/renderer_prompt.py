@@ -19,7 +19,7 @@ RENDERER_SYSTEM_PROMPT = (
     "the renderInput timeline suggests a sequence. Use breach_wave beats, camera_jolt impacts, camera_path moves, "
     "signal_interference overlays, "
     "hologram projections, signal scopes, tunnel grids, wire_landscape terrain, trace routes, "
-    "terminal walls, camera-drifting city_block districts, "
+    "terminal walls, access matrices, camera-drifting city_block districts, "
     "data rain, and structured svg_layer keyframes, path morphs, filters, or clips when they make the scene "
     "feel cinematic. "
     "Use only structured svg_layer data; never emit raw SVG markup, HTML, scripts, event handlers, "

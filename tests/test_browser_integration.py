@@ -306,6 +306,7 @@ def test_browser_display_renders_vector_symbols_and_data_rain() -> None:
                 page.wait_for_function("window.__gibsonWireLandscapeState?.['gallery-landscape']?.peakCount === 4")
                 page.wait_for_function("window.__gibsonCityState?.['gallery-city']?.cameraKeyframeCount === 3")
                 page.wait_for_function("window.__gibsonTerminalWallState?.['gallery-terminal']?.panelCount === 4")
+                page.wait_for_function("window.__gibsonAccessMatrixState?.['gallery-access']?.cellCount === 8")
                 page.wait_for_function("window.__gibsonDataRainState?.['gallery-rain']?.visibleColumns > 0")
                 page.wait_for_function("window.__gibsonTraceRouteState?.['gallery-trace']?.packetCount === 18")
                 vector_state = page.evaluate(
@@ -340,6 +341,9 @@ def test_browser_display_renders_vector_symbols_and_data_rain() -> None:
                 )
                 terminal_wall_state = page.evaluate(
                     """() => window.__gibsonTerminalWallState["gallery-terminal"]"""
+                )
+                access_matrix_state = page.evaluate(
+                    """() => window.__gibsonAccessMatrixState["gallery-access"]"""
                 )
                 data_rain_state = page.evaluate(
                     """() => window.__gibsonDataRainState["gallery-rain"]"""
@@ -461,6 +465,19 @@ def test_browser_display_renders_vector_symbols_and_data_rain() -> None:
                     "accentTone": "cyan",
                     "hasScan": True,
                     "hasCursor": True,
+                }
+                assert access_matrix_state == {
+                    "rowCount": 3,
+                    "columnCount": 4,
+                    "cellCount": 8,
+                    "activeCount": 3,
+                    "lockedCount": 3,
+                    "breachedCount": 1,
+                    "focusCellId": "core",
+                    "tone": "cyan",
+                    "accentTone": "magenta",
+                    "hasSweep": True,
+                    "hasLabels": True,
                 }
                 assert data_rain_state == {
                     "columns": 42,

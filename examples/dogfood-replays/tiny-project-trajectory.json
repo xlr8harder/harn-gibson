@@ -34,6 +34,10 @@
         "equals": "terminal_wall"
       },
       {
+        "path": "primitives.dogfood-access-matrix.kind",
+        "equals": "access_matrix"
+      },
+      {
         "path": "primitives.dogfood-control-graph.kind",
         "equals": "node_graph"
       },

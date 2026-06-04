@@ -50,6 +50,9 @@
       {"path": "primitives.gallery-terminal.kind", "equals": "terminal_wall"},
       {"path": "primitives.gallery-terminal.props.panels.1.title", "equals": "COMMAND"},
       {"path": "primitives.gallery-terminal.props.panels.2.lines.0", "equals": "src/harn_gibson/server.py"},
+      {"path": "primitives.gallery-access.kind", "equals": "access_matrix"},
+      {"path": "primitives.gallery-access.props.focusCellId", "equals": "core"},
+      {"path": "primitives.gallery-access.props.cells.2.breached", "equals": true},
       {"path": "primitives.gallery-city.kind", "equals": "city_block"},
       {"path": "primitives.gallery-city.props.cameraPath.keyframes.1.scale", "equals": 1.04},
       {"path": "primitives.gallery-trace.kind", "equals": "trace_route"},
@@ -94,6 +97,101 @@
             "eventType": "primitive_gallery",
             "title": "Primitive gallery",
             "summary": "mesh, signal scope, tunnel grid, wire landscape, vector paths, vector symbols, city blocks, graphs, ribbons, glyphs, data rain, particles, stream panel"
+          }
+        },
+        {
+          "op": "upsert",
+          "primitive": {
+            "id": "gallery-access",
+            "kind": "access_matrix",
+            "region": "stage",
+            "props": {
+              "label": "ACCESS MATRIX",
+              "position": {"x": 0.76, "y": 0.50},
+              "size": {"w": 0.28, "h": 0.21},
+              "rows": 3,
+              "columns": 4,
+              "focusCellId": "core",
+              "tone": "cyan",
+              "accentTone": "magenta",
+              "opacity": 0.70,
+              "sweep": true,
+              "speed": 0.66,
+              "seed": 829,
+              "cells": [
+                {
+                  "id": "hook",
+                  "label": "HOOK",
+                  "row": 0,
+                  "column": 0,
+                  "value": 0.72,
+                  "tone": "green",
+                  "active": true
+                },
+                {
+                  "id": "auth",
+                  "label": "AUTH",
+                  "row": 0,
+                  "column": 1,
+                  "value": 0.64,
+                  "tone": "cyan",
+                  "locked": true
+                },
+                {
+                  "id": "ice",
+                  "label": "ICE",
+                  "row": 0,
+                  "column": 2,
+                  "value": 0.92,
+                  "tone": "magenta",
+                  "breached": true,
+                  "active": true
+                },
+                {
+                  "id": "core",
+                  "label": "CORE",
+                  "row": 1,
+                  "column": 1,
+                  "value": 1.0,
+                  "tone": "white",
+                  "active": true
+                },
+                {
+                  "id": "fs",
+                  "label": "FS",
+                  "row": 1,
+                  "column": 2,
+                  "value": 0.58,
+                  "tone": "amber",
+                  "locked": true
+                },
+                {
+                  "id": "route",
+                  "label": "ROUTE",
+                  "row": 2,
+                  "column": 0,
+                  "value": 0.50,
+                  "tone": "green"
+                },
+                {
+                  "id": "render",
+                  "label": "RENDER",
+                  "row": 2,
+                  "column": 2,
+                  "value": 0.82,
+                  "tone": "cyan",
+                  "locked": true
+                },
+                {
+                  "id": "browser",
+                  "label": "BROWSER",
+                  "row": 2,
+                  "column": 3,
+                  "value": 0.67,
+                  "tone": "magenta"
+                }
+              ]
+            }
           }
         },
         {

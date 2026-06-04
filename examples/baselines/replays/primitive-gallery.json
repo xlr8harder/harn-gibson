@@ -34,6 +34,7 @@
         "effects": [
           "patch",
           "append_log",
+          "primitive:access_matrix",
           "primitive:hologram",
           "primitive:signal_scope",
           "primitive:data_vault",
@@ -61,7 +62,7 @@
           "renderer": "replay",
           "stepType": "mutations"
         },
-        "mutationCount": 20,
+        "mutationCount": 21,
         "renderer": "replay",
         "requestCount": 1,
         "routes": [
@@ -71,6 +72,7 @@
         "stepCount": 1,
         "targets": [
           "status",
+          "gallery-access",
           "gallery-hologram",
           "gallery-scope",
           "gallery-vault",
@@ -98,6 +100,7 @@
           "effects": [
             "patch",
             "append_log",
+            "primitive:access_matrix",
             "primitive:hologram",
             "primitive:signal_scope",
             "primitive:data_vault",
@@ -125,7 +128,7 @@
             "renderer": "replay",
             "stepType": "mutations"
           },
-          "mutationCount": 20,
+          "mutationCount": 21,
           "renderer": "replay",
           "requestCount": 1,
           "routes": [
@@ -135,6 +138,7 @@
           "stepCount": 1,
           "targets": [
             "status",
+            "gallery-access",
             "gallery-hologram",
             "gallery-scope",
             "gallery-vault",
@@ -190,6 +194,105 @@
           "maxItems": 80
         },
         "region": "side"
+      },
+      "gallery-access": {
+        "children": [],
+        "id": "gallery-access",
+        "kind": "access_matrix",
+        "props": {
+          "accentTone": "magenta",
+          "cells": [
+            {
+              "active": true,
+              "column": 0,
+              "id": "hook",
+              "label": "HOOK",
+              "row": 0,
+              "tone": "green",
+              "value": 0.72
+            },
+            {
+              "column": 1,
+              "id": "auth",
+              "label": "AUTH",
+              "locked": true,
+              "row": 0,
+              "tone": "cyan",
+              "value": 0.64
+            },
+            {
+              "active": true,
+              "breached": true,
+              "column": 2,
+              "id": "ice",
+              "label": "ICE",
+              "row": 0,
+              "tone": "magenta",
+              "value": 0.92
+            },
+            {
+              "active": true,
+              "column": 1,
+              "id": "core",
+              "label": "CORE",
+              "row": 1,
+              "tone": "white",
+              "value": 1.0
+            },
+            {
+              "column": 2,
+              "id": "fs",
+              "label": "FS",
+              "locked": true,
+              "row": 1,
+              "tone": "amber",
+              "value": 0.58
+            },
+            {
+              "column": 0,
+              "id": "route",
+              "label": "ROUTE",
+              "row": 2,
+              "tone": "green",
+              "value": 0.5
+            },
+            {
+              "column": 2,
+              "id": "render",
+              "label": "RENDER",
+              "locked": true,
+              "row": 2,
+              "tone": "cyan",
+              "value": 0.82
+            },
+            {
+              "column": 3,
+              "id": "browser",
+              "label": "BROWSER",
+              "row": 2,
+              "tone": "magenta",
+              "value": 0.67
+            }
+          ],
+          "columns": 4,
+          "focusCellId": "core",
+          "label": "ACCESS MATRIX",
+          "opacity": 0.7,
+          "position": {
+            "x": 0.76,
+            "y": 0.5
+          },
+          "rows": 3,
+          "seed": 829,
+          "size": {
+            "h": 0.21,
+            "w": 0.28
+          },
+          "speed": 0.66,
+          "sweep": true,
+          "tone": "cyan"
+        },
+        "region": "stage"
       },
       "gallery-black-ice": {
         "children": [],

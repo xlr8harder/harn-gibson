@@ -148,6 +148,36 @@ def build_parser() -> argparse.ArgumentParser:
     _add_replay_renderer_arguments(replay)
     _add_replay_project_arguments(replay)
 
+    watch_replay = subcommands.add_parser(
+        "watch-replay",
+        help="run the display, open a browser, and play a replay fixture step by step",
+    )
+    watch_replay.add_argument("path", help="path to replay JSON")
+    watch_replay.add_argument("--host", default="127.0.0.1")
+    watch_replay.add_argument("--port", type=int, default=0)
+    watch_replay.add_argument("--browser", action=argparse.BooleanOptionalAction, default=True)
+    watch_replay.add_argument(
+        "--hold",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="keep the display server running after playback completes",
+    )
+    watch_replay.add_argument(
+        "--start-delay-ms",
+        type=int,
+        default=1000,
+        help="delay before the first replay step so the browser can connect",
+    )
+    watch_replay.add_argument(
+        "--step-delay-ms",
+        type=int,
+        default=900,
+        help="delay between replay steps",
+    )
+    watch_replay.add_argument("--style", choices=style_pack_ids(), default=None, help="display style pack")
+    _add_replay_renderer_arguments(watch_replay)
+    _add_replay_project_arguments(watch_replay)
+
     replay_dir = subcommands.add_parser("replay-dir", help="run every replay JSON fixture under a directory")
     replay_dir.add_argument("path", help="directory or replay JSON file")
     replay_dir.add_argument("--output-result", default=None, help="write replay suite result JSON to this path")
@@ -629,12 +659,78 @@ def _write_json_file(path: str | Path, payload: Mapping[str, object]) -> None:
 
 
 def _hold_display_on_error(display_url: str) -> None:  # pragma: no cover - manual recovery loop
+    _hold_display(display_url)
+
+
+def _hold_display(display_url: str) -> None:  # pragma: no cover - manual playback loop
     print(f"harn-gibson display remains available at {display_url}; press Ctrl-C to stop.", file=sys.stderr)
     try:
         while True:
             time.sleep(3600)
     except KeyboardInterrupt:
         return
+
+
+def run_watch_replay(args: argparse.Namespace) -> int:
+    from harn_gibson.replay import ReplayExpectationError, ReplayStepResult, play_replay_file
+    from harn_gibson.scene import SceneState
+    from harn_gibson.server import create_server
+
+    if args.start_delay_ms < 0:
+        print("--start-delay-ms must be non-negative", file=sys.stderr)
+        return 2
+    if args.step_delay_ms < 0:
+        print("--step-delay-ms must be non-negative", file=sys.stderr)
+        return 2
+
+    state = _replay_state_from_args(args)
+    server = create_server(args.host, args.port, state)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    actual_host, actual_port = server.server_address
+    display_url = f"http://{actual_host}:{actual_port}"
+    interrupted = False
+
+    def report_progress(step: ReplayStepResult, position: int, total: int, scene: SceneState) -> None:
+        print(
+            f"watch-replay {position}/{total}: {step.kind}, revision {scene.revision}, updates {step.updates}",
+            file=sys.stderr,
+        )
+
+    print(f"harn-gibson replay display: {display_url}", file=sys.stderr)
+    if args.browser:
+        webbrowser.open(display_url)
+    try:
+        try:
+            result = play_replay_file(
+                args.path,
+                state,
+                start_delay_ms=args.start_delay_ms,
+                step_delay_ms=args.step_delay_ms,
+                progress=report_progress,
+            )
+        except ReplayExpectationError as error:
+            for failure in error.failures:
+                print(f"replay expectation failed: {failure.message}", file=sys.stderr)
+            return_code = 1
+        else:
+            print(
+                f"watched {len(result.steps)} replay steps; scene revision {result.scene.revision}",
+                file=sys.stderr,
+            )
+            return_code = 0
+        if args.hold:
+            _hold_display(display_url)
+        return return_code
+    except KeyboardInterrupt:
+        interrupted = True
+        return 130
+    finally:
+        state.pipeline.stop()
+        server.shutdown()
+        server.server_close()
+        if interrupted:
+            print("watch-replay interrupted", file=sys.stderr)
 
 
 def run(argv: Sequence[str] | None = None) -> int:
@@ -647,6 +743,8 @@ def run(argv: Sequence[str] | None = None) -> int:
         result = import_codex_auth(args.codex_auth, args.harn_auth)
         print(result.message)
         return 0 if result.available else 1
+    if args.command == "watch-replay":
+        return run_watch_replay(args)
     if args.command == "replay":
         from harn_gibson.replay import (
             ReplayExpectationError,

@@ -47,6 +47,7 @@ def main() -> None:
         _upsert_data_rain(event_type, summary, tone, accent, sequence),
         _upsert_opcode_glyphs(event_type, summary, tone, accent, sequence, touched),
         _upsert_terminal_wall(event, summary, entries, touched, tone, accent, sequence),
+        _upsert_access_matrix(event_type, phase, entries, touched, tone, accent, sequence),
         _upsert_tunnel(event_type, tone, accent, sequence, touched),
         _upsert_wire_landscape(entries, touched, event_type, tone, accent, sequence),
         _upsert_data_vault(project_name, event_type, tone, accent, sequence, touched, entries),
@@ -276,6 +277,98 @@ def _upsert_terminal_wall(
                 "cursor": True,
                 "speed": 0.78,
                 "seed": sequence + len(touched) * 19 + len(entries) * 5,
+            },
+        },
+    }
+
+
+def _upsert_access_matrix(
+    event_type: str,
+    phase: str,
+    entries: list[dict[str, Any]],
+    touched: list[dict[str, Any]],
+    tone: str,
+    accent: str,
+    sequence: int,
+) -> dict[str, Any]:
+    danger = phase == "after" or "error" in event_type or "fail" in event_type
+    cells = [
+        {
+            "id": "hook",
+            "label": "HOOK",
+            "row": 0,
+            "column": 0,
+            "value": 0.72,
+            "tone": "green",
+            "active": phase == "before",
+        },
+        {
+            "id": "event",
+            "label": event_type.upper()[:8],
+            "row": 0,
+            "column": 1,
+            "value": 0.84,
+            "tone": tone,
+            "active": True,
+        },
+        {
+            "id": "render",
+            "label": "RENDER",
+            "row": 0,
+            "column": 2,
+            "value": 0.66 + min(0.28, len(touched) * 0.03),
+            "tone": accent,
+            "locked": not danger,
+            "breached": danger,
+        },
+    ]
+    for index, item in enumerate(touched[:12]):
+        cells.append(
+            {
+                "id": f"file-{index}",
+                "label": _path_label(_text(item.get("path"), f"file-{index}")),
+                "row": (index + 3) // 5,
+                "column": (index + 3) % 5,
+                "value": round(0.42 + min(0.48, len(_list(item.get("phases"))) * 0.10 + index * 0.025), 3),
+                "tone": "magenta" if index % 2 == 0 else accent,
+                "active": True,
+                "locked": not danger and index % 3 == 0,
+                "breached": danger and index == 0,
+            }
+        )
+    if not touched:
+        for index, entry in enumerate(entries[:7]):
+            cells.append(
+                {
+                    "id": f"entry-{index}",
+                    "label": _path_label(_text(entry.get("path") or entry.get("name"), f"entry-{index}")),
+                    "row": (index + 3) // 5,
+                    "column": (index + 3) % 5,
+                    "value": round(0.34 + min(0.54, _entry_line_count(entry) / 120), 3),
+                    "tone": _entry_tone(_text(entry.get("kind"), "file"), tone, accent),
+                    "locked": index % 2 == 0,
+                }
+            )
+    return {
+        "op": "upsert",
+        "primitive": {
+            "id": "dogfood-access-matrix",
+            "kind": "access_matrix",
+            "region": "stage",
+            "props": {
+                "label": "ACCESS MATRIX",
+                "position": {"x": 0.79, "y": 0.50},
+                "size": {"w": 0.32, "h": 0.25},
+                "rows": 3,
+                "columns": 5,
+                "cells": cells,
+                "focusCellId": "file-0" if touched else "event",
+                "tone": "red" if danger and tone != "red" else tone,
+                "accentTone": accent,
+                "opacity": 0.72,
+                "sweep": True,
+                "speed": 0.78 if danger else 0.54,
+                "seed": sequence + len(touched) * 31 + len(entries) * 7,
             },
         },
     }

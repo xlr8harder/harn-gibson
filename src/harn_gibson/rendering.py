@@ -56,6 +56,7 @@ _BROWSER_PRIMITIVE_KINDS = frozenset(
         "tunnel_grid",
         "wire_landscape",
         "terminal_wall",
+        "access_matrix",
         "data_vault",
         "black_ice",
         "svg_layer",
