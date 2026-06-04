@@ -58,6 +58,22 @@ def request_text(url: str, data: bytes | None = None) -> tuple[int, str, str]:
         return error.code, error.headers.get("Content-Type", ""), error.read().decode("utf-8")
 
 
+def request_sse_once(
+    base: str,
+    path: str,
+    payload: dict[str, Any],
+) -> tuple[int, str, dict[str, Any], tuple[int, str, str]]:
+    with urllib.request.urlopen(f"{base}{path}", timeout=2) as response:  # noqa: S310
+        posted = request_text(f"{base}/events", json.dumps(payload).encode("utf-8"))
+        line = response.readline().decode("utf-8").strip()
+        assert response.readline().decode("utf-8") == "\n"
+        assert line.startswith("data: ")
+        streamed = json.loads(line.removeprefix("data: "))
+        status = response.status
+        content_type = response.headers.get("Content-Type", "")
+    return status, content_type, streamed, posted
+
+
 def start_server() -> tuple[ThreadingHTTPServer, str]:
     state = GibsonServerState()
     server = create_server("127.0.0.1", 0, state)
@@ -70,14 +86,20 @@ def start_server() -> tuple[ThreadingHTTPServer, str]:
 def test_http_server_routes() -> None:
     server, base = start_server()
     try:
+        assert server.daemon_threads is True
         assert request_text(f"{base}/")[0:2] == (200, "text/html; charset=utf-8")
         assert request_text(f"{base}/?capture=1")[0:2] == (200, "text/html; charset=utf-8")
         assert "GIBSON LINK" in request_text(f"{base}/index.html")[2]
         assert "Tracebacks" in request_text(f"{base}/index.html")[2]
         assert "Render Intents" in request_text(f"{base}/index.html")[2]
         assert request_text(f"{base}/assets/app.css")[1] == "text/css; charset=utf-8"
-        assert request_text(f"{base}/assets/app.js")[1] == "application/javascript; charset=utf-8"
+        app_status, app_content_type, app_js = request_text(f"{base}/assets/app.js")
+        assert (app_status, app_content_type) == (200, "application/javascript; charset=utf-8")
+        assert 'fetch("/health"' in app_js
+        assert 'EventSource("/events/stream")' in app_js
         health = json.loads(request_text(f"{base}/healthz")[2])
+        health_alias = json.loads(request_text(f"{base}/health?probe=1")[2])
+        assert health_alias == health
         assert health["ok"] is True
         assert health["events"] == 0
         assert health["sceneRevision"] == 0
@@ -127,7 +149,13 @@ def test_http_server_routes() -> None:
             "summary": "interactive input: hi",
             "payload": {"type": "input", "text": "hi", "source": "interactive"},
         }
-        status, _content_type, body = request_text(f"{base}/events?capture=1", json.dumps(payload).encode("utf-8"))
+        status, stream_type, streamed, posted = request_sse_once(base, "/events/stream?capture=1", payload)
+        assert status == 200
+        assert stream_type == "text/event-stream"
+        assert posted[0] == 202
+        assert streamed["schema"] == "harn-gibson.scene-update.v1"
+        assert streamed["scene"]["revision"] == 1
+        status, _content_type, body = posted
         assert status == 202
         assert json.loads(body) == {"ok": True, "renderMode": "blocking", "sceneRevision": 1}
         scene = json.loads(request_text(f"{base}/scene")[2])

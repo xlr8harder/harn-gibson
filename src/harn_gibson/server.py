@@ -46,6 +46,10 @@ from harn_gibson.sinks import EventBuffer
 from harn_gibson.styles import DEFAULT_STYLE_ID, StylePack, default_style_pack, style_pack_from_name
 
 
+class GibsonHTTPServer(ThreadingHTTPServer):
+    daemon_threads = True
+
+
 @dataclass(slots=True)
 class GibsonServerState:
     buffer: EventBuffer = field(default_factory=EventBuffer)
@@ -183,7 +187,7 @@ def create_server(
     port: int = 8765,
     state: GibsonServerState | None = None,
 ) -> ThreadingHTTPServer:
-    return ThreadingHTTPServer((host, port), make_handler(state or build_state_from_env()))
+    return GibsonHTTPServer((host, port), make_handler(state or build_state_from_env()))
 
 
 def run_server(host: str = "127.0.0.1", port: int = 8765, *, style: str | None = None) -> None:  # pragma: no cover
@@ -281,7 +285,7 @@ def make_handler(state: GibsonServerState) -> type[BaseHTTPRequestHandler]:
             if request_path == "/assets/app.js":
                 self._write(HTTPStatus.OK, JS, "application/javascript; charset=utf-8")
                 return
-            if request_path == "/healthz":
+            if request_path in {"/health", "/healthz"}:
                 self._json(HTTPStatus.OK, health_payload(state))
                 return
             if request_path == "/scene":
@@ -298,7 +302,7 @@ def make_handler(state: GibsonServerState) -> type[BaseHTTPRequestHandler]:
                     return
                 self._json(HTTPStatus.OK, item.to_dict())
                 return
-            if request_path == "/events":  # pragma: no cover
+            if request_path in {"/events", "/events/stream"}:  # pragma: no cover
                 self._stream_events()  # pragma: no cover
                 return  # pragma: no cover
             self._json(HTTPStatus.NOT_FOUND, {"error": "not found"})
@@ -4477,7 +4481,7 @@ function updateBridgeStatus(bridge) {
 
 async function refreshHealth() {
   try {
-    const response = await fetch("/healthz", {cache: "no-store"});
+    const response = await fetch("/health", {cache: "no-store"});
     const payload = await response.json();
     updateBridgeStatus(payload.inputBridge);
   } catch {
@@ -4485,7 +4489,7 @@ async function refreshHealth() {
   }
 }
 
-const source = new EventSource("/events");
+const source = new EventSource("/events/stream");
 source.onopen = () => { statusEl.textContent = "listening"; };
 source.onerror = () => { statusEl.textContent = "reconnecting"; };
 source.onmessage = (message) => {
