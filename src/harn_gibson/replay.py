@@ -484,6 +484,9 @@ def _replay_suite_result_summary(files: Sequence[ReplayFileResult]) -> dict[str,
     )
     if visual_continuity_summary:
         summary["visualContinuitySummary"] = visual_continuity_summary
+    trajectory_coverage = _trajectory_coverage_from_summary(summary)
+    if trajectory_coverage:
+        summary["trajectoryCoverage"] = trajectory_coverage
     return summary
 
 
@@ -2376,6 +2379,23 @@ def replay_review_bundle_manifest(
     capture_summary = result.metadata.get("captureSummary") if isinstance(result.metadata, Mapping) else None
     if isinstance(capture_summary, Mapping):
         manifest["captureSummary"] = dict(capture_summary)
+    trajectory_source: dict[str, Any] = {
+        "screenshotCount": len(rendered_screenshots),
+        "intentCount": int(render_intents["intentCount"]),
+    }
+    if isinstance(capture_summary, Mapping):
+        trajectory_source["eventSummary"] = capture_summary
+    if route_counts:
+        trajectory_source["routes"] = sorted(route_counts)
+        trajectory_source["routeCounts"] = route_counts
+    if renderer_counts:
+        trajectory_source["renderers"] = sorted(renderer_counts)
+        trajectory_source["rendererCounts"] = renderer_counts
+    if visual_continuity_summary:
+        trajectory_source["visualContinuitySummary"] = visual_continuity_summary
+    trajectory_coverage = _trajectory_coverage_from_summary(trajectory_source)
+    if trajectory_coverage:
+        manifest["trajectoryCoverage"] = trajectory_coverage
     return manifest
 
 
@@ -2500,6 +2520,17 @@ def _replay_review_metric_items(manifest: Mapping[str, Any]) -> tuple[tuple[str,
         style_motifs = _joined_summary_values(visual_summary.get("styleMotifs"))
         if style_motifs:
             items.append(("style motifs", style_motifs))
+    trajectory_coverage = manifest.get("trajectoryCoverage")
+    if isinstance(trajectory_coverage, Mapping):
+        signals = _joined_summary_values(trajectory_coverage.get("signals"))
+        if signals:
+            items.append(("trajectory signals", signals))
+        gaps = _joined_summary_values(trajectory_coverage.get("gaps"))
+        if gaps:
+            items.append(("trajectory gaps", gaps))
+        areas = _joined_summary_values(trajectory_coverage.get("topLevelAreas"))
+        if areas:
+            items.append(("trajectory areas", areas))
     return tuple(items)
 
 
@@ -2852,6 +2883,9 @@ def _replay_suite_review_entry(
     visual_continuity_summary = bundle_manifest.get("visualContinuitySummary")
     if isinstance(visual_continuity_summary, Mapping):
         entry["visualContinuitySummary"] = dict(visual_continuity_summary)
+    trajectory_coverage = bundle_manifest.get("trajectoryCoverage")
+    if isinstance(trajectory_coverage, Mapping):
+        entry["trajectoryCoverage"] = dict(trajectory_coverage)
     return entry
 
 
@@ -2914,6 +2948,9 @@ def _replay_suite_review_summary(entries: Sequence[Mapping[str, Any]]) -> dict[s
     )
     if visual_continuity_summary:
         summary["visualContinuitySummary"] = visual_continuity_summary
+    trajectory_coverage = _trajectory_coverage_from_summary(summary)
+    if trajectory_coverage:
+        summary["trajectoryCoverage"] = trajectory_coverage
     return summary
 
 
@@ -3000,6 +3037,17 @@ def _replay_suite_review_metric_items(manifest: Mapping[str, Any]) -> tuple[tupl
             continuity_effects = _joined_summary_values(visual_summary.get("effects"))
             if continuity_effects:
                 items.append(("reviewed continuity effects", continuity_effects))
+        trajectory_coverage = summary.get("trajectoryCoverage")
+        if isinstance(trajectory_coverage, Mapping):
+            signals = _joined_summary_values(trajectory_coverage.get("signals"))
+            if signals:
+                items.append(("trajectory signals", signals))
+            gaps = _joined_summary_values(trajectory_coverage.get("gaps"))
+            if gaps:
+                items.append(("trajectory gaps", gaps))
+            areas = _joined_summary_values(trajectory_coverage.get("topLevelAreas"))
+            if areas:
+                items.append(("trajectory areas", areas))
     return tuple(items)
 
 
@@ -3064,6 +3112,11 @@ def _replay_suite_review_file_card(file: Mapping[str, Any]) -> str:
         effects = _joined_summary_values(visual_summary.get("effects"))
         if effects:
             summary_parts.append(f"effects {escape(effects)}")
+    trajectory_coverage = file.get("trajectoryCoverage")
+    if isinstance(trajectory_coverage, Mapping):
+        signals = _joined_summary_values(trajectory_coverage.get("signals"))
+        if signals:
+            summary_parts.append(f"signals {escape(signals)}")
     if chunk_text:
         summary_parts.append(chunk_text)
     summary = " / ".join(summary_parts)
@@ -3229,6 +3282,132 @@ def _merge_visual_continuity_summaries(summaries: Iterable[Mapping[str, Any]]) -
     if motifs:
         payload["styleMotifs"] = motifs
     return payload
+
+
+def _trajectory_coverage_from_summary(summary: Mapping[str, Any]) -> dict[str, Any]:
+    event_summary = _mapping_value(summary.get("eventSummary"))
+    event_type_counts = _mapping_value(event_summary.get("eventTypeCounts"))
+    tools = _mapping_value(event_summary.get("tools"))
+    touched_files = _mapping_value(event_summary.get("touchedFiles"))
+    top_level_counts = _mapping_value(touched_files.get("topLevelCounts"))
+    route_counts = _mapping_value(summary.get("routeCounts"))
+    renderer_counts = _mapping_value(summary.get("rendererCounts"))
+    visual_summary = _mapping_value(summary.get("visualContinuitySummary"))
+
+    event_count = _coerce_int(event_summary.get("eventCount"), 0)
+    duration_ms = _coerce_int(event_summary.get("durationMs"), 0)
+    command_count = _coerce_int(tools.get("commandCount"), 0)
+    failed_tool_result_count = _coerce_int(tools.get("failedToolResultCount"), 0)
+    runtime_error_count = _coerce_int(event_type_counts.get("runtime_error"), 0)
+    browser_input_count = _coerce_int(event_type_counts.get("browser_input"), 0)
+    touched_file_count = _coerce_int(touched_files.get("count"), 0)
+    screenshot_count = _int_value(summary.get("screenshotCount"))
+    intent_count = _int_value(summary.get("intentCount"))
+    visual_anchor_count = _int_value(visual_summary.get("maxVisualAnchorCount"))
+    active_animation_count = _int_value(visual_summary.get("maxActiveAnimationCount"))
+
+    event_types = _positive_count_mapping_keys(event_type_counts)
+    top_level_areas = _positive_count_mapping_keys(top_level_counts)
+    routes = _positive_count_mapping_keys(route_counts)
+    renderers = _positive_count_mapping_keys(renderer_counts)
+    effects = _string_list(visual_summary.get("effects"))
+
+    has_any_coverage = any(
+        (
+            event_count,
+            command_count,
+            touched_file_count,
+            screenshot_count,
+            intent_count,
+            visual_anchor_count,
+            active_animation_count,
+            routes,
+            renderers,
+            effects,
+        )
+    )
+    if not has_any_coverage:
+        return {}
+
+    signals: list[str] = []
+    gaps: list[str] = []
+    if event_count:
+        signals.append("events")
+    else:
+        gaps.append("no_events")
+    if command_count:
+        signals.append("commands")
+    elif event_count:
+        gaps.append("no_commands")
+    if failed_tool_result_count:
+        signals.append("failed_tools")
+    if runtime_error_count:
+        signals.append("runtime_errors")
+    if browser_input_count:
+        signals.append("browser_input")
+    if touched_file_count:
+        signals.append("touched_files")
+    elif event_count:
+        gaps.append("no_touched_files")
+    if len(top_level_areas) >= 2:
+        signals.append("top_level_spread")
+    if routes:
+        signals.append("renderer_routes")
+    elif event_count:
+        gaps.append("no_renderer_routes")
+    if intent_count:
+        signals.append("renderer_intents")
+    if renderers:
+        signals.append("renderer_plans")
+    elif event_count:
+        gaps.append("no_renderer_plans")
+    if visual_anchor_count:
+        signals.append("visual_anchors")
+    elif event_count:
+        gaps.append("no_visual_anchors")
+    if active_animation_count:
+        signals.append("active_animations")
+    if effects:
+        signals.append("visual_effects")
+    if screenshot_count:
+        signals.append("screenshots")
+    elif event_count:
+        gaps.append("no_screenshots")
+
+    payload: dict[str, Any] = {
+        "schema": "harn-gibson.trajectory-coverage.v1",
+        "eventCount": event_count,
+        "eventTypes": event_types,
+        "commandCount": command_count,
+        "failedToolResultCount": failed_tool_result_count,
+        "runtimeErrorCount": runtime_error_count,
+        "browserInputCount": browser_input_count,
+        "touchedFileCount": touched_file_count,
+        "topLevelAreaCount": len(top_level_areas),
+        "topLevelAreas": top_level_areas,
+        "routes": routes,
+        "renderers": renderers,
+        "visualAnchorCount": visual_anchor_count,
+        "activeAnimationCount": active_animation_count,
+        "effectCount": len(effects),
+        "screenshotCount": screenshot_count,
+        "signals": signals,
+    }
+    if duration_ms:
+        payload["durationMs"] = duration_ms
+    if intent_count:
+        payload["intentCount"] = intent_count
+    if gaps:
+        payload["gaps"] = gaps
+    return payload
+
+
+def _positive_count_mapping_keys(value: Mapping[str, Any]) -> list[str]:
+    return sorted(
+        key
+        for key, count in value.items()
+        if isinstance(key, str) and key and _coerce_int(count, 0) > 0
+    )
 
 
 def _mapping_value(value: Any) -> Mapping[str, Any]:

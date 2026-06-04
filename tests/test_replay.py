@@ -553,6 +553,7 @@ def test_replay_event_steps_file_io_and_writers(tmp_path: Path, monkeypatch: pyt
     assert "capture" in bundle_index
     assert "visual anchors" in bundle_index
     assert "continuity anchors" in bundle_index
+    assert "trajectory signals" in bundle_index
     assert "scan-grid" in bundle_index
     assert "window.__gibsonReplayReview" in bundle_index
     assert "<\\/script>" in replay_review_bundle_index_html(
@@ -594,6 +595,24 @@ def test_replay_event_steps_file_io_and_writers(tmp_path: Path, monkeypatch: pyt
     assert "captured sources" not in sparse_bundle_index
     assert "visual anchors" not in sparse_bundle_index
     assert "continuity anchors" not in sparse_bundle_index
+    trajectory_bundle_index = replay_review_bundle_index_html(
+        {
+            "trajectoryCoverage": {
+                "signals": [],
+                "gaps": ["no_screenshots"],
+                "topLevelAreas": ["src"],
+            }
+        }
+    )
+    assert "trajectory signals" not in trajectory_bundle_index
+    assert "trajectory gaps" in trajectory_bundle_index
+    assert "trajectory areas" in trajectory_bundle_index
+    no_gap_bundle_index = replay_review_bundle_index_html(
+        {"trajectoryCoverage": {"signals": ["screenshots"], "gaps": [], "topLevelAreas": []}}
+    )
+    assert "trajectory signals" in no_gap_bundle_index
+    assert "trajectory gaps" not in no_gap_bundle_index
+    assert "trajectory areas" not in no_gap_bundle_index
     active_bundle_index = replay_review_bundle_index_html(
         {
             "visualContinuitySummary": {
@@ -830,6 +849,39 @@ def test_replay_suite_review_bundle(tmp_path: Path, monkeypatch: pytest.MonkeyPa
         "routes": ["renderer_agent"],
         "screenshotCount": 1,
         "stepCount": 1,
+        "trajectoryCoverage": {
+            "schema": "harn-gibson.trajectory-coverage.v1",
+            "eventCount": 3,
+            "eventTypes": ["browser_input", "tool_call", "tool_result"],
+            "commandCount": 1,
+            "failedToolResultCount": 1,
+            "runtimeErrorCount": 0,
+            "browserInputCount": 1,
+            "touchedFileCount": 2,
+            "topLevelAreaCount": 2,
+            "topLevelAreas": ["src", "tests"],
+            "routes": ["renderer_agent"],
+            "renderers": ["deterministic"],
+            "visualAnchorCount": 1,
+            "activeAnimationCount": 0,
+            "effectCount": 0,
+            "screenshotCount": 1,
+            "signals": [
+                "events",
+                "commands",
+                "failed_tools",
+                "browser_input",
+                "touched_files",
+                "top_level_spread",
+                "renderer_routes",
+                "renderer_intents",
+                "renderer_plans",
+                "visual_anchors",
+                "screenshots",
+            ],
+            "durationMs": 2,
+            "intentCount": 1,
+        },
         "visualContinuitySummary": {
             "anchors": ["scan-grid"],
             "maxVisualAnchorCount": 1,
@@ -887,11 +939,84 @@ def test_replay_suite_review_bundle(tmp_path: Path, monkeypatch: pytest.MonkeyPa
     assert "src: 1, tests: 1" in html
     assert "reviewed visual anchors" in html
     assert "reviewed continuity anchors" in html
+    assert "trajectory signals" in html
+    assert "trajectory areas" in html
     assert "renderer_agent" in html
     assert "deterministic" in html
     assert "scan-grid" in html
     assert "city-grid" in html
     assert "window.__gibsonReplaySuiteReview" in html
+    gap_manifest = replay_suite_review_bundle_manifest(
+        tmp_path,
+        [
+            {
+                "path": "gap.json",
+                "ok": True,
+                "eventSummary": {
+                    "eventCount": 1,
+                    "eventTypeCounts": {"tool_call": 1},
+                    "tools": {"commandCount": 1},
+                    "touchedFiles": {
+                        "files": [{"path": "src/app.py"}],
+                        "count": 1,
+                        "topLevelCounts": {"src": 1},
+                    },
+                },
+            }
+        ],
+    )
+    assert gap_manifest["summary"]["trajectoryCoverage"]["gaps"] == [
+        "no_renderer_routes",
+        "no_renderer_plans",
+        "no_visual_anchors",
+        "no_screenshots",
+    ]
+    screenshot_only_manifest = replay_suite_review_bundle_manifest(
+        tmp_path,
+        [{"path": "screenshot-only.json", "ok": True, "screenshotCount": 1}],
+    )
+    assert screenshot_only_manifest["summary"]["trajectoryCoverage"] == {
+        "schema": "harn-gibson.trajectory-coverage.v1",
+        "eventCount": 0,
+        "eventTypes": [],
+        "commandCount": 0,
+        "failedToolResultCount": 0,
+        "runtimeErrorCount": 0,
+        "browserInputCount": 0,
+        "touchedFileCount": 0,
+        "topLevelAreaCount": 0,
+        "topLevelAreas": [],
+        "routes": [],
+        "renderers": [],
+        "visualAnchorCount": 0,
+        "activeAnimationCount": 0,
+        "effectCount": 0,
+        "screenshotCount": 1,
+        "signals": ["screenshots"],
+        "gaps": ["no_events"],
+    }
+    sparse_trajectory_suite_index = replay_suite_review_index_html(
+        {
+            "summary": {
+                "trajectoryCoverage": {
+                    "signals": [],
+                    "gaps": ["no_screenshots"],
+                    "topLevelAreas": ["src"],
+                }
+            },
+            "files": [
+                {
+                    "path": "sparse-trajectory.json",
+                    "ok": True,
+                    "trajectoryCoverage": {"signals": []},
+                }
+            ],
+        }
+    )
+    assert "trajectory signals" not in sparse_trajectory_suite_index
+    assert "trajectory gaps" in sparse_trajectory_suite_index
+    assert "trajectory areas" in sparse_trajectory_suite_index
+    assert "signals " not in sparse_trajectory_suite_index
     sparse_suite_index = replay_suite_review_index_html(
         {
             "summary": {
@@ -1666,6 +1791,40 @@ def test_checked_in_dogfood_replay_suite_summarizes_trajectory_coverage() -> Non
     assert summary["screenshotCount"] == 0
     assert summary["screenshotExpectationCount"] == 0
     assert summary["visualContinuitySummary"] == dogfood_visual_summary
+    assert summary["trajectoryCoverage"] == {
+        "schema": "harn-gibson.trajectory-coverage.v1",
+        "eventCount": 20,
+        "eventTypes": ["browser_input", "input", "runtime_error", "tool_call", "tool_result"],
+        "commandCount": 14,
+        "failedToolResultCount": 3,
+        "runtimeErrorCount": 1,
+        "browserInputCount": 2,
+        "touchedFileCount": 12,
+        "topLevelAreaCount": 7,
+        "topLevelAreas": ["README.md", "docs", "fixtures", "pyproject.toml", "scripts", "src", "tests"],
+        "routes": ["renderer_agent"],
+        "renderers": ["gibson-dogfood-showcase"],
+        "visualAnchorCount": 16,
+        "activeAnimationCount": 8,
+        "effectCount": 12,
+        "screenshotCount": 0,
+        "signals": [
+            "events",
+            "commands",
+            "failed_tools",
+            "runtime_errors",
+            "browser_input",
+            "touched_files",
+            "top_level_spread",
+            "renderer_routes",
+            "renderer_plans",
+            "visual_anchors",
+            "active_animations",
+            "visual_effects",
+        ],
+        "durationMs": 27400,
+        "gaps": ["no_screenshots"],
+    }
     assert event_summary["durationMs"] == 27400
     assert event_summary["eventCount"] == 20
     assert event_summary["eventTypeCounts"] == {
