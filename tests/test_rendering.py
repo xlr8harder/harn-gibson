@@ -44,6 +44,7 @@ from harn_gibson.rendering import (
 )
 from harn_gibson.scene import SceneAnimation, SceneEngine, SceneMutation, ScenePrimitive
 from harn_gibson.sinks import EventBuffer
+from harn_gibson.styles import style_pack_from_name
 
 
 def event(sequence: int = 1, event_type: str = "input") -> GibsonEvent:
@@ -695,6 +696,25 @@ def test_dogfood_showcase_renderer_returns_valid_event_reactive_plan(tmp_path: P
     assert scene.state.primitives["dogfood-route"].props["focusHopId"] == "target-0"
     assert scene.state.primitives["dogfood-hologram"].props["rings"] == 6
     assert scene.state.animations["dogfood-camera-path"].props["keyframes"][1]["scale"] == 1.038
+    assert "displayStyle" not in plan.metadata
+
+    styled_scene = SceneEngine()
+    styled_context = RendererContextBuilder(
+        RendererContextConfig(
+            project_root=str(repo_root),
+            display_style="mainframe",
+            style_pack=style_pack_from_name("mainframe").to_dict(),
+        )
+    ).build(batch, styled_scene.state, pipeline_catalog())
+    styled_plan = renderer.render_with_context(batch.requests, styled_scene.state, styled_context)
+    assert validate_render_plan(styled_plan, styled_scene.state, pipeline_catalog()) == ()
+    styled_scene.apply(styled_plan.steps[0].mutations)
+
+    assert styled_plan.metadata["displayStyle"] == "mainframe"
+    assert styled_plan.metadata["styleMotifs"] == ["phosphor-grid", "audit-frames", "amber-alerts"]
+    assert styled_scene.state.primitives["dogfood-rain"].props["tone"] == "amber"
+    assert styled_scene.state.primitives["dogfood-rain"].props["accentTone"] == "green"
+    assert styled_scene.state.primitives["dogfood-ice-mesh"].props["material"] == "amber"
 
 
 def test_external_renderer_failures_become_trace_state(tmp_path: Path) -> None:
