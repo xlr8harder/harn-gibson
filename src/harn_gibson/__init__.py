@@ -135,10 +135,12 @@ from harn_gibson.world_model import (
     CommandObservation,
     CommandWorldEntity,
     FileWorldEntity,
+    HealthWorldEntity,
     WorldFactSource,
     WorldModel,
     changes_from_event,
     command_from_event,
+    health_category_from_command,
     outcome_from_event,
 )
 
@@ -203,6 +205,7 @@ __all__ = [
     "CommandObservation",
     "CommandWorldEntity",
     "FileWorldEntity",
+    "HealthWorldEntity",
     "WorldFactSource",
     "WorldModel",
     "capture_scene_screenshot",
@@ -273,6 +276,7 @@ __all__ = [
     "style_pack_from_name",
     "style_pack_ids",
     "summarize_event",
+    "health_category_from_command",
     "touched_files_context_from_events",
     "to_jsonable",
     "validate_render_plan",

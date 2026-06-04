@@ -17,6 +17,30 @@ _MAX_COMMAND_PREVIEW_CHARS = 240
 _MAX_COMMAND_SUMMARY_CHARS = 200
 _MAX_COMMAND_TOUCHED_PATHS = 12
 _MAX_CHANGE_SOURCE_CHARS = 120
+_HEALTH_COMMAND_PATTERNS = (
+    ("test", "pytest"),
+    ("test", "tox"),
+    ("test", "nox"),
+    ("test", "npm test"),
+    ("test", "npm run test"),
+    ("test", "pnpm test"),
+    ("test", "pnpm run test"),
+    ("test", "yarn test"),
+    ("test", "yarn run test"),
+    ("test", "cargo test"),
+    ("test", "go test"),
+    ("test", "make test"),
+    ("build", "python -m build"),
+    ("build", "uv build"),
+    ("build", "npm run build"),
+    ("build", "pnpm build"),
+    ("build", "pnpm run build"),
+    ("build", "yarn build"),
+    ("build", "yarn run build"),
+    ("build", "cargo build"),
+    ("build", "go build"),
+    ("build", "make build"),
+)
 _PATH_KEYS = frozenset(
     {
         "destinationPath",
@@ -279,6 +303,95 @@ class ChangeWorldEntity:
         return payload
 
 
+@dataclass(slots=True)
+class HealthWorldEntity:
+    id: str
+    category: str
+    source_command_id: str
+    tool_name: str
+    command_preview: str
+    command_source: str
+    first_sequence: int
+    first_seen_ms: int
+    last_sequence: int
+    last_seen_ms: int
+    status: str = "running"
+    status_source: str = "observed_command_start"
+    started_sequence: int | None = None
+    completed_sequence: int | None = None
+    duration_ms: int | None = None
+    event_types: list[str] = field(default_factory=list)
+    phases: list[str] = field(default_factory=list)
+    sources: list[str] = field(default_factory=list)
+    touched_paths: list[str] = field(default_factory=list)
+    last_summary: str = ""
+    last_outcome: dict[str, Any] | None = None
+
+    def record_command(self, command: CommandWorldEntity) -> None:
+        self.tool_name = command.tool_name
+        self.command_preview = command.command_preview
+        self.command_source = command.command_source
+        self.last_sequence = command.last_sequence
+        self.last_seen_ms = command.last_seen_ms
+        self.status = command.status
+        self.status_source = (
+            "observed_command_outcome" if command.last_outcome is not None else "observed_command_start"
+        )
+        self.started_sequence = command.started_sequence
+        self.completed_sequence = command.completed_sequence
+        self.duration_ms = command.duration_ms
+        self.event_types = list(command.event_types)
+        self.phases = list(command.phases)
+        self.sources = list(command.sources)
+        self.touched_paths = list(command.touched_paths)
+        self.last_summary = command.last_summary
+        self.last_outcome = dict(command.last_outcome) if command.last_outcome is not None else None
+
+    def to_dict(self) -> dict[str, Any]:
+        touched_paths = self.touched_paths[:_MAX_COMMAND_TOUCHED_PATHS]
+        payload: dict[str, Any] = {
+            "id": self.id,
+            "kind": "health",
+            "category": self.category,
+            "sourceCommandId": self.source_command_id,
+            "toolName": self.tool_name,
+            "commandPreview": self.command_preview,
+            "commandSource": self.command_source,
+            "status": self.status,
+            "statusSource": self.status_source,
+            "firstSequence": self.first_sequence,
+            "lastSequence": self.last_sequence,
+            "firstSeenMs": self.first_seen_ms,
+            "lastSeenMs": self.last_seen_ms,
+            "eventTypes": list(self.event_types),
+            "phases": list(self.phases),
+            "sources": list(self.sources),
+            "touchedPaths": touched_paths,
+            "touchedPathCount": len(self.touched_paths),
+            "touchedPathsTruncated": len(self.touched_paths) > len(touched_paths),
+            "lastSummary": self.last_summary,
+            "provenance": {
+                "source": "inferred",
+                "confidence": 0.85,
+                "lastConfirmedSequence": self.last_sequence,
+                "lastConfirmedMs": self.last_seen_ms,
+                "basis": (
+                    "Command text classified as a test/build health check; "
+                    "status comes from observed command state."
+                ),
+            },
+        }
+        if self.started_sequence is not None:
+            payload["startedSequence"] = self.started_sequence
+        if self.completed_sequence is not None:
+            payload["completedSequence"] = self.completed_sequence
+        if self.duration_ms is not None:
+            payload["durationMs"] = self.duration_ms
+        if self.last_outcome is not None:
+            payload["lastOutcome"] = dict(self.last_outcome)
+        return payload
+
+
 class WorldModel:
     """Accumulates durable facts derived from the agent event stream."""
 
@@ -287,6 +400,7 @@ class WorldModel:
         self._files: dict[str, FileWorldEntity] = {}
         self._commands: dict[str, CommandWorldEntity] = {}
         self._changes: dict[str, ChangeWorldEntity] = {}
+        self._health: dict[str, HealthWorldEntity] = {}
         self._pending_commands: dict[tuple[str, str], list[str]] = {}
         self._recent_outcomes: list[dict[str, Any]] = []
         self._seen_event_keys: set[tuple[str, int, int, str]] = set()
@@ -340,23 +454,27 @@ class WorldModel:
         files = sorted(self._files.values(), key=lambda item: (-item.activity_count, item.path))
         commands = sorted(self._commands.values(), key=lambda item: (-item.last_sequence, item.id))
         changes = sorted(self._changes.values(), key=lambda item: (-item.event_sequence, item.id))
+        health = sorted(self._health.values(), key=lambda item: (-item.last_sequence, item.id))
         rendered_files = [entity.to_dict() for entity in files[:limit]]
         rendered_commands = [entity.to_dict() for entity in commands[:limit]]
         rendered_changes = [entity.to_dict() for entity in changes[:limit]]
+        rendered_health = [entity.to_dict() for entity in health[:limit]]
         return {
             "schema": WORLD_MODEL_SCHEMA,
             "revision": self.revision,
-            "entityCount": len(files) + len(commands) + len(changes),
-            "truncated": len(files) > limit or len(commands) > limit or len(changes) > limit,
+            "entityCount": len(files) + len(commands) + len(changes) + len(health),
+            "truncated": len(files) > limit or len(commands) > limit or len(changes) > limit or len(health) > limit,
             "counts": {
                 "files": len(files),
                 "commands": len(commands),
                 "changes": len(changes),
+                "health": len(health),
             },
             "entities": {
                 "files": rendered_files,
                 "commands": rendered_commands,
                 "changes": rendered_changes,
+                "health": rendered_health,
             },
             "recentOutcomes": list(self._recent_outcomes),
             "provenance": {
@@ -364,6 +482,7 @@ class WorldModel:
                 "confidence": 1.0,
                 "notes": [
                     "Derived from normalized harn events and touched-file batches.",
+                    "Health categories are inferred from observed command text; command status remains observed.",
                     "Semantic graph and agent intent are not yet modeled.",
                 ],
             },
@@ -380,9 +499,11 @@ class WorldModel:
             entity = self._new_command_entity(event, observation)
             entity.record_start(event, observation, touches)
             self._pending_commands.setdefault((observation.tool_name, observation.command), []).append(entity.id)
+            self._record_health_from_command(entity, observation.command)
             return
         entity = self._command_for_finish(event, observation)
         entity.record_finish(event, observation, touches, outcome)
+        self._record_health_from_command(entity, observation.command)
 
     def _new_command_entity(self, event: GibsonEvent, observation: CommandObservation) -> CommandWorldEntity:
         entity = CommandWorldEntity(
@@ -405,6 +526,28 @@ class WorldModel:
             entity_id = pending_ids.pop(0)
             return self._commands[entity_id]
         return self._new_command_entity(event, observation)
+
+    def _record_health_from_command(self, command: CommandWorldEntity, command_text: str) -> None:
+        category = health_category_from_command(command_text)
+        if category is None:
+            return
+        entity_id = f"health:{command.id}"
+        entity = self._health.get(entity_id)
+        if entity is None:
+            entity = HealthWorldEntity(
+                id=entity_id,
+                category=category,
+                source_command_id=command.id,
+                tool_name=command.tool_name,
+                command_preview=command.command_preview,
+                command_source=command.command_source,
+                first_sequence=command.first_sequence,
+                first_seen_ms=command.first_seen_ms,
+                last_sequence=command.last_sequence,
+                last_seen_ms=command.last_seen_ms,
+            )
+            self._health[entity_id] = entity
+        entity.record_command(command)
 
 
 def outcome_from_event(event: GibsonEvent) -> dict[str, Any] | None:
@@ -453,6 +596,16 @@ def command_from_event(event: GibsonEvent) -> CommandObservation | None:
     tool_name = event.payload.get("toolName")
     rendered_tool = tool_name if isinstance(tool_name, str) and tool_name else event.event_type
     return CommandObservation(rendered_tool, command, source)
+
+
+def health_category_from_command(command: str) -> str | None:
+    normalized = " ".join(command.lower().split())
+    if not normalized:
+        return None
+    for category, marker in _HEALTH_COMMAND_PATTERNS:
+        if marker in normalized:
+            return category
+    return None
 
 
 def changes_from_event(
@@ -759,9 +912,11 @@ __all__ = [
     "CommandObservation",
     "CommandWorldEntity",
     "FileWorldEntity",
+    "HealthWorldEntity",
     "WorldFactSource",
     "WorldModel",
     "changes_from_event",
     "command_from_event",
+    "health_category_from_command",
     "outcome_from_event",
 ]

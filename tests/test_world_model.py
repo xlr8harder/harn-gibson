@@ -6,6 +6,7 @@ from harn_gibson.world_model import (
     WorldModel,
     changes_from_event,
     command_from_event,
+    health_category_from_command,
     outcome_from_event,
 )
 
@@ -66,14 +67,15 @@ def test_world_model_tracks_file_activity_outcomes_and_provenance() -> None:
 
     assert payload["schema"] == WORLD_MODEL_SCHEMA
     assert payload["revision"] == 1
-    assert payload["entityCount"] == 2
-    assert payload["counts"] == {"files": 1, "commands": 1, "changes": 0}
+    assert payload["entityCount"] == 3
+    assert payload["counts"] == {"files": 1, "commands": 1, "changes": 0, "health": 1}
     assert payload["truncated"] is False
     assert payload["provenance"] == {
         "source": "observed",
         "confidence": 1.0,
         "notes": [
             "Derived from normalized harn events and touched-file batches.",
+            "Health categories are inferred from observed command text; command status remains observed.",
             "Semantic graph and agent intent are not yet modeled.",
         ],
     }
@@ -120,6 +122,20 @@ def test_world_model_tracks_file_activity_outcomes_and_provenance() -> None:
     assert command_entity["touchedPathsTruncated"] is False
     assert command_entity["lastOutcome"]["status"] == "ok"
     assert command_entity["provenance"]["source"] == "observed"
+    health_entity = payload["entities"]["health"][0]
+    assert health_entity["id"] == "health:command:1"
+    assert health_entity["kind"] == "health"
+    assert health_entity["category"] == "test"
+    assert health_entity["sourceCommandId"] == "command:1"
+    assert health_entity["commandPreview"] == "pytest tests/test_world_model.py"
+    assert health_entity["status"] == "ok"
+    assert health_entity["statusSource"] == "observed_command_outcome"
+    assert health_entity["startedSequence"] == 1
+    assert health_entity["completedSequence"] == 2
+    assert health_entity["durationMs"] == 100
+    assert health_entity["lastOutcome"]["status"] == "ok"
+    assert health_entity["provenance"]["source"] == "inferred"
+    assert health_entity["provenance"]["confidence"] == 0.85
     assert model.to_dict(max_entities=0)["truncated"] is True
 
 
@@ -137,6 +153,7 @@ def test_world_model_handles_empty_or_malformed_touched_files_and_outcome_shapes
     payload = model.to_dict()
 
     assert payload["entityCount"] == 0
+    assert payload["counts"] == {"files": 0, "commands": 0, "changes": 0, "health": 0}
     assert [item["status"] for item in payload["recentOutcomes"]] == ["ok", "error"]
     assert outcome_from_event(no_outcome) is None
 
@@ -175,15 +192,23 @@ def test_world_model_tracks_command_entities_and_command_extraction() -> None:
     running = GibsonEvent.from_raw({"type": "user_bash", "command": "ls docs"}, 4, timestamp_ms=460)
     nested = GibsonEvent.from_raw({"type": "tool_call", "args": [{"shellCommand": "make test"}]}, 5)
     empty_command = GibsonEvent.from_raw({"type": "tool_call", "input": {"command": ""}}, 6)
+    result_only_build = GibsonEvent.from_raw(
+        {"type": "tool_execution_end", "toolName": "bash", "input": {"command": "uv build"}},
+        7,
+        timestamp_ms=520,
+    )
 
-    model.apply_batch((paired_call, paired_result, result_only, running, nested, empty_command), touched_files)
+    model.apply_batch(
+        (paired_call, paired_result, result_only, running, nested, empty_command, result_only_build),
+        touched_files,
+    )
     payload = model.to_dict(max_entities=2)
     commands = {item["id"]: item for item in payload["entities"]["commands"]}
 
-    assert payload["counts"] == {"files": 14, "commands": 4, "changes": 0}
-    assert payload["entityCount"] == 18
+    assert payload["counts"] == {"files": 14, "commands": 5, "changes": 0, "health": 3}
+    assert payload["entityCount"] == 22
     assert payload["truncated"] is True
-    assert list(commands) == ["command:5", "command:4"]
+    assert list(commands) == ["command:7", "command:5"]
 
     full_commands = {item["id"]: item for item in model.to_dict(max_entities=20)["entities"]["commands"]}
     paired = full_commands["command:1"]
@@ -210,6 +235,24 @@ def test_world_model_tracks_command_entities_and_command_extraction() -> None:
     assert full_commands["command:4"]["status"] == "running"
     assert "completedSequence" not in full_commands["command:4"]
     assert "lastOutcome" not in full_commands["command:4"]
+
+    health = {item["id"]: item for item in model.to_dict(max_entities=20)["entities"]["health"]}
+    assert health["health:command:1"]["category"] == "test"
+    assert health["health:command:1"]["status"] == "error"
+    assert health["health:command:1"]["durationMs"] == 240
+    assert health["health:command:1"]["touchedPathCount"] == 13
+    assert health["health:command:1"]["touchedPathsTruncated"] is True
+    assert health["health:command:5"]["status"] == "running"
+    assert health["health:command:5"]["statusSource"] == "observed_command_start"
+    assert "completedSequence" not in health["health:command:5"]
+    assert "lastOutcome" not in health["health:command:5"]
+    assert health["health:command:7"]["category"] == "build"
+    assert health["health:command:7"]["completedSequence"] == 7
+    assert "startedSequence" not in health["health:command:7"]
+    assert "durationMs" not in health["health:command:7"]
+    assert health_category_from_command("python -m build") == "build"
+    assert health_category_from_command("   ") is None
+    assert health_category_from_command("git status --short") is None
 
     nested_observation = command_from_event(nested)
     assert nested_observation is not None
@@ -282,7 +325,7 @@ def test_world_model_tracks_structured_change_facts() -> None:
     payload = model.to_dict(max_entities=10)
     changes = {item["id"]: item for item in payload["entities"]["changes"]}
 
-    assert payload["counts"] == {"files": 5, "commands": 0, "changes": 5}
+    assert payload["counts"] == {"files": 5, "commands": 0, "changes": 5, "health": 0}
     assert payload["entityCount"] == 10
     assert changes["change:1:0"] == {
         "id": "change:1:0",
