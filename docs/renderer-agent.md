@@ -66,6 +66,7 @@ HARN_GIBSON_RENDERER_MAX_RECENT_PLANS=6
 HARN_GIBSON_RENDERER_MAX_RECENT_LOG_ENTRIES=12
 HARN_GIBSON_RENDERER_MAX_PROP_PREVIEW_CHARS=240
 HARN_GIBSON_RENDERER_MAX_VISUAL_ANCHORS=16
+HARN_GIBSON_RENDERER_MAX_VISUAL_OBJECTS_PER_ANCHOR=8
 HARN_GIBSON_RENDERER_MAX_REPO_ENTRIES=64
 HARN_GIBSON_RENDERER_MAX_REPO_CHILDREN=8
 HARN_GIBSON_RENDERER_MAX_TOUCHED_FILES=24
@@ -76,7 +77,7 @@ HARN_GIBSON_RENDERER_MAX_SEMANTIC_EDGES=192
 HARN_GIBSON_RENDERER_MAX_SEMANTIC_SYMBOLS=160
 ```
 
-Lower values reduce prompt size and remote renderer latency; higher values give a model more scene continuity, repo topology, semantic graph edges, touched-file evidence, and accumulated world-model facts.
+Lower values reduce prompt size and remote renderer latency; higher values give a model more scene continuity, object-level camera targets, repo topology, semantic graph edges, touched-file evidence, and accumulated world-model facts.
 
 ## External Renderer Command
 
@@ -250,7 +251,7 @@ The renderer agent should not receive a full new transcript on every event. Use 
 - World bindings: optional `props.worldBindings` entries on scene primitives, schema `harn-gibson.world-binding.v1`, declaring which project/world fact a visual property follows.
 - Recent harn events: the newest event batch plus short summaries of recent prior events.
 - Recent visualization context: recent render intents, render plans, and active animations/effects.
-- Visual continuity: compact anchors for currently visible stage objects, active animations, world-binding counts/summaries, recent targets/effects, and style motifs.
+- Visual continuity: compact anchors for currently visible stage primitives, bounded object anchors inside targetable primitives, active animations, world-binding counts/summaries, recent targets/effects, and style motifs.
 
 The executable fixture for this is `RendererContext`. A renderer that only implements `render(requests, scene)` receives the existing deterministic-compatible call shape. A renderer that implements `render_with_context(requests, scene, context)` receives a `harn-gibson.renderer-context.v1` object with project metadata, bounded repo topology, semantic graph facts, touched-file summaries, world-model facts, catalog data, scene context, render input, recent agent context, visualization history, visual-continuity anchors, and compaction metadata. `context.project.displayStyle` is the selected style id and `context.project.stylePack` is a `harn-gibson.style-pack.v1` payload with tones, canvas backdrop settings, CSS variables, and motifs.
 
@@ -273,7 +274,7 @@ After enough events or token growth, do a renderer compaction:
 
 The first renderer context is a compaction context. Later contexts are rolling summaries until the configured event interval is reached, at which point the next context includes the full scene again. This gives a future model renderer a predictable place to refresh state without forcing every event batch to resend the whole display state.
 
-`context.visualContinuity` is always compact, even during compaction turns. It includes `anchors` for visible stage primitives, whether each anchor is currently animated, active animation summaries including `timeline_cue` cue labels and `route_trace` waypoint ids/labels, compact `worldBindings` for anchored primitives, a total `worldBindingCount`, recent effects/targets from render-intent history, and style motifs. Use it to preserve visual motifs and avoid recreating the same objects under new ids just because a rolling context omitted the full scene.
+`context.visualContinuity` is always compact, even during compaction turns. It includes `anchors` for visible stage primitives, whether each anchor is currently animated, active animation summaries including `timeline_cue` cue labels and `route_trace` waypoint ids/labels, compact `worldBindings` for anchored primitives, bounded `objectAnchors` for targetable child objects, a total `worldBindingCount`, recent effects/targets from render-intent history, and style motifs. Object anchors expose exact `targetRef` candidates plus compact identity, focus, tone, metrics, and matching world-binding metadata for `city_block` blocks, `trace_route` hops, `node_graph` nodes, `ribbon` points, and `wire_landscape` peaks. Use this continuity payload to preserve visual motifs, aim camera effects at meaningful objects, and avoid recreating the same objects under new ids just because a rolling context omitted the full scene.
 
 This mirrors harn session compaction, but it is separate from the primary agent conversation. The renderer agent owns visual continuity; harn owns task state.
 
@@ -356,7 +357,7 @@ Use `uv run harn-gibson catalog` to inspect that vocabulary without starting the
 
 `breach_wave` is a persistent `SceneAnimation` kind for full-scene access, intrusion, or ICE-crack moments. Renderer plans choose a target or normalized `position`, duration, tone/accent tone, intensity, ring count, shard count, optional scan slices, label, and seed. The browser draws expanding rings, radial flash, shards, and scan slices locally, so a renderer can mark one dramatic beat in a scheduled timeline without creating many separate primitives.
 
-`camera_jolt` is a persistent `SceneAnimation` kind for scene-level impact motion. Renderer plans choose a target or normalized `position`, duration, intensity, zoom, roll, and seed. They can also set `props.targetRef` or `props.anchorRef` to frame a named object inside the target primitive instead of only the primitive as a whole. Supported refs include `id`, `path`, `label`, or `index` for `city_block` blocks, `trace_route` hops, `node_graph` nodes, `ribbon` points, and `wire_landscape` peaks. The browser applies the resulting shake/zoom/roll transform while drawing stage primitives, so a renderer can make breach, command, or traversal beats feel physical without modifying each primitive.
+`camera_jolt` is a persistent `SceneAnimation` kind for scene-level impact motion. Renderer plans choose a target or normalized `position`, duration, intensity, zoom, roll, and seed. They can also set `props.targetRef` or `props.anchorRef` to frame a named object inside the target primitive instead of only the primitive as a whole. Supported refs include `id`, `path`, `label`, or `index` for `city_block` blocks, `trace_route` hops, `node_graph` nodes, `ribbon` points, and `wire_landscape` peaks. Rolling renderer contexts expose those addressable objects under `visualContinuity.anchors[].objectAnchors[].targetRef`, so a renderer can choose a camera target without receiving the full primitive props. The browser applies the resulting shake/zoom/roll transform while drawing stage primitives, so a renderer can make breach, command, or traversal beats feel physical without modifying each primitive.
 
 `camera_path` is a persistent `SceneAnimation` kind for scene-level pan/zoom/roll keyframes. Renderer plans choose a target or normalized `position`, duration, `loop`, optional `props.yoyo`, and bounded `props.keyframes` with `at`/`timeMs`, `x`, `y`, `scale`, and `rotation`. `props.targetRef` uses the same object-addressing shape as `camera_jolt`, so a camera path can orbit a specific city block, route hop, graph node, ribbon point, or terrain peak. Fractional `x`/`y` values are viewport-relative, while larger values are treated as device-scaled pixels. The browser composes camera paths with camera jolts, letting a coalesced 5-10 second window keep drifting while impact beats shake the same scene.
 

@@ -42,7 +42,7 @@ flowchart TD
 
 - `harn-gibson extension`: normalizes harn events into `GibsonEvent`, forwards them to configured sinks, and polls queued browser input back into harn.
 - `EventRouter`: decides whether an event should update scene state directly, enter a stream buffer, go to a renderer, be debug-only, or be dropped/sampled.
-- `RendererContextBuilder`: prepares the compact prompt/runtime context for renderers. It owns the accumulated world model and combines it with repo topology, semantic graph, touched files, agent attention, current scene state, visual continuity, and catalog data.
+- `RendererContextBuilder`: prepares the compact prompt/runtime context for renderers. It owns the accumulated world model and combines it with repo topology, semantic graph, touched files, agent attention, current scene state, visual continuity, object-level target anchors, and catalog data.
 - `renderer`: turns context into a `RenderPlan`. Current renderers can be deterministic Python, an external JSON command, or the prompt-command model adapter.
 - `SceneEngine`: applies `SceneMutation` objects to persistent `SceneState`, including primitive updates, animation lifecycle/TTL pruning, logs, metadata, and render-intent history.
 - `display backend`: renders `SceneState`. The browser/canvas backend is current, but a non-web backend can consume the same scene snapshots and mutation protocol.

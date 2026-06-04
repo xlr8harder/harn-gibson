@@ -18,6 +18,7 @@ RENDERER_SYSTEM_PROMPT = (
     "before patching new primitives. Use startOffsetMs, delayMs, timeline_cue, and route_trace animations when "
     "the renderInput timeline suggests a sequence. Use breach_wave beats, camera_jolt impacts, camera_path moves, "
     "camera targetRef anchors for named city blocks, route hops, graph nodes, ribbon points, or terrain peaks, "
+    "and visualContinuity objectAnchors as stable targetRef candidates, "
     "signal_interference overlays, "
     "hologram projections, signal scopes, tunnel grids, wire_landscape terrain, orbital maps, trace routes, "
     "terminal walls, access matrices, camera-drifting city_block districts, "

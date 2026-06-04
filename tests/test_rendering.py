@@ -1340,6 +1340,19 @@ def test_renderer_context_builder_compaction_rolling_and_history(tmp_path: Path)
                         "tone": "cyan",
                         "focusNodeId": "renderer",
                         "label": "context-map",
+                        "nodes": [
+                            {"id": "ingest", "label": "INGEST", "x": 0.18, "y": 0.72, "tone": "green"},
+                            {
+                                "id": "renderer",
+                                "label": "Renderer Core",
+                                "path": "src/harn_gibson/rendering.py",
+                                "x": 0.54,
+                                "y": 0.38,
+                                "tone": "cyan",
+                                "active": True,
+                                "activityCount": 3,
+                            },
+                        ],
                         "worldBindings": [
                             {
                                 "entityId": "file:src/harn_gibson/rendering.py",
@@ -1552,6 +1565,7 @@ def test_renderer_context_builder_compaction_rolling_and_history(tmp_path: Path)
     assert compaction.visual_continuity["sceneRevision"] == scene.state.revision
     assert compaction.visual_continuity["style"] == {"id": "mainframe", "motifs": ["phosphor-grid"]}
     assert compaction.visual_continuity["worldBindingCount"] == 1
+    assert compaction.visual_continuity["objectAnchorCount"] == 2
     assert compaction.visual_continuity["activeAnimationCount"] == 5
     cue_summary = next(item for item in compaction.visual_continuity["activeAnimations"] if item["id"] == "cue-1")
     assert cue_summary["kind"] == "timeline_cue"
@@ -1580,6 +1594,18 @@ def test_renderer_context_builder_compaction_rolling_and_history(tmp_path: Path)
     assert graph_anchor["worldBindingCount"] == 1
     assert graph_anchor["worldBindings"][0]["targetId"] == "continuity-graph"
     assert graph_anchor["worldBindings"][0]["relationship"] == "highlights"
+    assert graph_anchor["objectAnchorCount"] == 2
+    renderer_object = graph_anchor["objectAnchors"][0]
+    assert renderer_object["kind"] == "node"
+    assert renderer_object["id"] == "renderer"
+    assert renderer_object["path"] == "src/h..."
+    assert renderer_object["targetRef"] == {"id": "renderer"}
+    assert renderer_object["active"] is True
+    assert renderer_object["focused"] is True
+    assert renderer_object["metrics"] == {"activityCount": 3}
+    assert renderer_object["worldBindingCount"] == 1
+    assert renderer_object["worldBindings"][0]["entityId"] == "file:src/harn_gibson/rendering.py"
+    assert renderer_object["worldBindings"][0]["targetProp"] == "nodes[1].tone"
     stream_anchor = next(item for item in compaction.visual_continuity["anchors"] if item["id"] == "assistant-stream")
     assert stream_anchor["animated"] is True
     assert stream_anchor["isStreaming"] is True
@@ -1652,6 +1678,157 @@ def test_renderer_context_builder_compaction_rolling_and_history(tmp_path: Path)
             "metadata": {"renderer": "second"},
         },
     )
+
+
+def test_visual_continuity_exposes_object_level_target_anchors() -> None:
+    scene = SceneEngine()
+    scene.apply(
+        (
+            SceneMutation(
+                "upsert",
+                primitive=ScenePrimitive(
+                    "city",
+                    "city_block",
+                    "stage",
+                    {
+                        "focusBlockId": "src/app.py",
+                        "blocks": [
+                            {"id": "city-a", "label": "A", "x": 0.2, "y": 0.4, "h": 0.2, "tone": "green"},
+                            {
+                                "path": "src/app.py",
+                                "label": "Application",
+                                "x": 0.5,
+                                "y": 0.5,
+                                "h": 0.42,
+                                "active": True,
+                                "touched": 2,
+                            },
+                            "bad-block",
+                        ],
+                        "worldBindings": [
+                            {
+                                "entityId": "repo:city-a",
+                                "fieldPath": "visibleLineCount",
+                                "targetProp": "blocks[0]",
+                                "source": "repoTopology",
+                            },
+                            {
+                                "entityId": "file:src/app.py",
+                                "fieldPath": "activityCount",
+                                "targetProp": "blocks[1].h",
+                                "source": "worldModel",
+                            },
+                            {
+                                "entityId": "file:src/app.py",
+                                "fieldPath": "lastOutcome.status",
+                                "targetProp": "focusBlockId",
+                                "relationship": "focuses",
+                            },
+                        ],
+                    },
+                ),
+            ),
+            SceneMutation(
+                "upsert",
+                primitive=ScenePrimitive(
+                    "graph",
+                    "node_graph",
+                    "stage",
+                    {
+                        "focusNodeId": "node-a",
+                        "nodes": [{"id": "node-a", "label": "NODE", "x": 0.1, "y": 0.2, "activityCount": 5}],
+                        "worldBindings": [
+                            {
+                                "entityId": f"file:src/node_{index}.py",
+                                "fieldPath": "activityCount",
+                                "targetProp": f"nodes[0].field{index}",
+                            }
+                            for index in range(5)
+                        ],
+                    },
+                ),
+            ),
+            SceneMutation(
+                "upsert",
+                primitive=ScenePrimitive(
+                    "route",
+                    "trace_route",
+                    "stage",
+                    {"hops": [{"label": "Gateway", "x": 0.2, "y": 0.7}]},
+                ),
+            ),
+            SceneMutation(
+                "upsert",
+                primitive=ScenePrimitive(
+                    "ribbon",
+                    "ribbon",
+                    "stage",
+                    {"points": [{"x": 0.2, "y": 0.3}]},
+                ),
+            ),
+            SceneMutation(
+                "upsert",
+                primitive=ScenePrimitive(
+                    "terrain",
+                    "wire_landscape",
+                    "stage",
+                    {"focusPeakId": "mount-1", "peaks": [{"id": "mount-1", "height": 0.7, "radius": 0.2}]},
+                ),
+            ),
+            SceneMutation(
+                "upsert",
+                primitive=ScenePrimitive("empty-city", "city_block", "stage", {"blocks": "bad"}),
+            ),
+        )
+    )
+    batch = RenderInputBatch.from_requests(
+        (RenderRequest(GibsonEvent.from_raw({"type": "tool_call", "toolName": "bash"}, 1, timestamp_ms=100)),)
+    )
+    context = RendererContextBuilder(RendererContextConfig(max_visual_objects_per_anchor=8)).build(
+        batch,
+        scene.state,
+        pipeline_catalog(),
+    )
+
+    assert context.visual_continuity["objectAnchorCount"] == 6
+    city_anchor = next(anchor for anchor in context.visual_continuity["anchors"] if anchor["id"] == "city")
+    assert city_anchor["objectAnchorCount"] == 2
+    focused_block = city_anchor["objectAnchors"][0]
+    assert focused_block["kind"] == "block"
+    assert focused_block["path"] == "src/app.py"
+    assert focused_block["targetRef"] == {"path": "src/app.py"}
+    assert focused_block["focused"] is True
+    assert focused_block["active"] is True
+    assert focused_block["metrics"] == {"touched": 2, "height": 0.42}
+    assert [binding["targetProp"] for binding in focused_block["worldBindings"]] == [
+        "blocks[1].h",
+        "focusBlockId",
+    ]
+    assert city_anchor["objectAnchors"][1]["targetRef"] == {"id": "city-a"}
+    assert city_anchor["objectAnchors"][1]["worldBindings"][0]["targetProp"] == "blocks[0]"
+
+    graph_anchor = next(anchor for anchor in context.visual_continuity["anchors"] if anchor["id"] == "graph")
+    assert graph_anchor["objectAnchors"][0]["targetRef"] == {"id": "node-a"}
+    assert graph_anchor["objectAnchors"][0]["worldBindingCount"] == 4
+    route_anchor = next(anchor for anchor in context.visual_continuity["anchors"] if anchor["id"] == "route")
+    assert route_anchor["objectAnchors"][0]["targetRef"] == {"label": "Gateway"}
+    ribbon_anchor = next(anchor for anchor in context.visual_continuity["anchors"] if anchor["id"] == "ribbon")
+    assert ribbon_anchor["objectAnchors"][0]["targetRef"] == {"index": 0}
+    terrain_anchor = next(anchor for anchor in context.visual_continuity["anchors"] if anchor["id"] == "terrain")
+    assert terrain_anchor["objectAnchors"][0]["targetRef"] == {"id": "mount-1"}
+    assert terrain_anchor["objectAnchors"][0]["metrics"] == {"height": 0.7, "radius": 0.2}
+    empty_anchor = next(anchor for anchor in context.visual_continuity["anchors"] if anchor["id"] == "empty-city")
+    assert "objectAnchors" not in empty_anchor
+
+    truncated_context = RendererContextBuilder(RendererContextConfig(max_visual_objects_per_anchor=1)).build(
+        batch,
+        scene.state,
+        pipeline_catalog(),
+    )
+    truncated_city = next(anchor for anchor in truncated_context.visual_continuity["anchors"] if anchor["id"] == "city")
+    assert truncated_city["objectAnchorCount"] == 2
+    assert truncated_city["objectAnchorsTruncated"] is True
+    assert len(truncated_city["objectAnchors"]) == 1
 
 
 def test_renderer_context_repo_topology_counts_lines_without_contents(tmp_path: Path) -> None:

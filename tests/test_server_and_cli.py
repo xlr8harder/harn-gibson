@@ -681,6 +681,7 @@ def test_build_state_from_env(tmp_path: Path) -> None:
             "HARN_GIBSON_RENDERER_MAX_RECENT_LOG_ENTRIES": "4",
             "HARN_GIBSON_RENDERER_MAX_PROP_PREVIEW_CHARS": "80",
             "HARN_GIBSON_RENDERER_MAX_VISUAL_ANCHORS": "5",
+            "HARN_GIBSON_RENDERER_MAX_VISUAL_OBJECTS_PER_ANCHOR": "4",
             "HARN_GIBSON_RENDERER_MAX_VISUAL_RECENT_ITEMS": "6",
             "HARN_GIBSON_RENDERER_MAX_REPO_ENTRIES": "7",
             "HARN_GIBSON_RENDERER_MAX_REPO_CHILDREN": "2",
@@ -721,6 +722,7 @@ def test_build_state_from_env(tmp_path: Path) -> None:
     assert context_config.max_recent_log_entries == 4
     assert context_config.max_prop_preview_chars == 80
     assert context_config.max_visual_anchors == 5
+    assert context_config.max_visual_objects_per_anchor == 4
     assert context_config.max_visual_recent_items == 6
     assert context_config.max_repo_entries == 7
     assert context_config.max_repo_children_per_dir == 2

@@ -277,6 +277,10 @@ def renderer_context_config_from_env(source: Mapping[str, str]) -> RendererConte
             source.get("HARN_GIBSON_RENDERER_MAX_VISUAL_ANCHORS"),
             defaults.max_visual_anchors,
         ),
+        max_visual_objects_per_anchor=coerce_context_limit(
+            source.get("HARN_GIBSON_RENDERER_MAX_VISUAL_OBJECTS_PER_ANCHOR"),
+            defaults.max_visual_objects_per_anchor,
+        ),
         max_visual_recent_items=coerce_context_limit(
             source.get("HARN_GIBSON_RENDERER_MAX_VISUAL_RECENT_ITEMS"),
             defaults.max_visual_recent_items,

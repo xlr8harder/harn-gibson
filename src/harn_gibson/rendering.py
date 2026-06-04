@@ -297,6 +297,7 @@ class RendererContextConfig:
     max_recent_log_entries: int = 12
     max_prop_preview_chars: int = 240
     max_visual_anchors: int = 16
+    max_visual_objects_per_anchor: int = 8
     max_visual_recent_items: int = 16
     max_repo_entries: int = 64
     max_repo_children_per_dir: int = 8
@@ -1841,10 +1842,16 @@ def _visual_continuity_context(
     style_pack = config.style_pack or style_pack_from_name(config.display_style).to_dict()
     active_targets = {animation.target_id for animation in scene.animations.values()}
     anchors = [
-        _visual_anchor_summary(primitive, active_targets, config.max_prop_preview_chars)
+        _visual_anchor_summary(
+            primitive,
+            active_targets,
+            config.max_prop_preview_chars,
+            config.max_visual_objects_per_anchor,
+        )
         for primitive in sorted(scene.primitives.values(), key=lambda item: item.id)
         if primitive.region == "stage"
     ][: max(0, config.max_visual_anchors)]
+    object_anchor_count = sum(_visual_count(anchor.get("objectAnchorCount")) for anchor in anchors)
     world_binding_count = sum(
         len(world_bindings_from_props(primitive.props, target_id=primitive.id, max_bindings=32))
         for primitive in scene.primitives.values()
@@ -1871,6 +1878,7 @@ def _visual_continuity_context(
         },
         "anchorCount": len(anchors),
         "anchors": anchors,
+        "objectAnchorCount": object_anchor_count,
         "worldBindingCount": world_binding_count,
         "activeAnimationCount": len(scene.animations),
         "activeAnimations": [
@@ -1889,6 +1897,7 @@ def _visual_anchor_summary(
     primitive: ScenePrimitive,
     active_targets: set[str],
     max_chars: int,
+    max_objects: int,
 ) -> dict[str, Any]:
     props = primitive.props
     summary: dict[str, Any] = {
@@ -1917,7 +1926,211 @@ def _visual_anchor_summary(
     if world_bindings:
         summary["worldBindingCount"] = len(world_bindings)
         summary["worldBindings"] = list(world_bindings)
+    object_anchors, object_count = _visual_object_anchors(
+        primitive,
+        world_bindings,
+        max_chars=max_chars,
+        max_objects=max_objects,
+    )
+    if object_anchors:
+        summary["objectAnchorCount"] = object_count
+        summary["objectAnchors"] = object_anchors
+        if object_count > len(object_anchors):
+            summary["objectAnchorsTruncated"] = True
     return summary
+
+
+def _visual_object_anchors(
+    primitive: ScenePrimitive,
+    world_bindings: Sequence[Mapping[str, Any]],
+    *,
+    max_chars: int,
+    max_objects: int,
+) -> tuple[list[dict[str, Any]], int]:
+    collection_spec = _visual_object_collection_spec(primitive.kind)
+    if collection_spec is None:
+        return [], 0
+    collection_key, object_kind, focus_key = collection_spec
+    raw_items = primitive.props.get(collection_key)
+    if not isinstance(raw_items, list):
+        return [], 0
+    candidates: list[dict[str, Any]] = []
+    focus_value = primitive.props.get(focus_key) if focus_key else None
+    for index, item in enumerate(raw_items):
+        if not isinstance(item, Mapping):
+            continue
+        summary = _visual_object_anchor_summary(
+            primitive,
+            item,
+            object_kind=object_kind,
+            collection_key=collection_key,
+            index=index,
+            focus_key=focus_key,
+            focus_value=focus_value,
+            world_bindings=world_bindings,
+            max_chars=max_chars,
+        )
+        candidates.append(summary)
+    candidates.sort(key=lambda item: (not bool(item.get("focused")), not bool(item.get("active")), item["index"]))
+    limit = max(0, max_objects)
+    return candidates[:limit], len(candidates)
+
+
+def _visual_object_collection_spec(primitive_kind: str) -> tuple[str, str, str | None] | None:
+    if primitive_kind == "city_block":
+        return ("blocks", "block", "focusBlockId")
+    if primitive_kind == "node_graph":
+        return ("nodes", "node", "focusNodeId")
+    if primitive_kind == "trace_route":
+        return ("hops", "hop", "focusHopId")
+    if primitive_kind == "ribbon":
+        return ("points", "point", None)
+    if primitive_kind == "wire_landscape":
+        return ("peaks", "peak", "focusPeakId")
+    return None
+
+
+def _visual_object_anchor_summary(
+    primitive: ScenePrimitive,
+    item: Mapping[str, Any],
+    *,
+    object_kind: str,
+    collection_key: str,
+    index: int,
+    focus_key: str | None,
+    focus_value: Any,
+    world_bindings: Sequence[Mapping[str, Any]],
+    max_chars: int,
+) -> dict[str, Any]:
+    object_id = _object_text(item, "id")
+    path = _object_text(item, "path", "objectPath")
+    label = _object_text(item, "label", "name", "title")
+    focused = _object_is_focused(item, object_id, path, label, focus_value)
+    summary: dict[str, Any] = {
+        "kind": object_kind,
+        "index": index,
+        "targetRef": _visual_object_target_ref(object_id, path, label, index),
+    }
+    if object_id:
+        summary["id"] = _clip_preview(object_id, max_chars)
+    if path:
+        summary["path"] = _clip_preview(path, max_chars)
+    if label:
+        summary["label"] = _clip_preview(label, max_chars)
+    tone = _visual_tone(item)
+    if tone is not None:
+        summary["tone"] = tone
+    if item.get("active") is not None:
+        summary["active"] = bool(item.get("active"))
+    if focused:
+        summary["focused"] = True
+    metrics = _visual_object_metrics(item)
+    if metrics:
+        summary["metrics"] = metrics
+    bindings = _object_world_bindings(
+        primitive,
+        world_bindings,
+        object_id=object_id,
+        path=path,
+        collection_key=collection_key,
+        index=index,
+        focus_key=focus_key,
+        focused=focused,
+    )
+    if bindings:
+        summary["worldBindingCount"] = len(bindings)
+        summary["worldBindings"] = bindings
+    return summary
+
+
+def _visual_object_target_ref(object_id: str | None, path: str | None, label: str | None, index: int) -> dict[str, Any]:
+    if object_id:
+        return {"id": object_id}
+    if path:
+        return {"path": path}
+    if label:
+        return {"label": label}
+    return {"index": index}
+
+
+def _object_world_bindings(
+    primitive: ScenePrimitive,
+    world_bindings: Sequence[Mapping[str, Any]],
+    *,
+    object_id: str | None,
+    path: str | None,
+    collection_key: str,
+    index: int,
+    focus_key: str | None,
+    focused: bool,
+) -> list[dict[str, Any]]:
+    target_prefix = f"{collection_key}[{index}]"
+    entity_suffixes = tuple(value for value in (path, object_id) if value)
+    matches: list[dict[str, Any]] = []
+    for binding in world_bindings:
+        target_prop = str(binding.get("targetProp") or "")
+        entity_id = str(binding.get("entityId") or "")
+        if (
+            target_prop == target_prefix
+            or target_prop.startswith(f"{target_prefix}.")
+            or (focused and focus_key is not None and target_prop == focus_key)
+            or any(entity_id.endswith(f":{suffix}") or entity_id == suffix for suffix in entity_suffixes)
+        ):
+            normalized = dict(binding)
+            normalized["targetId"] = primitive.id
+            matches.append(normalized)
+        if len(matches) >= 4:
+            break
+    return matches
+
+
+def _object_is_focused(
+    item: Mapping[str, Any],
+    object_id: str | None,
+    path: str | None,
+    label: str | None,
+    focus_value: Any,
+) -> bool:
+    if not focus_value:
+        return False
+    focus_text = str(focus_value)
+    return focus_text in {
+        value
+        for value in (
+            object_id,
+            path,
+            label,
+            _object_text(item, "blockId", "nodeId", "hopId", "peakId", "pointId"),
+        )
+        if value
+    }
+
+
+def _visual_object_metrics(item: Mapping[str, Any]) -> dict[str, Any]:
+    metrics: dict[str, Any] = {}
+    for key in ("touched", "activityCount", "lines", "files", "dirs", "degree", "fileCount"):
+        value = item.get(key)
+        if type(value) in {int, float} and isfinite(float(value)):
+            metrics[key] = value
+    for source_key, output_key in (("h", "height"), ("height", "height"), ("radius", "radius")):
+        value = item.get(source_key)
+        if type(value) in {int, float} and isfinite(float(value)) and output_key not in metrics:
+            metrics[output_key] = value
+    return metrics
+
+
+def _object_text(item: Mapping[str, Any], *keys: str) -> str | None:
+    for key in keys:
+        value = item.get(key)
+        if isinstance(value, str) and value:
+            return value
+    return None
+
+
+def _visual_count(value: Any) -> int:
+    if type(value) is int:
+        return max(0, value)
+    return 0
 
 
 def _visual_animation_summary(animation: SceneAnimation, max_chars: int) -> dict[str, Any]:
