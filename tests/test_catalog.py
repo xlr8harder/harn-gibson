@@ -83,6 +83,7 @@ def test_default_visual_catalog_has_generic_and_cinematic_building_blocks() -> N
         "data_rain",
         "particle_field",
         "city_block",
+        "spatial_map",
         "trace_route",
     } <= primitive_ids
     assert {
@@ -192,6 +193,11 @@ def test_default_visual_catalog_has_generic_and_cinematic_building_blocks() -> N
         black_ice.props
     )
     assert {"gibson", "cinematic", "security", "barrier", "motion"} <= set(black_ice.tags)
+    spatial_map = catalog.entry("spatial_map")
+    assert spatial_map is not None
+    assert {"objects", "edges", "layout", "focusObjectId", "worldBindings"} <= set(spatial_map.props)
+    assert {"generic", "map", "binding", "world-model"} <= set(spatial_map.tags)
+    assert spatial_map.metadata["targetRef"] == ("id", "entityId", "path", "label", "index")
     trace_route = catalog.entry("trace_route")
     assert trace_route is not None
     assert {"hops", "links", "focusHopId", "packets", "speed", "label"} <= set(trace_route.props)

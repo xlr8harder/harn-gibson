@@ -71,6 +71,7 @@ _BROWSER_PRIMITIVE_KINDS = frozenset(
         "black_ice",
         "svg_layer",
         "node_graph",
+        "spatial_map",
         "trace_route",
         "ribbon",
         "glyph_layer",
@@ -1981,6 +1982,8 @@ def _visual_object_collection_spec(primitive_kind: str) -> tuple[str, str, str |
         return ("blocks", "block", "focusBlockId")
     if primitive_kind == "node_graph":
         return ("nodes", "node", "focusNodeId")
+    if primitive_kind == "spatial_map":
+        return ("objects", "object", "focusObjectId")
     if primitive_kind == "trace_route":
         return ("hops", "hop", "focusHopId")
     if primitive_kind == "ribbon":
@@ -2003,16 +2006,22 @@ def _visual_object_anchor_summary(
     max_chars: int,
 ) -> dict[str, Any]:
     object_id = _object_text(item, "id")
+    entity_id = _object_text(item, "entityId", "entity_id")
+    entity_kind = _object_text(item, "entityKind", "entity_kind")
     path = _object_text(item, "path", "objectPath")
     label = _object_text(item, "label", "name", "title")
-    focused = _object_is_focused(item, object_id, path, label, focus_value)
+    focused = _object_is_focused(item, object_id, entity_id, path, label, focus_value)
     summary: dict[str, Any] = {
         "kind": object_kind,
         "index": index,
-        "targetRef": _visual_object_target_ref(object_id, path, label, index),
+        "targetRef": _visual_object_target_ref(object_id, entity_id, path, label, index),
     }
     if object_id:
         summary["id"] = _clip_preview(object_id, max_chars)
+    if entity_id:
+        summary["entityId"] = _clip_preview(entity_id, max_chars)
+    if entity_kind:
+        summary["entityKind"] = _clip_preview(entity_kind, max_chars)
     if path:
         summary["path"] = _clip_preview(path, max_chars)
     if label:
@@ -2031,6 +2040,7 @@ def _visual_object_anchor_summary(
         primitive,
         world_bindings,
         object_id=object_id,
+        entity_id=entity_id,
         path=path,
         collection_key=collection_key,
         index=index,
@@ -2043,9 +2053,17 @@ def _visual_object_anchor_summary(
     return summary
 
 
-def _visual_object_target_ref(object_id: str | None, path: str | None, label: str | None, index: int) -> dict[str, Any]:
+def _visual_object_target_ref(
+    object_id: str | None,
+    entity_id: str | None,
+    path: str | None,
+    label: str | None,
+    index: int,
+) -> dict[str, Any]:
     if object_id:
         return {"id": object_id}
+    if entity_id:
+        return {"entityId": entity_id}
     if path:
         return {"path": path}
     if label:
@@ -2058,6 +2076,7 @@ def _object_world_bindings(
     world_bindings: Sequence[Mapping[str, Any]],
     *,
     object_id: str | None,
+    entity_id: str | None,
     path: str | None,
     collection_key: str,
     index: int,
@@ -2065,7 +2084,7 @@ def _object_world_bindings(
     focused: bool,
 ) -> list[dict[str, Any]]:
     target_prefix = f"{collection_key}[{index}]"
-    entity_suffixes = tuple(value for value in (path, object_id) if value)
+    entity_suffixes = tuple(value for value in (path, object_id, entity_id) if value)
     matches: list[dict[str, Any]] = []
     for binding in world_bindings:
         target_prop = str(binding.get("targetProp") or "")
@@ -2087,6 +2106,7 @@ def _object_world_bindings(
 def _object_is_focused(
     item: Mapping[str, Any],
     object_id: str | None,
+    entity_id: str | None,
     path: str | None,
     label: str | None,
     focus_value: Any,
@@ -2098,6 +2118,7 @@ def _object_is_focused(
         value
         for value in (
             object_id,
+            entity_id,
             path,
             label,
             _object_text(item, "blockId", "nodeId", "hopId", "peakId", "pointId"),
@@ -2108,7 +2129,19 @@ def _object_is_focused(
 
 def _visual_object_metrics(item: Mapping[str, Any]) -> dict[str, Any]:
     metrics: dict[str, Any] = {}
-    for key in ("touched", "activityCount", "lines", "files", "dirs", "degree", "fileCount"):
+    for key in (
+        "touched",
+        "activityCount",
+        "lines",
+        "files",
+        "dirs",
+        "degree",
+        "fileCount",
+        "mass",
+        "confidence",
+        "changeMagnitude",
+        "magnitudeLines",
+    ):
         value = item.get(key)
         if type(value) in {int, float} and isfinite(float(value)):
             metrics[key] = value

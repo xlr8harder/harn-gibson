@@ -1646,6 +1646,7 @@ function drawScenePrimitives(scene, w, h, now) {
     "svg_layer",
     "ribbon",
     "trace_route",
+    "spatial_map",
     "node_graph",
     "terminal_wall",
     "glyph_layer",
@@ -1670,6 +1671,7 @@ function drawPrimitive(primitive, w, h, now) {
   if (primitive.kind === "orbital_map") drawOrbitalMap(primitive, w, h, now);
   if (primitive.kind === "svg_layer") drawSvgLayer(primitive, w, h, now);
   if (primitive.kind === "node_graph") drawNodeGraph(primitive, w, h);
+  if (primitive.kind === "spatial_map") drawSpatialMap(primitive, w, h, now);
   if (primitive.kind === "trace_route") drawTraceRoute(primitive, w, h, now);
   if (primitive.kind === "ribbon") drawRibbon(primitive, w, h, now);
   if (primitive.kind === "terminal_wall") drawTerminalWall(primitive, w, h, now);
@@ -1944,6 +1946,17 @@ function primitiveAnchor(primitive, w, h) {
       return cameraAnchor(normalizedPoint(focus, w, h), objectAnchorRef(primitive, focus, "node", null, "primitive"));
     }
   }
+  if (primitive?.kind === "spatial_map") {
+    const objects = spatialMapObjects(props);
+    const focus = objects.find((object) => object.id === props.focusObjectId || object.entityId === props.focusObjectId)
+      || objects[0];
+    if (focus) {
+      return cameraAnchor(
+        spatialMapObjectPoint(props, focus, w, h),
+        objectAnchorRef(primitive, focus, "object", null, "primitive"),
+      );
+    }
+  }
   if (primitive?.kind === "city_block") {
     const blocks = Array.isArray(props.blocks) ? props.blocks : [];
     const focus = blocks.find((block) => block.id === props.focusBlockId) || blocks[0];
@@ -2008,6 +2021,15 @@ function primitiveObjectAnchor(primitive, ref, w, h) {
     const block = sceneObjectByRef(Array.isArray(props.blocks) ? props.blocks : [], ref);
     if (block) return cameraAnchor(cityBlockAnchorPoint(block, w, h), objectAnchorRef(primitive, block, "block"));
   }
+  if (primitive.kind === "spatial_map") {
+    const object = sceneObjectByRef(spatialMapObjects(props), ref);
+    if (object) {
+      return cameraAnchor(
+        spatialMapObjectPoint(props, object, w, h),
+        objectAnchorRef(primitive, object, "object"),
+      );
+    }
+  }
   if (primitive.kind === "trace_route") {
     const hop = sceneObjectByRef(traceRouteHops(props, w, h), ref);
     if (hop) return cameraAnchor(hop.point, objectAnchorRef(primitive, hop, "hop"));
@@ -2042,6 +2064,13 @@ function sceneObjectByRef(items, ref) {
     const found = items.find((item) => item && typeof item === "object" && String(item.id || "") === id);
     if (found) return found;
   }
+  const entityId = firstString(ref.entityId, ref.entity_id);
+  if (entityId) {
+    const found = items.find(
+      (item) => item && typeof item === "object" && String(item.entityId || item.entity_id || "") === entityId,
+    );
+    if (found) return found;
+  }
   const path = firstString(ref.path, ref.objectPath);
   if (path) {
     const found = items.find((item) => item && typeof item === "object" && String(item.path || "") === path);
@@ -2072,6 +2101,8 @@ function objectAnchorRef(primitive, object, kind, index = null, source = "target
   };
   if (object && typeof object === "object") {
     if (object.id) ref.objectId = String(object.id);
+    if (object.entityId || object.entity_id) ref.entityId = String(object.entityId || object.entity_id);
+    if (object.entityKind || object.entity_kind) ref.entityKind = String(object.entityKind || object.entity_kind);
     if (object.path) ref.path = String(object.path);
     if (object.label) ref.label = String(object.label).slice(0, 48);
   }
@@ -5848,6 +5879,249 @@ function drawNodeGraph(primitive, w, h) {
       ctx.fillText(String(node.label).slice(0, 16), point.x, point.y + radius + 14 * devicePixelRatio);
     }
   }
+  ctx.restore();
+}
+
+function spatialMapRect(props, w, h) {
+  const size = props.size && typeof props.size === "object" ? props.size : {};
+  const position = props.position && typeof props.position === "object" ? props.position : {x: 0.5, y: 0.52};
+  const width = clamp(finiteNumber(size.w ?? size.width ?? props.width, 0.46), 0.10, 1.2) * w;
+  const height = clamp(finiteNumber(size.h ?? size.height ?? props.height, 0.32), 0.08, 0.94) * h;
+  const x = finiteNumber(position.x, 0.5) * w - width * 0.5;
+  const y = finiteNumber(position.y, 0.52) * h - height * 0.5;
+  return {x, y, width, height};
+}
+
+function spatialMapObjects(props) {
+  const rawObjects = Array.isArray(props.objects) ? props.objects : [];
+  const capacity = Math.min(rawObjects.length, 160);
+  const layout = String(props.layout || "grid");
+  const columns = Math.max(1, Math.ceil(Math.sqrt(Math.max(1, capacity))));
+  const rows = Math.max(1, Math.ceil(Math.max(1, capacity) / columns));
+  const seed = finiteNumber(props.seed, 0);
+  return rawObjects
+    .filter((object) => object && typeof object === "object")
+    .slice(0, capacity)
+    .map((object, index) => {
+      const entityId = firstString(object.entityId, object.entity_id);
+      const entityKind = firstString(object.entityKind, object.entity_kind, object.kind, "object");
+      const id = String(object.id || entityId || object.path || object.label || `object-${index}`);
+      const column = index % columns;
+      const row = Math.floor(index / columns);
+      const ringAngle = capacity <= 1 ? 0 : (index / capacity) * Math.PI * 2;
+      const ringRadius = 0.18 + 0.30 * seededUnit(seed + index * 2.3);
+      const defaultX = layout === "ring"
+        ? 0.5 + Math.cos(ringAngle) * ringRadius
+        : (column + 0.5) / columns;
+      const defaultY = layout === "ring"
+        ? 0.5 + Math.sin(ringAngle) * ringRadius * 0.72
+        : (row + 0.5) / rows;
+      return {
+        ...object,
+        id,
+        entityId,
+        entityKind,
+        label: String(object.label || object.name || object.path || id).slice(0, 28),
+        x: clamp(finiteNumber(object.x, defaultX), 0, 1),
+        y: clamp(finiteNumber(object.y, defaultY), 0, 1),
+        z: clamp(finiteNumber(object.z ?? object.height, 0), 0, 1),
+        mass: clamp(
+          finiteNumber(object.mass ?? object.activityCount ?? object.lines, object.active ? 0.75 : 0.42),
+          0,
+          1,
+        ),
+        confidence: clamp(finiteNumber(object.confidence, 1), 0, 1),
+      };
+    });
+}
+
+function spatialMapPointInRect(rect, props, object) {
+  const paddingX = rect.width * 0.08;
+  const paddingY = rect.height * 0.12;
+  const projection = String(props.projection || "isometric");
+  const z = clamp(finiteNumber(object?.z, 0), 0, 1);
+  const x = rect.x + paddingX + finiteNumber(object?.x, 0.5) * Math.max(1, rect.width - paddingX * 2);
+  let y = rect.y + paddingY + finiteNumber(object?.y, 0.5) * Math.max(1, rect.height - paddingY * 2);
+  if (projection !== "flat") y -= z * rect.height * 0.18;
+  return {x, y};
+}
+
+function spatialMapObjectPoint(props, object, w, h) {
+  return spatialMapPointInRect(spatialMapRect(props, w, h), props, object);
+}
+
+function spatialMapObjectTone(object, props) {
+  const status = String(object.status || object.health || object.outcome || object.lastOutcome || "").toLowerCase();
+  if (status.includes("fail") || status.includes("error") || status.includes("red")) return "red";
+  if (status.includes("pass") || status.includes("ok") || status.includes("green")) return "green";
+  if (status.includes("stale") || status.includes("warn")) return "amber";
+  return object.tone || props.tone || "cyan";
+}
+
+function spatialMapObjectByRef(objects, ref) {
+  const target = String(ref || "");
+  if (!target) return null;
+  return objects.find((object) => (
+    object.id === target
+    || object.entityId === target
+    || object.path === target
+    || object.label === target
+  )) || null;
+}
+
+function drawSpatialMap(primitive, w, h, now) {
+  const props = primitive.props || {};
+  const rect = spatialMapRect(props, w, h);
+  const objects = spatialMapObjects(props);
+  const edges = Array.isArray(props.edges) ? props.edges.filter((edge) => edge && typeof edge === "object") : [];
+  const tone = props.tone || "cyan";
+  const accentTone = props.accentTone || props.accent || "magenta";
+  const opacity = clamp(finiteNumber(props.opacity, 0.74), 0, 1);
+  const focusObjectId = props.focusObjectId ? String(props.focusObjectId) : (objects[0]?.id || null);
+  const objectKinds = Array.from(new Set(objects.map((object) => object.entityKind).filter(Boolean))).slice(0, 8);
+  const bindings = Array.isArray(props.worldBindings) ? props.worldBindings : [];
+  const objectPoints = new Map(objects.map((object) => [object.id, spatialMapPointInRect(rect, props, object)]));
+
+  if (typeof window !== "undefined") {
+    window.__gibsonSpatialMapState = window.__gibsonSpatialMapState || {};
+    const focused = objects.find((object) => object.id === focusObjectId || object.entityId === focusObjectId) || null;
+    window.__gibsonSpatialMapState[primitive.id] = {
+      objectCount: objects.length,
+      edgeCount: edges.length,
+      focusObjectId,
+      focusedEntityId: focused?.entityId || null,
+      objectKinds,
+      worldBindingCount: bindings.length,
+      tone,
+      accentTone,
+      hasLabels: props.labels !== false,
+    };
+  }
+
+  ctx.save();
+  ctx.globalCompositeOperation = props.blend === "source-over" ? "source-over" : "screen";
+  ctx.globalAlpha *= opacity;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.beginPath();
+  ctx.rect(rect.x, rect.y, rect.width, rect.height);
+  ctx.clip();
+
+  ctx.fillStyle = toneColor("white", 0.025);
+  ctx.fillRect(rect.x, rect.y, rect.width, rect.height);
+  ctx.strokeStyle = toneColor(tone, 0.18);
+  ctx.lineWidth = 1 * devicePixelRatio;
+  const gridColumns = 8;
+  const gridRows = 5;
+  for (let column = 0; column <= gridColumns; column++) {
+    const x = rect.x + (column / gridColumns) * rect.width;
+    ctx.beginPath();
+    ctx.moveTo(x, rect.y);
+    ctx.lineTo(x - rect.width * 0.08, rect.y + rect.height);
+    ctx.stroke();
+  }
+  for (let row = 0; row <= gridRows; row++) {
+    const y = rect.y + (row / gridRows) * rect.height;
+    ctx.beginPath();
+    ctx.moveTo(rect.x, y);
+    ctx.lineTo(rect.x + rect.width, y - rect.height * 0.08);
+    ctx.stroke();
+  }
+
+  ctx.setLineDash([9 * devicePixelRatio, 12 * devicePixelRatio]);
+  ctx.lineDashOffset = -now * 0.030;
+  for (const edge of edges.slice(0, 220)) {
+    const source = spatialMapObjectByRef(objects, edge.source ?? edge.from);
+    const target = spatialMapObjectByRef(objects, edge.target ?? edge.to);
+    if (!source || !target) continue;
+    const a = objectPoints.get(source.id);
+    const b = objectPoints.get(target.id);
+    if (!a || !b) continue;
+    const edgeTone = edge.tone || (edge.active ? accentTone : tone);
+    const alpha = edge.active || edge.flow ? 0.46 : 0.22;
+    ctx.strokeStyle = toneColor(edgeTone, alpha);
+    ctx.lineWidth = Math.max(0.65, finiteNumber(edge.width, edge.active ? 1.6 : 1.0)) * devicePixelRatio;
+    ctx.beginPath();
+    const midX = (a.x + b.x) * 0.5;
+    const midY = (a.y + b.y) * 0.5 - rect.height * finiteNumber(edge.curve, 0.05);
+    ctx.moveTo(a.x, a.y);
+    ctx.quadraticCurveTo(midX, midY, b.x, b.y);
+    ctx.stroke();
+    if (edge.label && props.labels !== false) {
+      ctx.setLineDash([]);
+      ctx.font = `${9 * devicePixelRatio}px ui-monospace, monospace`;
+      ctx.fillStyle = toneColor("white", 0.42);
+      ctx.fillText(String(edge.label).slice(0, 14), midX, midY - 5 * devicePixelRatio);
+      ctx.setLineDash([9 * devicePixelRatio, 12 * devicePixelRatio]);
+    }
+  }
+  ctx.setLineDash([]);
+
+  for (const [index, object] of objects.entries()) {
+    const point = objectPoints.get(object.id);
+    if (!point) continue;
+    const focused = object.id === focusObjectId || object.entityId === focusObjectId;
+    const active = Boolean(object.active || focused);
+    const objectTone = spatialMapObjectTone(object, props);
+    const radius = (5.5 + object.mass * 9 + (focused ? 5 : 0)) * devicePixelRatio;
+    const lift = object.z * rect.height * 0.13;
+    const pulse = active ? 1 + Math.sin(now * 0.006 + index) * 0.11 : 1;
+    const r = radius * pulse;
+    ctx.shadowColor = toneColor(objectTone, focused ? 0.92 : 0.54);
+    ctx.shadowBlur = (focused ? 22 : 10) * devicePixelRatio;
+    if (lift > 1) {
+      ctx.strokeStyle = toneColor(objectTone, focused ? 0.45 : 0.24);
+      ctx.lineWidth = Math.max(0.8, 1.2 * devicePixelRatio);
+      ctx.beginPath();
+      ctx.moveTo(point.x, point.y + lift);
+      ctx.lineTo(point.x, point.y);
+      ctx.stroke();
+    }
+    ctx.fillStyle = toneColor(objectTone, focused ? 0.58 : 0.34);
+    ctx.strokeStyle = toneColor("white", focused ? 0.78 : 0.38 + object.confidence * 0.18);
+    ctx.lineWidth = Math.max(0.8, (focused ? 1.8 : 1.0) * devicePixelRatio);
+    ctx.beginPath();
+    ctx.moveTo(point.x, point.y - r);
+    ctx.lineTo(point.x + r * 0.82, point.y);
+    ctx.lineTo(point.x, point.y + r * 0.58);
+    ctx.lineTo(point.x - r * 0.82, point.y);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    if (object.confidence < 0.99) {
+      ctx.strokeStyle = toneColor("amber", (1 - object.confidence) * 0.5);
+      ctx.beginPath();
+      ctx.arc(point.x, point.y, r * 1.35, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    if (props.labels !== false && (focused || object.active || objects.length <= 18)) {
+      ctx.font = `${9.5 * devicePixelRatio}px ui-monospace, monospace`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "top";
+      ctx.fillStyle = toneColor("white", focused ? 0.88 : 0.58);
+      ctx.shadowBlur = 4 * devicePixelRatio;
+      ctx.fillText(String(object.label).slice(0, 18), point.x, point.y + r + 4 * devicePixelRatio);
+    }
+  }
+
+  if (props.label) {
+    ctx.font = `${12 * devicePixelRatio}px ui-monospace, monospace`;
+    ctx.textAlign = "left";
+    ctx.textBaseline = "top";
+    ctx.fillStyle = toneColor("white", 0.76);
+    ctx.shadowColor = toneColor(accentTone, 0.58);
+    ctx.shadowBlur = 7 * devicePixelRatio;
+    ctx.fillText(String(props.label).slice(0, 32), rect.x + 8 * devicePixelRatio, rect.y + 7 * devicePixelRatio);
+  }
+
+  ctx.strokeStyle = toneColor(accentTone, 0.34);
+  ctx.lineWidth = 1.2 * devicePixelRatio;
+  ctx.strokeRect(
+    rect.x + 0.5 * devicePixelRatio,
+    rect.y + 0.5 * devicePixelRatio,
+    rect.width - devicePixelRatio,
+    rect.height - devicePixelRatio,
+  );
   ctx.restore();
 }
 

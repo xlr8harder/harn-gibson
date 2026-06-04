@@ -385,6 +385,7 @@ def test_browser_display_renders_vector_symbols_and_data_rain() -> None:
                       window.__gibsonTunnelState?.["gallery-tunnel"]?.packetCount === 44,
                       window.__gibsonWireLandscapeState?.["gallery-landscape"]?.peakCount === 4,
                       window.__gibsonCityState?.["gallery-city"]?.cameraKeyframeCount === 3,
+                      window.__gibsonSpatialMapState?.["gallery-spatial"]?.objectCount === 4,
                       window.__gibsonTerminalWallState?.["gallery-terminal"]?.panelCount === 4,
                       window.__gibsonAccessMatrixState?.["gallery-access"]?.cellCount === 8,
                       window.__gibsonOrbitalMapState?.["gallery-orbital"]?.nodeCount === 5,
@@ -404,6 +405,7 @@ def test_browser_display_renders_vector_symbols_and_data_rain() -> None:
                       tunnel: window.__gibsonTunnelState["gallery-tunnel"],
                       wireLandscape: window.__gibsonWireLandscapeState["gallery-landscape"],
                       city: window.__gibsonCityState["gallery-city"],
+                      spatialMap: window.__gibsonSpatialMapState["gallery-spatial"],
                       terminalWall: window.__gibsonTerminalWallState["gallery-terminal"],
                       accessMatrix: window.__gibsonAccessMatrixState["gallery-access"],
                       orbitalMap: window.__gibsonOrbitalMapState["gallery-orbital"],
@@ -421,6 +423,7 @@ def test_browser_display_renders_vector_symbols_and_data_rain() -> None:
                 tunnel_state = gallery_state["tunnel"]
                 wire_landscape_state = gallery_state["wireLandscape"]
                 city_state = gallery_state["city"]
+                spatial_map_state = gallery_state["spatialMap"]
                 terminal_wall_state = gallery_state["terminalWall"]
                 access_matrix_state = gallery_state["accessMatrix"]
                 orbital_map_state = gallery_state["orbitalMap"]
@@ -529,6 +532,17 @@ def test_browser_display_renders_vector_symbols_and_data_rain() -> None:
                 assert city_state["cameraKeyframeCount"] == 3
                 assert 0 <= city_state["cameraProgress"] <= 1
                 assert city_state["cameraScale"] > 0
+                assert spatial_map_state == {
+                    "objectCount": 4,
+                    "edgeCount": 3,
+                    "focusObjectId": "file:src/harn_gibson/rendering.py",
+                    "focusedEntityId": "file:src/harn_gibson/rendering.py",
+                    "objectKinds": ["file", "symbol", "health"],
+                    "worldBindingCount": 2,
+                    "tone": "cyan",
+                    "accentTone": "magenta",
+                    "hasLabels": True,
+                }
                 assert terminal_wall_state == {
                     "panelCount": 4,
                     "lineCount": 11,

@@ -169,6 +169,7 @@ def test_http_server_routes() -> None:
         assert backend_contract["corePrimitiveKinds"] == list(CORE_PRIMITIVE_KINDS)
         assert "status" in backend_contract["supportedPrimitiveKinds"]
         assert "city_block" in backend_contract["supportedPrimitiveKinds"]
+        assert "spatial_map" in backend_contract["supportedPrimitiveKinds"]
         assert "route_trace" in backend_contract["supportedEffectKinds"]
         assert json.loads(request_text(f"{base}/missing")[2]) == {"error": "not found"}
         assert json.loads(request_text(f"{base}/bad", b"{}")[2]) == {"error": "not found"}
@@ -563,7 +564,7 @@ def test_backend_contract_payload_describes_non_web_backend_surface() -> None:
     assert contract["contracts"]["stylePack"].startswith("Style packs are presentation hints")
     assert contract["corePrimitiveKinds"] == list(CORE_PRIMITIVE_KINDS)
     assert set(CORE_PRIMITIVE_KINDS) <= set(contract["supportedPrimitiveKinds"])
-    assert {"terminal_wall", "svg_layer", "data_rain"} <= set(contract["catalogPrimitiveKinds"])
+    assert {"terminal_wall", "svg_layer", "data_rain", "spatial_map"} <= set(contract["catalogPrimitiveKinds"])
     assert {"timeline_cue", "route_trace", "camera_path"} <= set(contract["supportedEffectKinds"])
     assert contract["mutationSchema"] == "harn-gibson.scene-mutation.v1"
     assert contract["inputSchema"] == "harn-gibson.browser-input.v1"
@@ -1189,6 +1190,7 @@ def test_cli_parser_and_run(monkeypatch: Any, capsys: Any) -> None:
     assert "mainframe" in contract["supportedStylePackIds"]
     assert contract["capabilityProfile"]["timing"]["renderTimingModes"] == ["immediate", "scheduled"]
     assert "terminal_wall" in contract["supportedPrimitiveKinds"]
+    assert "spatial_map" in contract["supportedPrimitiveKinds"]
     assert cli.run(["catalog", "--kind", "effect", "--tag", "camera", "--compact"]) == 0
     catalog = json.loads(capsys.readouterr().out)
     assert catalog["schema"] == "harn-gibson.visual-catalog.v1"

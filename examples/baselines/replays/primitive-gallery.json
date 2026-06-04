@@ -48,6 +48,7 @@
           "primitive:city_block",
           "primitive:trace_route",
           "primitive:node_graph",
+          "primitive:spatial_map",
           "primitive:ribbon",
           "primitive:glyph_layer",
           "primitive:data_rain",
@@ -63,7 +64,7 @@
           "renderer": "replay",
           "stepType": "mutations"
         },
-        "mutationCount": 22,
+        "mutationCount": 23,
         "renderer": "replay",
         "requestCount": 1,
         "routes": [
@@ -87,6 +88,7 @@
           "gallery-city",
           "gallery-trace",
           "gallery-graph",
+          "gallery-spatial",
           "gallery-ribbon",
           "gallery-glyphs",
           "gallery-rain",
@@ -116,6 +118,7 @@
             "primitive:city_block",
             "primitive:trace_route",
             "primitive:node_graph",
+            "primitive:spatial_map",
             "primitive:ribbon",
             "primitive:glyph_layer",
             "primitive:data_rain",
@@ -131,7 +134,7 @@
             "renderer": "replay",
             "stepType": "mutations"
           },
-          "mutationCount": 22,
+          "mutationCount": 23,
           "renderer": "replay",
           "requestCount": 1,
           "routes": [
@@ -155,6 +158,7 @@
             "gallery-city",
             "gallery-trace",
             "gallery-graph",
+            "gallery-spatial",
             "gallery-ribbon",
             "gallery-glyphs",
             "gallery-rain",
@@ -949,6 +953,117 @@
               "label": "IO",
               "phase": 0.48,
               "tone": "white"
+            }
+          ]
+        },
+        "region": "stage"
+      },
+      "gallery-spatial": {
+        "children": [],
+        "id": "gallery-spatial",
+        "kind": "spatial_map",
+        "props": {
+          "accentTone": "magenta",
+          "edges": [
+            {
+              "flow": true,
+              "label": "feeds",
+              "source": "file:src/harn_gibson/world_model.py",
+              "target": "file:src/harn_gibson/rendering.py",
+              "tone": "cyan"
+            },
+            {
+              "active": true,
+              "label": "binds",
+              "source": "symbol:RendererContextBuilder",
+              "target": "file:src/harn_gibson/rendering.py",
+              "tone": "green"
+            },
+            {
+              "label": "verifies",
+              "source": "file:src/harn_gibson/rendering.py",
+              "target": "health:test",
+              "tone": "magenta"
+            }
+          ],
+          "focusObjectId": "file:src/harn_gibson/rendering.py",
+          "label": "WORLD BINDINGS",
+          "layout": "grid",
+          "objects": [
+            {
+              "active": true,
+              "confidence": 1.0,
+              "entityId": "file:src/harn_gibson/rendering.py",
+              "entityKind": "file",
+              "label": "rendering.py",
+              "mass": 0.86,
+              "path": "src/harn_gibson/rendering.py",
+              "tone": "magenta",
+              "x": 0.19,
+              "y": 0.6,
+              "z": 0.3
+            },
+            {
+              "confidence": 0.88,
+              "entityId": "file:src/harn_gibson/world_model.py",
+              "entityKind": "file",
+              "label": "world_model.py",
+              "mass": 0.72,
+              "path": "src/harn_gibson/world_model.py",
+              "tone": "cyan",
+              "x": 0.45,
+              "y": 0.3,
+              "z": 0.42
+            },
+            {
+              "confidence": 0.78,
+              "entityId": "symbol:RendererContextBuilder",
+              "entityKind": "symbol",
+              "label": "ContextBuilder",
+              "mass": 0.6,
+              "tone": "green",
+              "x": 0.68,
+              "y": 0.48,
+              "z": 0.22
+            },
+            {
+              "confidence": 0.85,
+              "entityId": "health:test",
+              "entityKind": "health",
+              "health": "ok",
+              "label": "tests",
+              "mass": 0.52,
+              "x": 0.83,
+              "y": 0.72,
+              "z": 0.14
+            }
+          ],
+          "opacity": 0.76,
+          "position": {
+            "x": 0.63,
+            "y": 0.72
+          },
+          "projection": "isometric",
+          "seed": 501,
+          "size": {
+            "h": 0.2,
+            "w": 0.3
+          },
+          "tone": "cyan",
+          "worldBindings": [
+            {
+              "entityId": "file:src/harn_gibson/rendering.py",
+              "fieldPath": "entities.files[].activityCount",
+              "relationship": "scales",
+              "source": "worldModel",
+              "targetProp": "objects[0].mass"
+            },
+            {
+              "entityId": "health:test",
+              "fieldPath": "entities.health[].status",
+              "relationship": "colors",
+              "source": "worldModel",
+              "targetProp": "objects[3].tone"
             }
           ]
         },

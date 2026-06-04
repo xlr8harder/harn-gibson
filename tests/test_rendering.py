@@ -1772,6 +1772,53 @@ def test_visual_continuity_exposes_object_level_target_anchors() -> None:
             SceneMutation(
                 "upsert",
                 primitive=ScenePrimitive(
+                    "spatial",
+                    "spatial_map",
+                    "stage",
+                    {
+                        "focusObjectId": "file:src/app.py",
+                        "objects": [
+                            {
+                                "entityId": "file:src/app.py",
+                                "entityKind": "file",
+                                "path": "src/app.py",
+                                "label": "app.py",
+                                "x": 0.25,
+                                "y": 0.44,
+                                "mass": 0.8,
+                                "confidence": 0.72,
+                                "active": True,
+                            },
+                            {
+                                "id": "test-object",
+                                "entityId": "file:tests/test_app.py",
+                                "entityKind": "test",
+                                "label": "test_app.py",
+                                "x": 0.58,
+                                "y": 0.38,
+                                "mass": 0.45,
+                            },
+                        ],
+                        "worldBindings": [
+                            {
+                                "entityId": "file:src/app.py",
+                                "fieldPath": "entities.files[].activityCount",
+                                "targetProp": "objects[0].mass",
+                                "source": "worldModel",
+                            },
+                            {
+                                "entityId": "file:src/app.py",
+                                "fieldPath": "recentOutcomes[0].status",
+                                "targetProp": "focusObjectId",
+                                "relationship": "frames",
+                            },
+                        ],
+                    },
+                ),
+            ),
+            SceneMutation(
+                "upsert",
+                primitive=ScenePrimitive(
                     "ribbon",
                     "ribbon",
                     "stage",
@@ -1802,7 +1849,7 @@ def test_visual_continuity_exposes_object_level_target_anchors() -> None:
         pipeline_catalog(),
     )
 
-    assert context.visual_continuity["objectAnchorCount"] == 6
+    assert context.visual_continuity["objectAnchorCount"] == 8
     city_anchor = next(anchor for anchor in context.visual_continuity["anchors"] if anchor["id"] == "city")
     assert city_anchor["objectAnchorCount"] == 2
     focused_block = city_anchor["objectAnchors"][0]
@@ -1824,6 +1871,21 @@ def test_visual_continuity_exposes_object_level_target_anchors() -> None:
     assert graph_anchor["objectAnchors"][0]["worldBindingCount"] == 4
     route_anchor = next(anchor for anchor in context.visual_continuity["anchors"] if anchor["id"] == "route")
     assert route_anchor["objectAnchors"][0]["targetRef"] == {"label": "Gateway"}
+    spatial_anchor = next(anchor for anchor in context.visual_continuity["anchors"] if anchor["id"] == "spatial")
+    assert spatial_anchor["objectAnchorCount"] == 2
+    focused_object = spatial_anchor["objectAnchors"][0]
+    assert focused_object["kind"] == "object"
+    assert focused_object["targetRef"] == {"entityId": "file:src/app.py"}
+    assert focused_object["entityKind"] == "file"
+    assert focused_object["path"] == "src/app.py"
+    assert focused_object["focused"] is True
+    assert focused_object["active"] is True
+    assert focused_object["metrics"] == {"mass": 0.8, "confidence": 0.72}
+    assert [binding["targetProp"] for binding in focused_object["worldBindings"]] == [
+        "objects[0].mass",
+        "focusObjectId",
+    ]
+    assert spatial_anchor["objectAnchors"][1]["targetRef"] == {"id": "test-object"}
     ribbon_anchor = next(anchor for anchor in context.visual_continuity["anchors"] if anchor["id"] == "ribbon")
     assert ribbon_anchor["objectAnchors"][0]["targetRef"] == {"index": 0}
     terrain_anchor = next(anchor for anchor in context.visual_continuity["anchors"] if anchor["id"] == "terrain")

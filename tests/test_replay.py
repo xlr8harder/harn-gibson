@@ -1648,7 +1648,7 @@ def test_checked_in_replay_fixtures_cover_agent_and_renderer_sides() -> None:
     assert renderer_result.scene.primitives["decision-log"].props["text"][0]["renderer"] == "fixture"
 
     assert [step.kind for step in gallery_result.steps] == ["mutations"]
-    assert len(gallery_result.expectations) == 63
+    assert len(gallery_result.expectations) == 66
     assert gallery_result.scene.primitives["gallery-mesh"].kind == "mesh"
     assert gallery_result.scene.primitives["gallery-tunnel"].kind == "tunnel_grid"
     assert gallery_result.scene.primitives["gallery-tunnel"].props["rings"] == 14
@@ -1704,6 +1704,13 @@ def test_checked_in_replay_fixtures_cover_agent_and_renderer_sides() -> None:
     assert gallery_result.scene.primitives["gallery-trace"].kind == "trace_route"
     assert gallery_result.scene.primitives["gallery-trace"].props["hops"][2]["label"] == "ICE"
     assert gallery_result.scene.primitives["gallery-trace"].props["focusHopId"] == "gibson"
+    assert gallery_result.scene.primitives["gallery-spatial"].kind == "spatial_map"
+    assert gallery_result.scene.primitives["gallery-spatial"].props["objects"][0]["entityId"] == (
+        "file:src/harn_gibson/rendering.py"
+    )
+    assert gallery_result.scene.primitives["gallery-spatial"].props["worldBindings"][0]["targetProp"] == (
+        "objects[0].mass"
+    )
     assert gallery_result.scene.primitives["gallery-rain"].kind == "data_rain"
     assert gallery_result.scene.primitives["gallery-rain"].props["columns"] == 42
     assert gallery_result.scene.primitives["gallery-rain"].props["bands"] == 3
