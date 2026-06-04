@@ -1735,9 +1735,11 @@ def test_checked_in_gibson1_replay_exercises_default_renderer() -> None:
     summary = suite.to_dict()["summary"]
     blocks = result.scene.primitives["gibson1-repo-city"].props["blocks"]
     block_paths = {block["path"]: block for block in blocks}
+    terrain_peaks = result.scene.primitives["gibson1-repo-terrain"].props["peaks"]
+    terrain_paths = {peak["path"]: peak for peak in terrain_peaks}
 
     assert [step.kind for step in result.steps] == ["event"] * 4
-    assert len(result.expectations) == 18
+    assert len(result.expectations) == 20
     assert result.scene.primitives["status"].props["text"] == "gibson1::tool_result"
     assert result.scene.primitives["gibson1-terminal"].kind == "terminal_wall"
     assert result.scene.primitives["gibson1-terminal"].props["title"] == "GIBSON1 EVENT BOARD"
@@ -1746,6 +1748,13 @@ def test_checked_in_gibson1_replay_exercises_default_renderer() -> None:
     assert result.scene.primitives["gibson1-repo-city"].props["focusBlockId"] == "gibson1-block-0-child-0"
     assert result.scene.primitives["gibson1-repo-city"].props["heightScale"] == 0.92
     assert len(result.scene.primitives["gibson1-repo-city"].props["cameraPath"]["keyframes"]) == 3
+    assert result.scene.primitives["gibson1-repo-terrain"].kind == "wire_landscape"
+    assert result.scene.primitives["gibson1-repo-terrain"].props["focusPeakId"] == "gibson1-terrain-0-child-0"
+    assert result.scene.primitives["gibson1-repo-terrain"].props["opacity"] == 0.30
+    assert terrain_paths["docs/usage.md"]["parentId"] == "gibson1-terrain-0"
+    assert terrain_paths["docs/usage.md"]["tone"] == "magenta"
+    assert terrain_paths["docs/usage.md"]["active"] is True
+    assert terrain_paths["src/repo_map"]["parentId"] == "gibson1-terrain-3"
     assert block_paths["docs"]["tone"] == "magenta"
     assert block_paths["docs"]["touched"] == 1
     assert 0.45 <= block_paths["docs"]["y"] <= 0.65
@@ -1767,7 +1776,7 @@ def test_checked_in_gibson1_replay_exercises_default_renderer() -> None:
     assert suite.ok is True
     assert summary["fileCount"] == 1
     assert summary["stepCount"] == 4
-    assert summary["expectationCount"] == 18
+    assert summary["expectationCount"] == 20
     assert summary["rendererCounts"] == {"gibson1": 4}
     assert summary["routeCounts"] == {"renderer_agent": 4}
 

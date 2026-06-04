@@ -15,7 +15,7 @@
         "kind": "timeline_cue",
         "loop": false,
         "props": {
-          "accentTone": "magenta",
+          "accentTone": "cyan",
           "label": "TOOL RESULT",
           "phase": "after",
           "sequence": 4,
@@ -30,7 +30,7 @@
         "kind": "route_trace",
         "loop": false,
         "props": {
-          "accentTone": "magenta",
+          "accentTone": "cyan",
           "packets": 10,
           "phase": "after",
           "points": [
@@ -103,6 +103,7 @@
           "patch",
           "append_log",
           "primitive:terminal_wall",
+          "primitive:wire_landscape",
           "primitive:city_block",
           "primitive:signal_scope",
           "primitive:trace_route",
@@ -121,10 +122,11 @@
           "phase": "after",
           "projectName": "repo-map",
           "renderer": "gibson1",
+          "repoTerrain": true,
           "touchedFileCount": 3,
           "visualizer": "gibson1"
         },
-        "mutationCount": 9,
+        "mutationCount": 10,
         "renderer": "gibson1",
         "requestCount": 1,
         "routes": [
@@ -135,6 +137,7 @@
         "targets": [
           "status",
           "gibson1-terminal",
+          "gibson1-repo-terrain",
           "gibson1-repo-city",
           "gibson1-scope",
           "gibson1-route",
@@ -150,6 +153,7 @@
             "patch",
             "append_log",
             "primitive:terminal_wall",
+            "primitive:wire_landscape",
             "primitive:city_block",
             "primitive:signal_scope",
             "primitive:trace_route",
@@ -168,10 +172,11 @@
             "phase": "before",
             "projectName": "repo-map",
             "renderer": "gibson1",
+            "repoTerrain": true,
             "touchedFileCount": 0,
             "visualizer": "gibson1"
           },
-          "mutationCount": 9,
+          "mutationCount": 10,
           "renderer": "gibson1",
           "requestCount": 1,
           "routes": [
@@ -182,6 +187,7 @@
           "targets": [
             "status",
             "gibson1-terminal",
+            "gibson1-repo-terrain",
             "gibson1-repo-city",
             "gibson1-scope",
             "gibson1-route",
@@ -196,6 +202,7 @@
             "patch",
             "append_log",
             "primitive:terminal_wall",
+            "primitive:wire_landscape",
             "primitive:city_block",
             "primitive:signal_scope",
             "primitive:trace_route",
@@ -214,10 +221,11 @@
             "phase": "before",
             "projectName": "repo-map",
             "renderer": "gibson1",
+            "repoTerrain": true,
             "touchedFileCount": 0,
             "visualizer": "gibson1"
           },
-          "mutationCount": 9,
+          "mutationCount": 10,
           "renderer": "gibson1",
           "requestCount": 1,
           "routes": [
@@ -228,6 +236,7 @@
           "targets": [
             "status",
             "gibson1-terminal",
+            "gibson1-repo-terrain",
             "gibson1-repo-city",
             "gibson1-scope",
             "gibson1-route",
@@ -242,6 +251,7 @@
             "patch",
             "append_log",
             "primitive:terminal_wall",
+            "primitive:wire_landscape",
             "primitive:city_block",
             "primitive:signal_scope",
             "primitive:trace_route",
@@ -260,10 +270,11 @@
             "phase": "after",
             "projectName": "repo-map",
             "renderer": "gibson1",
+            "repoTerrain": true,
             "touchedFileCount": 4,
             "visualizer": "gibson1"
           },
-          "mutationCount": 9,
+          "mutationCount": 10,
           "renderer": "gibson1",
           "requestCount": 1,
           "routes": [
@@ -274,6 +285,7 @@
           "targets": [
             "status",
             "gibson1-terminal",
+            "gibson1-repo-terrain",
             "gibson1-repo-city",
             "gibson1-scope",
             "gibson1-route",
@@ -288,6 +300,7 @@
             "patch",
             "append_log",
             "primitive:terminal_wall",
+            "primitive:wire_landscape",
             "primitive:city_block",
             "primitive:signal_scope",
             "primitive:trace_route",
@@ -306,10 +319,11 @@
             "phase": "after",
             "projectName": "repo-map",
             "renderer": "gibson1",
+            "repoTerrain": true,
             "touchedFileCount": 3,
             "visualizer": "gibson1"
           },
-          "mutationCount": 9,
+          "mutationCount": 10,
           "renderer": "gibson1",
           "requestCount": 1,
           "routes": [
@@ -320,6 +334,7 @@
           "targets": [
             "status",
             "gibson1-terminal",
+            "gibson1-repo-terrain",
             "gibson1-repo-city",
             "gibson1-scope",
             "gibson1-route",
@@ -356,7 +371,7 @@
         "id": "gibson1-rain",
         "kind": "data_rain",
         "props": {
-          "accentTone": "magenta",
+          "accentTone": "cyan",
           "bands": 2,
           "columns": 28,
           "density": 0.28,
@@ -384,7 +399,7 @@
         "id": "gibson1-repo-city",
         "kind": "city_block",
         "props": {
-          "accentTone": "magenta",
+          "accentTone": "cyan",
           "blocks": [
             {
               "active": true,
@@ -408,7 +423,7 @@
               "label": "FIXTURES",
               "lines": 8,
               "path": "fixtures",
-              "tone": "magenta",
+              "tone": "cyan",
               "touched": 0,
               "w": 0.082,
               "x": 0.33,
@@ -450,7 +465,7 @@
               "label": "TESTS",
               "lines": 36,
               "path": "tests",
-              "tone": "magenta",
+              "tone": "cyan",
               "touched": 0,
               "w": 0.082,
               "x": 0.18,
@@ -609,12 +624,208 @@
         },
         "region": "stage"
       },
+      "gibson1-repo-terrain": {
+        "children": [],
+        "id": "gibson1-repo-terrain",
+        "kind": "wire_landscape",
+        "props": {
+          "accentTone": "cyan",
+          "columns": 24,
+          "depth": 0.72,
+          "focusPeakId": "gibson1-terrain-0-child-0",
+          "height": 0.242,
+          "label": "REPO TERRAIN",
+          "opacity": 0.3,
+          "packets": 38,
+          "peaks": [
+            {
+              "active": true,
+              "height": 0.418,
+              "id": "gibson1-terrain-0",
+              "label": "DOCS",
+              "lines": 29,
+              "path": "docs",
+              "radius": 0.189,
+              "tone": "magenta",
+              "touched": 1,
+              "x": 0.12,
+              "z": 0.28
+            },
+            {
+              "active": true,
+              "height": 0.267,
+              "id": "gibson1-terrain-0-child-0",
+              "kind": "file",
+              "label": "USAGE.MD",
+              "lines": 29,
+              "parentId": "gibson1-terrain-0",
+              "path": "docs/usage.md",
+              "radius": 0.157,
+              "tone": "magenta",
+              "touched": 1,
+              "x": 0.154,
+              "z": 0.334
+            },
+            {
+              "active": false,
+              "height": 0.224,
+              "id": "gibson1-terrain-1",
+              "label": "FIXTURES",
+              "lines": 8,
+              "path": "fixtures",
+              "radius": 0.164,
+              "tone": "cyan",
+              "touched": 0,
+              "x": 0.36,
+              "z": 0.28
+            },
+            {
+              "active": false,
+              "height": 0.114,
+              "id": "gibson1-terrain-1-child-0",
+              "kind": "file",
+              "label": "",
+              "lines": 8,
+              "parentId": "gibson1-terrain-1",
+              "path": "fixtures/tasks.txt",
+              "radius": 0.118,
+              "tone": "magenta",
+              "touched": 0,
+              "x": 0.394,
+              "z": 0.334
+            },
+            {
+              "active": true,
+              "height": 0.37,
+              "id": "gibson1-terrain-2",
+              "label": "SCRIPTS",
+              "lines": 17,
+              "path": "scripts",
+              "radius": 0.189,
+              "tone": "magenta",
+              "touched": 1,
+              "x": 0.6,
+              "z": 0.28
+            },
+            {
+              "active": true,
+              "height": 0.231,
+              "id": "gibson1-terrain-2-child-0",
+              "kind": "file",
+              "label": "LINE-SUMM...",
+              "lines": 17,
+              "parentId": "gibson1-terrain-2",
+              "path": "scripts/line_summary.py",
+              "radius": 0.145,
+              "tone": "magenta",
+              "touched": 1,
+              "x": 0.634,
+              "z": 0.334
+            },
+            {
+              "active": true,
+              "height": 0.302,
+              "id": "gibson1-terrain-3",
+              "label": "SRC",
+              "lines": 0,
+              "path": "src",
+              "radius": 0.189,
+              "tone": "magenta",
+              "touched": 1,
+              "x": 0.84,
+              "z": 0.28
+            },
+            {
+              "active": true,
+              "height": 0.324,
+              "id": "gibson1-terrain-3-child-0",
+              "kind": "dir",
+              "label": "REPO-MAP",
+              "lines": 48,
+              "parentId": "gibson1-terrain-3",
+              "path": "src/repo_map",
+              "radius": 0.176,
+              "tone": "magenta",
+              "touched": 1,
+              "x": 0.874,
+              "z": 0.334
+            },
+            {
+              "active": false,
+              "height": 0.336,
+              "id": "gibson1-terrain-4",
+              "label": "TESTS",
+              "lines": 36,
+              "path": "tests",
+              "radius": 0.164,
+              "tone": "cyan",
+              "touched": 0,
+              "x": 0.12,
+              "z": 0.6
+            },
+            {
+              "active": false,
+              "height": 0.198,
+              "id": "gibson1-terrain-4-child-0",
+              "kind": "file",
+              "label": "",
+              "lines": 36,
+              "parentId": "gibson1-terrain-4",
+              "path": "tests/test_cli.py",
+              "radius": 0.146,
+              "tone": "magenta",
+              "touched": 0,
+              "x": 0.154,
+              "z": 0.654
+            },
+            {
+              "active": false,
+              "height": 0.22,
+              "id": "gibson1-terrain-5",
+              "label": "PYPROJECT...",
+              "lines": 15,
+              "path": "pyproject.toml",
+              "radius": 0.15,
+              "tone": "magenta",
+              "touched": 0,
+              "x": 0.36,
+              "z": 0.6
+            },
+            {
+              "active": false,
+              "height": 0.232,
+              "id": "gibson1-terrain-6",
+              "label": "README.MD",
+              "lines": 18,
+              "path": "README.md",
+              "radius": 0.15,
+              "tone": "magenta",
+              "touched": 0,
+              "x": 0.6,
+              "z": 0.6
+            }
+          ],
+          "position": {
+            "x": 0.5,
+            "y": 0.45
+          },
+          "rows": 14,
+          "seed": 88,
+          "size": {
+            "h": 0.34,
+            "w": 0.74
+          },
+          "speed": 0.32,
+          "tone": "magenta"
+        },
+        "region": "stage"
+      },
       "gibson1-route": {
         "children": [],
         "id": "gibson1-route",
         "kind": "trace_route",
         "props": {
-          "accentTone": "magenta",
+          "accentTone": "cyan",
           "focusHopId": "file-0",
           "hops": [
             {
@@ -637,7 +848,7 @@
               "active": true,
               "id": "render",
               "label": "RENDER",
-              "tone": "magenta",
+              "tone": "cyan",
               "x": 0.56,
               "y": 0.24
             },
@@ -696,7 +907,7 @@
         "id": "gibson1-scope",
         "kind": "signal_scope",
         "props": {
-          "accentTone": "magenta",
+          "accentTone": "cyan",
           "blips": [
             {
               "angle": 0.2,
@@ -743,13 +954,13 @@
         "id": "gibson1-terminal",
         "kind": "terminal_wall",
         "props": {
-          "accentTone": "magenta",
+          "accentTone": "cyan",
           "columns": 2,
           "cursor": true,
           "opacity": 0.82,
           "panels": [
             {
-              "accentTone": "magenta",
+              "accentTone": "cyan",
               "active": true,
               "id": "event",
               "lines": [
@@ -761,7 +972,7 @@
               "tone": "magenta"
             },
             {
-              "accentTone": "magenta",
+              "accentTone": "cyan",
               "id": "command",
               "lines": [
                 "uv run python scripts/line_summary.py docs/usage.md src/repo_map/cli.py"
@@ -783,7 +994,7 @@
               "tone": "magenta"
             },
             {
-              "accentTone": "magenta",
+              "accentTone": "cyan",
               "id": "output",
               "lines": [
                 "bash completed: docs and CLI touched"

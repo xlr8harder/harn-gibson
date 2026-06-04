@@ -23,7 +23,7 @@ def main() -> None:
     touched = _touched_files(context)
     entries = _repo_entries(context)
     tone = _phase_tone(phase, event_type)
-    accent = "magenta" if touched else "cyan"
+    accent = "magenta" if touched and tone != "magenta" else "cyan"
     project_name = _text(project.get("name"), "project")
 
     mutations = [
@@ -43,6 +43,7 @@ def main() -> None:
             },
         },
         _upsert_terminal_wall(event, summary, entries, touched, tone, accent, sequence),
+        _upsert_repo_terrain(entries, touched, event_type, tone, accent, sequence),
         _upsert_repo_city(entries, touched, event_type, tone, accent, sequence),
         _upsert_signal_scope(event_type, phase, touched, tone, accent, sequence),
         _upsert_trace_route(event_type, phase, touched, tone, accent, sequence),
@@ -61,6 +62,7 @@ def main() -> None:
             "visualizer": "gibson1",
             "mode": "usable-default",
             "touchedFileCount": len(touched),
+            "repoTerrain": bool(entries),
             "projectName": project_name,
         },
         "steps": [{"eventIndex": max(0, len(requests) - 1), "mutations": mutations}],
@@ -279,6 +281,111 @@ def _upsert_repo_city(
                     ],
                 },
                 "seed": sequence + len(blocks) * 17,
+            },
+        },
+    }
+
+
+def _upsert_repo_terrain(
+    entries: list[dict[str, Any]],
+    touched: list[dict[str, Any]],
+    event_type: str,
+    tone: str,
+    accent: str,
+    sequence: int,
+) -> dict[str, Any]:
+    touched_paths = [_text(item.get("path"), "") for item in touched]
+    peaks: list[dict[str, Any]] = []
+    for index, entry in enumerate(entries[:7]):
+        path = _text(entry.get("path") or entry.get("name"), f"entry-{index}")
+        children = _list(entry.get("children"))
+        touched_count = _touch_count(path, touched_paths)
+        line_count = _entry_line_count(entry)
+        x = round(0.12 + (index % 4) * 0.24, 3)
+        z = round(0.28 + (index // 4) * 0.32, 3)
+        peaks.append(
+            {
+                "id": f"gibson1-terrain-{index}",
+                "label": _path_label(path),
+                "path": path,
+                "x": x,
+                "z": z,
+                "height": round(
+                    0.16 + min(0.38, len(children) * 0.032 + line_count * 0.004 + touched_count * 0.11),
+                    3,
+                ),
+                "radius": round(0.15 + min(0.10, len(children) * 0.014 + touched_count * 0.025), 3),
+                "tone": "magenta" if touched_count else _entry_tone(_text(entry.get("kind"), "file"), tone, accent),
+                "active": touched_count > 0,
+                "lines": line_count,
+                "touched": touched_count,
+            }
+        )
+        for child_index, child in enumerate(children[:2]):
+            child_entry = _dict(child)
+            child_path = _text(child_entry.get("path") or child_entry.get("name"), "")
+            if not child_path:
+                continue
+            child_touched_count = _touch_count(child_path, touched_paths)
+            child_lines = _entry_line_count(child_entry)
+            peaks.append(
+                {
+                    "id": f"gibson1-terrain-{index}-child-{child_index}",
+                    "parentId": f"gibson1-terrain-{index}",
+                    "label": _path_label(child_path) if child_touched_count else "",
+                    "path": child_path,
+                    "x": round(min(0.94, x + 0.034 + child_index * 0.046), 3),
+                    "z": round(min(0.88, z + 0.054 + child_index * 0.044), 3),
+                    "height": round(0.09 + min(0.25, child_lines * 0.003 + child_touched_count * 0.09), 3),
+                    "radius": round(0.11 + min(0.07, child_lines * 0.001 + child_touched_count * 0.018), 3),
+                    "tone": "magenta"
+                    if child_touched_count
+                    else _entry_tone(_text(child_entry.get("kind"), "file"), tone, accent),
+                    "active": child_touched_count > 0,
+                    "kind": _text(child_entry.get("kind"), "entry"),
+                    "lines": child_lines,
+                    "touched": child_touched_count,
+                }
+            )
+    if not peaks:
+        peaks = [
+            {
+                "id": f"gibson1-terrain-fallback-{index}",
+                "label": label,
+                "x": round(0.18 + index * 0.20, 3),
+                "z": round(0.30 + (index % 2) * 0.26, 3),
+                "height": round(0.18 + index * 0.06, 3),
+                "radius": 0.14,
+                "tone": tone if index % 2 else accent,
+            }
+            for index, label in enumerate(["HOOK", _clip(event_type.upper(), 8), "RENDER", "SCENE"])
+        ]
+    focus = next(
+        (peak["id"] for peak in peaks if peak.get("active") and peak.get("parentId")),
+        next((peak["id"] for peak in peaks if peak.get("active")), peaks[0]["id"]),
+    )
+    return {
+        "op": "upsert",
+        "primitive": {
+            "id": "gibson1-repo-terrain",
+            "kind": "wire_landscape",
+            "region": "stage",
+            "props": {
+                "label": "REPO TERRAIN",
+                "position": {"x": 0.50, "y": 0.45},
+                "size": {"w": 0.74, "h": 0.34},
+                "rows": 9 + min(5, len(entries)),
+                "columns": 14 + min(10, len(entries) * 2),
+                "depth": 0.72,
+                "height": round(0.20 + min(0.10, len(touched) * 0.014), 3),
+                "peaks": peaks,
+                "focusPeakId": focus,
+                "packets": 12 + min(28, len(touched) * 4 + len(entries) * 2),
+                "speed": 0.32,
+                "tone": tone,
+                "accentTone": accent,
+                "opacity": 0.30,
+                "seed": sequence + len(peaks) * 7,
             },
         },
     }

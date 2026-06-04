@@ -851,10 +851,12 @@ def test_gibson1_renderer_returns_coherent_valid_plan(tmp_path: Path) -> None:
     assert plan.metadata["mode"] == "usable-default"
     assert plan.metadata["visualizer"] == "gibson1"
     assert plan.metadata["touchedFileCount"] == 1
+    assert plan.metadata["repoTerrain"] is True
     assert "renderPlanDiagnostics" not in plan.metadata
     assert issues == ()
     assert primitive_kinds == {
         "gibson1-terminal": "terminal_wall",
+        "gibson1-repo-terrain": "wire_landscape",
         "gibson1-repo-city": "city_block",
         "gibson1-scope": "signal_scope",
         "gibson1-route": "trace_route",
@@ -885,6 +887,13 @@ def test_gibson1_renderer_returns_coherent_valid_plan(tmp_path: Path) -> None:
     assert city_blocks["src/app.py"]["parentId"] == "gibson1-block-0"
     assert city_blocks["src/app.py"]["lines"] == 2
     assert city_blocks["tests/test_app.py"]["parentId"] == "gibson1-block-1"
+    repo_terrain = scene.state.primitives["gibson1-repo-terrain"]
+    terrain_peaks = {peak["path"]: peak for peak in repo_terrain.props["peaks"]}
+    assert repo_terrain.props["focusPeakId"] == "gibson1-terrain-1"
+    assert repo_terrain.props["opacity"] == 0.30
+    assert terrain_peaks["tests"]["tone"] == "magenta"
+    assert terrain_peaks["tests"]["touched"] == 1
+    assert terrain_peaks["tests/test_app.py"]["parentId"] == "gibson1-terrain-1"
     assert scene.state.primitives["gibson1-scope"].props["blips"][0]["label"] == "TEST-APP.PY"
     assert scene.state.primitives["gibson1-route"].props["focusHopId"] == "file-0"
     assert scene.state.animations["gibson1-route-trace"].target_id == "gibson1-route"
