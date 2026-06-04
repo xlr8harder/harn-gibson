@@ -1,0 +1,625 @@
+{
+  "metadata": {
+    "purpose": "exercise style-pack-driven browser backdrop motifs and styled primitives"
+  },
+  "replayName": "style showcase",
+  "replaySchema": "harn-gibson.replay.v1",
+  "scene": {
+    "animations": {
+      "style-cues": {
+        "durationMs": 6400,
+        "id": "style-cues",
+        "kind": "timeline_cue",
+        "loop": true,
+        "props": {
+          "accentTone": "red",
+          "cues": [
+            {
+              "at": 0.08,
+              "label": "LOCK",
+              "showLabel": true,
+              "tone": "green"
+            },
+            {
+              "at": 0.36,
+              "label": "UPLINK",
+              "tone": "cyan"
+            },
+            {
+              "at": 0.68,
+              "label": "WARN",
+              "showLabel": true,
+              "tone": "red"
+            },
+            {
+              "at": 0.92,
+              "label": "RELAY",
+              "tone": "amber"
+            }
+          ],
+          "label": "SATELLITE WINDOW",
+          "offsetY": 0.15,
+          "phase": "lifecycle",
+          "tone": "cyan",
+          "width": 0.34
+        },
+        "startedAtMs": 9900,
+        "targetId": "style-route"
+      }
+    },
+    "log": [
+      {
+        "eventType": "style_showcase",
+        "phase": "lifecycle",
+        "sequence": 990,
+        "summary": "satellite uplink style pack, orbital backdrop motifs, radar sweep, and warning chevrons",
+        "title": "Style showcase"
+      }
+    ],
+    "metadata": {
+      "lastRenderIntent": {
+        "effects": [
+          "patch",
+          "append_log",
+          "primitive:data_rain",
+          "primitive:signal_scope",
+          "primitive:trace_route",
+          "primitive:hologram",
+          "primitive:city_block",
+          "primitive:svg_layer",
+          "animation:timeline_cue"
+        ],
+        "eventTypes": [
+          "replay_mutations"
+        ],
+        "intent": "visualize replay_mutations",
+        "metadata": {
+          "renderer": "replay",
+          "stepType": "mutations"
+        },
+        "mutationCount": 10,
+        "renderer": "replay",
+        "requestCount": 1,
+        "routes": [
+          "direct_scene"
+        ],
+        "schema": "harn-gibson.render-intent.v1",
+        "stepCount": 1,
+        "targets": [
+          "stage",
+          "status",
+          "style-rain",
+          "style-scope",
+          "style-route",
+          "style-hologram",
+          "style-city",
+          "style-vector"
+        ],
+        "timeline": {
+          "durationMs": 0
+        }
+      },
+      "renderIntents": [
+        {
+          "effects": [
+            "patch",
+            "append_log",
+            "primitive:data_rain",
+            "primitive:signal_scope",
+            "primitive:trace_route",
+            "primitive:hologram",
+            "primitive:city_block",
+            "primitive:svg_layer",
+            "animation:timeline_cue"
+          ],
+          "eventTypes": [
+            "replay_mutations"
+          ],
+          "intent": "visualize replay_mutations",
+          "metadata": {
+            "renderer": "replay",
+            "stepType": "mutations"
+          },
+          "mutationCount": 10,
+          "renderer": "replay",
+          "requestCount": 1,
+          "routes": [
+            "direct_scene"
+          ],
+          "schema": "harn-gibson.render-intent.v1",
+          "stepCount": 1,
+          "targets": [
+            "stage",
+            "status",
+            "style-rain",
+            "style-scope",
+            "style-route",
+            "style-hologram",
+            "style-city",
+            "style-vector"
+          ],
+          "timeline": {
+            "durationMs": 0
+          }
+        }
+      ]
+    },
+    "primitives": {
+      "decision-log": {
+        "children": [],
+        "id": "decision-log",
+        "kind": "code",
+        "props": {
+          "language": "json",
+          "text": "[]"
+        },
+        "region": "side"
+      },
+      "event-feed": {
+        "children": [],
+        "id": "event-feed",
+        "kind": "feed",
+        "props": {
+          "maxItems": 80
+        },
+        "region": "side"
+      },
+      "scan-grid": {
+        "children": [],
+        "id": "scan-grid",
+        "kind": "grid",
+        "props": {
+          "intensity": 0.2
+        },
+        "region": "stage"
+      },
+      "stage": {
+        "children": [
+          "status",
+          "event-feed",
+          "trace-log",
+          "decision-log",
+          "scan-grid"
+        ],
+        "id": "stage",
+        "kind": "viewport",
+        "props": {
+          "stylePack": {
+            "canvas": {
+              "background": "#041010",
+              "gridAlpha": 0.16,
+              "gridPerspective": 0.18,
+              "gridTone": "cyan",
+              "horizonAlpha": 0.18,
+              "horizonTone": "red"
+            },
+            "cssVars": {
+              "--amber": "#ffcb52",
+              "--bg": "#030a0a",
+              "--cyan": "#54ebe4",
+              "--green": "#83ff97",
+              "--line": "rgba(84, 235, 228, 0.26)",
+              "--magenta": "#ff6bb0",
+              "--muted": "#91b8b2",
+              "--panel": "rgba(4, 22, 22, 0.88)",
+              "--stage-bg": "#041010",
+              "--text": "#ecfaff"
+            },
+            "description": "Orbital command screen with radar sweeps, cyan telemetry, red warnings, and amber route marks.",
+            "id": "satellite-uplink",
+            "label": "Satellite Uplink",
+            "motifs": [
+              "orbital-grid",
+              "radar-sweeps",
+              "warning-chevrons"
+            ],
+            "schema": "harn-gibson.style-pack.v1",
+            "tones": {
+              "amber": [
+                255,
+                203,
+                82
+              ],
+              "cyan": [
+                84,
+                235,
+                228
+              ],
+              "green": [
+                131,
+                255,
+                151
+              ],
+              "magenta": [
+                255,
+                107,
+                176
+              ],
+              "red": [
+                255,
+                82,
+                84
+              ],
+              "white": [
+                236,
+                250,
+                255
+              ]
+            }
+          },
+          "theme": "satellite-uplink",
+          "title": "GIBSON LINK"
+        },
+        "region": "root"
+      },
+      "status": {
+        "children": [],
+        "id": "status",
+        "kind": "status",
+        "props": {
+          "phase": "lifecycle",
+          "text": "style:satellite_uplink",
+          "tone": "cyan"
+        },
+        "region": "mast"
+      },
+      "style-city": {
+        "children": [],
+        "id": "style-city",
+        "kind": "city_block",
+        "props": {
+          "blocks": [
+            {
+              "d": 0.08,
+              "h": 0.2,
+              "id": "uplink-city-0",
+              "label": "ground",
+              "tone": "green",
+              "w": 0.07,
+              "x": 0.15,
+              "y": 0.62
+            },
+            {
+              "d": 0.08,
+              "h": 0.32,
+              "id": "uplink-city-1",
+              "label": "relay",
+              "tone": "cyan",
+              "w": 0.08,
+              "x": 0.27,
+              "y": 0.58
+            },
+            {
+              "d": 0.08,
+              "h": 0.42,
+              "id": "uplink-city-2",
+              "label": "uplink",
+              "tone": "amber",
+              "w": 0.08,
+              "x": 0.39,
+              "y": 0.5
+            },
+            {
+              "d": 0.08,
+              "h": 0.24,
+              "id": "uplink-city-3",
+              "label": "warn",
+              "tone": "red",
+              "w": 0.07,
+              "x": 0.51,
+              "y": 0.6
+            }
+          ],
+          "cameraPath": {
+            "durationMs": 7000,
+            "keyframes": [
+              {
+                "at": 0,
+                "scale": 0.99,
+                "x": -0.01,
+                "y": 0.008
+              },
+              {
+                "at": 0.5,
+                "scale": 1.04,
+                "x": 0.02,
+                "y": -0.014
+              },
+              {
+                "at": 1,
+                "scale": 1.0,
+                "x": 0.004,
+                "y": 0.006
+              }
+            ],
+            "loop": true,
+            "yoyo": true
+          },
+          "focusBlockId": "uplink-city-2",
+          "heightScale": 1.0,
+          "labels": [
+            "SATELLITE UPLINK",
+            "STYLE MOTIFS"
+          ]
+        },
+        "region": "stage"
+      },
+      "style-hologram": {
+        "children": [],
+        "id": "style-hologram",
+        "kind": "hologram",
+        "props": {
+          "accentTone": "amber",
+          "beams": 6,
+          "label": "SATCOM",
+          "motes": 28,
+          "opacity": 0.82,
+          "panels": 4,
+          "position": {
+            "x": 0.34,
+            "y": 0.32
+          },
+          "rings": 5,
+          "scale": 0.17,
+          "scan": true,
+          "seed": 992,
+          "spin": 0.52,
+          "tone": "cyan"
+        },
+        "region": "stage"
+      },
+      "style-rain": {
+        "children": [],
+        "id": "style-rain",
+        "kind": "data_rain",
+        "props": {
+          "accentTone": "red",
+          "bands": 2,
+          "columns": 36,
+          "density": 0.62,
+          "direction": "down",
+          "glitch": 0.12,
+          "glyphs": "UPLINK ORBIT RELAY AZIMUTH VECTOR SATCOM 0x2600",
+          "opacity": 0.34,
+          "position": {
+            "x": 0.5,
+            "y": 0.5
+          },
+          "seed": 990,
+          "size": {
+            "h": 0.86,
+            "w": 0.94
+          },
+          "speed": 0.54,
+          "tone": "cyan",
+          "trail": 14
+        },
+        "region": "stage"
+      },
+      "style-route": {
+        "children": [],
+        "id": "style-route",
+        "kind": "trace_route",
+        "props": {
+          "accentTone": "red",
+          "focusHopId": "satellite",
+          "hops": [
+            {
+              "id": "agent",
+              "label": "AGENT",
+              "tone": "green",
+              "x": 0.12,
+              "y": 0.76
+            },
+            {
+              "id": "ground",
+              "label": "GROUND",
+              "tone": "cyan",
+              "x": 0.32,
+              "y": 0.66
+            },
+            {
+              "id": "satellite",
+              "label": "SATELLITE",
+              "tone": "amber",
+              "x": 0.56,
+              "y": 0.42
+            },
+            {
+              "id": "relay",
+              "label": "RELAY",
+              "tone": "red",
+              "x": 0.8,
+              "y": 0.58
+            }
+          ],
+          "label": "ORBITAL ROUTE",
+          "links": [
+            {
+              "label": "hook",
+              "source": "agent",
+              "target": "ground"
+            },
+            {
+              "label": "uplink",
+              "source": "ground",
+              "target": "satellite"
+            },
+            {
+              "label": "route",
+              "source": "satellite",
+              "target": "relay"
+            }
+          ],
+          "packets": 24,
+          "seed": 991,
+          "speed": 0.78,
+          "tone": "cyan"
+        },
+        "region": "stage"
+      },
+      "style-scope": {
+        "children": [],
+        "id": "style-scope",
+        "kind": "signal_scope",
+        "props": {
+          "accentTone": "red",
+          "blips": [
+            {
+              "angle": -0.8,
+              "intensity": 0.7,
+              "label": "LOW",
+              "radius": 0.28,
+              "tone": "cyan"
+            },
+            {
+              "angle": 0.16,
+              "intensity": 0.95,
+              "label": "SAT",
+              "radius": 0.54,
+              "tone": "green"
+            },
+            {
+              "angle": 1.1,
+              "intensity": 0.85,
+              "label": "WARN",
+              "radius": 0.72,
+              "tone": "red"
+            }
+          ],
+          "label": "UPLINK",
+          "mode": "radar",
+          "opacity": 0.9,
+          "position": {
+            "x": 0.73,
+            "y": 0.34
+          },
+          "rings": 6,
+          "scale": 0.19,
+          "seed": 990,
+          "spokes": 12,
+          "sweep": true,
+          "sweepSpeed": 0.9,
+          "tone": "green",
+          "waveforms": [
+            {
+              "amplitude": 0.18,
+              "frequency": 4.4,
+              "label": "SIG",
+              "phase": 0.14,
+              "tone": "cyan"
+            },
+            {
+              "amplitude": 0.12,
+              "frequency": 7.1,
+              "label": "PING",
+              "phase": 0.52,
+              "tone": "amber"
+            }
+          ]
+        },
+        "region": "stage"
+      },
+      "style-vector": {
+        "children": [],
+        "id": "style-vector",
+        "kind": "svg_layer",
+        "props": {
+          "accentTone": "red",
+          "blend": "screen",
+          "filters": [
+            {
+              "intensity": 0.9,
+              "kind": "glow"
+            },
+            {
+              "alpha": 0.62,
+              "kind": "scanline",
+              "spacing": 5.5
+            }
+          ],
+          "labels": [
+            {
+              "size": 8,
+              "text": "ORBIT",
+              "tone": "white",
+              "x": 50,
+              "y": 54
+            }
+          ],
+          "position": {
+            "x": 0.5,
+            "y": 0.28
+          },
+          "scale": 0.18,
+          "symbols": [
+            {
+              "kind": "globe",
+              "r": 34,
+              "spin": 0.4,
+              "tone": "cyan",
+              "x": 50,
+              "y": 50
+            },
+            {
+              "kind": "reticle",
+              "pulse": true,
+              "r": 42,
+              "tone": "red",
+              "x": 50,
+              "y": 50
+            }
+          ],
+          "tone": "cyan",
+          "traces": [
+            {
+              "count": 8,
+              "points": [
+                {
+                  "x": 18,
+                  "y": 72
+                },
+                {
+                  "x": 38,
+                  "y": 42
+                },
+                {
+                  "x": 58,
+                  "y": 35
+                },
+                {
+                  "x": 82,
+                  "y": 20
+                }
+              ],
+              "radius": 1.0,
+              "speed": 0.0002,
+              "tone": "amber"
+            }
+          ],
+          "viewBox": [
+            0,
+            0,
+            100,
+            100
+          ]
+        },
+        "region": "stage"
+      },
+      "trace-log": {
+        "children": [],
+        "id": "trace-log",
+        "kind": "code",
+        "props": {
+          "language": "text",
+          "text": []
+        },
+        "region": "side"
+      }
+    },
+    "revision": 1,
+    "schema": "harn-gibson.scene.v1"
+  },
+  "schema": "harn-gibson.replay-baseline.v1",
+  "stepCount": 1
+}

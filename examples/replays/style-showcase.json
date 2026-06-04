@@ -1,0 +1,304 @@
+{
+  "schema": "harn-gibson.replay.v1",
+  "name": "style showcase",
+  "metadata": {
+    "purpose": "exercise style-pack-driven browser backdrop motifs and styled primitives"
+  },
+  "expect": {
+    "sceneRevision": 1,
+    "checks": [
+      {"path": "primitives.stage.props.theme", "equals": "satellite-uplink"},
+      {"path": "primitives.stage.props.stylePack.id", "equals": "satellite-uplink"},
+      {"path": "primitives.stage.props.stylePack.motifs.0", "equals": "orbital-grid"},
+      {"path": "primitives.stage.props.stylePack.motifs.1", "equals": "radar-sweeps"},
+      {"path": "primitives.stage.props.stylePack.motifs.2", "equals": "warning-chevrons"},
+      {"path": "primitives.style-scope.kind", "equals": "signal_scope"},
+      {"path": "primitives.style-scope.props.mode", "equals": "radar"},
+      {"path": "primitives.style-route.kind", "equals": "trace_route"},
+      {"path": "primitives.style-route.props.focusHopId", "equals": "satellite"},
+      {"path": "primitives.style-hologram.kind", "equals": "hologram"},
+      {"path": "primitives.style-city.kind", "equals": "city_block"},
+      {"path": "primitives.style-rain.kind", "equals": "data_rain"},
+      {"path": "primitives.style-vector.kind", "equals": "svg_layer"},
+      {"path": "primitives.style-vector.props.symbols.0.kind", "equals": "globe"},
+      {"path": "animations.style-cues.kind", "equals": "timeline_cue"}
+    ]
+  },
+  "screenshotExpect": {
+    "nonblank": true,
+    "checks": [
+      {"path": "canvasMetrics.litRatio", "min": 0.02},
+      {"path": "canvasMetrics.maxChannelTotal", "min": 60}
+    ]
+  },
+  "steps": [
+    {
+      "type": "mutations",
+      "summary": "satellite uplink style motif showcase",
+      "mutations": [
+        {
+          "op": "patch",
+          "targetId": "stage",
+          "props": {
+            "theme": "satellite-uplink",
+            "stylePack": {
+              "schema": "harn-gibson.style-pack.v1",
+              "id": "satellite-uplink",
+              "label": "Satellite Uplink",
+              "description": "Orbital command screen with radar sweeps, cyan telemetry, red warnings, and amber route marks.",
+              "tones": {
+                "amber": [255, 203, 82],
+                "cyan": [84, 235, 228],
+                "green": [131, 255, 151],
+                "magenta": [255, 107, 176],
+                "red": [255, 82, 84],
+                "white": [236, 250, 255]
+              },
+              "canvas": {
+                "background": "#041010",
+                "gridTone": "cyan",
+                "gridAlpha": 0.16,
+                "gridPerspective": 0.18,
+                "horizonTone": "red",
+                "horizonAlpha": 0.18
+              },
+              "cssVars": {
+                "--bg": "#030a0a",
+                "--stage-bg": "#041010",
+                "--panel": "rgba(4, 22, 22, 0.88)",
+                "--line": "rgba(84, 235, 228, 0.26)",
+                "--green": "#83ff97",
+                "--cyan": "#54ebe4",
+                "--amber": "#ffcb52",
+                "--magenta": "#ff6bb0",
+                "--text": "#ecfaff",
+                "--muted": "#91b8b2"
+              },
+              "motifs": ["orbital-grid", "radar-sweeps", "warning-chevrons"]
+            }
+          }
+        },
+        {
+          "op": "patch",
+          "targetId": "status",
+          "props": {
+            "text": "style:satellite_uplink",
+            "phase": "lifecycle",
+            "tone": "cyan"
+          }
+        },
+        {
+          "op": "append_log",
+          "entry": {
+            "sequence": 990,
+            "phase": "lifecycle",
+            "eventType": "style_showcase",
+            "title": "Style showcase",
+            "summary": "satellite uplink style pack, orbital backdrop motifs, radar sweep, and warning chevrons"
+          }
+        },
+        {
+          "op": "upsert",
+          "primitive": {
+            "id": "style-rain",
+            "kind": "data_rain",
+            "region": "stage",
+            "props": {
+              "glyphs": "UPLINK ORBIT RELAY AZIMUTH VECTOR SATCOM 0x2600",
+              "columns": 36,
+              "density": 0.62,
+              "speed": 0.54,
+              "direction": "down",
+              "tone": "cyan",
+              "accentTone": "red",
+              "opacity": 0.34,
+              "position": {"x": 0.50, "y": 0.50},
+              "size": {"w": 0.94, "h": 0.86},
+              "trail": 14,
+              "bands": 2,
+              "glitch": 0.12,
+              "seed": 990
+            }
+          }
+        },
+        {
+          "op": "upsert",
+          "primitive": {
+            "id": "style-scope",
+            "kind": "signal_scope",
+            "region": "stage",
+            "props": {
+              "mode": "radar",
+              "label": "UPLINK",
+              "position": {"x": 0.73, "y": 0.34},
+              "scale": 0.19,
+              "tone": "green",
+              "accentTone": "red",
+              "opacity": 0.9,
+              "rings": 6,
+              "spokes": 12,
+              "sweep": true,
+              "sweepSpeed": 0.9,
+              "seed": 990,
+              "blips": [
+                {"angle": -0.8, "radius": 0.28, "label": "LOW", "tone": "cyan", "intensity": 0.7},
+                {"angle": 0.16, "radius": 0.54, "label": "SAT", "tone": "green", "intensity": 0.95},
+                {"angle": 1.1, "radius": 0.72, "label": "WARN", "tone": "red", "intensity": 0.85}
+              ],
+              "waveforms": [
+                {"label": "SIG", "tone": "cyan", "amplitude": 0.18, "frequency": 4.4, "phase": 0.14},
+                {"label": "PING", "tone": "amber", "amplitude": 0.12, "frequency": 7.1, "phase": 0.52}
+              ]
+            }
+          }
+        },
+        {
+          "op": "upsert",
+          "primitive": {
+            "id": "style-route",
+            "kind": "trace_route",
+            "region": "stage",
+            "props": {
+              "hops": [
+                {"id": "agent", "label": "AGENT", "x": 0.12, "y": 0.76, "tone": "green"},
+                {"id": "ground", "label": "GROUND", "x": 0.32, "y": 0.66, "tone": "cyan"},
+                {"id": "satellite", "label": "SATELLITE", "x": 0.56, "y": 0.42, "tone": "amber"},
+                {"id": "relay", "label": "RELAY", "x": 0.80, "y": 0.58, "tone": "red"}
+              ],
+              "links": [
+                {"source": "agent", "target": "ground", "label": "hook"},
+                {"source": "ground", "target": "satellite", "label": "uplink"},
+                {"source": "satellite", "target": "relay", "label": "route"}
+              ],
+              "focusHopId": "satellite",
+              "packets": 24,
+              "speed": 0.78,
+              "tone": "cyan",
+              "accentTone": "red",
+              "label": "ORBITAL ROUTE",
+              "seed": 991
+            }
+          }
+        },
+        {
+          "op": "upsert",
+          "primitive": {
+            "id": "style-hologram",
+            "kind": "hologram",
+            "region": "stage",
+            "props": {
+              "label": "SATCOM",
+              "position": {"x": 0.34, "y": 0.32},
+              "scale": 0.17,
+              "tone": "cyan",
+              "accentTone": "amber",
+              "opacity": 0.82,
+              "rings": 5,
+              "beams": 6,
+              "panels": 4,
+              "motes": 28,
+              "scan": true,
+              "spin": 0.52,
+              "seed": 992
+            }
+          }
+        },
+        {
+          "op": "upsert",
+          "primitive": {
+            "id": "style-city",
+            "kind": "city_block",
+            "region": "stage",
+            "props": {
+              "focusBlockId": "uplink-city-2",
+              "heightScale": 1.0,
+              "labels": ["SATELLITE UPLINK", "STYLE MOTIFS"],
+              "cameraPath": {
+                "durationMs": 7000,
+                "loop": true,
+                "yoyo": true,
+                "keyframes": [
+                  {"at": 0, "x": -0.01, "y": 0.008, "scale": 0.99},
+                  {"at": 0.5, "x": 0.02, "y": -0.014, "scale": 1.04},
+                  {"at": 1, "x": 0.004, "y": 0.006, "scale": 1.0}
+                ]
+              },
+              "blocks": [
+                {"id": "uplink-city-0", "x": 0.15, "y": 0.62, "w": 0.07, "d": 0.08, "h": 0.20, "tone": "green", "label": "ground"},
+                {"id": "uplink-city-1", "x": 0.27, "y": 0.58, "w": 0.08, "d": 0.08, "h": 0.32, "tone": "cyan", "label": "relay"},
+                {"id": "uplink-city-2", "x": 0.39, "y": 0.50, "w": 0.08, "d": 0.08, "h": 0.42, "tone": "amber", "label": "uplink"},
+                {"id": "uplink-city-3", "x": 0.51, "y": 0.60, "w": 0.07, "d": 0.08, "h": 0.24, "tone": "red", "label": "warn"}
+              ]
+            }
+          }
+        },
+        {
+          "op": "upsert",
+          "primitive": {
+            "id": "style-vector",
+            "kind": "svg_layer",
+            "region": "stage",
+            "props": {
+              "tone": "cyan",
+              "accentTone": "red",
+              "viewBox": [0, 0, 100, 100],
+              "position": {"x": 0.50, "y": 0.28},
+              "scale": 0.18,
+              "blend": "screen",
+              "filters": [
+                {"kind": "glow", "intensity": 0.9},
+                {"kind": "scanline", "spacing": 5.5, "alpha": 0.62}
+              ],
+              "symbols": [
+                {"kind": "globe", "x": 50, "y": 50, "r": 34, "tone": "cyan", "spin": 0.4},
+                {"kind": "reticle", "x": 50, "y": 50, "r": 42, "tone": "red", "pulse": true}
+              ],
+              "traces": [
+                {
+                  "points": [
+                    {"x": 18, "y": 72},
+                    {"x": 38, "y": 42},
+                    {"x": 58, "y": 35},
+                    {"x": 82, "y": 20}
+                  ],
+                  "tone": "amber",
+                  "count": 8,
+                  "speed": 0.0002,
+                  "radius": 1.0
+                }
+              ],
+              "labels": [
+                {"text": "ORBIT", "x": 50, "y": 54, "tone": "white", "size": 8}
+              ]
+            }
+          }
+        },
+        {
+          "op": "start_animation",
+          "animation": {
+            "id": "style-cues",
+            "targetId": "style-route",
+            "kind": "timeline_cue",
+            "startedAtMs": 9900,
+            "durationMs": 6400,
+            "loop": true,
+            "props": {
+              "phase": "lifecycle",
+              "label": "SATELLITE WINDOW",
+              "tone": "cyan",
+              "accentTone": "red",
+              "offsetY": 0.15,
+              "width": 0.34,
+              "cues": [
+                {"at": 0.08, "label": "LOCK", "tone": "green", "showLabel": true},
+                {"at": 0.36, "label": "UPLINK", "tone": "cyan"},
+                {"at": 0.68, "label": "WARN", "tone": "red", "showLabel": true},
+                {"at": 0.92, "label": "RELAY", "tone": "amber"}
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

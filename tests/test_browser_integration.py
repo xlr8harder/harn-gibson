@@ -233,6 +233,54 @@ def test_browser_display_applies_scene_style_pack() -> None:
         server.server_close()
 
 
+def test_browser_display_applies_replay_style_showcase_backdrop() -> None:
+    state = GibsonServerState()
+    run_replay_file(EXAMPLE_REPLAYS / "style-showcase.json", state)
+    server, state, base = start_display_server(state)
+    try:
+        with sync_playwright() as driver:
+            try:
+                browser = driver.chromium.launch()
+            except Error as exc:
+                pytest.skip(f"Chromium is not installed for Playwright: {exc}")
+            try:
+                page = browser.new_page(viewport={"width": 960, "height": 700})
+                page.goto(base, wait_until="domcontentloaded")
+                page.wait_for_function("window.__gibsonBackdropState?.styleId === 'satellite-uplink'")
+                page.wait_for_function("window.__gibsonSignalScopeState?.['style-scope']?.mode === 'radar'")
+                page.wait_for_function("window.__gibsonTimelineCueState?.['style-cues']?.cueCount === 4")
+                style_state = page.evaluate(
+                    """() => ({
+                      backdrop: window.__gibsonBackdropState,
+                      bodyStyle: document.body.dataset.style,
+                      scope: window.__gibsonSignalScopeState["style-scope"],
+                      route: window.__gibsonTraceRouteState["style-route"],
+                      cue: window.__gibsonTimelineCueState["style-cues"],
+                    })"""
+                )
+                assert style_state["bodyStyle"] == "satellite-uplink"
+                assert style_state["backdrop"] == {
+                    "styleId": "satellite-uplink",
+                    "motifs": ["orbital-grid", "radar-sweeps", "warning-chevrons"],
+                    "gridTone": "cyan",
+                    "horizonAlpha": 0.18,
+                    "motifEffectCount": 3,
+                }
+                assert style_state["scope"]["blipCount"] == 3
+                assert style_state["scope"]["tone"] == "green"
+                assert style_state["route"]["focusHopId"] == "satellite"
+                assert style_state["route"]["packetCount"] == 24
+                assert style_state["cue"]["targetId"] == "style-route"
+                assert style_state["cue"]["cueCount"] == 4
+                assert_canvas_nonblank(page)
+            finally:
+                browser.close()
+    finally:
+        state.pipeline.stop()
+        server.shutdown()
+        server.server_close()
+
+
 def test_browser_display_renders_vector_symbols_and_data_rain() -> None:
     state = GibsonServerState()
     run_replay_file(EXAMPLE_REPLAYS / "primitive-gallery.json", state)
@@ -523,6 +571,7 @@ def test_replay_frame_review_html_player_switches_frames() -> None:
         ("stream-and-diagnostic.json", "replay-stream-and-diagnostic.png"),
         ("renderer-plan.json", "replay-renderer-plan.png"),
         ("primitive-gallery.json", "replay-primitive-gallery.png"),
+        ("style-showcase.json", "replay-style-showcase.png"),
     ],
 )
 def test_checked_in_replay_fixtures_render_browser_screenshots(fixture_name: str, screenshot_name: str) -> None:

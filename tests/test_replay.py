@@ -1412,6 +1412,7 @@ def test_checked_in_replay_fixtures_cover_agent_and_renderer_sides() -> None:
     renderer_result = run_replay_file(EXAMPLE_REPLAYS / "renderer-plan.json")
     gallery_result = run_replay_file(EXAMPLE_REPLAYS / "primitive-gallery.json")
     animation_result = run_replay_file(EXAMPLE_REPLAYS / "animation-gallery.json")
+    style_result = run_replay_file(EXAMPLE_REPLAYS / "style-showcase.json")
 
     assert [step.kind for step in agent_result.steps] == ["event", "event", "mutations"]
     assert len(agent_result.expectations) == 5
@@ -1497,6 +1498,20 @@ def test_checked_in_replay_fixtures_cover_agent_and_renderer_sides() -> None:
         "scan",
         "timeline_cue",
     ]
+
+    assert [step.kind for step in style_result.steps] == ["mutations"]
+    assert len(style_result.expectations) == 16
+    assert style_result.scene.primitives["stage"].props["theme"] == "satellite-uplink"
+    assert style_result.scene.primitives["stage"].props["stylePack"]["motifs"] == [
+        "orbital-grid",
+        "radar-sweeps",
+        "warning-chevrons",
+    ]
+    assert style_result.scene.primitives["style-scope"].kind == "signal_scope"
+    assert style_result.scene.primitives["style-route"].props["focusHopId"] == "satellite"
+    assert style_result.scene.primitives["style-hologram"].kind == "hologram"
+    assert style_result.scene.primitives["style-vector"].props["symbols"][0]["kind"] == "globe"
+    assert style_result.scene.animations["style-cues"].kind == "timeline_cue"
 
 
 def test_checked_in_dogfood_replay_exercises_showcase_renderer() -> None:

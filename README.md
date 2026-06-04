@@ -241,7 +241,7 @@ uv run harn-gibson replay examples/replays/renderer-plan.json \
 
 Replay files can include final-scene expectations and screenshot metric expectations, so fixtures act as verifiers as well as demos. The fixture format is documented in [docs/replay.md](docs/replay.md).
 
-The checked-in replay set includes agent-side routing, renderer-side plan, primitive-gallery, and animation-gallery fixtures so browser screenshots can review both harness behavior and generic visual primitives/effects. Screenshot captures record canvas metrics and checked-in fixtures assert broad nonblank/visibility thresholds.
+The checked-in replay set includes agent-side routing, renderer-side plan, primitive-gallery, animation-gallery, and style-showcase fixtures so browser screenshots can review both harness behavior and generic visual primitives/effects. Screenshot captures record canvas metrics and checked-in fixtures assert broad nonblank/visibility thresholds.
 
 Run the full local acceptance gate before a release checkpoint:
 
