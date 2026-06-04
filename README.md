@@ -243,6 +243,14 @@ Replay files can include final-scene expectations and screenshot metric expectat
 
 The checked-in replay set includes agent-side routing, renderer-side plan, primitive-gallery, and animation-gallery fixtures so browser screenshots can review both harness behavior and generic visual primitives/effects. Screenshot captures record canvas metrics and checked-in fixtures assert broad nonblank/visibility thresholds.
 
+Run the full local acceptance gate before a release checkpoint:
+
+```bash
+bash scripts/acceptance.sh
+```
+
+Use `bash scripts/acceptance.sh --dry-run` to inspect the exact commands without running the heavyweight browser/replay gates. The script runs lint, the full covered test suite, a dynamic-port dogfood smoke, both replay baseline/screenshot suites, whitespace checks, and runtime/secret hygiene scans.
+
 Run the checked-in replay fixture suite:
 
 ```bash

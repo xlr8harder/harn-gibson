@@ -551,7 +551,7 @@
               "id": "repo-city-docs",
               "kind": "dir",
               "label": "docs",
-              "lines": 715,
+              "lines": 717,
               "path": "docs",
               "tone": "green",
               "touched": 0,
@@ -567,7 +567,7 @@
               "id": "repo-city-docs-integration",
               "kind": "dir",
               "label": "integration",
-              "lines": 43,
+              "lines": 49,
               "path": "docs/integration",
               "tone": "green",
               "touched": 0,
@@ -583,7 +583,7 @@
               "id": "repo-city-docs-1-0-feature-set-md",
               "kind": "file",
               "label": "1.0-feature-set.md",
-              "lines": 130,
+              "lines": 132,
               "path": "docs/1.0-feature-set.md",
               "tone": "cyan",
               "touched": 0,
@@ -706,6 +706,38 @@
             {
               "d": 0.066,
               "dirs": 1,
+              "files": 1,
+              "h": 0.46,
+              "id": "repo-city-scripts",
+              "kind": "dir",
+              "label": "scripts",
+              "lines": 93,
+              "path": "scripts",
+              "tone": "green",
+              "touched": 0,
+              "w": 0.058,
+              "x": 0.244,
+              "y": 0.68
+            },
+            {
+              "d": 0.03,
+              "dirs": 0,
+              "files": 1,
+              "h": 0.277,
+              "id": "repo-city-scripts-acceptance-sh",
+              "kind": "file",
+              "label": "acceptance.sh",
+              "lines": 93,
+              "path": "scripts/acceptance.sh",
+              "tone": "cyan",
+              "touched": 0,
+              "w": 0.024,
+              "x": 0.256,
+              "y": 0.715
+            },
+            {
+              "d": 0.066,
+              "dirs": 1,
               "files": 0,
               "h": 0.41,
               "id": "repo-city-src",
@@ -716,7 +748,7 @@
               "tone": "green",
               "touched": 0,
               "w": 0.058,
-              "x": 0.244,
+              "x": 0.326,
               "y": 0.68
             },
             {
@@ -732,7 +764,7 @@
               "tone": "green",
               "touched": 0,
               "w": 0.024,
-              "x": 0.256,
+              "x": 0.338,
               "y": 0.715
             },
             {
@@ -743,13 +775,29 @@
               "id": "repo-city-tests",
               "kind": "dir",
               "label": "tests",
-              "lines": 1945,
+              "lines": 1708,
               "path": "tests",
               "tone": "green",
               "touched": 0,
               "w": 0.058,
-              "x": 0.326,
+              "x": 0.408,
               "y": 0.68
+            },
+            {
+              "d": 0.03,
+              "dirs": 0,
+              "files": 1,
+              "h": 0.297,
+              "id": "repo-city-tests-test_acceptance_script-py",
+              "kind": "file",
+              "label": "test_acceptance_sc",
+              "lines": 45,
+              "path": "tests/test_acceptance_script.py",
+              "tone": "cyan",
+              "touched": 0,
+              "w": 0.024,
+              "x": 0.42,
+              "y": 0.715
             },
             {
               "d": 0.03,
@@ -764,7 +812,7 @@
               "tone": "cyan",
               "touched": 0,
               "w": 0.024,
-              "x": 0.338,
+              "x": 0.451,
               "y": 0.715
             },
             {
@@ -780,8 +828,8 @@
               "tone": "cyan",
               "touched": 0,
               "w": 0.024,
-              "x": 0.369,
-              "y": 0.715
+              "x": 0.42,
+              "y": 0.743
             },
             {
               "d": 0.03,
@@ -796,23 +844,7 @@
               "tone": "cyan",
               "touched": 0,
               "w": 0.024,
-              "x": 0.338,
-              "y": 0.743
-            },
-            {
-              "d": 0.03,
-              "dirs": 0,
-              "files": 1,
-              "h": 0.277,
-              "id": "repo-city-tests-test_catalog-py",
-              "kind": "file",
-              "label": "test_catalog.py",
-              "lines": 147,
-              "path": "tests/test_catalog.py",
-              "tone": "cyan",
-              "touched": 0,
-              "w": 0.024,
-              "x": 0.369,
+              "x": 0.451,
               "y": 0.743
             },
             {
@@ -828,8 +860,8 @@
               "tone": "cyan",
               "touched": 0,
               "w": 0.058,
-              "x": 0.408,
-              "y": 0.68
+              "x": 0.08,
+              "y": 0.58
             },
             {
               "d": 0.066,
@@ -844,7 +876,7 @@
               "tone": "cyan",
               "touched": 0,
               "w": 0.058,
-              "x": 0.08,
+              "x": 0.162,
               "y": 0.58
             },
             {
@@ -855,24 +887,8 @@
               "id": "repo-city-README-md",
               "kind": "file",
               "label": "README.md",
-              "lines": 292,
+              "lines": 300,
               "path": "README.md",
-              "tone": "cyan",
-              "touched": 0,
-              "w": 0.058,
-              "x": 0.162,
-              "y": 0.58
-            },
-            {
-              "d": 0.066,
-              "dirs": 0,
-              "files": 1,
-              "h": 0.17,
-              "id": "repo-city-uv-lock",
-              "kind": "file",
-              "label": "uv.lock",
-              "lines": 0,
-              "path": "uv.lock",
               "tone": "cyan",
               "touched": 0,
               "w": 0.058,
@@ -939,6 +955,11 @@
             {
               "label": "dir",
               "source": "repo-root",
+              "target": "repo:scripts"
+            },
+            {
+              "label": "dir",
+              "source": "repo-root",
               "target": "repo:src"
             },
             {
@@ -960,11 +981,6 @@
               "label": "file",
               "source": "repo-root",
               "target": "repo:README.md"
-            },
-            {
-              "label": "file",
-              "source": "repo-root",
-              "target": "repo:uv.lock"
             }
           ],
           "eventSequence": 1,
@@ -997,43 +1013,43 @@
               "y": 0.28
             },
             {
+              "id": "repo:scripts",
+              "label": "scripts",
+              "tone": "green",
+              "x": 0.37,
+              "y": 0.28
+            },
+            {
               "id": "repo:src",
               "label": "src",
               "tone": "green",
-              "x": 0.37,
+              "x": 0.465,
               "y": 0.28
             },
             {
               "id": "repo:tests",
               "label": "tests",
               "tone": "green",
-              "x": 0.465,
-              "y": 0.28
+              "x": 0.18,
+              "y": 0.42
             },
             {
               "id": "repo:.gitignore",
               "label": ".gitignore",
               "tone": "cyan",
-              "x": 0.18,
+              "x": 0.275,
               "y": 0.42
             },
             {
               "id": "repo:pyproject.toml",
               "label": "pyproject.toml",
               "tone": "cyan",
-              "x": 0.275,
+              "x": 0.37,
               "y": 0.42
             },
             {
               "id": "repo:README.md",
               "label": "README.md",
-              "tone": "cyan",
-              "x": 0.37,
-              "y": 0.42
-            },
-            {
-              "id": "repo:uv.lock",
-              "label": "uv.lock",
               "tone": "cyan",
               "x": 0.465,
               "y": 0.42
