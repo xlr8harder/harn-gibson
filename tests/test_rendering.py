@@ -873,9 +873,14 @@ def test_gibson1_renderer_returns_coherent_valid_plan(tmp_path: Path) -> None:
     assert scene.state.primitives["gibson1-terminal"].props["panels"][3]["lines"] == [
         "tests/test_app.py passed"
     ]
-    assert scene.state.primitives["gibson1-repo-city"].props["focusBlockId"] == "gibson1-block-1"
-    assert scene.state.primitives["gibson1-repo-city"].props["blocks"][1]["path"] == "tests"
-    assert scene.state.primitives["gibson1-repo-city"].props["blocks"][1]["touched"] == 1
+    repo_city = scene.state.primitives["gibson1-repo-city"]
+    assert repo_city.props["focusBlockId"] == "gibson1-block-1"
+    assert repo_city.props["heightScale"] == 0.92
+    assert repo_city.props["cameraPath"]["keyframes"][0]["scale"] == 0.90
+    assert repo_city.props["blocks"][1]["path"] == "tests"
+    assert repo_city.props["blocks"][1]["touched"] == 1
+    assert 0.45 <= repo_city.props["blocks"][1]["y"] <= 0.65
+    assert repo_city.props["blocks"][1]["h"] <= 0.32
     assert scene.state.primitives["gibson1-scope"].props["blips"][0]["label"] == "TEST-APP.PY"
     assert scene.state.primitives["gibson1-route"].props["focusHopId"] == "file-0"
     assert scene.state.animations["gibson1-route-trace"].target_id == "gibson1-route"

@@ -1,0 +1,227 @@
+{
+  "schema": "harn-gibson.replay.v1",
+  "name": "repo map gibson1 trajectory",
+  "metadata": {
+    "purpose": "exercise the calmer default gibson1 renderer against a topology-heavy repo-map trajectory",
+    "renderer": "examples/renderers/gibson1_renderer.py",
+    "projectRoot": "examples/dogfood-workspaces/repo-map",
+    "projectName": "repo-map"
+  },
+  "expect": {
+    "sceneRevision": 4,
+    "checks": [
+      {
+        "path": "primitives.status.props.text",
+        "equals": "gibson1::tool_result"
+      },
+      {
+        "path": "primitives.gibson1-terminal.kind",
+        "equals": "terminal_wall"
+      },
+      {
+        "path": "primitives.gibson1-terminal.props.title",
+        "equals": "GIBSON1 EVENT BOARD"
+      },
+      {
+        "path": "primitives.gibson1-terminal.props.panels",
+        "contains": {
+          "id": "files",
+          "title": "FILES",
+          "tone": "magenta",
+          "accentTone": "white",
+          "active": true
+        }
+      },
+      {
+        "path": "primitives.gibson1-repo-city.kind",
+        "equals": "city_block"
+      },
+      {
+        "path": "primitives.gibson1-repo-city.props.blocks",
+        "contains": {
+          "id": "gibson1-block-0",
+          "path": "docs",
+          "tone": "magenta",
+          "active": true,
+          "touched": 1
+        }
+      },
+      {
+        "path": "primitives.gibson1-repo-city.props.focusBlockId",
+        "equals": "gibson1-block-0"
+      },
+      {
+        "path": "primitives.gibson1-scope.kind",
+        "equals": "signal_scope"
+      },
+      {
+        "path": "primitives.gibson1-scope.props.blips",
+        "contains": {
+          "label": "USAGE.MD",
+          "tone": "magenta"
+        }
+      },
+      {
+        "path": "primitives.gibson1-route.kind",
+        "equals": "trace_route"
+      },
+      {
+        "path": "primitives.gibson1-route.props.focusHopId",
+        "equals": "file-0"
+      },
+      {
+        "path": "primitives.gibson1-rain.kind",
+        "equals": "data_rain"
+      },
+      {
+        "path": "animations.gibson1-cues.kind",
+        "equals": "timeline_cue"
+      },
+      {
+        "path": "animations.gibson1-route-trace.kind",
+        "equals": "route_trace"
+      },
+      {
+        "path": "metadata.lastRenderIntent.renderer",
+        "equals": "gibson1"
+      },
+      {
+        "path": "metadata.lastRenderIntent.eventTypes",
+        "contains": "tool_result"
+      }
+    ]
+  },
+  "screenshotExpect": {
+    "nonblank": true,
+    "checks": [
+      {"path": "canvasMetrics.litRatio", "min": 0.015},
+      {"path": "canvasMetrics.maxChannelTotal", "min": 60}
+    ]
+  },
+  "steps": [
+    {
+      "type": "event",
+      "event": {
+        "schema": "harn-gibson.event.v1",
+        "sequence": 1,
+        "timestampMs": 1000,
+        "source": "harn",
+        "eventType": "input",
+        "phase": "before",
+        "title": "Input intercept",
+        "summary": "user input: inspect repo-map with the calmer Gibson renderer",
+        "payload": {
+          "type": "input",
+          "source": "user",
+          "text": "show a coherent repo-map visualization while the agent edits files"
+        },
+        "recentContext": [
+          "user wants the default renderer to be less over the top than dogfood"
+        ],
+        "visualizationContext": [
+          "keep the scene legible while showing touched repository areas"
+        ]
+      }
+    },
+    {
+      "type": "event",
+      "event": {
+        "schema": "harn-gibson.event.v1",
+        "sequence": 2,
+        "timestampMs": 2800,
+        "source": "harn",
+        "eventType": "tool_call",
+        "phase": "before",
+        "title": "Tool preflight",
+        "summary": "bash starting with {command}",
+        "payload": {
+          "type": "tool_call",
+          "toolName": "bash",
+          "input": {
+            "command": "find . -maxdepth 2 -type f | sort"
+          }
+        },
+        "recentContext": [
+          "agent is sampling project structure for the renderer"
+        ],
+        "visualizationContext": [
+          "show command activity without filling the whole display"
+        ]
+      }
+    },
+    {
+      "type": "event",
+      "event": {
+        "schema": "harn-gibson.event.v1",
+        "sequence": 3,
+        "timestampMs": 6100,
+        "source": "harn",
+        "eventType": "tool_result",
+        "phase": "after",
+        "title": "Tool result",
+        "summary": "bash completed: repo files listed",
+        "payload": {
+          "type": "tool_result",
+          "toolName": "bash",
+          "filePath": [
+            "README.md",
+            "docs/usage.md",
+            "src/repo_map/cli.py",
+            "tests/test_cli.py"
+          ],
+          "input": {
+            "command": "find . -maxdepth 2 -type f | sort"
+          },
+          "content": [
+            {
+              "type": "text",
+              "text": "README.md\\ndocs/usage.md\\nfixtures/tasks.txt\\nscripts/line_summary.py\\nsrc/repo_map/cli.py\\ntests/test_cli.py"
+            }
+          ]
+        },
+        "recentContext": [
+          "agent has a compact file listing for the repo-map workspace"
+        ],
+        "visualizationContext": [
+          "focus the repo city on touched top-level areas"
+        ]
+      }
+    },
+    {
+      "type": "event",
+      "event": {
+        "schema": "harn-gibson.event.v1",
+        "sequence": 4,
+        "timestampMs": 9300,
+        "source": "harn",
+        "eventType": "tool_result",
+        "phase": "after",
+        "title": "Tool result",
+        "summary": "bash completed: docs and CLI touched",
+        "payload": {
+          "type": "tool_result",
+          "toolName": "bash",
+          "filePath": [
+            "docs/usage.md",
+            "src/repo_map/cli.py"
+          ],
+          "input": {
+            "command": "uv run python scripts/line_summary.py docs/usage.md src/repo_map/cli.py"
+          },
+          "content": [
+            {
+              "type": "text",
+              "text": "docs/usage.md 22\\nsrc/repo_map/cli.py 33"
+            }
+          ]
+        },
+        "recentContext": [
+          "agent reviewed concrete docs and source files"
+        ],
+        "visualizationContext": [
+          "settle on a readable final scene with docs and source highlighted"
+        ]
+      }
+    }
+  ]
+}

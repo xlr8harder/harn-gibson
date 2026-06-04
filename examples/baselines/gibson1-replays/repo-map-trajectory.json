@@ -1,0 +1,785 @@
+{
+  "metadata": {
+    "projectName": "repo-map",
+    "projectRoot": "examples/dogfood-workspaces/repo-map",
+    "purpose": "exercise the calmer default gibson1 renderer against a topology-heavy repo-map trajectory",
+    "renderer": "examples/renderers/gibson1_renderer.py"
+  },
+  "replayName": "repo map gibson1 trajectory",
+  "replaySchema": "harn-gibson.replay.v1",
+  "scene": {
+    "animations": {
+      "gibson1-cues": {
+        "durationMs": 2600,
+        "id": "gibson1-cues",
+        "kind": "timeline_cue",
+        "loop": false,
+        "props": {
+          "accentTone": "magenta",
+          "label": "TOOL RESULT",
+          "phase": "after",
+          "sequence": 4,
+          "tone": "magenta"
+        },
+        "startedAtMs": 9300,
+        "targetId": "status"
+      },
+      "gibson1-route-trace": {
+        "durationMs": 2600,
+        "id": "gibson1-route-trace",
+        "kind": "route_trace",
+        "loop": false,
+        "props": {
+          "accentTone": "magenta",
+          "packets": 10,
+          "phase": "after",
+          "points": [
+            {
+              "label": "INPUT",
+              "x": 0.18,
+              "y": 0.18
+            },
+            {
+              "label": "HARN",
+              "x": 0.38,
+              "y": 0.32
+            },
+            {
+              "label": "RENDER",
+              "x": 0.58,
+              "y": 0.24
+            },
+            {
+              "label": "SCENE",
+              "x": 0.76,
+              "y": 0.38
+            },
+            {
+              "label": "USAGE.MD",
+              "x": 0.56,
+              "y": 0.7
+            }
+          ],
+          "sequence": 4,
+          "tone": "magenta"
+        },
+        "startedAtMs": 9300,
+        "targetId": "gibson1-route"
+      }
+    },
+    "log": [
+      {
+        "eventType": "gibson1_renderer",
+        "phase": "before",
+        "sequence": 1,
+        "summary": "input: user input: inspect repo-map with the calmer Gibson renderer",
+        "title": "Gibson1 renderer"
+      },
+      {
+        "eventType": "gibson1_renderer",
+        "phase": "before",
+        "sequence": 2,
+        "summary": "tool_call: bash starting with {command}",
+        "title": "Gibson1 renderer"
+      },
+      {
+        "eventType": "gibson1_renderer",
+        "phase": "after",
+        "sequence": 3,
+        "summary": "tool_result: bash completed: repo files listed",
+        "title": "Gibson1 renderer"
+      },
+      {
+        "eventType": "gibson1_renderer",
+        "phase": "after",
+        "sequence": 4,
+        "summary": "tool_result: bash completed: docs and CLI touched",
+        "title": "Gibson1 renderer"
+      }
+    ],
+    "metadata": {
+      "lastRenderIntent": {
+        "effects": [
+          "patch",
+          "append_log",
+          "primitive:terminal_wall",
+          "primitive:city_block",
+          "primitive:signal_scope",
+          "primitive:trace_route",
+          "primitive:data_rain",
+          "animation:timeline_cue",
+          "animation:route_trace"
+        ],
+        "eventTypes": [
+          "tool_result"
+        ],
+        "intent": "show tool_result as a coherent live operations display",
+        "metadata": {
+          "eventType": "tool_result",
+          "intent": "show tool_result as a coherent live operations display",
+          "mode": "usable-default",
+          "phase": "after",
+          "projectName": "repo-map",
+          "renderer": "gibson1",
+          "touchedFileCount": 3,
+          "visualizer": "gibson1"
+        },
+        "mutationCount": 9,
+        "renderer": "gibson1",
+        "requestCount": 1,
+        "routes": [
+          "renderer_agent"
+        ],
+        "schema": "harn-gibson.render-intent.v1",
+        "stepCount": 1,
+        "targets": [
+          "status",
+          "gibson1-terminal",
+          "gibson1-repo-city",
+          "gibson1-scope",
+          "gibson1-route",
+          "gibson1-rain"
+        ],
+        "timeline": {
+          "durationMs": 0
+        }
+      },
+      "renderIntents": [
+        {
+          "effects": [
+            "patch",
+            "append_log",
+            "primitive:terminal_wall",
+            "primitive:city_block",
+            "primitive:signal_scope",
+            "primitive:trace_route",
+            "primitive:data_rain",
+            "animation:timeline_cue",
+            "animation:route_trace"
+          ],
+          "eventTypes": [
+            "input"
+          ],
+          "intent": "show input as a coherent live operations display",
+          "metadata": {
+            "eventType": "input",
+            "intent": "show input as a coherent live operations display",
+            "mode": "usable-default",
+            "phase": "before",
+            "projectName": "repo-map",
+            "renderer": "gibson1",
+            "touchedFileCount": 0,
+            "visualizer": "gibson1"
+          },
+          "mutationCount": 9,
+          "renderer": "gibson1",
+          "requestCount": 1,
+          "routes": [
+            "renderer_agent"
+          ],
+          "schema": "harn-gibson.render-intent.v1",
+          "stepCount": 1,
+          "targets": [
+            "status",
+            "gibson1-terminal",
+            "gibson1-repo-city",
+            "gibson1-scope",
+            "gibson1-route",
+            "gibson1-rain"
+          ],
+          "timeline": {
+            "durationMs": 0
+          }
+        },
+        {
+          "effects": [
+            "patch",
+            "append_log",
+            "primitive:terminal_wall",
+            "primitive:city_block",
+            "primitive:signal_scope",
+            "primitive:trace_route",
+            "primitive:data_rain",
+            "animation:timeline_cue",
+            "animation:route_trace"
+          ],
+          "eventTypes": [
+            "tool_call"
+          ],
+          "intent": "show tool_call as a coherent live operations display",
+          "metadata": {
+            "eventType": "tool_call",
+            "intent": "show tool_call as a coherent live operations display",
+            "mode": "usable-default",
+            "phase": "before",
+            "projectName": "repo-map",
+            "renderer": "gibson1",
+            "touchedFileCount": 0,
+            "visualizer": "gibson1"
+          },
+          "mutationCount": 9,
+          "renderer": "gibson1",
+          "requestCount": 1,
+          "routes": [
+            "renderer_agent"
+          ],
+          "schema": "harn-gibson.render-intent.v1",
+          "stepCount": 1,
+          "targets": [
+            "status",
+            "gibson1-terminal",
+            "gibson1-repo-city",
+            "gibson1-scope",
+            "gibson1-route",
+            "gibson1-rain"
+          ],
+          "timeline": {
+            "durationMs": 0
+          }
+        },
+        {
+          "effects": [
+            "patch",
+            "append_log",
+            "primitive:terminal_wall",
+            "primitive:city_block",
+            "primitive:signal_scope",
+            "primitive:trace_route",
+            "primitive:data_rain",
+            "animation:timeline_cue",
+            "animation:route_trace"
+          ],
+          "eventTypes": [
+            "tool_result"
+          ],
+          "intent": "show tool_result as a coherent live operations display",
+          "metadata": {
+            "eventType": "tool_result",
+            "intent": "show tool_result as a coherent live operations display",
+            "mode": "usable-default",
+            "phase": "after",
+            "projectName": "repo-map",
+            "renderer": "gibson1",
+            "touchedFileCount": 4,
+            "visualizer": "gibson1"
+          },
+          "mutationCount": 9,
+          "renderer": "gibson1",
+          "requestCount": 1,
+          "routes": [
+            "renderer_agent"
+          ],
+          "schema": "harn-gibson.render-intent.v1",
+          "stepCount": 1,
+          "targets": [
+            "status",
+            "gibson1-terminal",
+            "gibson1-repo-city",
+            "gibson1-scope",
+            "gibson1-route",
+            "gibson1-rain"
+          ],
+          "timeline": {
+            "durationMs": 0
+          }
+        },
+        {
+          "effects": [
+            "patch",
+            "append_log",
+            "primitive:terminal_wall",
+            "primitive:city_block",
+            "primitive:signal_scope",
+            "primitive:trace_route",
+            "primitive:data_rain",
+            "animation:timeline_cue",
+            "animation:route_trace"
+          ],
+          "eventTypes": [
+            "tool_result"
+          ],
+          "intent": "show tool_result as a coherent live operations display",
+          "metadata": {
+            "eventType": "tool_result",
+            "intent": "show tool_result as a coherent live operations display",
+            "mode": "usable-default",
+            "phase": "after",
+            "projectName": "repo-map",
+            "renderer": "gibson1",
+            "touchedFileCount": 3,
+            "visualizer": "gibson1"
+          },
+          "mutationCount": 9,
+          "renderer": "gibson1",
+          "requestCount": 1,
+          "routes": [
+            "renderer_agent"
+          ],
+          "schema": "harn-gibson.render-intent.v1",
+          "stepCount": 1,
+          "targets": [
+            "status",
+            "gibson1-terminal",
+            "gibson1-repo-city",
+            "gibson1-scope",
+            "gibson1-route",
+            "gibson1-rain"
+          ],
+          "timeline": {
+            "durationMs": 0
+          }
+        }
+      ]
+    },
+    "primitives": {
+      "decision-log": {
+        "children": [],
+        "id": "decision-log",
+        "kind": "code",
+        "props": {
+          "language": "json",
+          "text": "[]"
+        },
+        "region": "side"
+      },
+      "event-feed": {
+        "children": [],
+        "id": "event-feed",
+        "kind": "feed",
+        "props": {
+          "maxItems": 80
+        },
+        "region": "side"
+      },
+      "gibson1-rain": {
+        "children": [],
+        "id": "gibson1-rain",
+        "kind": "data_rain",
+        "props": {
+          "accentTone": "magenta",
+          "bands": 2,
+          "columns": 28,
+          "density": 0.28,
+          "direction": "down",
+          "glitch": 0.04,
+          "glyphs": "TOOL_RESULT BASH COMPLETED: DOCS AND CLI TOUCHED HARN GIBSON1",
+          "opacity": 0.2,
+          "position": {
+            "x": 0.5,
+            "y": 0.5
+          },
+          "seed": 4,
+          "size": {
+            "h": 0.82,
+            "w": 0.92
+          },
+          "speed": 0.3,
+          "tone": "magenta",
+          "trail": 10
+        },
+        "region": "stage"
+      },
+      "gibson1-repo-city": {
+        "children": [],
+        "id": "gibson1-repo-city",
+        "kind": "city_block",
+        "props": {
+          "accentTone": "magenta",
+          "blocks": [
+            {
+              "active": true,
+              "d": 0.088,
+              "h": 0.296,
+              "id": "gibson1-block-0",
+              "label": "DOCS",
+              "lines": 29,
+              "path": "docs",
+              "tone": "magenta",
+              "touched": 1,
+              "w": 0.082,
+              "x": 0.18,
+              "y": 0.46
+            },
+            {
+              "active": false,
+              "d": 0.088,
+              "h": 0.132,
+              "id": "gibson1-block-1",
+              "label": "FIXTURES",
+              "lines": 8,
+              "path": "fixtures",
+              "tone": "magenta",
+              "touched": 0,
+              "w": 0.082,
+              "x": 0.33,
+              "y": 0.46
+            },
+            {
+              "active": true,
+              "d": 0.088,
+              "h": 0.248,
+              "id": "gibson1-block-2",
+              "label": "SCRIPTS",
+              "lines": 17,
+              "path": "scripts",
+              "tone": "magenta",
+              "touched": 1,
+              "w": 0.082,
+              "x": 0.48,
+              "y": 0.46
+            },
+            {
+              "active": true,
+              "d": 0.088,
+              "h": 0.18,
+              "id": "gibson1-block-3",
+              "label": "SRC",
+              "lines": 0,
+              "path": "src",
+              "tone": "magenta",
+              "touched": 1,
+              "w": 0.082,
+              "x": 0.63,
+              "y": 0.46
+            },
+            {
+              "active": false,
+              "d": 0.088,
+              "h": 0.244,
+              "id": "gibson1-block-4",
+              "label": "TESTS",
+              "lines": 36,
+              "path": "tests",
+              "tone": "magenta",
+              "touched": 0,
+              "w": 0.082,
+              "x": 0.18,
+              "y": 0.56
+            },
+            {
+              "active": false,
+              "d": 0.088,
+              "h": 0.16,
+              "id": "gibson1-block-5",
+              "label": "PYPROJECT...",
+              "lines": 15,
+              "path": "pyproject.toml",
+              "tone": "magenta",
+              "touched": 0,
+              "w": 0.082,
+              "x": 0.33,
+              "y": 0.56
+            },
+            {
+              "active": false,
+              "d": 0.088,
+              "h": 0.172,
+              "id": "gibson1-block-6",
+              "label": "README.MD",
+              "lines": 18,
+              "path": "README.md",
+              "tone": "magenta",
+              "touched": 0,
+              "w": 0.082,
+              "x": 0.48,
+              "y": 0.56
+            }
+          ],
+          "cameraPath": {
+            "durationMs": 7400,
+            "keyframes": [
+              {
+                "at": 0,
+                "scale": 0.9,
+                "x": -0.004,
+                "y": 0.012
+              },
+              {
+                "at": 0.48,
+                "rotation": 0.008,
+                "scale": 0.925,
+                "x": 0.004,
+                "y": 0.002
+              },
+              {
+                "at": 1,
+                "scale": 0.905,
+                "x": 0.003,
+                "y": 0.01
+              }
+            ],
+            "loop": true,
+            "yoyo": true
+          },
+          "focusBlockId": "gibson1-block-0",
+          "heightScale": 0.92,
+          "label": "REPO MAP",
+          "labels": true,
+          "opacity": 0.72,
+          "position": {
+            "x": 0.48,
+            "y": 0.42
+          },
+          "seed": 123,
+          "size": {
+            "h": 0.38,
+            "w": 0.7
+          },
+          "tone": "magenta"
+        },
+        "region": "stage"
+      },
+      "gibson1-route": {
+        "children": [],
+        "id": "gibson1-route",
+        "kind": "trace_route",
+        "props": {
+          "accentTone": "magenta",
+          "focusHopId": "file-0",
+          "hops": [
+            {
+              "active": false,
+              "id": "input",
+              "label": "INPUT",
+              "tone": "green",
+              "x": 0.12,
+              "y": 0.18
+            },
+            {
+              "active": true,
+              "id": "harn",
+              "label": "HARN",
+              "tone": "magenta",
+              "x": 0.33,
+              "y": 0.32
+            },
+            {
+              "active": true,
+              "id": "render",
+              "label": "RENDER",
+              "tone": "magenta",
+              "x": 0.56,
+              "y": 0.24
+            },
+            {
+              "active": true,
+              "id": "scene",
+              "label": "SCENE",
+              "tone": "cyan",
+              "x": 0.78,
+              "y": 0.38
+            },
+            {
+              "active": true,
+              "id": "file-0",
+              "label": "USAGE.MD",
+              "tone": "magenta",
+              "x": 0.28,
+              "y": 0.62
+            },
+            {
+              "active": false,
+              "id": "file-1",
+              "label": "CLI.PY",
+              "tone": "magenta",
+              "x": 0.48,
+              "y": 0.72
+            },
+            {
+              "active": false,
+              "id": "file-2",
+              "label": "LINE-SUMM...",
+              "tone": "magenta",
+              "x": 0.68,
+              "y": 0.62
+            }
+          ],
+          "label": "TOOL RESULT",
+          "opacity": 0.74,
+          "packets": 22,
+          "position": {
+            "x": 0.5,
+            "y": 0.23
+          },
+          "seed": 39,
+          "size": {
+            "h": 0.22,
+            "w": 0.58
+          },
+          "speed": 0.44,
+          "tone": "magenta"
+        },
+        "region": "stage"
+      },
+      "gibson1-scope": {
+        "children": [],
+        "id": "gibson1-scope",
+        "kind": "signal_scope",
+        "props": {
+          "accentTone": "magenta",
+          "blips": [
+            {
+              "angle": 0.2,
+              "intensity": 0.78,
+              "label": "USAGE.MD",
+              "radius": 0.24,
+              "tone": "magenta"
+            },
+            {
+              "angle": 1.28,
+              "intensity": 0.78,
+              "label": "CLI.PY",
+              "radius": 0.38,
+              "tone": "magenta"
+            },
+            {
+              "angle": 2.36,
+              "intensity": 0.78,
+              "label": "LINE-SUMM...",
+              "radius": 0.52,
+              "tone": "magenta"
+            }
+          ],
+          "label": "EVENT SCOPE",
+          "mode": "radar",
+          "opacity": 0.78,
+          "position": {
+            "x": 0.82,
+            "y": 0.26
+          },
+          "rings": 4,
+          "scale": 0.13,
+          "seed": 7,
+          "speed": 0.36,
+          "spokes": 8,
+          "sweep": true,
+          "tone": "magenta",
+          "waveform": true
+        },
+        "region": "side"
+      },
+      "gibson1-terminal": {
+        "children": [],
+        "id": "gibson1-terminal",
+        "kind": "terminal_wall",
+        "props": {
+          "accentTone": "magenta",
+          "columns": 2,
+          "cursor": true,
+          "opacity": 0.82,
+          "panels": [
+            {
+              "accentTone": "magenta",
+              "active": true,
+              "id": "event",
+              "lines": [
+                "SEQ 4",
+                "bash completed: docs and CLI touched",
+                "3 TOUCHED / 7 AREAS"
+              ],
+              "title": "AFTER::TOOL_RESULT",
+              "tone": "magenta"
+            },
+            {
+              "accentTone": "magenta",
+              "id": "command",
+              "lines": [
+                "uv run python scripts/line_summary.py docs/usage.md src/repo_map/cli.py"
+              ],
+              "streaming": true,
+              "title": "COMMAND",
+              "tone": "cyan"
+            },
+            {
+              "accentTone": "white",
+              "active": true,
+              "id": "files",
+              "lines": [
+                "docs/usage.md",
+                "src/repo_map/cli.py",
+                "scripts/line_summary.py"
+              ],
+              "title": "FILES",
+              "tone": "magenta"
+            },
+            {
+              "accentTone": "magenta",
+              "id": "output",
+              "lines": [
+                "bash completed: docs and CLI touched"
+              ],
+              "streaming": true,
+              "title": "OUTPUT",
+              "tone": "amber"
+            }
+          ],
+          "position": {
+            "x": 0.5,
+            "y": 0.65
+          },
+          "rows": 2,
+          "scan": true,
+          "seed": 37,
+          "size": {
+            "h": 0.18,
+            "w": 0.78
+          },
+          "speed": 0.42,
+          "title": "GIBSON1 EVENT BOARD",
+          "tone": "magenta"
+        },
+        "region": "stage"
+      },
+      "scan-grid": {
+        "children": [],
+        "id": "scan-grid",
+        "kind": "grid",
+        "props": {
+          "intensity": 0.2
+        },
+        "region": "stage"
+      },
+      "stage": {
+        "children": [
+          "status",
+          "event-feed",
+          "trace-log",
+          "decision-log",
+          "scan-grid"
+        ],
+        "id": "stage",
+        "kind": "viewport",
+        "props": {
+          "theme": "gibson",
+          "title": "GIBSON LINK"
+        },
+        "region": "root"
+      },
+      "status": {
+        "children": [],
+        "id": "status",
+        "kind": "status",
+        "props": {
+          "phase": "after",
+          "text": "gibson1::tool_result",
+          "tone": "magenta"
+        },
+        "region": "mast"
+      },
+      "trace-log": {
+        "children": [],
+        "id": "trace-log",
+        "kind": "code",
+        "props": {
+          "language": "text",
+          "text": []
+        },
+        "region": "side"
+      }
+    },
+    "revision": 4,
+    "schema": "harn-gibson.scene.v1"
+  },
+  "schema": "harn-gibson.replay-baseline.v1",
+  "stepCount": 4
+}

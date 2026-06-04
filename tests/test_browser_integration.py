@@ -11,6 +11,7 @@ import pytest
 
 from harn_gibson.browser_capture import capture_scene_screenshot
 from harn_gibson.replay import replay_frame_review_html, run_replay_file
+from harn_gibson.scene import SceneMutation, ScenePrimitive
 from harn_gibson.server import GibsonServerState, create_server
 from harn_gibson.styles import style_pack_from_name
 
@@ -281,6 +282,83 @@ def test_browser_display_applies_replay_style_showcase_backdrop() -> None:
         server.server_close()
 
 
+def test_browser_terminal_wall_does_not_repeat_short_panel_lines() -> None:
+    state = GibsonServerState()
+    state.scene.apply(
+        [
+            SceneMutation(
+                op="upsert",
+                primitive=ScenePrimitive(
+                    id="short-terminal",
+                    kind="terminal_wall",
+                    region="stage",
+                    props={
+                        "position": {"x": 0.5, "y": 0.55},
+                        "size": {"w": 0.62, "h": 0.22},
+                        "columns": 2,
+                        "rows": 1,
+                        "scan": False,
+                        "cursor": False,
+                        "panels": [
+                            {
+                                "id": "command",
+                                "title": "COMMAND",
+                                "lines": ["uv run pytest"],
+                                "active": True,
+                                "tone": "cyan",
+                            },
+                            {
+                                "id": "output",
+                                "title": "OUTPUT",
+                                "lines": ["tests passed"],
+                                "tone": "amber",
+                            },
+                        ],
+                    },
+                ),
+            )
+        ]
+    )
+    server, state, base = start_display_server(state)
+    try:
+        with sync_playwright() as driver:
+            try:
+                browser = driver.chromium.launch()
+            except Error as exc:
+                pytest.skip(f"Chromium is not installed for Playwright: {exc}")
+            try:
+                page = browser.new_page(viewport={"width": 720, "height": 480})
+                page.goto(base, wait_until="domcontentloaded")
+                page.wait_for_function(
+                    "window.__gibsonTerminalWallState?.['short-terminal']?.renderedLineCount === 2"
+                )
+                terminal_wall_state = page.evaluate(
+                    """() => window.__gibsonTerminalWallState["short-terminal"]"""
+                )
+                assert terminal_wall_state == {
+                    "panelCount": 2,
+                    "lineCount": 2,
+                    "renderedLineCount": 2,
+                    "columnCount": 2,
+                    "rowCount": 1,
+                    "activePanelId": "command",
+                    "streamingCount": 1,
+                    "tone": "green",
+                    "accentTone": "cyan",
+                    "hasScan": False,
+                    "hasCursor": False,
+                    "panelLineCounts": [1, 1],
+                    "panelRenderedLineCounts": [1, 1],
+                }
+                assert_canvas_nonblank(page)
+            finally:
+                browser.close()
+    finally:
+        state.pipeline.stop()
+        server.shutdown()
+        server.server_close()
+
+
 def test_browser_display_renders_vector_symbols_and_data_rain() -> None:
     state = GibsonServerState()
     run_replay_file(EXAMPLE_REPLAYS / "primitive-gallery.json", state)
@@ -454,6 +532,7 @@ def test_browser_display_renders_vector_symbols_and_data_rain() -> None:
                 assert terminal_wall_state == {
                     "panelCount": 4,
                     "lineCount": 11,
+                    "renderedLineCount": 11,
                     "columnCount": 2,
                     "rowCount": 2,
                     "activePanelId": "evt",
@@ -462,6 +541,8 @@ def test_browser_display_renders_vector_symbols_and_data_rain() -> None:
                     "accentTone": "cyan",
                     "hasScan": True,
                     "hasCursor": True,
+                    "panelLineCounts": [3, 2, 3, 3],
+                    "panelRenderedLineCounts": [3, 2, 3, 3],
                 }
                 assert access_matrix_state == {
                     "rowCount": 3,

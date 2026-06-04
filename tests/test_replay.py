@@ -85,7 +85,19 @@ from harn_gibson.server import GibsonServerState, build_state_from_env
 
 ROOT = Path(__file__).resolve().parents[1]
 EXAMPLE_REPLAYS = ROOT / "examples" / "replays"
+EXAMPLE_GIBSON1_REPLAYS = ROOT / "examples" / "gibson1-replays"
 EXAMPLE_DOGFOOD_REPLAYS = ROOT / "examples" / "dogfood-replays"
+
+
+def gibson1_renderer_state() -> GibsonServerState:
+    return build_state_from_env(
+        {
+            "HARN_GIBSON_RENDERER_COMMAND": json.dumps(
+                ["uv", "run", "python", str(ROOT / "examples" / "renderers" / "gibson1_renderer.py")]
+            ),
+            "HARN_GIBSON_RENDERER_TIMEOUT_MS": "10000",
+        }
+    )
 
 
 def dogfood_renderer_state() -> GibsonServerState:
@@ -1710,6 +1722,49 @@ def test_checked_in_replay_fixtures_cover_agent_and_renderer_sides() -> None:
     assert style_result.scene.primitives["style-hologram"].kind == "hologram"
     assert style_result.scene.primitives["style-vector"].props["symbols"][0]["kind"] == "globe"
     assert style_result.scene.animations["style-cues"].kind == "timeline_cue"
+
+
+def test_checked_in_gibson1_replay_exercises_default_renderer() -> None:
+    state = gibson1_renderer_state()
+    try:
+        result = run_replay_file(EXAMPLE_GIBSON1_REPLAYS / "repo-map-trajectory.json", state)
+    finally:
+        state.pipeline.stop()
+
+    suite = run_replay_suite(EXAMPLE_GIBSON1_REPLAYS, state_factory=gibson1_renderer_state)
+    summary = suite.to_dict()["summary"]
+    blocks = result.scene.primitives["gibson1-repo-city"].props["blocks"]
+    block_paths = {block["path"]: block for block in blocks}
+
+    assert [step.kind for step in result.steps] == ["event"] * 4
+    assert len(result.expectations) == 17
+    assert result.scene.primitives["status"].props["text"] == "gibson1::tool_result"
+    assert result.scene.primitives["gibson1-terminal"].kind == "terminal_wall"
+    assert result.scene.primitives["gibson1-terminal"].props["title"] == "GIBSON1 EVENT BOARD"
+    assert result.scene.primitives["gibson1-terminal"].props["panels"][2]["title"] == "FILES"
+    assert result.scene.primitives["gibson1-repo-city"].kind == "city_block"
+    assert result.scene.primitives["gibson1-repo-city"].props["focusBlockId"] == "gibson1-block-0"
+    assert result.scene.primitives["gibson1-repo-city"].props["heightScale"] == 0.92
+    assert len(result.scene.primitives["gibson1-repo-city"].props["cameraPath"]["keyframes"]) == 3
+    assert block_paths["docs"]["tone"] == "magenta"
+    assert block_paths["docs"]["touched"] == 1
+    assert 0.45 <= block_paths["docs"]["y"] <= 0.65
+    assert block_paths["docs"]["h"] <= 0.40
+    assert block_paths["src"]["touched"] == 1
+    assert result.scene.primitives["gibson1-scope"].kind == "signal_scope"
+    assert result.scene.primitives["gibson1-scope"].props["blips"][0]["label"] == "USAGE.MD"
+    assert result.scene.primitives["gibson1-route"].kind == "trace_route"
+    assert result.scene.primitives["gibson1-route"].props["focusHopId"] == "file-0"
+    assert result.scene.primitives["gibson1-rain"].kind == "data_rain"
+    assert result.scene.animations["gibson1-cues"].kind == "timeline_cue"
+    assert result.scene.animations["gibson1-route-trace"].target_id == "gibson1-route"
+    assert result.scene.metadata["lastRenderIntent"]["renderer"] == "gibson1"
+    assert suite.ok is True
+    assert summary["fileCount"] == 1
+    assert summary["stepCount"] == 4
+    assert summary["expectationCount"] == 17
+    assert summary["rendererCounts"] == {"gibson1": 4}
+    assert summary["routeCounts"] == {"renderer_agent": 4}
 
 
 def test_checked_in_dogfood_replay_exercises_showcase_renderer() -> None:

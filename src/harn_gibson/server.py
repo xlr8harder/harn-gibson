@@ -5859,15 +5859,35 @@ function drawTerminalWall(primitive, w, h, now) {
   const fontSize = Math.max(7 * devicePixelRatio, finiteNumber(props.fontSize, 10) * devicePixelRatio);
   const lineHeight = fontSize * 1.25;
   const headerHeight = Math.max(16 * devicePixelRatio, lineHeight * 1.7);
+  const panelMetrics = panels.map((panel, index) => {
+    const row = Math.floor(index / columns);
+    if (row >= rows) {
+      return {visibleLines: 0, renderedLines: 0, scroll: 0};
+    }
+    const visibleLines = Math.max(
+      1,
+      Math.floor((panelHeight - headerHeight - 7 * devicePixelRatio) / lineHeight)
+    );
+    const scroll = panel.lines.length > visibleLines
+      ? Math.floor(now * speed * 0.0022 + seed + index * 3.1) % panel.lines.length
+      : 0;
+    return {
+      visibleLines,
+      renderedLines: Math.min(visibleLines, panel.lines.length),
+      scroll,
+    };
+  });
   const streamingCount = panels.filter((panel) => panel.streaming || panel.active).length;
   const activePanel = panels.find((panel) => panel.active || panel.streaming) || panels[0];
   const lineCount = panels.reduce((total, panel) => total + panel.lines.length, 0);
+  const renderedLineCount = panelMetrics.reduce((total, metrics) => total + metrics.renderedLines, 0);
 
   if (typeof window !== "undefined") {
     window.__gibsonTerminalWallState = window.__gibsonTerminalWallState || {};
     window.__gibsonTerminalWallState[primitive.id] = {
       panelCount: panels.length,
       lineCount,
+      renderedLineCount,
       columnCount: columns,
       rowCount: rows,
       activePanelId: activePanel.id,
@@ -5876,6 +5896,8 @@ function drawTerminalWall(primitive, w, h, now) {
       accentTone,
       hasScan,
       hasCursor,
+      panelLineCounts: panels.map((panel) => panel.lines.length),
+      panelRenderedLineCounts: panelMetrics.map((metrics) => metrics.renderedLines),
     };
   }
 
@@ -5908,10 +5930,7 @@ function drawTerminalWall(primitive, w, h, now) {
     const activity = panel.active || panel.streaming ? 1 : 0.36 + seededUnit(seed + index * 13.7) * 0.26;
     const panelOpacity = opacity * clamp(finiteNumber(panel.opacity, 0.82), 0, 1);
     const bodyTop = y + headerHeight;
-    const visibleLines = Math.max(1, Math.floor((panelHeight - headerHeight - 7 * devicePixelRatio) / lineHeight));
-    const scroll = panel.lines.length > visibleLines
-      ? Math.floor(now * speed * 0.0022 + seed + index * 3.1) % panel.lines.length
-      : 0;
+    const {visibleLines, renderedLines, scroll} = panelMetrics[index];
 
     ctx.fillStyle = toneColor(panelTone, 0.035 * panelOpacity + activity * 0.018);
     ctx.fillRect(x, y, panelWidth, panelHeight);
@@ -5947,8 +5966,10 @@ function drawTerminalWall(primitive, w, h, now) {
     ctx.clip();
     ctx.font = `${fontSize}px ui-monospace, monospace`;
     ctx.textBaseline = "top";
-    for (let lineIndex = 0; lineIndex < visibleLines; lineIndex++) {
-      const sourceIndex = (scroll + lineIndex) % panel.lines.length;
+    for (let lineIndex = 0; lineIndex < renderedLines; lineIndex++) {
+      const sourceIndex = panel.lines.length > visibleLines
+        ? (scroll + lineIndex) % panel.lines.length
+        : lineIndex;
       const text = panel.lines[sourceIndex];
       const yLine = bodyTop + 4 * devicePixelRatio + lineIndex * lineHeight;
       const isHot = sourceIndex === panel.lines.length - 1 && (panel.streaming || panel.active);

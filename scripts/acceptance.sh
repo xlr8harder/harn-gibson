@@ -51,6 +51,7 @@ run_bash() {
 }
 
 ARTIFACT_DIR="test-artifacts/acceptance"
+GIBSON1_RENDERER_COMMAND="uv run python examples/renderers/gibson1_renderer.py"
 DOGFOOD_RENDERER_COMMAND="uv run python examples/renderers/gibson_dogfood_renderer.py"
 
 run uv run ruff check .
@@ -60,6 +61,12 @@ run uv run harn-gibson replay-dir examples/replays \
   --output-result "$ARTIFACT_DIR/replay-suite.json" \
   --baseline-dir examples/baselines/replays \
   --screenshot-dir "$ARTIFACT_DIR/replay-screenshots"
+run uv run harn-gibson replay-dir examples/gibson1-replays \
+  --renderer-command "$GIBSON1_RENDERER_COMMAND" \
+  --renderer-timeout-ms 10000 \
+  --baseline-dir examples/baselines/gibson1-replays \
+  --screenshot-dir "$ARTIFACT_DIR/gibson1-screenshots" \
+  --output-result "$ARTIFACT_DIR/gibson1-suite.json"
 run uv run harn-gibson replay-dir examples/dogfood-replays \
   --renderer-command "$DOGFOOD_RENDERER_COMMAND" \
   --renderer-timeout-ms 10000 \

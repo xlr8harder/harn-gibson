@@ -280,7 +280,7 @@ Run the full local acceptance gate before a release checkpoint:
 bash scripts/acceptance.sh
 ```
 
-Use `bash scripts/acceptance.sh --dry-run` to inspect the exact commands without running the heavyweight browser/replay gates. The script runs lint, the full covered test suite, a dynamic-port dogfood smoke, both replay baseline/screenshot suites, whitespace checks, and runtime/secret hygiene scans.
+Use `bash scripts/acceptance.sh --dry-run` to inspect the exact commands without running the heavyweight browser/replay gates. The script runs lint, the full covered test suite, a dynamic-port dogfood smoke, generic replay screenshots, the default `gibson1` replay screenshots, the dogfood stress-renderer screenshots, whitespace checks, and runtime/secret hygiene scans.
 
 Run the checked-in replay fixture suite:
 
@@ -289,6 +289,16 @@ uv run harn-gibson replay-dir examples/replays \
   --output-result test-artifacts/replays/suite.json \
   --baseline-dir examples/baselines/replays \
   --screenshot-dir test-artifacts/replays/screenshots
+```
+
+Run the calmer default `gibson1` renderer against its checked-in visual fixture:
+
+```bash
+uv run harn-gibson replay-dir examples/gibson1-replays \
+  --renderer-command 'uv run python examples/renderers/gibson1_renderer.py' \
+  --renderer-timeout-ms 10000 \
+  --baseline-dir examples/baselines/gibson1-replays \
+  --screenshot-dir test-artifacts/replays/gibson1-screenshots
 ```
 
 Run the hard-coded dogfood renderer against the checked-in dogfood trajectory fixtures:
