@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from harn_gibson.events import GibsonEvent
-from harn_gibson.world_model import WORLD_MODEL_SCHEMA, WorldModel, outcome_from_event
+from harn_gibson.world_model import WORLD_MODEL_SCHEMA, WorldModel, command_from_event, outcome_from_event
 
 
 def test_world_model_tracks_file_activity_outcomes_and_provenance() -> None:
@@ -20,6 +20,7 @@ def test_world_model_tracks_file_activity_outcomes_and_provenance() -> None:
             "type": "tool_result",
             "toolName": "bash",
             "isError": False,
+            "input": {"command": "pytest tests/test_world_model.py"},
             "content": [{"text": "ok"}],
         },
         2,
@@ -59,7 +60,8 @@ def test_world_model_tracks_file_activity_outcomes_and_provenance() -> None:
 
     assert payload["schema"] == WORLD_MODEL_SCHEMA
     assert payload["revision"] == 1
-    assert payload["entityCount"] == 1
+    assert payload["entityCount"] == 2
+    assert payload["counts"] == {"files": 1, "commands": 1}
     assert payload["truncated"] is False
     assert payload["provenance"] == {
         "source": "observed",
@@ -94,6 +96,24 @@ def test_world_model_tracks_file_activity_outcomes_and_provenance() -> None:
     assert payload["recentOutcomes"][0]["eventType"] == "runtime_error"
     assert payload["recentOutcomes"][1]["eventType"] == "harn_exit"
     assert payload["recentOutcomes"][1]["exitCode"] == 7
+    command_entity = payload["entities"]["commands"][0]
+    assert command_entity["id"] == "command:1"
+    assert command_entity["kind"] == "command"
+    assert command_entity["toolName"] == "bash"
+    assert command_entity["commandPreview"] == "pytest tests/test_world_model.py"
+    assert command_entity["commandSource"] == "input.command"
+    assert command_entity["status"] == "ok"
+    assert command_entity["startedSequence"] == 1
+    assert command_entity["completedSequence"] == 2
+    assert command_entity["durationMs"] == 100
+    assert command_entity["eventTypes"] == ["tool_call", "tool_result"]
+    assert command_entity["phases"] == ["before", "after"]
+    assert command_entity["sources"] == ["input.command"]
+    assert command_entity["touchedPaths"] == ["tests/test_world_model.py"]
+    assert command_entity["touchedPathCount"] == 1
+    assert command_entity["touchedPathsTruncated"] is False
+    assert command_entity["lastOutcome"]["status"] == "ok"
+    assert command_entity["provenance"]["source"] == "observed"
     assert model.to_dict(max_entities=0)["truncated"] is True
 
 
@@ -113,6 +133,96 @@ def test_world_model_handles_empty_or_malformed_touched_files_and_outcome_shapes
     assert payload["entityCount"] == 0
     assert [item["status"] for item in payload["recentOutcomes"]] == ["ok", "error"]
     assert outcome_from_event(no_outcome) is None
+
+
+def test_world_model_tracks_command_entities_and_command_extraction() -> None:
+    model = WorldModel()
+    touched_files = {
+        "files": [
+            *[
+                {
+                    "path": f"src/file_{index}.py",
+                    "firstSequence": 1,
+                    "lastSequence": 2,
+                    "sources": ["input.command"],
+                }
+                for index in range(13)
+            ],
+            {"path": "README.md", "firstSequence": 3, "lastSequence": 3, "sources": ["input.command"]},
+        ]
+    }
+    paired_call = GibsonEvent.from_raw(
+        {"type": "tool_call", "toolName": "bash", "input": {"command": "python -m pytest"}},
+        1,
+        timestamp_ms=100,
+    )
+    paired_result = GibsonEvent.from_raw(
+        {"type": "tool_result", "toolName": "bash", "isError": True, "input": {"command": "python -m pytest"}},
+        2,
+        timestamp_ms=340,
+    )
+    result_only = GibsonEvent.from_raw(
+        {"type": "tool_execution_end", "toolName": "bash", "input": {"command": "git status --short"}},
+        3,
+        timestamp_ms=450,
+    )
+    running = GibsonEvent.from_raw({"type": "user_bash", "command": "ls docs"}, 4, timestamp_ms=460)
+    nested = GibsonEvent.from_raw({"type": "tool_call", "args": [{"shellCommand": "make test"}]}, 5)
+    empty_command = GibsonEvent.from_raw({"type": "tool_call", "input": {"command": ""}}, 6)
+
+    model.apply_batch((paired_call, paired_result, result_only, running, nested, empty_command), touched_files)
+    payload = model.to_dict(max_entities=2)
+    commands = {item["id"]: item for item in payload["entities"]["commands"]}
+
+    assert payload["counts"] == {"files": 14, "commands": 4}
+    assert payload["entityCount"] == 18
+    assert payload["truncated"] is True
+    assert list(commands) == ["command:5", "command:4"]
+
+    full_commands = {item["id"]: item for item in model.to_dict(max_entities=20)["entities"]["commands"]}
+    paired = full_commands["command:1"]
+    assert paired["status"] == "error"
+    assert paired["durationMs"] == 240
+    assert paired["completedSequence"] == 2
+    assert paired["lastOutcome"] == {
+        "status": "error",
+        "eventSequence": 2,
+        "eventType": "tool_result",
+        "toolName": "bash",
+    }
+    assert paired["touchedPathCount"] == 13
+    assert paired["touchedPathsTruncated"] is True
+    assert paired["touchedPaths"] == [f"src/file_{index}.py" for index in range(12)]
+
+    result = full_commands["command:3"]
+    assert result["status"] == "ok"
+    assert result["completedSequence"] == 3
+    assert "startedSequence" not in result
+    assert "durationMs" not in result
+    assert result["touchedPaths"] == ["README.md"]
+
+    assert full_commands["command:4"]["status"] == "running"
+    assert "completedSequence" not in full_commands["command:4"]
+    assert "lastOutcome" not in full_commands["command:4"]
+
+    nested_observation = command_from_event(nested)
+    assert nested_observation is not None
+    assert nested_observation.tool_name == "tool_call"
+    assert nested_observation.command == "make test"
+    assert nested_observation.source == "args.0.shellCommand"
+    assert command_from_event(empty_command) is None
+
+
+def test_world_model_clips_long_command_previews() -> None:
+    model = WorldModel()
+    command = "x" * 260
+    model.apply_batch(
+        (GibsonEvent.from_raw({"type": "tool_call", "toolName": "bash", "input": {"command": command}}, 1),),
+        {"files": []},
+    )
+
+    preview = model.to_dict()["entities"]["commands"][0]["commandPreview"]
+    assert preview == f"{'x' * 239}..."
 
 
 def test_world_model_ignores_blank_paths_and_uses_event_operation_fallback() -> None:

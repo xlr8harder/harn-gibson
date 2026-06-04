@@ -1409,13 +1409,17 @@ def test_renderer_context_builder_compaction_rolling_and_history(tmp_path: Path)
     }
     assert compaction.project["worldModel"]["schema"] == "harn-gibson.world-model.v1"
     assert compaction.project["worldModel"]["revision"] == 1
-    assert compaction.project["worldModel"]["entityCount"] == 2
+    assert compaction.project["worldModel"]["entityCount"] == 3
+    assert compaction.project["worldModel"]["counts"] == {"files": 2, "commands": 1}
     assert compaction.project["worldModel"]["truncated"] is False
     assert [item["path"] for item in compaction.project["worldModel"]["entities"]["files"]] == [
         "src/harn_gibson/rendering.py",
         "tests/test_rendering.py",
     ]
     assert compaction.project["worldModel"]["entities"]["files"][0]["provenance"]["source"] == "observed"
+    assert compaction.project["worldModel"]["entities"]["commands"][0]["commandPreview"] == (
+        "uv run pytest tests/test_rendering.py docs/renderer-agent.md"
+    )
     assert compaction.catalog["schema"] == "harn-gibson.visual-catalog.v1"
     assert compaction.scene["schema"] == "harn-gibson.scene.v1"
     assert compaction.recent_agent_context == ("agent saw tool call", "grid was pulsing")
@@ -1470,7 +1474,8 @@ def test_renderer_context_builder_compaction_rolling_and_history(tmp_path: Path)
     assert rolling.mode == "rolling"
     assert rolling.project["touchedFiles"]["truncated"] is True
     assert rolling.project["worldModel"]["revision"] == 1
-    assert rolling.project["worldModel"]["entityCount"] == 2
+    assert rolling.project["worldModel"]["entityCount"] == 3
+    assert rolling.project["worldModel"]["counts"] == {"files": 2, "commands": 1}
     assert rolling.catalog["mode"] == "summary"
     assert rolling.scene["schema"] == "harn-gibson.scene-summary.v1"
     assert rolling.scene["animationCount"] == 5
@@ -1559,6 +1564,7 @@ def test_renderer_context_repo_topology_handles_unavailable_root_and_duplicate_t
                     {
                         "type": "tool_result",
                         "toolName": "write",
+                        "input": {"command": "write readme"},
                         "result": {"filePath": str(tmp_path / "outside.py")},
                     },
                     1,
@@ -1570,6 +1576,7 @@ def test_renderer_context_repo_topology_handles_unavailable_root_and_duplicate_t
                     {
                         "type": "tool_result",
                         "toolName": "write",
+                        "input": {"command": "write project files"},
                         "result": {
                             "destinationPath": 123,
                             "filePath": "src/new_scene.py",
@@ -1651,10 +1658,14 @@ def test_renderer_context_repo_topology_handles_unavailable_root_and_duplicate_t
         "count": 4,
         "truncated": False,
     }
-    assert context.project["worldModel"]["entityCount"] == 4
+    assert context.project["worldModel"]["entityCount"] == 6
+    assert context.project["worldModel"]["counts"] == {"files": 4, "commands": 2}
     world_files = {item["path"]: item for item in context.project["worldModel"]["entities"]["files"]}
+    world_commands = {item["id"]: item for item in context.project["worldModel"]["entities"]["commands"]}
     assert world_files["src/new_scene.py"]["activityCount"] == 2
     assert world_files["src/new_scene.py"]["lastOutcome"]["eventType"] == "runtime_error"
+    assert world_commands["command:1"]["commandPreview"] == "write readme"
+    assert world_commands["command:2"]["lastOutcome"]["status"] == "ok"
     assert context.project["worldModel"]["recentOutcomes"][0]["toolName"] == "write"
 
 

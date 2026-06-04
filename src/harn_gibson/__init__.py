@@ -128,7 +128,16 @@ from harn_gibson.styles import (
     style_pack_from_name,
     style_pack_ids,
 )
-from harn_gibson.world_model import WORLD_MODEL_SCHEMA, FileWorldEntity, WorldFactSource, WorldModel, outcome_from_event
+from harn_gibson.world_model import (
+    WORLD_MODEL_SCHEMA,
+    CommandObservation,
+    CommandWorldEntity,
+    FileWorldEntity,
+    WorldFactSource,
+    WorldModel,
+    command_from_event,
+    outcome_from_event,
+)
 
 __all__ = [
     "CatalogEntry",
@@ -186,12 +195,15 @@ __all__ = [
     "TimelineWindow",
     "VisualCatalog",
     "WORLD_MODEL_SCHEMA",
+    "CommandObservation",
+    "CommandWorldEntity",
     "FileWorldEntity",
     "WorldFactSource",
     "WorldModel",
     "capture_scene_screenshot",
     "capture_replay_frame_screenshots",
     "coerce_render_timing_mode",
+    "command_from_event",
     "compare_replay_baseline",
     "default_mutations_for_event",
     "default_style_pack",
