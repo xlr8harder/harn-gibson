@@ -22,6 +22,8 @@ RENDERER_SYSTEM_PROMPT = (
     "terminal walls, access matrices, camera-drifting city_block districts, "
     "data rain, and structured svg_layer keyframes, path morphs, filters, or clips when they make the scene "
     "feel cinematic. "
+    "Use context.project.semanticGraph when routing packets, arranging districts, or showing blast radius along "
+    "imports, definitions, packages, and inferred test-to-code edges. "
     "When a visual property follows a durable repo or world-model fact, attach props.worldBindings entries using "
     "the harn-gibson.world-binding.v1 schema so later turns can preserve that mapping. "
     "Use only structured svg_layer data; never emit raw SVG markup, HTML, scripts, event handlers, "
@@ -88,6 +90,7 @@ def _context_metadata(context: Mapping[str, Any]) -> dict[str, Any]:
     agent_attention = _mapping(project.get("agentAttention"))
     attention_action = _mapping(agent_attention.get("action"))
     attention_focus = _mapping(agent_attention.get("focus"))
+    semantic_graph = _mapping(project.get("semanticGraph"))
     visual_continuity = _mapping(context.get("visualContinuity"))
     render_input = _mapping(context.get("renderInput"))
     timeline = _mapping(render_input.get("timeline"))
@@ -106,6 +109,8 @@ def _context_metadata(context: Mapping[str, Any]) -> dict[str, Any]:
         "displayStyle": str(project.get("displayStyle") or "gibson"),
         "attentionAction": str(attention_action.get("kind") or "unknown"),
         "attentionFocusCount": len(focus_paths if isinstance(focus_paths, list) else []),
+        "semanticGraphNodeCount": _coerce_int(semantic_graph.get("nodeCount"), 0),
+        "semanticGraphEdgeCount": _coerce_int(semantic_graph.get("edgeCount"), 0),
         "eventTypes": event_types,
         "routes": routes,
         "timeline": {

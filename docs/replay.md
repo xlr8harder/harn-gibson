@@ -246,7 +246,7 @@ Screenshot result metadata includes `canvasMetrics` with canvas dimensions, samp
 
 `replay-dir --review-dir` applies the same review-bundle generation to every replay file in a directory. This is the preferred review path for split long captures: the suite overview records aggregate counts, reviewed event types, renderer routes, renderer names, and links to each chunk's frame player, prompts, renderer chunks, render intents, final scene, and raw result JSON.
 
-`--output-render-contexts` records each `harn-gibson.renderer-context.v1` payload that replay sent to a renderer. Stream-buffer, debug-only, direct-scene, and saved-render-plan steps do not invent renderer contexts; the artifact is an exact review aid for model-renderer prompt inputs, compaction cadence, repo topology, touched-file extraction, accumulated world-model facts, and render-input batching.
+`--output-render-contexts` records each `harn-gibson.renderer-context.v1` payload that replay sent to a renderer. Stream-buffer, debug-only, direct-scene, and saved-render-plan steps do not invent renderer contexts; the artifact is an exact review aid for model-renderer prompt inputs, compaction cadence, repo topology, semantic graph samples, touched-file extraction, accumulated world-model facts, and render-input batching.
 
 `--output-render-prompts` writes `harn-gibson.replay-renderer-prompts.v1`, a provider-neutral system/user message artifact built from the captured renderer contexts. `--render-prompt-review` writes a standalone HTML page that shows those messages, event types, routes, timing, and prompt sizes before any live model adapter exists. This lets prompt shape, context size, and safety instructions be reviewed offline from the same replay fixture used for scene screenshots.
 

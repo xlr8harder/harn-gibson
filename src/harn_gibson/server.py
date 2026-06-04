@@ -301,6 +301,18 @@ def renderer_context_config_from_env(source: Mapping[str, str]) -> RendererConte
             source.get("HARN_GIBSON_RENDERER_MAX_WORLD_ENTITIES"),
             defaults.max_world_entities,
         ),
+        max_semantic_files=coerce_context_limit(
+            source.get("HARN_GIBSON_RENDERER_MAX_SEMANTIC_FILES"),
+            defaults.max_semantic_files,
+        ),
+        max_semantic_edges=coerce_context_limit(
+            source.get("HARN_GIBSON_RENDERER_MAX_SEMANTIC_EDGES"),
+            defaults.max_semantic_edges,
+        ),
+        max_semantic_symbols=coerce_context_limit(
+            source.get("HARN_GIBSON_RENDERER_MAX_SEMANTIC_SYMBOLS"),
+            defaults.max_semantic_symbols,
+        ),
     )
 
 

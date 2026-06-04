@@ -155,6 +155,8 @@ def test_renderer_prompt_metadata_handles_sparse_context() -> None:
     assert prompt["metadata"]["displayStyle"] == "gibson"
     assert prompt["metadata"]["attentionAction"] == "unknown"
     assert prompt["metadata"]["attentionFocusCount"] == 0
+    assert prompt["metadata"]["semanticGraphNodeCount"] == 0
+    assert prompt["metadata"]["semanticGraphEdgeCount"] == 0
     assert prompt["metadata"]["worldBindingCount"] == 0
 
 
@@ -287,6 +289,8 @@ def test_replay_event_steps_file_io_and_writers(tmp_path: Path, monkeypatch: pyt
     assert prompt["metadata"]["displayStyle"] == "gibson"
     assert prompt["metadata"]["attentionAction"] == "command"
     assert prompt["metadata"]["attentionFocusCount"] == 0
+    assert prompt["metadata"]["semanticGraphNodeCount"] >= 0
+    assert prompt["metadata"]["semanticGraphEdgeCount"] >= 0
     assert prompt["metadata"]["visualAnchorCount"] >= 1
     assert prompt["metadata"]["worldBindingCount"] >= 0
     assert prompt["metadata"]["activeAnimationCount"] >= 0

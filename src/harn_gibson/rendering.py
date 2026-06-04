@@ -24,6 +24,11 @@ from harn_gibson.scene import (
     default_mutations_for_event,
     scene_update_payload,
 )
+from harn_gibson.semantic_graph import (
+    SEMANTIC_REPO_GRAPH_SCHEMA,
+    SemanticRepoGraphConfig,
+    semantic_repo_graph_context,
+)
 from harn_gibson.shell_commands import shell_command_path_candidates
 from harn_gibson.sinks import EventBuffer
 from harn_gibson.styles import style_pack_from_name
@@ -298,6 +303,9 @@ class RendererContextConfig:
     max_touched_files: int = 24
     max_touched_path_chars: int = 160
     max_world_entities: int = 24
+    max_semantic_files: int = 96
+    max_semantic_edges: int = 192
+    max_semantic_symbols: int = 160
 
 
 @dataclass(frozen=True, slots=True)
@@ -393,6 +401,7 @@ class RendererContextBuilder:
     def _project_metadata(self, batch: RenderInputBatch) -> dict[str, Any]:
         style_pack = self.config.style_pack or style_pack_from_name(self.config.display_style).to_dict()
         repo_topology = _repo_topology_context(self.config)
+        semantic_graph = _semantic_repo_graph_context(self.config)
         touched_files = _touched_files_context(batch, self.config)
         world_model = self._world_model_context(batch, touched_files)
         return {
@@ -407,11 +416,13 @@ class RendererContextBuilder:
                 "renderPlan": "harn-gibson.render-plan.v1",
                 "repoTopology": "harn-gibson.repo-topology.v1",
                 "scene": "harn-gibson.scene.v1",
+                "semanticGraph": SEMANTIC_REPO_GRAPH_SCHEMA,
                 "touchedFiles": "harn-gibson.touched-files.v1",
                 "worldBinding": WORLD_BINDING_SCHEMA,
                 "worldModel": WORLD_MODEL_SCHEMA,
             },
             "repoTopology": repo_topology,
+            "semanticGraph": semantic_graph,
             "touchedFiles": touched_files,
             "worldModel": world_model,
             "agentAttention": agent_attention_from_context(
@@ -2484,6 +2495,17 @@ def _repo_topology_context(config: RendererContextConfig) -> dict[str, Any]:
         "entryCount": len(entries),
         "truncated": truncated,
     }
+
+
+def _semantic_repo_graph_context(config: RendererContextConfig) -> dict[str, Any]:
+    return semantic_repo_graph_context(
+        SemanticRepoGraphConfig(
+            project_root=str(_project_root(config)),
+            max_files=config.max_semantic_files,
+            max_edges=config.max_semantic_edges,
+            max_symbols=config.max_semantic_symbols,
+        )
+    )
 
 
 def _project_root(config: RendererContextConfig) -> Path:

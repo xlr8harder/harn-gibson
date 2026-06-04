@@ -112,10 +112,13 @@ HARN_GIBSON_RENDERER_MAX_REPO_ENTRIES=64       # top-level repo entries sampled
 HARN_GIBSON_RENDERER_MAX_REPO_CHILDREN=8       # visible children per directory
 HARN_GIBSON_RENDERER_MAX_TOUCHED_FILES=24      # touched-file batch size
 HARN_GIBSON_RENDERER_MAX_WORLD_ENTITIES=24     # durable world-model entities
+HARN_GIBSON_RENDERER_MAX_SEMANTIC_FILES=96     # Python files scanned for semantic graph
+HARN_GIBSON_RENDERER_MAX_SEMANTIC_EDGES=192    # import/test/definition graph edges
+HARN_GIBSON_RENDERER_MAX_SEMANTIC_SYMBOLS=160  # top-level symbols exposed
 HARN_GIBSON_RENDERER_MAX_PROP_PREVIEW_CHARS=240
 ```
 
-Lower limits keep renderer prompts small for fast model turnaround; higher limits give the renderer more continuity, topology, touched-file evidence, and accumulated world-model facts.
+Lower limits keep renderer prompts small for fast model turnaround; higher limits give the renderer more continuity, topology, semantic graph evidence, touched-file evidence, and accumulated world-model facts.
 
 Renderer event interest can also be narrowed with JSON. Events outside the interest fall back locally instead of going to the renderer:
 

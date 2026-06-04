@@ -45,6 +45,7 @@ from harn_gibson.rendering import (
     validate_render_plan,
 )
 from harn_gibson.scene import SceneAnimation, SceneEngine, SceneMutation, ScenePrimitive
+from harn_gibson.semantic_graph import SEMANTIC_REPO_GRAPH_SCHEMA
 from harn_gibson.sinks import EventBuffer
 from harn_gibson.styles import style_pack_from_name
 from harn_gibson.world_bindings import WORLD_BINDING_SCHEMA
@@ -1407,6 +1408,7 @@ def test_renderer_context_builder_compaction_rolling_and_history(tmp_path: Path)
     assert compaction.project["schemas"]["agentAttention"] == "harn-gibson.agent-attention.v1"
     assert compaction.project["schemas"]["rendererContext"] == "harn-gibson.renderer-context.v1"
     assert compaction.project["schemas"]["repoTopology"] == "harn-gibson.repo-topology.v1"
+    assert compaction.project["schemas"]["semanticGraph"] == SEMANTIC_REPO_GRAPH_SCHEMA
     assert compaction.project["schemas"]["worldBinding"] == "harn-gibson.world-binding.v1"
     assert compaction.project["schemas"]["worldModel"] == "harn-gibson.world-model.v1"
     assert compaction.project["displayStyle"] == "mainframe"
@@ -1452,6 +1454,14 @@ def test_renderer_context_builder_compaction_rolling_and_history(tmp_path: Path)
     )
     assert readme_entry["lineCount"] == 1
     assert "auth.json" not in {entry["path"] for entry in compaction.project["repoTopology"]["entries"]}
+    assert compaction.project["semanticGraph"]["schema"] == SEMANTIC_REPO_GRAPH_SCHEMA
+    assert compaction.project["semanticGraph"]["available"] is True
+    assert compaction.project["semanticGraph"]["languages"] == ["python"]
+    assert {item["path"] for item in compaction.project["semanticGraph"]["files"]} == {
+        "src/harn_gibson/__init__.py",
+        "src/harn_gibson/rendering.py",
+        "tests/test_rendering.py",
+    }
     assert compaction.project["touchedFiles"] == {
         "schema": "harn-gibson.touched-files.v1",
         "files": [
