@@ -9,6 +9,71 @@
   "replaySchema": "harn-gibson.replay.v1",
   "scene": {
     "animations": {
+      "gibson1-camera-drift": {
+        "durationMs": 3600,
+        "expiresAtMs": 14700,
+        "id": "gibson1-camera-drift",
+        "kind": "camera_path",
+        "loop": false,
+        "props": {
+          "accentTone": "green",
+          "keyframes": [
+            {
+              "at": 0,
+              "rotation": -0.002,
+              "scale": 1.0,
+              "x": -0.006,
+              "y": 0.004
+            },
+            {
+              "at": 0.52,
+              "rotation": 0.004,
+              "scale": 1.026,
+              "x": 0.012,
+              "y": -0.008
+            },
+            {
+              "at": 1,
+              "rotation": 0.001,
+              "scale": 1.006,
+              "x": 0.004,
+              "y": 0.006
+            }
+          ],
+          "phase": "focus",
+          "sequence": 4,
+          "targetRef": {
+            "path": "docs/usage.md"
+          },
+          "tone": "amber",
+          "yoyo": true
+        },
+        "startedAtMs": 9300,
+        "targetId": "gibson1-repo-city",
+        "ttlMs": 5400
+      },
+      "gibson1-camera-focus": {
+        "durationMs": 1250,
+        "expiresAtMs": 11600,
+        "id": "gibson1-camera-focus",
+        "kind": "camera_jolt",
+        "loop": false,
+        "props": {
+          "accentTone": "green",
+          "intensity": 0.24,
+          "phase": "after",
+          "roll": 0.005,
+          "seed": 43,
+          "targetRef": {
+            "path": "docs/usage.md"
+          },
+          "tone": "amber",
+          "zoom": 0.01
+        },
+        "startedAtMs": 9300,
+        "targetId": "gibson1-repo-city",
+        "ttlMs": 2300
+      },
       "gibson1-cues": {
         "durationMs": 2600,
         "expiresAtMs": 13100,
@@ -132,7 +197,9 @@
           "primitive:trace_route",
           "primitive:data_rain",
           "animation:timeline_cue",
-          "animation:route_trace"
+          "animation:route_trace",
+          "animation:camera_path",
+          "animation:camera_jolt"
         ],
         "eventTypes": [
           "tool_result"
@@ -158,7 +225,7 @@
           "touchedFileCount": 3,
           "visualizer": "gibson1"
         },
-        "mutationCount": 10,
+        "mutationCount": 12,
         "renderer": "gibson1",
         "requestCount": 1,
         "routes": [
@@ -191,7 +258,8 @@
             "primitive:trace_route",
             "primitive:data_rain",
             "animation:timeline_cue",
-            "animation:route_trace"
+            "animation:route_trace",
+            "animation:camera_path"
           ],
           "eventTypes": [
             "input"
@@ -217,7 +285,7 @@
             "touchedFileCount": 0,
             "visualizer": "gibson1"
           },
-          "mutationCount": 10,
+          "mutationCount": 11,
           "renderer": "gibson1",
           "requestCount": 1,
           "routes": [
@@ -249,7 +317,8 @@
             "primitive:trace_route",
             "primitive:data_rain",
             "animation:timeline_cue",
-            "animation:route_trace"
+            "animation:route_trace",
+            "animation:camera_path"
           ],
           "eventTypes": [
             "tool_call"
@@ -275,7 +344,7 @@
             "touchedFileCount": 0,
             "visualizer": "gibson1"
           },
-          "mutationCount": 10,
+          "mutationCount": 11,
           "renderer": "gibson1",
           "requestCount": 1,
           "routes": [
@@ -307,7 +376,9 @@
             "primitive:trace_route",
             "primitive:data_rain",
             "animation:timeline_cue",
-            "animation:route_trace"
+            "animation:route_trace",
+            "animation:camera_path",
+            "animation:camera_jolt"
           ],
           "eventTypes": [
             "tool_result"
@@ -333,7 +404,7 @@
             "touchedFileCount": 4,
             "visualizer": "gibson1"
           },
-          "mutationCount": 10,
+          "mutationCount": 12,
           "renderer": "gibson1",
           "requestCount": 1,
           "routes": [
@@ -365,7 +436,9 @@
             "primitive:trace_route",
             "primitive:data_rain",
             "animation:timeline_cue",
-            "animation:route_trace"
+            "animation:route_trace",
+            "animation:camera_path",
+            "animation:camera_jolt"
           ],
           "eventTypes": [
             "tool_result"
@@ -391,7 +464,7 @@
             "touchedFileCount": 3,
             "visualizer": "gibson1"
           },
-          "mutationCount": 10,
+          "mutationCount": 12,
           "renderer": "gibson1",
           "requestCount": 1,
           "routes": [

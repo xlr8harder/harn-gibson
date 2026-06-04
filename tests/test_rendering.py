@@ -898,6 +898,8 @@ def test_gibson1_renderer_returns_coherent_valid_plan(tmp_path: Path) -> None:
     assert animation_kinds == {
         "gibson1-cues": "timeline_cue",
         "gibson1-route-trace": "route_trace",
+        "gibson1-camera-drift": "camera_path",
+        "gibson1-camera-focus": "camera_jolt",
     }
     assert all(not primitive_id.startswith("dogfood-") for primitive_id in primitive_kinds)
 
@@ -957,6 +959,16 @@ def test_gibson1_renderer_returns_coherent_valid_plan(tmp_path: Path) -> None:
     assert scene.state.animations["gibson1-route-trace"].ttl_ms == 3800
     assert scene.state.animations["gibson1-route-trace"].expiry_ms == 8900
     assert scene.state.animations["gibson1-route-trace"].props["points"][-1]["label"] == "APP.PY"
+    assert scene.state.animations["gibson1-camera-drift"].target_id == "gibson1-repo-city"
+    assert scene.state.animations["gibson1-camera-drift"].kind == "camera_path"
+    assert scene.state.animations["gibson1-camera-drift"].ttl_ms == 5400
+    assert scene.state.animations["gibson1-camera-drift"].props["targetRef"] == {"path": "tests/test_app.py"}
+    assert scene.state.animations["gibson1-camera-drift"].props["keyframes"][1]["scale"] == 1.026
+    assert scene.state.animations["gibson1-camera-focus"].target_id == "gibson1-repo-city"
+    assert scene.state.animations["gibson1-camera-focus"].kind == "camera_jolt"
+    assert scene.state.animations["gibson1-camera-focus"].ttl_ms == 2300
+    assert scene.state.animations["gibson1-camera-focus"].props["targetRef"] == {"path": "tests/test_app.py"}
+    assert scene.state.animations["gibson1-camera-focus"].props["intensity"] == 0.24
 
     styled_scene = SceneEngine()
     styled_context = RendererContextBuilder(

@@ -135,6 +135,26 @@
         "equals": "route_trace"
       },
       {
+        "path": "animations.gibson1-camera-drift.kind",
+        "equals": "camera_path"
+      },
+      {
+        "path": "animations.gibson1-camera-drift.targetId",
+        "equals": "gibson1-repo-city"
+      },
+      {
+        "path": "animations.gibson1-camera-drift.props.targetRef.path",
+        "equals": "docs/usage.md"
+      },
+      {
+        "path": "animations.gibson1-camera-focus.kind",
+        "equals": "camera_jolt"
+      },
+      {
+        "path": "animations.gibson1-camera-focus.props.targetRef.path",
+        "equals": "docs/usage.md"
+      },
+      {
         "path": "metadata.lastRenderIntent.renderer",
         "equals": "gibson1"
       },

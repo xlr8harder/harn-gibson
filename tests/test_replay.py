@@ -1772,7 +1772,7 @@ def test_checked_in_gibson1_replay_exercises_default_renderer() -> None:
     terrain_paths = {peak["path"]: peak for peak in terrain_peaks}
 
     assert [step.kind for step in result.steps] == ["event"] * 4
-    assert len(result.expectations) == 25
+    assert len(result.expectations) == 30
     assert result.scene.primitives["status"].props["text"] == "gibson1::tool_result"
     assert result.scene.primitives["gibson1-terminal"].kind == "terminal_wall"
     assert result.scene.primitives["gibson1-terminal"].props["title"] == "GIBSON1 EVENT BOARD"
@@ -1820,13 +1820,18 @@ def test_checked_in_gibson1_replay_exercises_default_renderer() -> None:
     assert result.scene.animations["gibson1-cues"].kind == "timeline_cue"
     assert result.scene.animations["gibson1-route-trace"].target_id == "gibson1-route"
     assert result.scene.animations["gibson1-route-trace"].props["points"][-2]["label"] == "CLI.PY"
+    assert result.scene.animations["gibson1-camera-drift"].kind == "camera_path"
+    assert result.scene.animations["gibson1-camera-drift"].target_id == "gibson1-repo-city"
+    assert result.scene.animations["gibson1-camera-drift"].props["targetRef"] == {"path": "docs/usage.md"}
+    assert result.scene.animations["gibson1-camera-focus"].kind == "camera_jolt"
+    assert result.scene.animations["gibson1-camera-focus"].props["targetRef"] == {"path": "docs/usage.md"}
     assert result.scene.metadata["lastRenderIntent"]["renderer"] == "gibson1"
     assert result.scene.metadata["lastRenderIntent"]["metadata"]["semanticGraph"] is True
     assert result.scene.metadata["lastRenderIntent"]["metadata"]["semanticEdgeCount"] == 9
     assert suite.ok is True
     assert summary["fileCount"] == 1
     assert summary["stepCount"] == 4
-    assert summary["expectationCount"] == 25
+    assert summary["expectationCount"] == 30
     assert summary["rendererCounts"] == {"gibson1": 4}
     assert summary["routeCounts"] == {"renderer_agent": 4}
 

@@ -53,6 +53,8 @@ def main() -> None:
         _upsert_data_rain(event_type, summary, tone, accent, sequence),
         _timeline_cue(event_type, phase, sequence, timestamp_ms, duration_ms, tone, accent),
         _route_trace_animation(event_type, phase, touched, semantic, sequence, timestamp_ms, duration_ms, tone, accent),
+        _camera_path_animation(touched, sequence, timestamp_ms, duration_ms, tone, accent),
+        *_camera_jolt_animations(event_type, phase, touched, sequence, timestamp_ms, tone, accent),
     ]
 
     metadata: dict[str, Any] = {
@@ -711,6 +713,92 @@ def _route_trace_animation(
             },
         },
     }
+
+
+def _camera_target_ref(touched: list[dict[str, Any]]) -> dict[str, Any]:
+    path = _text(_dict(touched[0]).get("path"), "") if touched else ""
+    if path:
+        path = path.split()[0].strip(",:;")
+    return {"path": path} if path else {"index": 0}
+
+
+def _camera_path_animation(
+    touched: list[dict[str, Any]],
+    sequence: int,
+    timestamp_ms: int,
+    duration_ms: int,
+    tone: str,
+    accent: str,
+) -> dict[str, Any]:
+    target_ref = _camera_target_ref(touched)
+    duration = max(3600, duration_ms)
+    return {
+        "op": "start_animation",
+        "animation": {
+            "id": "gibson1-camera-drift",
+            "targetId": "gibson1-repo-city",
+            "kind": "camera_path",
+            "startedAtMs": timestamp_ms,
+            "durationMs": duration,
+            "ttlMs": duration + 1800,
+            "props": {
+                "targetRef": target_ref,
+                "phase": "focus",
+                "tone": tone,
+                "accentTone": accent,
+                "yoyo": True,
+                "keyframes": [
+                    {"at": 0, "x": -0.006, "y": 0.004, "scale": 1.0, "rotation": -0.002},
+                    {
+                        "at": 0.52,
+                        "x": round(0.010 + (sequence % 3) * 0.002, 3),
+                        "y": -0.008,
+                        "scale": 1.026,
+                        "rotation": round(0.004 + (sequence % 4) * 0.001, 3),
+                    },
+                    {"at": 1, "x": 0.004, "y": 0.006, "scale": 1.006, "rotation": 0.001},
+                ],
+                "sequence": sequence,
+            },
+        },
+    }
+
+
+def _camera_jolt_animations(
+    event_type: str,
+    phase: str,
+    touched: list[dict[str, Any]],
+    sequence: int,
+    timestamp_ms: int,
+    tone: str,
+    accent: str,
+) -> list[dict[str, Any]]:
+    if not touched and event_type != "runtime_error":
+        return []
+    intensity = 0.24 if event_type != "runtime_error" else 0.42
+    return [
+        {
+            "op": "start_animation",
+            "animation": {
+                "id": "gibson1-camera-focus",
+                "targetId": "gibson1-repo-city",
+                "kind": "camera_jolt",
+                "startedAtMs": timestamp_ms,
+                "durationMs": 1250,
+                "ttlMs": 2300,
+                "props": {
+                    "targetRef": _camera_target_ref(touched),
+                    "phase": phase,
+                    "tone": tone,
+                    "accentTone": accent,
+                    "intensity": intensity,
+                    "zoom": 0.010,
+                    "roll": 0.005,
+                    "seed": sequence + len(touched) * 13,
+                },
+            },
+        }
+    ]
 
 
 def _event_command_lines(payload: dict[str, Any]) -> list[str]:
