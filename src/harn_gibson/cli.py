@@ -16,6 +16,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
+from harn_gibson import __version__
 from harn_gibson.auth import import_codex_auth
 from harn_gibson.extension import extension_path
 from harn_gibson.styles import style_pack_from_name, style_pack_ids
@@ -56,6 +57,7 @@ DOGFOOD_CAPTURE_TRAJECTORIES: dict[str, DogfoodCaptureTrajectory] = {
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="harn-gibson")
+    parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     subcommands = parser.add_subparsers(dest="command")
 
     serve = subcommands.add_parser("serve", help="run the local graphical display server")

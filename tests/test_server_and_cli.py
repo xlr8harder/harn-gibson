@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import sys
 import threading
+import tomllib
 import urllib.error
 import urllib.request
 from http.server import ThreadingHTTPServer
@@ -24,6 +25,7 @@ from harn_gibson import (
     RenderStep,
     ReplayFrameScreenshot,
     SceneMutation,
+    __version__,
     cli,
 )
 from harn_gibson.scene import SCENE_MUTATION_OPS
@@ -869,6 +871,12 @@ def test_cli_harn_args_with_project_defaults() -> None:
 
 def test_cli_parser_and_run(monkeypatch: Any, capsys: Any) -> None:
     parser = cli.build_parser()
+    with pytest.raises(SystemExit) as version_exit:
+        parser.parse_args(["--version"])
+    assert version_exit.value.code == 0
+    assert capsys.readouterr().out.strip() == f"harn-gibson {__version__}"
+    project_metadata = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
+    assert __version__ == project_metadata["project"]["version"]
     assert parser.parse_args(["extension-path"]).command == "extension-path"
     parsed_dogfood = parser.parse_args(
         ["dogfood", "--no-browser", "--style", "neon-noir", "--cwd", "work", "--", "-p", "hello"]

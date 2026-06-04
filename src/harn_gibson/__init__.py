@@ -1,5 +1,7 @@
 """Public surface for harn-gibson."""
 
+__version__ = "0.1.0"
+
 from harn_gibson.browser_capture import BrowserScreenshotResult, capture_scene_screenshot
 from harn_gibson.catalog import CatalogEntry, VisualCatalog, default_visual_catalog, visual_catalog_payload
 from harn_gibson.events import EventPhase, GibsonEvent, phase_for_event, summarize_event, to_jsonable
@@ -145,6 +147,7 @@ from harn_gibson.world_model import (
 )
 
 __all__ = [
+    "__version__",
     "CatalogEntry",
     "BrowserScreenshotResult",
     "ContextualSceneRenderer",
