@@ -2,7 +2,7 @@
 
 Browser tests use Playwright to render the local display in headless Chromium and capture screenshots.
 
-The browser/canvas display is the first display backend, not the only possible one. Non-web backend experiments can start from `GET /backend-contract` or `uv run harn-gibson backend-contract` to discover endpoints, schemas, primitive/effect support, and style-pack metadata, then consume `GET /scene`, `GET /catalog`, and `GET /events/stream` to render scene snapshots and scene-update payloads with their own primitive runtime.
+The browser/canvas display is the first display backend, not the only possible one. Non-web backend experiments can start from `GET /backend-contract` or `uv run harn-gibson backend-contract` to discover endpoints, schemas, primitive/effect support, mutation/input/timing support, style-pack metadata, and the backend capability profile, then consume `GET /scene`, `GET /catalog`, and `GET /events/stream` to render scene snapshots and scene-update payloads with their own primitive runtime.
 
 Install browser binaries once per environment:
 

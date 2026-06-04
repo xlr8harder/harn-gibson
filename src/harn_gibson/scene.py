@@ -18,6 +18,16 @@ SceneOp = Literal[
     "reset_scene",
 ]
 
+SCENE_MUTATION_OPS: tuple[SceneOp, ...] = (
+    "upsert",
+    "patch",
+    "remove",
+    "append_log",
+    "start_animation",
+    "stop_animation",
+    "reset_scene",
+)
+
 
 @dataclass(frozen=True, slots=True)
 class ScenePrimitive:
@@ -233,15 +243,7 @@ def apply_style_to_scene(state: SceneState, style_pack: Mapping[str, Any]) -> No
 
 def mutation_from_mapping(value: Mapping[str, Any]) -> SceneMutation:
     op = value.get("op")
-    if op not in {
-        "upsert",
-        "patch",
-        "remove",
-        "append_log",
-        "start_animation",
-        "stop_animation",
-        "reset_scene",
-    }:
+    if op not in SCENE_MUTATION_OPS:
         raise ValueError(f"unsupported scene mutation op: {op}")
     return SceneMutation(
         op=op,

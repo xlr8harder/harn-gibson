@@ -4,6 +4,7 @@ import pytest
 
 from harn_gibson.events import GibsonEvent, diagnostic_event
 from harn_gibson.scene import (
+    SCENE_MUTATION_OPS,
     SceneAnimation,
     SceneEngine,
     SceneMutation,
@@ -44,6 +45,19 @@ def test_scene_primitive_animation_mutation_and_state_to_dict() -> None:
     assert state.to_dict()["schema"] == "harn-gibson.scene.v1"
     assert state.to_dict()["metadata"] == {}
     assert "status" in state.primitives
+
+
+def test_scene_mutation_ops_are_the_public_parser_vocabulary() -> None:
+    assert SCENE_MUTATION_OPS == (
+        "upsert",
+        "patch",
+        "remove",
+        "append_log",
+        "start_animation",
+        "stop_animation",
+        "reset_scene",
+    )
+    assert mutation_from_mapping({"op": "append_log", "entry": {"ok": True}}).op in SCENE_MUTATION_OPS
 
 
 def test_scene_state_from_mapping_round_trips_scene_payload() -> None:

@@ -43,11 +43,14 @@ from harn_gibson.routing import (
     renderer_event_interest_from_renderer,
     renderer_event_interest_from_value,
 )
-from harn_gibson.scene import SceneEngine, apply_style_to_scene, initial_scene
+from harn_gibson.scene import SCENE_MUTATION_OPS, SceneEngine, apply_style_to_scene, initial_scene
 from harn_gibson.sinks import EventBuffer
 from harn_gibson.styles import DEFAULT_STYLE_ID, STYLE_PACKS, StylePack, default_style_pack, style_pack_from_name
 
 CORE_PRIMITIVE_KINDS = ("viewport", "status", "feed", "code", "grid")
+INPUT_DELIVERY_KINDS = ("followUp", "steer")
+SUPPORTED_RENDER_MODES = ("blocking", "async")
+SUPPORTED_RENDER_TIMING_MODES = ("immediate", "scheduled")
 
 
 class GibsonHTTPServer(ThreadingHTTPServer):
@@ -126,7 +129,7 @@ class BrowserInputQueue:
         text = message.strip()
         if not text:
             raise ValueError("message cannot be empty")
-        if deliver_as not in {"followUp", "steer"}:
+        if deliver_as not in INPUT_DELIVERY_KINDS:
             raise ValueError("deliverAs must be followUp or steer")
         with self._lock:
             self._sequence += 1
@@ -487,12 +490,27 @@ def backend_contract_payload(state: GibsonServerState) -> dict[str, Any]:
     effect_kinds = [str(entry["id"]) for entry in catalog["effects"]]
     supported_primitives = tuple(dict.fromkeys((*CORE_PRIMITIVE_KINDS, *catalog_primitive_kinds)))
     supported_style_packs = [style.to_dict() for style in STYLE_PACKS]
+    supported_style_pack_ids = [style["id"] for style in supported_style_packs]
+    supported_mutation_ops = list(SCENE_MUTATION_OPS)
+    supported_input_deliver_as = list(INPUT_DELIVERY_KINDS)
+    supported_render_modes = list(SUPPORTED_RENDER_MODES)
+    supported_render_timing_modes = list(SUPPORTED_RENDER_TIMING_MODES)
+    supported_primitive_kinds = list(supported_primitives)
+    display_backend = {
+        "id": "browser-canvas",
+        "primary": True,
+        "renderTarget": "html-canvas",
+        "catalogSupport": "full",
+        "styleSupport": "style-pack-v1",
+    }
     return {
         "schema": "harn-gibson.display-backend-contract.v1",
         "transport": "http+sse",
         "sceneSchema": "harn-gibson.scene.v1",
         "sceneUpdateSchema": "harn-gibson.scene-update.v1",
         "catalogSchema": catalog["schema"],
+        "mutationSchema": "harn-gibson.scene-mutation.v1",
+        "inputSchema": "harn-gibson.browser-input.v1",
         "stylePackSchema": "harn-gibson.style-pack.v1",
         "renderInputSchema": "harn-gibson.render-input.v1",
         "renderIntentSchema": "harn-gibson.render-intent.v1",
@@ -512,23 +530,63 @@ def backend_contract_payload(state: GibsonServerState) -> dict[str, Any]:
             "input": {"method": "POST", "path": "/input", "schema": "harn-gibson.browser-input.v1"},
             "inputNext": {"method": "GET", "path": "/input/next", "schema": "harn-gibson.browser-input.v1"},
         },
-        "displayBackend": {
-            "id": "browser-canvas",
-            "primary": True,
-            "renderTarget": "html-canvas",
-            "catalogSupport": "full",
-            "styleSupport": "style-pack-v1",
-        },
+        "displayBackend": display_backend,
         "corePrimitiveKinds": list(CORE_PRIMITIVE_KINDS),
         "catalogPrimitiveKinds": catalog_primitive_kinds,
-        "supportedPrimitiveKinds": list(supported_primitives),
+        "supportedPrimitiveKinds": supported_primitive_kinds,
         "supportedEffectKinds": effect_kinds,
+        "supportedMutationOps": supported_mutation_ops,
+        "supportedInputDeliverAs": supported_input_deliver_as,
+        "supportedRenderModes": supported_render_modes,
+        "supportedRenderTimingModes": supported_render_timing_modes,
         "activeStylePack": state.style_pack.to_dict(),
-        "supportedStylePackIds": [style["id"] for style in supported_style_packs],
+        "supportedStylePackIds": supported_style_pack_ids,
         "supportedStylePacks": supported_style_packs,
+        "capabilityProfile": {
+            "schema": "harn-gibson.backend-capability-profile.v1",
+            "backendId": display_backend["id"],
+            "primitiveLayer": {
+                "contract": catalog["schema"],
+                "catalogSupport": display_backend["catalogSupport"],
+                "supportsCustomPrimitiveLayer": True,
+                "customPrimitivePolicy": (
+                    "Implement the advertised catalog directly, translate it to a backend-native vocabulary, "
+                    "or pair a custom vocabulary with a renderer that targets that vocabulary."
+                ),
+                "unknownPrimitivePolicy": "preserve-scene-state-render-noop",
+                "supportedPrimitiveKinds": supported_primitive_kinds,
+                "supportedEffectKinds": effect_kinds,
+            },
+            "mutationLayer": {
+                "schema": "harn-gibson.scene-mutation.v1",
+                "supportedOps": supported_mutation_ops,
+                "patchSemantics": "shallow-props-merge",
+                "sceneSnapshotAuthority": True,
+            },
+            "timing": {
+                "renderModes": supported_render_modes,
+                "renderTimingModes": supported_render_timing_modes,
+                "supportsRenderStepDelayMs": True,
+                "supportsRenderStepStartOffsetMs": True,
+                "coalescedBatchTimeline": True,
+            },
+            "input": {
+                "schema": "harn-gibson.browser-input.v1",
+                "deliverAs": supported_input_deliver_as,
+                "queueEndpoint": "/input",
+                "pollEndpoint": "/input/next",
+            },
+            "style": {
+                "schema": "harn-gibson.style-pack.v1",
+                "support": display_backend["styleSupport"],
+                "activeStylePackId": state.style_pack.id,
+                "supportedStylePackIds": supported_style_pack_ids,
+            },
+        },
         "contracts": {
             "scene": "A full scene snapshot is authoritative for backend state.",
             "sceneUpdate": "Scene updates include the triggering event, mutations, full scene, and render metadata.",
+            "mutation": "Scene mutations are state deltas; display backends own drawing and animation loops.",
             "stylePack": (
                 "Style packs are presentation hints for tones, canvas backdrop behavior, CSS variables, and motifs; "
                 "the selected pack is mirrored in scene metadata."
@@ -6416,6 +6474,9 @@ __all__ = [
     "CORE_PRIMITIVE_KINDS",
     "GibsonServerState",
     "HarnBridgeState",
+    "INPUT_DELIVERY_KINDS",
+    "SUPPORTED_RENDER_MODES",
+    "SUPPORTED_RENDER_TIMING_MODES",
     "apply_event_to_scene",
     "backend_contract_payload",
     "build_state_from_env",

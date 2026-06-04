@@ -108,6 +108,7 @@ from harn_gibson.routing import (
     renderer_event_interest_from_value,
 )
 from harn_gibson.scene import (
+    SCENE_MUTATION_OPS,
     SceneAnimation,
     SceneEngine,
     SceneMutation,
@@ -172,6 +173,7 @@ __all__ = [
     "ReplayStepResult",
     "ReplaySuiteResult",
     "RouteDecision",
+    "SCENE_MUTATION_OPS",
     "SceneAnimation",
     "SceneEngine",
     "SceneMutation",

@@ -26,8 +26,12 @@ from harn_gibson import (
     SceneMutation,
     cli,
 )
+from harn_gibson.scene import SCENE_MUTATION_OPS
 from harn_gibson.server import (
     CORE_PRIMITIVE_KINDS,
+    INPUT_DELIVERY_KINDS,
+    SUPPORTED_RENDER_MODES,
+    SUPPORTED_RENDER_TIMING_MODES,
     BrowserInputQueue,
     GibsonServerState,
     HarnBridgeState,
@@ -135,6 +139,8 @@ def test_http_server_routes() -> None:
         assert backend_contract["sceneSchema"] == "harn-gibson.scene.v1"
         assert backend_contract["sceneUpdateSchema"] == "harn-gibson.scene-update.v1"
         assert backend_contract["catalogSchema"] == "harn-gibson.visual-catalog.v1"
+        assert backend_contract["mutationSchema"] == "harn-gibson.scene-mutation.v1"
+        assert backend_contract["inputSchema"] == "harn-gibson.browser-input.v1"
         assert backend_contract["endpoints"]["scene"] == {
             "method": "GET",
             "path": "/scene",
@@ -151,6 +157,13 @@ def test_http_server_routes() -> None:
         assert backend_contract["stylePackSchema"] == "harn-gibson.style-pack.v1"
         assert backend_contract["activeStylePack"]["id"] == "gibson"
         assert backend_contract["supportedStylePackIds"] == [style.id for style in STYLE_PACKS]
+        assert backend_contract["supportedMutationOps"] == list(SCENE_MUTATION_OPS)
+        assert backend_contract["supportedInputDeliverAs"] == list(INPUT_DELIVERY_KINDS)
+        assert backend_contract["supportedRenderModes"] == list(SUPPORTED_RENDER_MODES)
+        assert backend_contract["supportedRenderTimingModes"] == list(SUPPORTED_RENDER_TIMING_MODES)
+        assert backend_contract["capabilityProfile"]["primitiveLayer"]["supportsCustomPrimitiveLayer"] is True
+        assert backend_contract["capabilityProfile"]["mutationLayer"]["supportedOps"] == list(SCENE_MUTATION_OPS)
+        assert backend_contract["capabilityProfile"]["input"]["deliverAs"] == list(INPUT_DELIVERY_KINDS)
         assert backend_contract["corePrimitiveKinds"] == list(CORE_PRIMITIVE_KINDS)
         assert "status" in backend_contract["supportedPrimitiveKinds"]
         assert "city_block" in backend_contract["supportedPrimitiveKinds"]
@@ -542,11 +555,20 @@ def test_backend_contract_payload_describes_non_web_backend_surface() -> None:
     assert contract["endpoints"]["catalog"]["path"] == "/catalog"
     assert contract["endpoints"]["sceneStream"]["schema"] == "harn-gibson.scene-update.v1"
     assert contract["contracts"]["scene"] == "A full scene snapshot is authoritative for backend state."
+    assert contract["contracts"]["mutation"] == (
+        "Scene mutations are state deltas; display backends own drawing and animation loops."
+    )
     assert contract["contracts"]["stylePack"].startswith("Style packs are presentation hints")
     assert contract["corePrimitiveKinds"] == list(CORE_PRIMITIVE_KINDS)
     assert set(CORE_PRIMITIVE_KINDS) <= set(contract["supportedPrimitiveKinds"])
     assert {"terminal_wall", "svg_layer", "data_rain"} <= set(contract["catalogPrimitiveKinds"])
     assert {"timeline_cue", "route_trace", "camera_path"} <= set(contract["supportedEffectKinds"])
+    assert contract["mutationSchema"] == "harn-gibson.scene-mutation.v1"
+    assert contract["inputSchema"] == "harn-gibson.browser-input.v1"
+    assert contract["supportedMutationOps"] == list(SCENE_MUTATION_OPS)
+    assert contract["supportedInputDeliverAs"] == list(INPUT_DELIVERY_KINDS)
+    assert contract["supportedRenderModes"] == ["blocking", "async"]
+    assert contract["supportedRenderTimingModes"] == ["immediate", "scheduled"]
     assert contract["stylePackSchema"] == "harn-gibson.style-pack.v1"
     assert contract["activeStylePack"]["schema"] == "harn-gibson.style-pack.v1"
     assert contract["activeStylePack"]["id"] == "gibson"
@@ -554,6 +576,47 @@ def test_backend_contract_payload_describes_non_web_backend_surface() -> None:
     assert contract["supportedStylePackIds"] == [style.id for style in STYLE_PACKS]
     assert {style["id"] for style in contract["supportedStylePacks"]} == {style.id for style in STYLE_PACKS}
     assert all(style["schema"] == "harn-gibson.style-pack.v1" for style in contract["supportedStylePacks"])
+    assert contract["capabilityProfile"] == {
+        "schema": "harn-gibson.backend-capability-profile.v1",
+        "backendId": "browser-canvas",
+        "primitiveLayer": {
+            "contract": "harn-gibson.visual-catalog.v1",
+            "catalogSupport": "full",
+            "supportsCustomPrimitiveLayer": True,
+            "customPrimitivePolicy": (
+                "Implement the advertised catalog directly, translate it to a backend-native vocabulary, "
+                "or pair a custom vocabulary with a renderer that targets that vocabulary."
+            ),
+            "unknownPrimitivePolicy": "preserve-scene-state-render-noop",
+            "supportedPrimitiveKinds": contract["supportedPrimitiveKinds"],
+            "supportedEffectKinds": contract["supportedEffectKinds"],
+        },
+        "mutationLayer": {
+            "schema": "harn-gibson.scene-mutation.v1",
+            "supportedOps": list(SCENE_MUTATION_OPS),
+            "patchSemantics": "shallow-props-merge",
+            "sceneSnapshotAuthority": True,
+        },
+        "timing": {
+            "renderModes": ["blocking", "async"],
+            "renderTimingModes": ["immediate", "scheduled"],
+            "supportsRenderStepDelayMs": True,
+            "supportsRenderStepStartOffsetMs": True,
+            "coalescedBatchTimeline": True,
+        },
+        "input": {
+            "schema": "harn-gibson.browser-input.v1",
+            "deliverAs": ["followUp", "steer"],
+            "queueEndpoint": "/input",
+            "pollEndpoint": "/input/next",
+        },
+        "style": {
+            "schema": "harn-gibson.style-pack.v1",
+            "support": "style-pack-v1",
+            "activeStylePackId": "gibson",
+            "supportedStylePackIds": [style.id for style in STYLE_PACKS],
+        },
+    }
 
 
 def test_async_state_accepts_without_immediate_scene_update() -> None:
@@ -1097,8 +1160,10 @@ def test_cli_parser_and_run(monkeypatch: Any, capsys: Any) -> None:
     assert contract["schema"] == "harn-gibson.display-backend-contract.v1"
     assert contract["displayBackend"]["id"] == "browser-canvas"
     assert contract["stylePackSchema"] == "harn-gibson.style-pack.v1"
+    assert contract["mutationSchema"] == "harn-gibson.scene-mutation.v1"
     assert contract["activeStylePack"]["id"] == "gibson"
     assert "mainframe" in contract["supportedStylePackIds"]
+    assert contract["capabilityProfile"]["timing"]["renderTimingModes"] == ["immediate", "scheduled"]
     assert "terminal_wall" in contract["supportedPrimitiveKinds"]
 
     calls: list[tuple[str, int]] = []
