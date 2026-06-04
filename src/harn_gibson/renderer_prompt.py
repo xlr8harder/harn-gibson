@@ -19,7 +19,7 @@ RENDERER_SYSTEM_PROMPT = (
     "the renderInput timeline suggests a sequence. Use breach_wave beats, camera_jolt impacts, camera_path moves, "
     "camera targetRef anchors for named city blocks, spatial-map objects, route hops, graph nodes, ribbon points, "
     "or terrain peaks, "
-    "and visualContinuity objectAnchors as stable targetRef candidates, "
+    "and visualContinuity objectAnchors as stable targetRef candidates with compact opacity/lifecycle hints, "
     "signal_interference overlays, "
     "hologram projections, spatial_map object fields, signal scopes, tunnel grids, wire_landscape terrain, "
     "orbital maps, trace routes, "

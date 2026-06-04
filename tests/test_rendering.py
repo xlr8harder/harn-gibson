@@ -1837,6 +1837,11 @@ def test_visual_continuity_exposes_object_level_target_anchors() -> None:
                                 "mass": 0.8,
                                 "confidence": 0.72,
                                 "active": True,
+                                "opacity": 1.2,
+                                "recency": "current",
+                                "settlement": "reconciled",
+                                "ageSequences": 0,
+                                "ageMs": 0,
                             },
                             {
                                 "id": "test-object",
@@ -1846,6 +1851,11 @@ def test_visual_continuity_exposes_object_level_target_anchors() -> None:
                                 "x": 0.58,
                                 "y": 0.38,
                                 "mass": 0.45,
+                                "opacity": "bad",
+                                "recency": "stale",
+                                "settlement": "open",
+                                "ageSequences": 32,
+                                "ageMs": 400000,
                             },
                         ],
                         "worldBindings": [
@@ -1929,12 +1939,26 @@ def test_visual_continuity_exposes_object_level_target_anchors() -> None:
     assert focused_object["path"] == "src/app.py"
     assert focused_object["focused"] is True
     assert focused_object["active"] is True
+    assert focused_object["opacity"] == 1.0
+    assert focused_object["lifecycle"] == {
+        "recency": "current",
+        "settlement": "reconciled",
+        "ageSequences": 0,
+        "ageMs": 0,
+    }
     assert focused_object["metrics"] == {"mass": 0.8, "confidence": 0.72}
     assert [binding["targetProp"] for binding in focused_object["worldBindings"]] == [
         "objects[0].mass",
         "focusObjectId",
     ]
     assert spatial_anchor["objectAnchors"][1]["targetRef"] == {"id": "test-object"}
+    assert "opacity" not in spatial_anchor["objectAnchors"][1]
+    assert spatial_anchor["objectAnchors"][1]["lifecycle"] == {
+        "recency": "stale",
+        "settlement": "open",
+        "ageSequences": 32,
+        "ageMs": 400000,
+    }
     ribbon_anchor = next(anchor for anchor in context.visual_continuity["anchors"] if anchor["id"] == "ribbon")
     assert ribbon_anchor["objectAnchors"][0]["targetRef"] == {"index": 0}
     terrain_anchor = next(anchor for anchor in context.visual_continuity["anchors"] if anchor["id"] == "terrain")

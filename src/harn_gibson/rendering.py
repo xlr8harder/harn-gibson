@@ -2031,6 +2031,12 @@ def _visual_object_anchor_summary(
         summary["tone"] = tone
     if item.get("active") is not None:
         summary["active"] = bool(item.get("active"))
+    opacity = _visual_opacity(item)
+    if opacity is not None:
+        summary["opacity"] = opacity
+    lifecycle = _visual_object_lifecycle(item)
+    if lifecycle:
+        summary["lifecycle"] = lifecycle
     if focused:
         summary["focused"] = True
     metrics = _visual_object_metrics(item)
@@ -2150,6 +2156,26 @@ def _visual_object_metrics(item: Mapping[str, Any]) -> dict[str, Any]:
         if type(value) in {int, float} and isfinite(float(value)) and output_key not in metrics:
             metrics[output_key] = value
     return metrics
+
+
+def _visual_opacity(item: Mapping[str, Any]) -> float | None:
+    value = item.get("opacity")
+    if type(value) not in {int, float} or not isfinite(float(value)):
+        return None
+    return round(max(0.0, min(1.0, float(value))), 3)
+
+
+def _visual_object_lifecycle(item: Mapping[str, Any]) -> dict[str, Any]:
+    lifecycle: dict[str, Any] = {}
+    for key in ("recency", "settlement"):
+        value = item.get(key)
+        if isinstance(value, str) and value:
+            lifecycle[key] = _clip_preview(value, 48)
+    for key in ("ageSequences", "ageMs"):
+        value = item.get(key)
+        if type(value) is int:
+            lifecycle[key] = max(0, value)
+    return lifecycle
 
 
 def _object_text(item: Mapping[str, Any], *keys: str) -> str | None:
