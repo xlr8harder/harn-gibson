@@ -684,6 +684,7 @@ def test_build_state_from_env(tmp_path: Path) -> None:
             "HARN_GIBSON_RENDERER_MAX_REPO_CHILDREN": "2",
             "HARN_GIBSON_RENDERER_MAX_TOUCHED_FILES": "8",
             "HARN_GIBSON_RENDERER_MAX_TOUCHED_PATH_CHARS": "40",
+            "HARN_GIBSON_RENDERER_MAX_WORLD_ENTITIES": "11",
         }
     )
     clamped_context = renderer_context_config_from_env(
@@ -720,6 +721,7 @@ def test_build_state_from_env(tmp_path: Path) -> None:
     assert context_config.max_repo_children_per_dir == 2
     assert context_config.max_touched_files == 8
     assert context_config.max_touched_path_chars == 40
+    assert context_config.max_world_entities == 11
     assert clamped_context.compaction_interval_events == 1
     assert clamped_context.max_recent_plans == 0
     assert clamped_context.max_repo_entries == 64

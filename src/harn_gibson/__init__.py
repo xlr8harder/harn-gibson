@@ -128,6 +128,7 @@ from harn_gibson.styles import (
     style_pack_from_name,
     style_pack_ids,
 )
+from harn_gibson.world_model import WORLD_MODEL_SCHEMA, FileWorldEntity, WorldFactSource, WorldModel, outcome_from_event
 
 __all__ = [
     "CatalogEntry",
@@ -184,6 +185,10 @@ __all__ = [
     "StreamBinding",
     "TimelineWindow",
     "VisualCatalog",
+    "WORLD_MODEL_SCHEMA",
+    "FileWorldEntity",
+    "WorldFactSource",
+    "WorldModel",
     "capture_scene_screenshot",
     "capture_replay_frame_screenshots",
     "coerce_render_timing_mode",
@@ -201,6 +206,7 @@ __all__ = [
     "load_hook_module",
     "model_renderer_from_env",
     "model_renderer_request_payload",
+    "outcome_from_event",
     "parse_renderer_command",
     "phase_for_event",
     "result_for_harn",

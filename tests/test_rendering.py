@@ -1340,6 +1340,7 @@ def test_renderer_context_builder_compaction_rolling_and_history(tmp_path: Path)
     assert compaction.to_dict()["schema"] == "harn-gibson.renderer-context.v1"
     assert compaction.project["schemas"]["rendererContext"] == "harn-gibson.renderer-context.v1"
     assert compaction.project["schemas"]["repoTopology"] == "harn-gibson.repo-topology.v1"
+    assert compaction.project["schemas"]["worldModel"] == "harn-gibson.world-model.v1"
     assert compaction.project["displayStyle"] == "mainframe"
     assert compaction.project["stylePack"] == {"id": "mainframe", "motifs": ["phosphor-grid"]}
     assert compaction.project["repoTopology"]["rootName"] == "repo"
@@ -1406,6 +1407,15 @@ def test_renderer_context_builder_compaction_rolling_and_history(tmp_path: Path)
         "count": 3,
         "truncated": True,
     }
+    assert compaction.project["worldModel"]["schema"] == "harn-gibson.world-model.v1"
+    assert compaction.project["worldModel"]["revision"] == 1
+    assert compaction.project["worldModel"]["entityCount"] == 2
+    assert compaction.project["worldModel"]["truncated"] is False
+    assert [item["path"] for item in compaction.project["worldModel"]["entities"]["files"]] == [
+        "src/harn_gibson/rendering.py",
+        "tests/test_rendering.py",
+    ]
+    assert compaction.project["worldModel"]["entities"]["files"][0]["provenance"]["source"] == "observed"
     assert compaction.catalog["schema"] == "harn-gibson.visual-catalog.v1"
     assert compaction.scene["schema"] == "harn-gibson.scene.v1"
     assert compaction.recent_agent_context == ("agent saw tool call", "grid was pulsing")
@@ -1459,6 +1469,8 @@ def test_renderer_context_builder_compaction_rolling_and_history(tmp_path: Path)
     rolling = builder.build(batch, scene.state, pipeline_catalog())
     assert rolling.mode == "rolling"
     assert rolling.project["touchedFiles"]["truncated"] is True
+    assert rolling.project["worldModel"]["revision"] == 1
+    assert rolling.project["worldModel"]["entityCount"] == 2
     assert rolling.catalog["mode"] == "summary"
     assert rolling.scene["schema"] == "harn-gibson.scene-summary.v1"
     assert rolling.scene["animationCount"] == 5
@@ -1639,6 +1651,11 @@ def test_renderer_context_repo_topology_handles_unavailable_root_and_duplicate_t
         "count": 4,
         "truncated": False,
     }
+    assert context.project["worldModel"]["entityCount"] == 4
+    world_files = {item["path"]: item for item in context.project["worldModel"]["entities"]["files"]}
+    assert world_files["src/new_scene.py"]["activityCount"] == 2
+    assert world_files["src/new_scene.py"]["lastOutcome"]["eventType"] == "runtime_error"
+    assert context.project["worldModel"]["recentOutcomes"][0]["toolName"] == "write"
 
 
 def test_render_intent_from_plan_summarizes_effects_targets_and_defaults() -> None:
@@ -1978,21 +1995,36 @@ def test_pipeline_scheduled_timing_honors_start_offsets() -> None:
 def test_pipeline_direct_apply_bypasses_renderer_queue() -> None:
     buffer = EventBuffer()
     pipeline = RenderPipeline(scene=SceneEngine(), buffer=buffer, mode="async", batch_window_ms=0)
-    request = RenderRequest(event(9, "message_update"), route="stream_buffer")
+    request = RenderRequest(
+        GibsonEvent.from_raw(
+            {"type": "tool_result", "toolName": "write", "isError": False, "filePath": "src/direct.py"},
+            9,
+            timestamp_ms=90,
+        ),
+        route="direct_scene",
+    )
 
     result = pipeline.apply_direct(
         request,
         (SceneMutation("append_log", entry={"direct": True}),),
-        metadata={"route": {"route": "stream_buffer"}},
+        metadata={"route": {"route": "direct_scene"}},
     )
 
     assert result.mode == "async"
     assert result.scene_revision == 1
     assert result.updates[0]["renderPlan"]["metadata"] == {
         "renderer": "direct",
-        "route": {"route": "stream_buffer"},
+        "route": {"route": "direct_scene"},
     }
     assert buffer.snapshot() == list(result.updates)
+    context = pipeline.context_builder.build(
+        RenderInputBatch.from_requests((RenderRequest(event(10, "input")),)),
+        pipeline.scene.state,
+        pipeline.catalog,
+    )
+    world_file = context.project["worldModel"]["entities"]["files"][0]
+    assert world_file["path"] == "src/direct.py"
+    assert world_file["lastOutcome"]["status"] == "ok"
 
     plan_result = pipeline.apply_plan(
         RenderPlan(

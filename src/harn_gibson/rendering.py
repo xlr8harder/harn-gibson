@@ -25,6 +25,7 @@ from harn_gibson.scene import (
 )
 from harn_gibson.sinks import EventBuffer
 from harn_gibson.styles import style_pack_from_name
+from harn_gibson.world_model import WORLD_MODEL_SCHEMA, WorldModel
 
 RenderMode = Literal["blocking", "async"]
 RenderTimingMode = Literal["immediate", "scheduled"]
@@ -293,6 +294,7 @@ class RendererContextConfig:
     max_repo_children_per_dir: int = 8
     max_touched_files: int = 24
     max_touched_path_chars: int = 160
+    max_world_entities: int = 24
 
 
 @dataclass(frozen=True, slots=True)
@@ -330,6 +332,7 @@ class RendererContextBuilder:
         self.events_since_compaction = 0
         self._history: list[dict[str, Any]] = []
         self._last_context_mode: Literal["rolling", "compaction"] | None = None
+        self._world_model = WorldModel()
 
     def build(
         self,
@@ -343,10 +346,11 @@ class RendererContextBuilder:
             "compaction" if force_compaction or self._should_compact() else "rolling"
         )
         self._last_context_mode = mode
+        project = self._project_metadata(batch)
         visualization_context = tuple(self._history[-self.config.max_recent_plans :])
         return RendererContext(
             mode=mode,
-            project=self._project_metadata(batch),
+            project=project,
             catalog=_catalog_context(catalog, full=mode == "compaction"),
             scene=_scene_context(scene, full=mode == "compaction", config=self.config),
             render_input=batch.to_dict(),
@@ -374,6 +378,10 @@ class RendererContextBuilder:
     def snapshot_history(self) -> tuple[dict[str, Any], ...]:
         return tuple(self._history)
 
+    def observe_batch(self, batch: RenderInputBatch) -> None:
+        touched_files = _touched_files_context(batch, self.config)
+        self._observe_world_model(batch, touched_files)
+
     def _should_compact(self) -> bool:
         return self.events_since_compaction == 0 or self.events_since_compaction >= max(
             1, self.config.compaction_interval_events
@@ -381,6 +389,8 @@ class RendererContextBuilder:
 
     def _project_metadata(self, batch: RenderInputBatch) -> dict[str, Any]:
         style_pack = self.config.style_pack or style_pack_from_name(self.config.display_style).to_dict()
+        repo_topology = _repo_topology_context(self.config)
+        touched_files = _touched_files_context(batch, self.config)
         return {
             "name": self.config.project_name,
             "displayStyle": self.config.display_style,
@@ -393,10 +403,19 @@ class RendererContextBuilder:
                 "repoTopology": "harn-gibson.repo-topology.v1",
                 "scene": "harn-gibson.scene.v1",
                 "touchedFiles": "harn-gibson.touched-files.v1",
+                "worldModel": WORLD_MODEL_SCHEMA,
             },
-            "repoTopology": _repo_topology_context(self.config),
-            "touchedFiles": _touched_files_context(batch, self.config),
+            "repoTopology": repo_topology,
+            "touchedFiles": touched_files,
+            "worldModel": self._world_model_context(batch, touched_files),
         }
+
+    def _world_model_context(self, batch: RenderInputBatch, touched_files: Mapping[str, Any]) -> dict[str, Any]:
+        self._observe_world_model(batch, touched_files)
+        return self._world_model.to_dict(max_entities=self.config.max_world_entities)
+
+    def _observe_world_model(self, batch: RenderInputBatch, touched_files: Mapping[str, Any]) -> None:
+        self._world_model.apply_batch(tuple(request.event for request in batch.requests), touched_files)
 
 
 @dataclass(frozen=True, slots=True)
@@ -1565,12 +1584,14 @@ class RenderPipeline:
         *,
         metadata: dict[str, Any] | None = None,
     ) -> RenderSubmitResult:
+        batch = RenderInputBatch.from_requests((request,), route=request.route)
         plan = RenderPlan(
             requests=(request,),
             steps=(RenderStep(tuple(mutations), event_index=0),),
             metadata={"renderer": "direct", **dict(metadata or {})},
         )
         with self._lock:
+            self.context_builder.observe_batch(batch)
             updates = tuple(self._apply_plan(plan))
         return RenderSubmitResult(mode=self.mode, queued=self.pending_count(), updates=updates)
 

@@ -4,6 +4,7 @@
 
 - a harn extension that hooks before, during, and after core agent events;
 - a normalized JSON event stream for graphical displays;
+- an event-sourced renderer world model for durable observed facts;
 - a persistent scene engine with primitives, animations, and mutations;
 - a browser-based local display server with SSE updates and an input composer;
 - a hook dispatcher so future policies can block, transform, or post-process events.
@@ -14,7 +15,7 @@ The current display agent is deterministic. The later LLM-driven visualization l
 
 The deterministic renderer remains the default. Events pass through a routing layer before rendering: normal events become renderer requests, streaming assistant deltas update a local `text_stream` primitive, and debug-only events can bypass renderer execution. The deterministic fallback emits browser-rendered `city_block`, `node_graph`, `ribbon`, `glyph_layer`, and `particle_field` primitives, including a bounded repo map when renderer context includes topology or touched-file data. Repo city building height uses numeric line-count metadata plus visible file/directory counts, without sending file contents to the renderer. The browser renderer also supports low-level `mesh`, cinematic `hologram` projections, animated `signal_scope` radar/oscilloscope instruments, animated `tunnel_grid` data corridors, animated `wire_landscape` terrain/filesystem planes, `terminal_wall` banks for command/output/file panels, `access_matrix` lock/security grids, spinning `orbital_map` uplink globes, rotating `data_vault` cores, faceted `black_ice` barriers, animated `trace_route` paths, camera-drifting `city_block` filesystem districts, constrained `svg_layer` vector primitives with transform keyframes, path morph frames, and safe filter/clip presets, `data_rain` glyph curtains, and persistent scene animations for pulses, packet bursts, timeline cues, route traces, scans, glitches, signal interference overlays, breach waves, camera jolts, scene camera paths, flythrough rays, extrusion frames, and hold brackets. Dogfood runs can opt into either an external render-plan command or a prompt-command model adapter; unsafe external/model plans are rejected before scene application and recorded as diagnostics. The display server exposes `/catalog`, and `uv run harn-gibson catalog` prints the same visual primitive/effect catalog for offline renderer prompts and display-backend experiments.
 
-Renderer implementations can stay simple with `render(requests, scene)`, or opt into `render_with_context(requests, scene, context)` to receive compact project metadata, scene state, catalog entries, recent agent context, visual-continuity anchors, and recent visualization history. See [docs/renderer-agent.md](docs/renderer-agent.md) for the context and compaction contract.
+Renderer implementations can stay simple with `render(requests, scene)`, or opt into `render_with_context(requests, scene, context)` to receive compact project metadata, the framework-owned world model, scene state, catalog entries, recent agent context, visual-continuity anchors, and recent visualization history. See [docs/renderer-agent.md](docs/renderer-agent.md) for the context and compaction contract.
 
 ## Development
 
@@ -110,10 +111,11 @@ HARN_GIBSON_RENDERER_MAX_RECENT_PLANS=6        # visual history retained between
 HARN_GIBSON_RENDERER_MAX_REPO_ENTRIES=64       # top-level repo entries sampled
 HARN_GIBSON_RENDERER_MAX_REPO_CHILDREN=8       # visible children per directory
 HARN_GIBSON_RENDERER_MAX_TOUCHED_FILES=24      # touched-file batch size
+HARN_GIBSON_RENDERER_MAX_WORLD_ENTITIES=24     # durable world-model entities
 HARN_GIBSON_RENDERER_MAX_PROP_PREVIEW_CHARS=240
 ```
 
-Lower limits keep renderer prompts small for fast model turnaround; higher limits give the renderer more continuity, topology, and touched-file evidence.
+Lower limits keep renderer prompts small for fast model turnaround; higher limits give the renderer more continuity, topology, touched-file evidence, and accumulated world-model facts.
 
 Renderer event interest can also be narrowed with JSON. Events outside the interest fall back locally instead of going to the renderer:
 

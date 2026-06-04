@@ -256,6 +256,9 @@ def test_replay_event_steps_file_io_and_writers(tmp_path: Path, monkeypatch: pyt
     assert replay_renderer_contexts_from_result(context_result)["contextCount"] == 1
     assert context_payload["schema"] == "harn-gibson.replay-renderer-contexts.v1"
     assert context_payload["contexts"][0]["context"]["catalog"]["schema"] == "harn-gibson.visual-catalog.v1"
+    assert context_payload["contexts"][0]["context"]["project"]["schemas"]["worldModel"] == (
+        "harn-gibson.world-model.v1"
+    )
     assert context_result.to_dict()["rendererContexts"][0]["index"] == 0
     prompts_path = tmp_path / "out" / "renderer-prompts.json"
     prompts_review_path = tmp_path / "out" / "renderer-prompts.html"

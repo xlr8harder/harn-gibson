@@ -70,9 +70,10 @@ HARN_GIBSON_RENDERER_MAX_REPO_ENTRIES=64
 HARN_GIBSON_RENDERER_MAX_REPO_CHILDREN=8
 HARN_GIBSON_RENDERER_MAX_TOUCHED_FILES=24
 HARN_GIBSON_RENDERER_MAX_TOUCHED_PATH_CHARS=160
+HARN_GIBSON_RENDERER_MAX_WORLD_ENTITIES=24
 ```
 
-Lower values reduce prompt size and remote renderer latency; higher values give a model more scene continuity, repo topology, and touched-file evidence.
+Lower values reduce prompt size and remote renderer latency; higher values give a model more scene continuity, repo topology, touched-file evidence, and accumulated world-model facts.
 
 ## External Renderer Command
 
@@ -238,11 +239,18 @@ The renderer agent should not receive a full new transcript on every event. Use 
 - Current renderer state: compact `SceneState` summary, not screenshots.
 - Bounded repo topology: project root name, top-level directories/files, and an optional clipped file-tree sample.
 - Touched files: recent file paths from harn/tool events or coalesced batches, with operation hints when available.
+- World model: durable per-file activity and outcome facts with observed provenance, schema `harn-gibson.world-model.v1`.
 - Recent harn events: the newest event batch plus short summaries of recent prior events.
 - Recent visualization context: recent render intents, render plans, and active animations/effects.
 - Visual continuity: compact anchors for currently visible stage objects, active animations, recent targets/effects, and style motifs.
 
-The executable fixture for this is `RendererContext`. A renderer that only implements `render(requests, scene)` receives the existing deterministic-compatible call shape. A renderer that implements `render_with_context(requests, scene, context)` receives a `harn-gibson.renderer-context.v1` object with project metadata, bounded repo topology, touched-file summaries, catalog data, scene context, render input, recent agent context, visualization history, visual-continuity anchors, and compaction metadata. `context.project.displayStyle` is the selected style id and `context.project.stylePack` is a `harn-gibson.style-pack.v1` payload with tones, canvas backdrop settings, CSS variables, and motifs.
+The executable fixture for this is `RendererContext`. A renderer that only implements `render(requests, scene)` receives the existing deterministic-compatible call shape. A renderer that implements `render_with_context(requests, scene, context)` receives a `harn-gibson.renderer-context.v1` object with project metadata, bounded repo topology, touched-file summaries, world-model facts, catalog data, scene context, render input, recent agent context, visualization history, visual-continuity anchors, and compaction metadata. `context.project.displayStyle` is the selected style id and `context.project.stylePack` is a `harn-gibson.style-pack.v1` payload with tones, canvas backdrop settings, CSS variables, and motifs.
+
+## World Model
+
+The world model is the first framework-owned perception layer. `RendererContextBuilder` folds normalized harn events plus the current touched-file batch into an event-sourced `harn-gibson.world-model.v1` payload at `context.project.worldModel`. The first version tracks file entities, activity counts, phases, operation hints, sources, last observed outcome, recent tool/runtime outcomes, revision, truncation, and provenance. Every emitted fact is marked as observed with last-confirmed sequence and timestamp.
+
+This is intentionally narrower than the long-term Gibson-world vision. It does not yet model symbols, imports, test-to-code relationships, semantic agent intent, attention, confidence beyond observed facts, or structured edit deltas. Those should be added as enrichable perception facts behind the same contract, not as one-off renderer prompt decoration.
 
 After enough events or token growth, do a renderer compaction:
 
@@ -257,7 +265,7 @@ The first renderer context is a compaction context. Later contexts are rolling s
 
 This mirrors harn session compaction, but it is separate from the primary agent conversation. The renderer agent owns visual continuity; harn owns task state.
 
-Use `harn-gibson replay --output-render-contexts path.json ...` to inspect the exact renderer contexts produced by a fixture or converted event log. The artifact is `harn-gibson.replay-renderer-contexts.v1` and contains only contexts for steps that actually reached the renderer boundary. It is the quickest way to review model prompt inputs, compaction mode, catalog summaries, repo topology, touched-file batches, and render-input timing without starting a live model-backed renderer.
+Use `harn-gibson replay --output-render-contexts path.json ...` to inspect the exact renderer contexts produced by a fixture or converted event log. The artifact is `harn-gibson.replay-renderer-contexts.v1` and contains only contexts for steps that actually reached the renderer boundary. It is the quickest way to review model prompt inputs, compaction mode, catalog summaries, repo topology, touched-file batches, accumulated world-model facts, and render-input timing without starting a live model-backed renderer.
 
 Use `harn-gibson replay --output-render-prompts prompts.json --render-prompt-review prompts.html ...` to inspect the provider-neutral system/user messages that a prompt-command or future provider-backed renderer would receive for each captured renderer context. The artifact is `harn-gibson.replay-renderer-prompts.v1`; each prompt is `harn-gibson.renderer-prompt.v1` with message content, context index, mode, event types, routes, timeline metadata, and prompt size. This remains offline and model-free so the prompt contract, context growth, and safety instructions can be reviewed before wiring a live provider adapter.
 
@@ -269,7 +277,7 @@ Use `harn-gibson replay --output-render-intents intents.json --render-intent-rev
 
 Streaming deltas need special handling before a remote renderer agent is added. `message_update` and similar stream events should update local stream buffers or named text primitives with throttled display refreshes. The renderer agent should receive coarse stream milestones or compact summaries, not every streaming delta as a separate model turn.
 
-Repo topology follows the same rule. The current context includes a bounded top-level directory/file sample from `HARN_GIBSON_PROJECT_ROOT` and a coalesced `touchedFiles` list extracted from path-like event payload fields and command strings. `dogfood --cwd PATH` sets that project root to the harn target workspace automatically, and `HARN_GIBSON_PROJECT_NAME` can override the display name. Runtime/auth-looking paths, virtualenvs, env files, caches, and test artifacts are omitted. The deterministic renderer already turns this context into a `repo-map` `node_graph`, a `repo-city` `city_block` mapped from the visible depth-2 repo sample, and, when files are touched, `repo-touch-field` particles plus repo-city extrusion; the hard-coded dogfood renderer also maps the same sample into a `wire_landscape` terrain plane with touched peaks, a `terminal_wall` file panel, an `access_matrix`, and an `orbital_map` uplink. City district and terrain peak height are based on bounded line-count metadata plus visible file/directory counts, while touched paths select and recolor the matching district, child block, peak, panel, access cell, or uplink node. The line counts are numeric metadata only; file contents are not included in renderer context. `city_block.cameraPath` accepts bounded transform keyframes so the browser can add slow camera drift over filesystem districts without changing the underlying scene. A future renderer can use the same context to create richer directory graphs, edited-file pulses, terrain flyovers, terminal panel banks, uplink maps, or flythrough paths without receiving file contents or a full repository listing every turn.
+Repo topology follows the same rule. The current context includes a bounded top-level directory/file sample from `HARN_GIBSON_PROJECT_ROOT` and a coalesced `touchedFiles` list extracted from path-like event payload fields and command strings. `context.project.worldModel` accumulates touched-file activity and outcomes across renderer batches, while `touchedFiles` remains the bounded current batch. `dogfood --cwd PATH` sets that project root to the harn target workspace automatically, and `HARN_GIBSON_PROJECT_NAME` can override the display name. Runtime/auth-looking paths, virtualenvs, env files, caches, and test artifacts are omitted. The deterministic renderer already turns this context into a `repo-map` `node_graph`, a `repo-city` `city_block` mapped from the visible depth-2 repo sample, and, when files are touched, `repo-touch-field` particles plus repo-city extrusion; the hard-coded dogfood renderer also maps the same sample into a `wire_landscape` terrain plane with touched peaks, a `terminal_wall` file panel, an `access_matrix`, and an `orbital_map` uplink. City district and terrain peak height are based on bounded line-count metadata plus visible file/directory counts, while touched paths select and recolor the matching district, child block, peak, panel, access cell, or uplink node. The line counts are numeric metadata only; file contents are not included in renderer context. `city_block.cameraPath` accepts bounded transform keyframes so the browser can add slow camera drift over filesystem districts without changing the underlying scene. A future renderer can use the same context to create richer directory graphs, edited-file pulses, terrain flyovers, terminal panel banks, uplink maps, or flythrough paths without receiving file contents or a full repository listing every turn.
 
 ## Visual Catalog
 

@@ -297,6 +297,10 @@ def renderer_context_config_from_env(source: Mapping[str, str]) -> RendererConte
             source.get("HARN_GIBSON_RENDERER_MAX_TOUCHED_PATH_CHARS"),
             defaults.max_touched_path_chars,
         ),
+        max_world_entities=coerce_context_limit(
+            source.get("HARN_GIBSON_RENDERER_MAX_WORLD_ENTITIES"),
+            defaults.max_world_entities,
+        ),
     )
 
 
