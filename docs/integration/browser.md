@@ -2,6 +2,8 @@
 
 Browser tests use Playwright to render the local display in headless Chromium and capture screenshots.
 
+The browser/canvas display is the first display backend, not the only possible one. Non-web backend experiments can start from `GET /backend-contract`, then consume `GET /scene`, `GET /catalog`, and `GET /events/stream` to render scene snapshots and scene-update payloads with their own primitive runtime.
+
 Install browser binaries once per environment:
 
 ```bash

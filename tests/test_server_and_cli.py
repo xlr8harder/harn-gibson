@@ -27,10 +27,12 @@ from harn_gibson import (
     cli,
 )
 from harn_gibson.server import (
+    CORE_PRIMITIVE_KINDS,
     BrowserInputQueue,
     GibsonServerState,
     HarnBridgeState,
     apply_event_to_scene,
+    backend_contract_payload,
     browser_input_event_payload,
     build_state_from_env,
     create_server,
@@ -127,6 +129,28 @@ def test_http_server_routes() -> None:
         catalog = json.loads(request_text(f"{base}/catalog")[2])
         assert catalog["schema"] == "harn-gibson.visual-catalog.v1"
         assert any(entry["id"] == "text_stream" for entry in catalog["primitives"])
+        backend_contract = json.loads(request_text(f"{base}/backend-contract")[2])
+        assert backend_contract["schema"] == "harn-gibson.display-backend-contract.v1"
+        assert backend_contract["transport"] == "http+sse"
+        assert backend_contract["sceneSchema"] == "harn-gibson.scene.v1"
+        assert backend_contract["sceneUpdateSchema"] == "harn-gibson.scene-update.v1"
+        assert backend_contract["catalogSchema"] == "harn-gibson.visual-catalog.v1"
+        assert backend_contract["endpoints"]["scene"] == {
+            "method": "GET",
+            "path": "/scene",
+            "schema": "harn-gibson.scene.v1",
+        }
+        assert backend_contract["endpoints"]["sceneStream"]["contentType"] == "text/event-stream"
+        assert backend_contract["displayBackend"] == {
+            "id": "browser-canvas",
+            "primary": True,
+            "renderTarget": "html-canvas",
+            "catalogSupport": "full",
+        }
+        assert backend_contract["corePrimitiveKinds"] == list(CORE_PRIMITIVE_KINDS)
+        assert "status" in backend_contract["supportedPrimitiveKinds"]
+        assert "city_block" in backend_contract["supportedPrimitiveKinds"]
+        assert "route_trace" in backend_contract["supportedEffectKinds"]
         assert json.loads(request_text(f"{base}/missing")[2]) == {"error": "not found"}
         assert json.loads(request_text(f"{base}/bad", b"{}")[2]) == {"error": "not found"}
         assert json.loads(request_text(f"{base}/events", b"{")[2]) == {"error": "invalid json"}
@@ -505,6 +529,19 @@ def test_harn_bridge_state_and_health_payload() -> None:
     assert styled_health["stylePack"]["canvas"]["gridTone"] == "magenta"
     assert styled.scene.state.primitives["stage"].props["theme"] == "neon-noir"
     styled.pipeline.stop()
+
+
+def test_backend_contract_payload_describes_non_web_backend_surface() -> None:
+    contract = backend_contract_payload(GibsonServerState())
+
+    assert contract["schema"] == "harn-gibson.display-backend-contract.v1"
+    assert contract["endpoints"]["catalog"]["path"] == "/catalog"
+    assert contract["endpoints"]["sceneStream"]["schema"] == "harn-gibson.scene-update.v1"
+    assert contract["contracts"]["scene"] == "A full scene snapshot is authoritative for backend state."
+    assert contract["corePrimitiveKinds"] == list(CORE_PRIMITIVE_KINDS)
+    assert set(CORE_PRIMITIVE_KINDS) <= set(contract["supportedPrimitiveKinds"])
+    assert {"terminal_wall", "svg_layer", "data_rain"} <= set(contract["catalogPrimitiveKinds"])
+    assert {"timeline_cue", "route_trace", "camera_path"} <= set(contract["supportedEffectKinds"])
 
 
 def test_async_state_accepts_without_immediate_scene_update() -> None:

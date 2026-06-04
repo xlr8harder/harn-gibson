@@ -47,6 +47,8 @@ from harn_gibson.scene import SceneEngine, apply_style_to_scene, initial_scene
 from harn_gibson.sinks import EventBuffer
 from harn_gibson.styles import DEFAULT_STYLE_ID, StylePack, default_style_pack, style_pack_from_name
 
+CORE_PRIMITIVE_KINDS = ("viewport", "status", "feed", "code", "grid")
+
 
 class GibsonHTTPServer(ThreadingHTTPServer):
     daemon_threads = True
@@ -345,6 +347,9 @@ def make_handler(state: GibsonServerState) -> type[BaseHTTPRequestHandler]:
             if request_path == "/catalog":
                 self._json(HTTPStatus.OK, state.catalog.to_dict())
                 return
+            if request_path == "/backend-contract":
+                self._json(HTTPStatus.OK, backend_contract_payload(state))
+                return
             if request_path == "/input/next":
                 item = state.inputs.pop()
                 state.input_bridge.record_input_poll(delivered=item is not None)
@@ -473,6 +478,56 @@ def health_payload(state: GibsonServerState) -> dict[str, Any]:
         "pendingRenderJobs": state.pipeline.pending_count(),
         "inputBridge": state.input_bridge.snapshot(pending_inputs=state.inputs.pending_count()),
         "streams": state.router.stream_snapshot(),
+    }
+
+
+def backend_contract_payload(state: GibsonServerState) -> dict[str, Any]:
+    catalog = state.catalog.to_dict()
+    catalog_primitive_kinds = [str(entry["id"]) for entry in catalog["primitives"]]
+    effect_kinds = [str(entry["id"]) for entry in catalog["effects"]]
+    supported_primitives = tuple(dict.fromkeys((*CORE_PRIMITIVE_KINDS, *catalog_primitive_kinds)))
+    return {
+        "schema": "harn-gibson.display-backend-contract.v1",
+        "transport": "http+sse",
+        "sceneSchema": "harn-gibson.scene.v1",
+        "sceneUpdateSchema": "harn-gibson.scene-update.v1",
+        "catalogSchema": catalog["schema"],
+        "renderInputSchema": "harn-gibson.render-input.v1",
+        "renderIntentSchema": "harn-gibson.render-intent.v1",
+        "endpoints": {
+            "display": {"method": "GET", "path": "/", "contentType": "text/html; charset=utf-8"},
+            "health": {"method": "GET", "path": "/health", "payload": "display health JSON"},
+            "scene": {"method": "GET", "path": "/scene", "schema": "harn-gibson.scene.v1"},
+            "catalog": {"method": "GET", "path": "/catalog", "schema": catalog["schema"]},
+            "events": {"method": "POST", "path": "/events", "accepts": "harn-gibson.event.v1"},
+            "sceneStream": {
+                "method": "GET",
+                "path": "/events/stream",
+                "contentType": "text/event-stream",
+                "data": "JSON scene-update payload per SSE message",
+                "schema": "harn-gibson.scene-update.v1",
+            },
+            "input": {"method": "POST", "path": "/input", "schema": "harn-gibson.browser-input.v1"},
+            "inputNext": {"method": "GET", "path": "/input/next", "schema": "harn-gibson.browser-input.v1"},
+        },
+        "displayBackend": {
+            "id": "browser-canvas",
+            "primary": True,
+            "renderTarget": "html-canvas",
+            "catalogSupport": "full",
+        },
+        "corePrimitiveKinds": list(CORE_PRIMITIVE_KINDS),
+        "catalogPrimitiveKinds": catalog_primitive_kinds,
+        "supportedPrimitiveKinds": list(supported_primitives),
+        "supportedEffectKinds": effect_kinds,
+        "contracts": {
+            "scene": "A full scene snapshot is authoritative for backend state.",
+            "sceneUpdate": "Scene updates include the triggering event, mutations, full scene, and render metadata.",
+            "backend": (
+                "A non-web backend may render the full supported primitive set or advertise a subset, "
+                "but should preserve SceneState and SceneMutation semantics."
+            ),
+        },
     }
 
 
@@ -6348,9 +6403,11 @@ setInterval(refreshHealth, 1000);
 __all__ = [
     "BrowserInput",
     "BrowserInputQueue",
+    "CORE_PRIMITIVE_KINDS",
     "GibsonServerState",
     "HarnBridgeState",
     "apply_event_to_scene",
+    "backend_contract_payload",
     "build_state_from_env",
     "browser_input_event_payload",
     "create_server",
