@@ -45,7 +45,7 @@ from harn_gibson.routing import (
 )
 from harn_gibson.scene import SceneEngine, apply_style_to_scene, initial_scene
 from harn_gibson.sinks import EventBuffer
-from harn_gibson.styles import DEFAULT_STYLE_ID, StylePack, default_style_pack, style_pack_from_name
+from harn_gibson.styles import DEFAULT_STYLE_ID, STYLE_PACKS, StylePack, default_style_pack, style_pack_from_name
 
 CORE_PRIMITIVE_KINDS = ("viewport", "status", "feed", "code", "grid")
 
@@ -486,12 +486,14 @@ def backend_contract_payload(state: GibsonServerState) -> dict[str, Any]:
     catalog_primitive_kinds = [str(entry["id"]) for entry in catalog["primitives"]]
     effect_kinds = [str(entry["id"]) for entry in catalog["effects"]]
     supported_primitives = tuple(dict.fromkeys((*CORE_PRIMITIVE_KINDS, *catalog_primitive_kinds)))
+    supported_style_packs = [style.to_dict() for style in STYLE_PACKS]
     return {
         "schema": "harn-gibson.display-backend-contract.v1",
         "transport": "http+sse",
         "sceneSchema": "harn-gibson.scene.v1",
         "sceneUpdateSchema": "harn-gibson.scene-update.v1",
         "catalogSchema": catalog["schema"],
+        "stylePackSchema": "harn-gibson.style-pack.v1",
         "renderInputSchema": "harn-gibson.render-input.v1",
         "renderIntentSchema": "harn-gibson.render-intent.v1",
         "endpoints": {
@@ -515,14 +517,22 @@ def backend_contract_payload(state: GibsonServerState) -> dict[str, Any]:
             "primary": True,
             "renderTarget": "html-canvas",
             "catalogSupport": "full",
+            "styleSupport": "style-pack-v1",
         },
         "corePrimitiveKinds": list(CORE_PRIMITIVE_KINDS),
         "catalogPrimitiveKinds": catalog_primitive_kinds,
         "supportedPrimitiveKinds": list(supported_primitives),
         "supportedEffectKinds": effect_kinds,
+        "activeStylePack": state.style_pack.to_dict(),
+        "supportedStylePackIds": [style["id"] for style in supported_style_packs],
+        "supportedStylePacks": supported_style_packs,
         "contracts": {
             "scene": "A full scene snapshot is authoritative for backend state.",
             "sceneUpdate": "Scene updates include the triggering event, mutations, full scene, and render metadata.",
+            "stylePack": (
+                "Style packs are presentation hints for tones, canvas backdrop behavior, CSS variables, and motifs; "
+                "the selected pack is mirrored in scene metadata."
+            ),
             "backend": (
                 "A non-web backend may render the full supported primitive set or advertise a subset, "
                 "but should preserve SceneState and SceneMutation semantics."

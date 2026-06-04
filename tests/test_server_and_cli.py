@@ -49,7 +49,7 @@ from harn_gibson.server import (
     route_rules_from_env,
     submit_event_to_renderer,
 )
-from harn_gibson.styles import style_pack_from_name
+from harn_gibson.styles import STYLE_PACKS, style_pack_from_name
 
 
 def request_text(url: str, data: bytes | None = None) -> tuple[int, str, str]:
@@ -146,7 +146,11 @@ def test_http_server_routes() -> None:
             "primary": True,
             "renderTarget": "html-canvas",
             "catalogSupport": "full",
+            "styleSupport": "style-pack-v1",
         }
+        assert backend_contract["stylePackSchema"] == "harn-gibson.style-pack.v1"
+        assert backend_contract["activeStylePack"]["id"] == "gibson"
+        assert backend_contract["supportedStylePackIds"] == [style.id for style in STYLE_PACKS]
         assert backend_contract["corePrimitiveKinds"] == list(CORE_PRIMITIVE_KINDS)
         assert "status" in backend_contract["supportedPrimitiveKinds"]
         assert "city_block" in backend_contract["supportedPrimitiveKinds"]
@@ -538,10 +542,18 @@ def test_backend_contract_payload_describes_non_web_backend_surface() -> None:
     assert contract["endpoints"]["catalog"]["path"] == "/catalog"
     assert contract["endpoints"]["sceneStream"]["schema"] == "harn-gibson.scene-update.v1"
     assert contract["contracts"]["scene"] == "A full scene snapshot is authoritative for backend state."
+    assert contract["contracts"]["stylePack"].startswith("Style packs are presentation hints")
     assert contract["corePrimitiveKinds"] == list(CORE_PRIMITIVE_KINDS)
     assert set(CORE_PRIMITIVE_KINDS) <= set(contract["supportedPrimitiveKinds"])
     assert {"terminal_wall", "svg_layer", "data_rain"} <= set(contract["catalogPrimitiveKinds"])
     assert {"timeline_cue", "route_trace", "camera_path"} <= set(contract["supportedEffectKinds"])
+    assert contract["stylePackSchema"] == "harn-gibson.style-pack.v1"
+    assert contract["activeStylePack"]["schema"] == "harn-gibson.style-pack.v1"
+    assert contract["activeStylePack"]["id"] == "gibson"
+    assert contract["displayBackend"]["styleSupport"] == "style-pack-v1"
+    assert contract["supportedStylePackIds"] == [style.id for style in STYLE_PACKS]
+    assert {style["id"] for style in contract["supportedStylePacks"]} == {style.id for style in STYLE_PACKS}
+    assert all(style["schema"] == "harn-gibson.style-pack.v1" for style in contract["supportedStylePacks"])
 
 
 def test_async_state_accepts_without_immediate_scene_update() -> None:
@@ -1084,6 +1096,9 @@ def test_cli_parser_and_run(monkeypatch: Any, capsys: Any) -> None:
     contract = json.loads(capsys.readouterr().out)
     assert contract["schema"] == "harn-gibson.display-backend-contract.v1"
     assert contract["displayBackend"]["id"] == "browser-canvas"
+    assert contract["stylePackSchema"] == "harn-gibson.style-pack.v1"
+    assert contract["activeStylePack"]["id"] == "gibson"
+    assert "mainframe" in contract["supportedStylePackIds"]
     assert "terminal_wall" in contract["supportedPrimitiveKinds"]
 
     calls: list[tuple[str, int]] = []
