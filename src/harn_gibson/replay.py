@@ -2071,6 +2071,9 @@ def replay_review_bundle_manifest(
     if renderer_counts:
         manifest["renderers"] = sorted(renderer_counts)
         manifest["rendererCounts"] = renderer_counts
+    visual_continuity_summary = _renderer_chunks_continuity_summary(renderer_chunks.get("chunks"))
+    if visual_continuity_summary:
+        manifest["visualContinuitySummary"] = visual_continuity_summary
     capture_summary = result.metadata.get("captureSummary") if isinstance(result.metadata, Mapping) else None
     if isinstance(capture_summary, Mapping):
         manifest["captureSummary"] = dict(capture_summary)
@@ -2181,6 +2184,23 @@ def _replay_review_metric_items(manifest: Mapping[str, Any]) -> tuple[tuple[str,
         sources = _joined_summary_values(capture_summary.get("sources"))
         if sources:
             items.append(("captured sources", sources))
+    visual_summary = manifest.get("visualContinuitySummary")
+    if isinstance(visual_summary, Mapping):
+        visual_anchors = _int_value(visual_summary.get("maxVisualAnchorCount"))
+        if visual_anchors:
+            items.append(("visual anchors", visual_anchors))
+        active_animations = _int_value(visual_summary.get("maxActiveAnimationCount"))
+        if active_animations:
+            items.append(("active animations", active_animations))
+        continuity_anchors = _joined_summary_values(visual_summary.get("anchors"))
+        if continuity_anchors:
+            items.append(("continuity anchors", continuity_anchors))
+        continuity_effects = _joined_summary_values(visual_summary.get("effects"))
+        if continuity_effects:
+            items.append(("continuity effects", continuity_effects))
+        style_motifs = _joined_summary_values(visual_summary.get("styleMotifs"))
+        if style_motifs:
+            items.append(("style motifs", style_motifs))
     return tuple(items)
 
 
@@ -2519,6 +2539,9 @@ def _replay_suite_review_entry(
     capture_summary = bundle_manifest.get("captureSummary")
     if isinstance(capture_summary, Mapping):
         entry["captureSummary"] = dict(capture_summary)
+    visual_continuity_summary = bundle_manifest.get("visualContinuitySummary")
+    if isinstance(visual_continuity_summary, Mapping):
+        entry["visualContinuitySummary"] = dict(visual_continuity_summary)
     return entry
 
 
@@ -2574,6 +2597,13 @@ def _replay_suite_review_summary(entries: Sequence[Mapping[str, Any]]) -> dict[s
     if renderer_counts:
         summary["renderers"] = sorted(renderer_counts)
         summary["rendererCounts"] = renderer_counts
+    visual_continuity_summary = _merge_visual_continuity_summaries(
+        entry.get("visualContinuitySummary")
+        for entry in rendered_entries
+        if isinstance(entry.get("visualContinuitySummary"), Mapping)
+    )
+    if visual_continuity_summary:
+        summary["visualContinuitySummary"] = visual_continuity_summary
     return summary
 
 
@@ -2624,6 +2654,20 @@ def _replay_suite_review_metric_items(manifest: Mapping[str, Any]) -> tuple[tupl
         renderers = _joined_summary_values(summary.get("renderers"))
         if renderers:
             items.append(("reviewed renderers", renderers))
+        visual_summary = summary.get("visualContinuitySummary")
+        if isinstance(visual_summary, Mapping):
+            visual_anchors = _int_value(visual_summary.get("maxVisualAnchorCount"))
+            if visual_anchors:
+                items.append(("reviewed visual anchors", visual_anchors))
+            active_animations = _int_value(visual_summary.get("maxActiveAnimationCount"))
+            if active_animations:
+                items.append(("reviewed active animations", active_animations))
+            continuity_anchors = _joined_summary_values(visual_summary.get("anchors"))
+            if continuity_anchors:
+                items.append(("reviewed continuity anchors", continuity_anchors))
+            continuity_effects = _joined_summary_values(visual_summary.get("effects"))
+            if continuity_effects:
+                items.append(("reviewed continuity effects", continuity_effects))
     return tuple(items)
 
 
@@ -2670,6 +2714,14 @@ def _replay_suite_review_file_card(file: Mapping[str, Any]) -> str:
     renderers = _joined_summary_values(file.get("renderers"))
     if renderers:
         summary_parts.append(f"renderers {escape(renderers)}")
+    visual_summary = file.get("visualContinuitySummary")
+    if isinstance(visual_summary, Mapping):
+        anchors = _joined_summary_values(visual_summary.get("anchors"))
+        if anchors:
+            summary_parts.append(f"continuity {escape(anchors)}")
+        effects = _joined_summary_values(visual_summary.get("effects"))
+        if effects:
+            summary_parts.append(f"effects {escape(effects)}")
     if chunk_text:
         summary_parts.append(chunk_text)
     summary = " / ".join(summary_parts)
@@ -2782,6 +2834,56 @@ def _renderer_context_chunk_continuity_summary(contexts: tuple[ReplayRendererCon
         payload["continuityTargets"] = targets
     if renderers:
         payload["continuityRenderers"] = renderers
+    if motifs:
+        payload["styleMotifs"] = motifs
+    return payload
+
+
+def _renderer_chunks_continuity_summary(chunks: Any) -> dict[str, Any]:
+    chunk_items = [chunk for chunk in chunks if isinstance(chunk, Mapping)] if isinstance(chunks, list) else []
+    return _merge_visual_continuity_summaries(
+        {
+            "maxVisualAnchorCount": _coerce_int(chunk.get("visualAnchorCount"), 0),
+            "maxActiveAnimationCount": _coerce_int(chunk.get("activeAnimationCount"), 0),
+            "anchors": chunk.get("continuityAnchors"),
+            "effects": chunk.get("continuityEffects"),
+            "targets": chunk.get("continuityTargets"),
+            "renderers": chunk.get("continuityRenderers"),
+            "styleMotifs": chunk.get("styleMotifs"),
+        }
+        for chunk in chunk_items
+    )
+
+
+def _merge_visual_continuity_summaries(summaries: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
+    anchors: list[str] = []
+    effects: list[str] = []
+    targets: list[str] = []
+    renderers: list[str] = []
+    motifs: list[str] = []
+    max_visual_anchor_count = 0
+    max_active_animation_count = 0
+    for summary in summaries:
+        max_visual_anchor_count = max(max_visual_anchor_count, _int_value(summary.get("maxVisualAnchorCount")))
+        max_active_animation_count = max(max_active_animation_count, _int_value(summary.get("maxActiveAnimationCount")))
+        _extend_bounded_unique(anchors, summary.get("anchors"))
+        _extend_bounded_unique(effects, summary.get("effects"))
+        _extend_bounded_unique(targets, summary.get("targets"))
+        _extend_bounded_unique(renderers, summary.get("renderers"))
+        _extend_bounded_unique(motifs, summary.get("styleMotifs"))
+    payload: dict[str, Any] = {}
+    if max_visual_anchor_count:
+        payload["maxVisualAnchorCount"] = max_visual_anchor_count
+    if max_active_animation_count:
+        payload["maxActiveAnimationCount"] = max_active_animation_count
+    if anchors:
+        payload["anchors"] = anchors
+    if effects:
+        payload["effects"] = effects
+    if targets:
+        payload["targets"] = targets
+    if renderers:
+        payload["renderers"] = renderers
     if motifs:
         payload["styleMotifs"] = motifs
     return payload

@@ -531,6 +531,9 @@ def test_replay_event_steps_file_io_and_writers(tmp_path: Path, monkeypatch: pyt
         "phases": ["before", "after"],
         "sources": ["capture"],
     }
+    assert bundle_manifest["visualContinuitySummary"]["maxVisualAnchorCount"] >= 1
+    assert "scan-grid" in bundle_manifest["visualContinuitySummary"]["anchors"]
+    assert "city-grid" in bundle_manifest["visualContinuitySummary"]["styleMotifs"]
     assert bundle_manifest_file == bundle_manifest
     assert json.loads((bundle_path / "renderer-contexts.json").read_text(encoding="utf-8"))["contextCount"] == 1
     assert json.loads((bundle_path / "renderer-prompts.json").read_text(encoding="utf-8"))["promptCount"] == 1
@@ -548,6 +551,9 @@ def test_replay_event_steps_file_io_and_writers(tmp_path: Path, monkeypatch: pyt
     assert "tool_call, tool_result" in bundle_index
     assert "before, after" in bundle_index
     assert "capture" in bundle_index
+    assert "visual anchors" in bundle_index
+    assert "continuity anchors" in bundle_index
+    assert "scan-grid" in bundle_index
     assert "window.__gibsonReplayReview" in bundle_index
     assert "<\\/script>" in replay_review_bundle_index_html(
         replay_review_bundle_manifest(
@@ -572,13 +578,32 @@ def test_replay_event_steps_file_io_and_writers(tmp_path: Path, monkeypatch: pyt
                 "eventTypes": "bad",
                 "phases": [],
                 "sources": [None, ""],
-            }
+            },
+            "visualContinuitySummary": {
+                "maxVisualAnchorCount": 0,
+                "maxActiveAnimationCount": 0,
+                "anchors": [],
+                "effects": [],
+                "styleMotifs": [],
+            },
         }
     )
     assert "captured duration" not in sparse_bundle_index
     assert "captured event types" not in sparse_bundle_index
     assert "captured phases" not in sparse_bundle_index
     assert "captured sources" not in sparse_bundle_index
+    assert "visual anchors" not in sparse_bundle_index
+    assert "continuity anchors" not in sparse_bundle_index
+    active_bundle_index = replay_review_bundle_index_html(
+        {
+            "visualContinuitySummary": {
+                "maxActiveAnimationCount": 2,
+                "effects": ["scan"],
+            }
+        }
+    )
+    assert "active animations" in active_bundle_index
+    assert "continuity effects" in active_bundle_index
     assert 'src="frame-0000.png"' in review_html
     assert 'id="timelineScrubber"' in review_html
     assert 'data-frame-select="1"' in review_html
@@ -752,6 +777,11 @@ def test_replay_suite_review_bundle(tmp_path: Path, monkeypatch: pytest.MonkeyPa
         "routes": ["renderer_agent"],
         "screenshotCount": 1,
         "stepCount": 1,
+        "visualContinuitySummary": {
+            "anchors": ["scan-grid"],
+            "maxVisualAnchorCount": 1,
+            "styleMotifs": ["city-grid", "packet-routes", "vector-ice"],
+        },
     }
     assert suite_manifest["splitManifest"]["schema"] == "harn-gibson.event-log-split.v1"
     assert suite_manifest["files"][0]["path"] == "chunk-0001.json"
@@ -761,6 +791,11 @@ def test_replay_suite_review_bundle(tmp_path: Path, monkeypatch: pytest.MonkeyPa
     assert suite_manifest["files"][0]["eventSummary"]["eventTypeCounts"] == {"tool_call": 1}
     assert suite_manifest["files"][0]["routeCounts"] == {"renderer_agent": 1}
     assert suite_manifest["files"][0]["rendererCounts"] == {"deterministic": 1}
+    assert suite_manifest["files"][0]["visualContinuitySummary"] == {
+        "anchors": ["scan-grid"],
+        "maxVisualAnchorCount": 1,
+        "styleMotifs": ["city-grid", "packet-routes", "vector-ice"],
+    }
     assert suite_manifest["files"][0]["screenshotCount"] == 1
     assert suite_manifest["files"][1]["path"] == "chunk-0002.json"
     assert suite_manifest["files"][1]["ok"] is False
@@ -785,9 +820,41 @@ def test_replay_suite_review_bundle(tmp_path: Path, monkeypatch: pytest.MonkeyPa
     assert "captured duration" in html
     assert "4200 ms" in html
     assert "reviewed event types" in html
+    assert "reviewed visual anchors" in html
+    assert "reviewed continuity anchors" in html
     assert "renderer_agent" in html
     assert "deterministic" in html
+    assert "scan-grid" in html
+    assert "city-grid" in html
     assert "window.__gibsonReplaySuiteReview" in html
+    sparse_suite_index = replay_suite_review_index_html(
+        {
+            "summary": {
+                "visualContinuitySummary": {
+                    "maxVisualAnchorCount": 0,
+                    "maxActiveAnimationCount": 0,
+                    "anchors": [],
+                    "effects": [],
+                }
+            },
+            "files": [{"path": "sparse.json", "visualContinuitySummary": {"anchors": [], "effects": []}}],
+        }
+    )
+    assert "reviewed visual anchors" not in sparse_suite_index
+    assert "reviewed continuity anchors" not in sparse_suite_index
+    assert "continuity " not in sparse_suite_index
+    active_suite_index = replay_suite_review_index_html(
+        {
+            "summary": {
+                "visualContinuitySummary": {
+                    "maxActiveAnimationCount": 2,
+                    "effects": ["scan"],
+                }
+            }
+        }
+    )
+    assert "reviewed active animations" in active_suite_index
+    assert "reviewed continuity effects" in active_suite_index
 
 
 def test_replay_suite_review_bundle_fallbacks(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
