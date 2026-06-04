@@ -52,6 +52,7 @@ def test_default_visual_catalog_has_generic_and_cinematic_building_blocks() -> N
     } <= primitive_ids
     assert {
         "glitch",
+        "signal_interference",
         "breach_wave",
         "camera_jolt",
         "camera_path",
@@ -156,6 +157,12 @@ def test_default_visual_catalog_has_generic_and_cinematic_building_blocks() -> N
     assert breach_wave is not None
     assert {"targetId", "intensity", "rings", "shards", "label", "position"} <= set(breach_wave.props)
     assert {"gibson", "cinematic", "motion", "timed"} <= set(breach_wave.tags)
+    signal_interference = catalog.entry("signal_interference")
+    assert signal_interference is not None
+    assert {"targetId", "intensity", "bands", "blocks", "noise", "speed", "label", "seed"} <= set(
+        signal_interference.props
+    )
+    assert {"gibson", "cinematic", "motion", "timed", "overlay"} <= set(signal_interference.tags)
     camera_jolt = catalog.entry("camera_jolt")
     assert camera_jolt is not None
     assert {"targetId", "intensity", "zoom", "roll", "position", "seed"} <= set(camera_jolt.props)

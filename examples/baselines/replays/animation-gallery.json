@@ -171,6 +171,26 @@
         "startedAtMs": 9720,
         "targetId": "animation-ribbon"
       },
+      "gallery-interference": {
+        "durationMs": 5200,
+        "id": "gallery-interference",
+        "kind": "signal_interference",
+        "loop": true,
+        "props": {
+          "accentTone": "magenta",
+          "bands": 14,
+          "blocks": 32,
+          "intensity": 0.78,
+          "label": "SIGNAL BREAK",
+          "noise": 88,
+          "phase": "after",
+          "seed": 964,
+          "speed": 0.86,
+          "tone": "cyan"
+        },
+        "startedAtMs": 9665,
+        "targetId": "scan-grid"
+      },
       "gallery-packets": {
         "durationMs": 3400,
         "id": "gallery-packets",
@@ -267,7 +287,7 @@
         "eventType": "animation_gallery",
         "phase": "lifecycle",
         "sequence": 960,
-        "summary": "persistent pulses, packets, timeline cues, scans, glitch, breach waves, camera jolts, camera paths, flythrough, extrusion, and hold brackets",
+        "summary": "persistent pulses, packets, timeline cues, scans, glitch, signal interference, breach waves, camera jolts, camera paths, flythrough, extrusion, and hold brackets",
         "title": "Animation gallery"
       }
     ],
@@ -285,6 +305,7 @@
           "animation:route_trace",
           "animation:scan",
           "animation:glitch",
+          "animation:signal_interference",
           "animation:breach_wave",
           "animation:camera_jolt",
           "animation:camera_path",
@@ -300,7 +321,7 @@
           "renderer": "replay",
           "stepType": "mutations"
         },
-        "mutationCount": 17,
+        "mutationCount": 18,
         "renderer": "replay",
         "requestCount": 1,
         "routes": [
@@ -333,6 +354,7 @@
             "animation:route_trace",
             "animation:scan",
             "animation:glitch",
+            "animation:signal_interference",
             "animation:breach_wave",
             "animation:camera_jolt",
             "animation:camera_path",
@@ -348,7 +370,7 @@
             "renderer": "replay",
             "stepType": "mutations"
           },
-          "mutationCount": 17,
+          "mutationCount": 18,
           "renderer": "replay",
           "requestCount": 1,
           "routes": [

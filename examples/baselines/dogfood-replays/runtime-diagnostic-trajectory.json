@@ -137,6 +137,28 @@
         "startedAtMs": 13800,
         "targetId": "dogfood-sigil"
       },
+      "dogfood-interference": {
+        "durationMs": 4600,
+        "id": "dogfood-interference",
+        "kind": "signal_interference",
+        "loop": true,
+        "props": {
+          "accentTone": "white",
+          "bands": 16,
+          "blocks": 34,
+          "intensity": 0.86,
+          "label": "SIGNAL BREAK",
+          "labelX": 0.78,
+          "labelY": 0.14,
+          "noise": 96,
+          "phase": "after",
+          "seed": 94,
+          "speed": 0.96,
+          "tone": "red"
+        },
+        "startedAtMs": 13800,
+        "targetId": "scan-grid"
+      },
       "dogfood-packets": {
         "durationMs": 2600,
         "id": "dogfood-packets",
@@ -281,6 +303,7 @@
           "animation:route_trace",
           "animation:camera_path",
           "animation:camera_jolt",
+          "animation:signal_interference",
           "animation:packet_burst",
           "animation:scan",
           "animation:extrude",
@@ -297,7 +320,7 @@
           "renderer": "gibson-dogfood-showcase",
           "touchedFileCount": 1
         },
-        "mutationCount": 26,
+        "mutationCount": 27,
         "renderer": "gibson-dogfood-showcase",
         "requestCount": 1,
         "routes": [
@@ -354,6 +377,7 @@
             "animation:route_trace",
             "animation:camera_path",
             "animation:camera_jolt",
+            "animation:signal_interference",
             "animation:packet_burst",
             "animation:scan",
             "animation:extrude",
@@ -370,6 +394,78 @@
             "renderer": "gibson-dogfood-showcase",
             "touchedFileCount": 0
           },
+          "mutationCount": 27,
+          "renderer": "gibson-dogfood-showcase",
+          "requestCount": 1,
+          "routes": [
+            "renderer_agent"
+          ],
+          "schema": "harn-gibson.render-intent.v1",
+          "stepCount": 1,
+          "targets": [
+            "status",
+            "dogfood-rain",
+            "dogfood-opcodes",
+            "dogfood-terminal-wall",
+            "dogfood-tunnel",
+            "dogfood-landscape",
+            "dogfood-vault",
+            "dogfood-black-ice",
+            "dogfood-ice-mesh",
+            "dogfood-scope",
+            "dogfood-control-graph",
+            "dogfood-route",
+            "dogfood-city",
+            "dogfood-file-sparks",
+            "dogfood-hologram",
+            "dogfood-command-ribbon",
+            "dogfood-sigil",
+            "scan-grid"
+          ],
+          "timeline": {
+            "durationMs": 0
+          }
+        },
+        {
+          "effects": [
+            "patch",
+            "append_log",
+            "primitive:data_rain",
+            "primitive:glyph_layer",
+            "primitive:terminal_wall",
+            "primitive:tunnel_grid",
+            "primitive:wire_landscape",
+            "primitive:data_vault",
+            "primitive:black_ice",
+            "primitive:mesh",
+            "primitive:signal_scope",
+            "primitive:node_graph",
+            "primitive:trace_route",
+            "primitive:city_block",
+            "primitive:particle_field",
+            "primitive:hologram",
+            "primitive:ribbon",
+            "primitive:svg_layer",
+            "animation:timeline_cue",
+            "animation:route_trace",
+            "animation:camera_path",
+            "animation:camera_jolt",
+            "animation:signal_interference",
+            "animation:packet_burst",
+            "animation:scan",
+            "animation:extrude"
+          ],
+          "eventTypes": [
+            "tool_call"
+          ],
+          "intent": "stage tool_call as a Hollywood terminal intrusion",
+          "metadata": {
+            "eventType": "tool_call",
+            "intent": "stage tool_call as a Hollywood terminal intrusion",
+            "phase": "before",
+            "renderer": "gibson-dogfood-showcase",
+            "touchedFileCount": 1
+          },
           "mutationCount": 26,
           "renderer": "gibson-dogfood-showcase",
           "requestCount": 1,
@@ -426,77 +522,7 @@
             "animation:route_trace",
             "animation:camera_path",
             "animation:camera_jolt",
-            "animation:packet_burst",
-            "animation:scan",
-            "animation:extrude"
-          ],
-          "eventTypes": [
-            "tool_call"
-          ],
-          "intent": "stage tool_call as a Hollywood terminal intrusion",
-          "metadata": {
-            "eventType": "tool_call",
-            "intent": "stage tool_call as a Hollywood terminal intrusion",
-            "phase": "before",
-            "renderer": "gibson-dogfood-showcase",
-            "touchedFileCount": 1
-          },
-          "mutationCount": 25,
-          "renderer": "gibson-dogfood-showcase",
-          "requestCount": 1,
-          "routes": [
-            "renderer_agent"
-          ],
-          "schema": "harn-gibson.render-intent.v1",
-          "stepCount": 1,
-          "targets": [
-            "status",
-            "dogfood-rain",
-            "dogfood-opcodes",
-            "dogfood-terminal-wall",
-            "dogfood-tunnel",
-            "dogfood-landscape",
-            "dogfood-vault",
-            "dogfood-black-ice",
-            "dogfood-ice-mesh",
-            "dogfood-scope",
-            "dogfood-control-graph",
-            "dogfood-route",
-            "dogfood-city",
-            "dogfood-file-sparks",
-            "dogfood-hologram",
-            "dogfood-command-ribbon",
-            "dogfood-sigil",
-            "scan-grid"
-          ],
-          "timeline": {
-            "durationMs": 0
-          }
-        },
-        {
-          "effects": [
-            "patch",
-            "append_log",
-            "primitive:data_rain",
-            "primitive:glyph_layer",
-            "primitive:terminal_wall",
-            "primitive:tunnel_grid",
-            "primitive:wire_landscape",
-            "primitive:data_vault",
-            "primitive:black_ice",
-            "primitive:mesh",
-            "primitive:signal_scope",
-            "primitive:node_graph",
-            "primitive:trace_route",
-            "primitive:city_block",
-            "primitive:particle_field",
-            "primitive:hologram",
-            "primitive:ribbon",
-            "primitive:svg_layer",
-            "animation:timeline_cue",
-            "animation:route_trace",
-            "animation:camera_path",
-            "animation:camera_jolt",
+            "animation:signal_interference",
             "animation:packet_burst",
             "animation:scan",
             "animation:extrude",
@@ -513,6 +539,78 @@
             "renderer": "gibson-dogfood-showcase",
             "touchedFileCount": 2
           },
+          "mutationCount": 27,
+          "renderer": "gibson-dogfood-showcase",
+          "requestCount": 1,
+          "routes": [
+            "renderer_agent"
+          ],
+          "schema": "harn-gibson.render-intent.v1",
+          "stepCount": 1,
+          "targets": [
+            "status",
+            "dogfood-rain",
+            "dogfood-opcodes",
+            "dogfood-terminal-wall",
+            "dogfood-tunnel",
+            "dogfood-landscape",
+            "dogfood-vault",
+            "dogfood-black-ice",
+            "dogfood-ice-mesh",
+            "dogfood-scope",
+            "dogfood-control-graph",
+            "dogfood-route",
+            "dogfood-city",
+            "dogfood-file-sparks",
+            "dogfood-hologram",
+            "dogfood-command-ribbon",
+            "dogfood-sigil",
+            "scan-grid"
+          ],
+          "timeline": {
+            "durationMs": 0
+          }
+        },
+        {
+          "effects": [
+            "patch",
+            "append_log",
+            "primitive:data_rain",
+            "primitive:glyph_layer",
+            "primitive:terminal_wall",
+            "primitive:tunnel_grid",
+            "primitive:wire_landscape",
+            "primitive:data_vault",
+            "primitive:black_ice",
+            "primitive:mesh",
+            "primitive:signal_scope",
+            "primitive:node_graph",
+            "primitive:trace_route",
+            "primitive:city_block",
+            "primitive:particle_field",
+            "primitive:hologram",
+            "primitive:ribbon",
+            "primitive:svg_layer",
+            "animation:timeline_cue",
+            "animation:route_trace",
+            "animation:camera_path",
+            "animation:camera_jolt",
+            "animation:signal_interference",
+            "animation:packet_burst",
+            "animation:scan",
+            "animation:extrude"
+          ],
+          "eventTypes": [
+            "browser_input"
+          ],
+          "intent": "stage browser_input as a Hollywood terminal intrusion",
+          "metadata": {
+            "eventType": "browser_input",
+            "intent": "stage browser_input as a Hollywood terminal intrusion",
+            "phase": "lifecycle",
+            "renderer": "gibson-dogfood-showcase",
+            "touchedFileCount": 0
+          },
           "mutationCount": 26,
           "renderer": "gibson-dogfood-showcase",
           "requestCount": 1,
@@ -569,77 +667,7 @@
             "animation:route_trace",
             "animation:camera_path",
             "animation:camera_jolt",
-            "animation:packet_burst",
-            "animation:scan",
-            "animation:extrude"
-          ],
-          "eventTypes": [
-            "browser_input"
-          ],
-          "intent": "stage browser_input as a Hollywood terminal intrusion",
-          "metadata": {
-            "eventType": "browser_input",
-            "intent": "stage browser_input as a Hollywood terminal intrusion",
-            "phase": "lifecycle",
-            "renderer": "gibson-dogfood-showcase",
-            "touchedFileCount": 0
-          },
-          "mutationCount": 25,
-          "renderer": "gibson-dogfood-showcase",
-          "requestCount": 1,
-          "routes": [
-            "renderer_agent"
-          ],
-          "schema": "harn-gibson.render-intent.v1",
-          "stepCount": 1,
-          "targets": [
-            "status",
-            "dogfood-rain",
-            "dogfood-opcodes",
-            "dogfood-terminal-wall",
-            "dogfood-tunnel",
-            "dogfood-landscape",
-            "dogfood-vault",
-            "dogfood-black-ice",
-            "dogfood-ice-mesh",
-            "dogfood-scope",
-            "dogfood-control-graph",
-            "dogfood-route",
-            "dogfood-city",
-            "dogfood-file-sparks",
-            "dogfood-hologram",
-            "dogfood-command-ribbon",
-            "dogfood-sigil",
-            "scan-grid"
-          ],
-          "timeline": {
-            "durationMs": 0
-          }
-        },
-        {
-          "effects": [
-            "patch",
-            "append_log",
-            "primitive:data_rain",
-            "primitive:glyph_layer",
-            "primitive:terminal_wall",
-            "primitive:tunnel_grid",
-            "primitive:wire_landscape",
-            "primitive:data_vault",
-            "primitive:black_ice",
-            "primitive:mesh",
-            "primitive:signal_scope",
-            "primitive:node_graph",
-            "primitive:trace_route",
-            "primitive:city_block",
-            "primitive:particle_field",
-            "primitive:hologram",
-            "primitive:ribbon",
-            "primitive:svg_layer",
-            "animation:timeline_cue",
-            "animation:route_trace",
-            "animation:camera_path",
-            "animation:camera_jolt",
+            "animation:signal_interference",
             "animation:packet_burst",
             "animation:scan",
             "animation:extrude",
@@ -656,7 +684,7 @@
             "renderer": "gibson-dogfood-showcase",
             "touchedFileCount": 1
           },
-          "mutationCount": 26,
+          "mutationCount": 27,
           "renderer": "gibson-dogfood-showcase",
           "requestCount": 1,
           "routes": [

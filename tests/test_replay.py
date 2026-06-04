@@ -1606,12 +1606,14 @@ def test_checked_in_replay_fixtures_cover_agent_and_renderer_sides() -> None:
     assert gallery_result.scene.primitives["assistant-stream"].props["title"] == "CATALOG STREAM"
 
     assert [step.kind for step in animation_result.steps] == ["mutations"]
-    assert len(animation_result.expectations) == 21
+    assert len(animation_result.expectations) == 23
     assert animation_result.scene.primitives["animation-vector"].kind == "svg_layer"
     assert animation_result.scene.primitives["animation-vector"].props["gradients"][0]["id"] == "fx-gradient"
     assert animation_result.scene.primitives["animation-vector"].props["traces"][0]["direction"] == "reverse"
     assert animation_result.scene.animations["gallery-breach"].kind == "breach_wave"
     assert animation_result.scene.animations["gallery-breach"].props["label"] == "ICE BREACH"
+    assert animation_result.scene.animations["gallery-interference"].kind == "signal_interference"
+    assert animation_result.scene.animations["gallery-interference"].props["noise"] == 88
     assert animation_result.scene.animations["gallery-camera"].kind == "camera_jolt"
     assert animation_result.scene.animations["gallery-camera-path"].kind == "camera_path"
     assert animation_result.scene.animations["gallery-camera-path"].props["keyframes"][1]["scale"] == 1.035
@@ -1632,6 +1634,7 @@ def test_checked_in_replay_fixtures_cover_agent_and_renderer_sides() -> None:
         "phase-pulse",
         "route_trace",
         "scan",
+        "signal_interference",
         "timeline_cue",
     ]
 
@@ -1769,7 +1772,7 @@ def test_checked_in_dogfood_replay_suite_summarizes_trajectory_coverage() -> Non
             "primitive:signal_scope",
             "primitive:node_graph",
         ],
-        "maxActiveAnimationCount": 8,
+        "maxActiveAnimationCount": 9,
         "maxVisualAnchorCount": 17,
         "renderers": ["gibson-dogfood-showcase"],
         "targets": [
@@ -1816,7 +1819,7 @@ def test_checked_in_dogfood_replay_suite_summarizes_trajectory_coverage() -> Non
         "routes": ["renderer_agent"],
         "renderers": ["gibson-dogfood-showcase"],
         "visualAnchorCount": 17,
-        "activeAnimationCount": 8,
+        "activeAnimationCount": 9,
         "effectCount": 12,
         "screenshotCount": 0,
         "signals": [

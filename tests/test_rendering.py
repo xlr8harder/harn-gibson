@@ -719,6 +719,7 @@ def test_dogfood_showcase_renderer_returns_valid_event_reactive_plan(tmp_path: P
     }
     assert animation_kinds["dogfood-camera-path"] == "camera_path"
     assert animation_kinds["dogfood-camera-jolt"] == "camera_jolt"
+    assert animation_kinds["dogfood-interference"] == "signal_interference"
     assert animation_kinds["dogfood-breach"] == "breach_wave"
     assert animation_kinds["dogfood-city-extrude"] == "extrude"
     assert animation_kinds["dogfood-route-trace"] == "route_trace"
@@ -753,6 +754,9 @@ def test_dogfood_showcase_renderer_returns_valid_event_reactive_plan(tmp_path: P
     assert scene.state.primitives["dogfood-route"].props["focusHopId"] == "target-0"
     assert scene.state.primitives["dogfood-hologram"].props["rings"] == 6
     assert scene.state.animations["dogfood-camera-path"].props["keyframes"][1]["scale"] == 1.038
+    assert scene.state.animations["dogfood-interference"].target_id == "scan-grid"
+    assert scene.state.animations["dogfood-interference"].props["label"] == "SIGNAL BREAK"
+    assert scene.state.animations["dogfood-interference"].props["noise"] == 96
     assert scene.state.animations["dogfood-route-trace"].props["points"][2]["label"] == "TOOL_RESUL"
     assert "displayStyle" not in plan.metadata
 

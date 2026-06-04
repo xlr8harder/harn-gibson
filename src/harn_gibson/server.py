@@ -1806,6 +1806,7 @@ function drawSceneAnimation(animation, scene, w, h, now, progress) {
   else if (animation.kind === "timeline_cue") drawTimelineCueAnimation(animation, scene, w, h, progress);
   else if (animation.kind === "scan") drawScanAnimation(animation, w, h, progress);
   else if (animation.kind === "glitch") drawGlitchAnimation(animation, scene, w, h, now, progress);
+  else if (animation.kind === "signal_interference") drawSignalInterferenceAnimation(animation, w, h, now, progress);
   else if (animation.kind === "breach_wave") drawBreachWaveAnimation(animation, scene, w, h, now, progress);
   else if (animation.kind === "route_trace") drawRouteTraceAnimation(animation, scene, w, h, now, progress);
   else if (animation.kind === "flythrough") drawFlythroughAnimation(animation, w, h, progress);
@@ -2021,6 +2022,109 @@ function drawGlitchAnimation(animation, scene, w, h, now, progress) {
     ctx.strokeStyle = toneColor(index % 2 ? "magenta" : "cyan", alpha);
     ctx.strokeRect(x - width * 0.5, y, width, 3 * devicePixelRatio);
   }
+  ctx.restore();
+}
+
+function drawSignalInterferenceAnimation(animation, w, h, now, progress) {
+  const props = animation.props || {};
+  const tone = animationTone(animation);
+  const accentTone = props.accentTone || props.accent || "magenta";
+  const intensity = clamp(finiteNumber(props.intensity, 0.74), 0.05, 2.2);
+  const bandCount = Math.max(1, Math.min(28, Math.floor(finiteNumber(props.bands, 12))));
+  const blockCount = Math.max(0, Math.min(80, Math.floor(finiteNumber(props.blocks, 24))));
+  const noiseCount = Math.max(0, Math.min(160, Math.floor(finiteNumber(props.noise, 72))));
+  const speed = Math.max(0, finiteNumber(props.speed, 0.84));
+  const seed = finiteNumber(props.seed, animation.id.length);
+  const wave = animation.loop ? 0.58 + Math.sin(now * 0.005 * speed + seed) * 0.22 : Math.sin(progress * Math.PI);
+  const alpha = clamp(wave * intensity, 0, 1.4);
+
+  if (typeof window !== "undefined") {
+    window.__gibsonSignalInterferenceState = window.__gibsonSignalInterferenceState || {};
+    window.__gibsonSignalInterferenceState[animation.id] = {
+      targetId: animation.targetId,
+      bandCount,
+      blockCount,
+      noiseCount,
+      tone,
+      accentTone,
+      hasLabel: Boolean(props.label),
+      progress: vectorRounded(progress),
+    };
+  }
+
+  ctx.save();
+  ctx.globalCompositeOperation = props.blend === "source-over" ? "source-over" : "screen";
+  ctx.lineCap = "butt";
+  ctx.lineJoin = "miter";
+
+  const scanGap = Math.max(3, finiteNumber(props.scanGap, 7) * devicePixelRatio);
+  ctx.fillStyle = toneColor(tone, 0.018 * alpha);
+  for (let y = (now * 0.035 * speed + seed * 13) % scanGap; y < h; y += scanGap) {
+    ctx.fillRect(0, y, w, Math.max(1, 1.1 * devicePixelRatio));
+  }
+
+  for (let index = 0; index < bandCount; index++) {
+    const bandSeed = seed + index * 11.43 + Math.floor(now * 0.008 * speed);
+    const y = (seededUnit(bandSeed) * h + progress * h * 0.14 * (index % 2 ? -1 : 1) + h) % h;
+    const height = (2 + seededUnit(bandSeed + 1.7) * 11) * devicePixelRatio;
+    const jitter = (seededUnit(bandSeed + 2.9) - 0.5) * w * 0.08 * intensity;
+    const bandTone = index % 3 === 0 ? accentTone : tone;
+    const gradient = ctx.createLinearGradient(0, y, w, y);
+    gradient.addColorStop(0, toneColor(bandTone, 0));
+    gradient.addColorStop(0.18, toneColor(bandTone, 0.05 * alpha));
+    gradient.addColorStop(0.52, toneColor("white", 0.08 * alpha));
+    gradient.addColorStop(0.86, toneColor(bandTone, 0.06 * alpha));
+    gradient.addColorStop(1, toneColor(bandTone, 0));
+    ctx.fillStyle = gradient;
+    ctx.fillRect(jitter - w * 0.04, y, w * 1.08, height);
+  }
+
+  for (let index = 0; index < blockCount; index++) {
+    const blockSeed = seed + index * 5.77 + Math.floor(now * 0.010 * speed);
+    const width = (8 + seededUnit(blockSeed + 1.4) * 74) * devicePixelRatio;
+    const height = (3 + seededUnit(blockSeed + 2.6) * 18) * devicePixelRatio;
+    const x = seededUnit(blockSeed + 3.2) * w;
+    const y = seededUnit(blockSeed + 4.1) * h;
+    const blockTone = index % 4 === 0 ? "white" : (index % 2 ? accentTone : tone);
+    ctx.fillStyle = toneColor(blockTone, (0.018 + seededUnit(blockSeed + 5.8) * 0.06) * alpha);
+    ctx.fillRect(x, y, width, height);
+  }
+
+  ctx.lineWidth = Math.max(1, 1.15 * devicePixelRatio);
+  for (let index = 0; index < noiseCount; index++) {
+    const noiseSeed = seed + index * 2.31 + Math.floor(now * 0.014 * speed);
+    const x = seededUnit(noiseSeed) * w;
+    const y = seededUnit(noiseSeed + 0.9) * h;
+    const length = (3 + seededUnit(noiseSeed + 2.2) * 28) * devicePixelRatio;
+    const noiseTone = index % 5 === 0 ? "white" : (index % 2 ? accentTone : tone);
+    ctx.strokeStyle = toneColor(noiseTone, (0.04 + seededUnit(noiseSeed + 3.5) * 0.10) * alpha);
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x + length, y + (seededUnit(noiseSeed + 4.7) - 0.5) * 5 * devicePixelRatio);
+    ctx.stroke();
+  }
+
+  if (props.label) {
+    const y = h * clamp(finiteNumber(props.labelY, 0.17), 0.04, 0.92);
+    const x = w * clamp(finiteNumber(props.labelX, 0.74), 0.05, 0.95);
+    const label = String(props.label).slice(0, 24);
+    ctx.font = `${12 * devicePixelRatio}px ui-monospace, monospace`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.shadowColor = toneColor(accentTone, 0.8 * alpha);
+    ctx.shadowBlur = 10 * devicePixelRatio;
+    ctx.fillStyle = toneColor("white", 0.52 + 0.30 * alpha);
+    ctx.fillText(label, x, y);
+    ctx.strokeStyle = toneColor(accentTone, 0.42 * alpha);
+    ctx.lineWidth = Math.max(1, 1.2 * devicePixelRatio);
+    ctx.strokeRect(
+      x - label.length * 4.5 * devicePixelRatio,
+      y - 12 * devicePixelRatio,
+      label.length * 9 * devicePixelRatio,
+      24 * devicePixelRatio
+    );
+  }
+
   ctx.restore();
 }
 

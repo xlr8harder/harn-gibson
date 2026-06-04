@@ -64,6 +64,7 @@ def main() -> None:
         _route_trace_animation(event_type, phase, sequence, timestamp_ms, duration_ms, tone, accent, touched),
         _camera_path_animation(sequence, timestamp_ms, duration_ms),
         _camera_jolt_animation(sequence, timestamp_ms, phase),
+        _signal_interference_animation(event_type, phase, sequence, timestamp_ms, duration_ms, tone, accent),
         _packet_burst_animation(sequence, timestamp_ms, phase, tone),
         _scan_animation(sequence, timestamp_ms, phase),
         _extrude_animation(sequence, timestamp_ms, phase),
@@ -1143,6 +1144,44 @@ def _camera_jolt_animation(sequence: int, timestamp_ms: int, phase: str) -> dict
                 "zoom": 0.018,
                 "roll": 0.013,
                 "seed": sequence + 83,
+            },
+        },
+    }
+
+
+def _signal_interference_animation(
+    event_type: str,
+    phase: str,
+    sequence: int,
+    timestamp_ms: int,
+    duration_ms: int,
+    tone: str,
+    accent: str,
+) -> dict[str, Any]:
+    danger = phase == "after" or "error" in event_type or "fail" in event_type
+    intensity = 0.86 if danger else 0.46
+    return {
+        "op": "start_animation",
+        "animation": {
+            "id": "dogfood-interference",
+            "targetId": "scan-grid",
+            "kind": "signal_interference",
+            "startedAtMs": timestamp_ms,
+            "durationMs": max(4600, duration_ms),
+            "loop": True,
+            "props": {
+                "phase": phase,
+                "tone": "red" if danger else tone,
+                "accentTone": accent,
+                "intensity": intensity,
+                "bands": 16 if danger else 10,
+                "blocks": 34 if danger else 18,
+                "noise": 96 if danger else 54,
+                "speed": 0.96 if danger else 0.64,
+                "label": "SIGNAL BREAK" if danger else "SIGNAL NOISE",
+                "labelX": 0.78,
+                "labelY": 0.14,
+                "seed": sequence + 89,
             },
         },
     }

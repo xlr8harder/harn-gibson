@@ -76,6 +76,7 @@ _BROWSER_ANIMATION_KINDS = frozenset(
         "timeline_cue",
         "scan",
         "glitch",
+        "signal_interference",
         "breach_wave",
         "camera_jolt",
         "camera_path",

@@ -19,6 +19,8 @@
       {"path": "animations.gallery-route.props.points.2.label", "equals": "BREACH"},
       {"path": "animations.gallery-scan.kind", "equals": "scan"},
       {"path": "animations.gallery-glitch.kind", "equals": "glitch"},
+      {"path": "animations.gallery-interference.kind", "equals": "signal_interference"},
+      {"path": "animations.gallery-interference.props.bands", "equals": 14},
       {"path": "animations.gallery-breach.kind", "equals": "breach_wave"},
       {"path": "animations.gallery-breach.props.label", "equals": "ICE BREACH"},
       {"path": "animations.gallery-camera.kind", "equals": "camera_jolt"},
@@ -57,7 +59,7 @@
             "phase": "lifecycle",
             "eventType": "animation_gallery",
             "title": "Animation gallery",
-            "summary": "persistent pulses, packets, timeline cues, scans, glitch, breach waves, camera jolts, camera paths, flythrough, extrusion, and hold brackets"
+            "summary": "persistent pulses, packets, timeline cues, scans, glitch, signal interference, breach waves, camera jolts, camera paths, flythrough, extrusion, and hold brackets"
           }
         },
         {
@@ -273,6 +275,29 @@
             "durationMs": 1900,
             "loop": true,
             "props": {"phase": "after", "tone": "magenta", "amount": 0.9, "seed": 962}
+          }
+        },
+        {
+          "op": "start_animation",
+          "animation": {
+            "id": "gallery-interference",
+            "targetId": "scan-grid",
+            "kind": "signal_interference",
+            "startedAtMs": 9665,
+            "durationMs": 5200,
+            "loop": true,
+            "props": {
+              "phase": "after",
+              "tone": "cyan",
+              "accentTone": "magenta",
+              "intensity": 0.78,
+              "bands": 14,
+              "blocks": 32,
+              "noise": 88,
+              "speed": 0.86,
+              "label": "SIGNAL BREAK",
+              "seed": 964
+            }
           }
         },
         {

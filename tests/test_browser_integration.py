@@ -510,6 +510,9 @@ def test_browser_display_renders_timeline_cue_animation() -> None:
                 page.wait_for_function("window.__gibsonTimelineCueState?.['gallery-cues']?.cueCount === 4")
                 page.wait_for_function("window.__gibsonRouteTraceState?.['gallery-route']?.pointCount === 4")
                 page.wait_for_function("window.__gibsonBreachWaveState?.['gallery-breach']?.ringCount === 5")
+                page.wait_for_function(
+                    "window.__gibsonSignalInterferenceState?.['gallery-interference']?.bandCount === 14"
+                )
                 page.wait_for_function("window.__gibsonCameraState?.animationIds?.includes('gallery-camera')")
                 page.wait_for_function("window.__gibsonCameraState?.animationIds?.includes('gallery-camera-path')")
                 state_payload = page.evaluate(
@@ -518,12 +521,14 @@ def test_browser_display_renders_timeline_cue_animation() -> None:
                       cueState: window.__gibsonTimelineCueState["gallery-cues"],
                       routeState: window.__gibsonRouteTraceState["gallery-route"],
                       breachState: window.__gibsonBreachWaveState["gallery-breach"],
+                      interferenceState: window.__gibsonSignalInterferenceState["gallery-interference"],
                       cameraState: window.__gibsonCameraState,
                     })"""
                 )
                 assert "timeline_cue" in state_payload["animationKinds"]
                 assert "route_trace" in state_payload["animationKinds"]
                 assert "breach_wave" in state_payload["animationKinds"]
+                assert "signal_interference" in state_payload["animationKinds"]
                 assert "camera_jolt" in state_payload["animationKinds"]
                 assert "camera_path" in state_payload["animationKinds"]
                 assert state_payload["cueState"] == {
@@ -557,6 +562,17 @@ def test_browser_display_renders_timeline_cue_animation() -> None:
                     "progress": state_payload["breachState"]["progress"],
                 }
                 assert 0 <= state_payload["breachState"]["progress"] <= 1
+                assert state_payload["interferenceState"] == {
+                    "targetId": "scan-grid",
+                    "bandCount": 14,
+                    "blockCount": 32,
+                    "noiseCount": 88,
+                    "tone": "cyan",
+                    "accentTone": "magenta",
+                    "hasLabel": True,
+                    "progress": state_payload["interferenceState"]["progress"],
+                }
+                assert 0 <= state_payload["interferenceState"]["progress"] <= 1
                 assert state_payload["cameraState"] == {
                     "activeCount": 2,
                     "animationIds": ["gallery-camera", "gallery-camera-path"],
