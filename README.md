@@ -268,11 +268,11 @@ Run the hard-coded dogfood renderer against the checked-in dogfood trajectory fi
 uv run harn-gibson replay-dir examples/dogfood-replays \
   --renderer-command 'uv run python examples/renderers/gibson_dogfood_renderer.py' \
   --renderer-timeout-ms 10000 \
-  --project-root examples/dogfood-workspaces/tiny-project \
-  --project-name tiny-project \
   --baseline-dir examples/baselines/dogfood-replays \
   --screenshot-dir test-artifacts/replays/dogfood-screenshots
 ```
+
+Checked-in dogfood replay fixtures carry `metadata.projectRoot` and `metadata.projectName`, so mixed suites can review multiple fixture workspaces in one command. Use `--project-root` and `--project-name` when intentionally overriding that metadata for a copied or freshly captured workspace.
 
 ## Browser Tests
 

@@ -141,7 +141,7 @@ uv run harn-gibson replay-dir examples/replays \
 
 The model command receives `harn-gibson.model-renderer-request.v1`; the external command receives `harn-gibson.external-renderer-request.v1`. Returned plans still go through the same validation, diagnostics, fail-open fallback, and final-scene expectation checks as live dogfood rendering.
 
-The hard-coded `gibson_dogfood_renderer.py` is meant for live harn use before the renderer-agent backend is good enough. The checked-in `examples/dogfood-replays/` fixtures exercise that renderer against `examples/dogfood-workspaces/tiny-project`, giving the showcase renderer committed trajectories for project bootstrapping, runtime diagnostics, failed tests, browser steering input, repo-topology, touched-file signals, active style packs, and the project hologram/data-vault/data-tunnel/ICE-mesh/control-graph/glyph-layer/ribbon/repo-city/spark-field scene. A useful future fixture workflow is to run `uv run harn-gibson dogfood-capture --trajectory tiny-project` for a general bootstrap capture and `uv run harn-gibson dogfood-capture --trajectory repo-map` for a topology-heavy capture, then convert those event trajectories into split replay directories and browser screenshots. Several such trajectories should become regression inputs for event coalescing, renderer timing, touched-file visualization, style-pack rendering, and visual continuity.
+The hard-coded `gibson_dogfood_renderer.py` is meant for live harn use before the renderer-agent backend is good enough. The checked-in `examples/dogfood-replays/` fixtures exercise that renderer against fixture workspaces under `examples/dogfood-workspaces/`, giving the showcase renderer committed trajectories for project bootstrapping, runtime diagnostics, failed tests, browser steering input, repo-topology, touched-file signals, active style packs, and the project hologram/data-vault/data-tunnel/ICE-mesh/control-graph/glyph-layer/ribbon/repo-city/spark-field scene. A useful future fixture workflow is to run `uv run harn-gibson dogfood-capture --trajectory tiny-project` for a general bootstrap capture and `uv run harn-gibson dogfood-capture --trajectory repo-map` for a topology-heavy capture, then convert those event trajectories into split replay directories and browser screenshots. Several such trajectories should become regression inputs for event coalescing, renderer timing, touched-file visualization, style-pack rendering, and visual continuity.
 
 ## Baseline Review
 
@@ -170,11 +170,11 @@ Check the hard-coded dogfood renderer trajectory against its committed baseline 
 uv run harn-gibson replay-dir examples/dogfood-replays \
   --renderer-command 'uv run python examples/renderers/gibson_dogfood_renderer.py' \
   --renderer-timeout-ms 10000 \
-  --project-root examples/dogfood-workspaces/tiny-project \
-  --project-name tiny-project \
   --baseline-dir examples/baselines/dogfood-replays \
   --screenshot-dir test-artifacts/replays/dogfood-screenshots
 ```
+
+Checked-in dogfood replay fixtures carry `metadata.projectRoot` and `metadata.projectName`. `replay` and `replay-dir` apply those values to renderer context when the caller has not supplied an explicit project root, which lets one suite compare trajectories from several fixture workspaces. Pass `--project-root PATH` and `--project-name NAME` to override fixture metadata for copied captures or preserved workspaces outside the repo.
 
 ## Screenshot Review
 

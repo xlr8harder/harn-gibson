@@ -63,8 +63,6 @@ run uv run harn-gibson replay-dir examples/replays \
 run uv run harn-gibson replay-dir examples/dogfood-replays \
   --renderer-command "$DOGFOOD_RENDERER_COMMAND" \
   --renderer-timeout-ms 10000 \
-  --project-root examples/dogfood-workspaces/tiny-project \
-  --project-name tiny-project \
   --baseline-dir examples/baselines/dogfood-replays \
   --screenshot-dir "$ARTIFACT_DIR/dogfood-screenshots" \
   --output-result "$ARTIFACT_DIR/dogfood-suite.json"

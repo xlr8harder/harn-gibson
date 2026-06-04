@@ -7,7 +7,7 @@ import os
 import re
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from copy import deepcopy
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from difflib import unified_diff
 from html import escape
 from itertools import islice
@@ -1216,6 +1216,7 @@ def run_replay_data(
     capture_renderer_contexts: bool = False,
 ) -> ReplayResult:
     replay_state = state or GibsonServerState()
+    _apply_replay_project_metadata(replay_state, data)
     schema = str(data.get("schema") or "harn-gibson.replay.v1")
     name = str(data.get("name") or "unnamed replay")
     steps = data.get("steps")
@@ -1265,6 +1266,37 @@ def run_replay_data(
         frames=tuple(frames),
         renderer_contexts=tuple(renderer_contexts),
     )
+
+
+def _apply_replay_project_metadata(state: GibsonServerState, data: Mapping[str, Any]) -> None:
+    metadata = data.get("metadata")
+    if not isinstance(metadata, Mapping):
+        return
+    project_root = _metadata_text(metadata.get("projectRoot"))
+    project_name = _metadata_text(metadata.get("projectName"))
+    if project_root is None and project_name is None:
+        return
+    if state.project_root is not None:
+        return
+    resolved_project_name = project_name
+    if resolved_project_name is None and project_root is not None:
+        resolved_project_name = Path(project_root).expanduser().resolve().name or "workspace"
+    if project_root is not None:
+        state.project_root = project_root
+    state.project_name = cast(str, resolved_project_name)
+    config = state.pipeline.context_builder.config
+    state.pipeline.context_builder.config = replace(
+        config,
+        project_name=state.project_name,
+        project_root=state.project_root,
+    )
+
+
+def _metadata_text(value: Any) -> str | None:
+    if not isinstance(value, str):
+        return None
+    text = value.strip()
+    return text or None
 
 
 def evaluate_replay_expectations(scene: SceneState, value: Any) -> tuple[ReplayExpectationResult, ...]:

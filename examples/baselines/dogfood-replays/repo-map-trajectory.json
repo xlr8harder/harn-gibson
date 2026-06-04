@@ -1,0 +1,1979 @@
+{
+  "metadata": {
+    "projectName": "repo-map",
+    "projectRoot": "examples/dogfood-workspaces/repo-map",
+    "purpose": "exercise the hard-coded dogfood renderer against a topology-heavy repo-map trajectory",
+    "renderer": "examples/renderers/gibson_dogfood_renderer.py"
+  },
+  "replayName": "repo map dogfood trajectory",
+  "replaySchema": "harn-gibson.replay.v1",
+  "scene": {
+    "animations": {
+      "dogfood-breach": {
+        "durationMs": 5200,
+        "id": "dogfood-breach",
+        "kind": "breach_wave",
+        "loop": true,
+        "props": {
+          "accentTone": "white",
+          "intensity": 0.88,
+          "label": "BREACH",
+          "phase": "after",
+          "rings": 5,
+          "seed": 105,
+          "shards": 32,
+          "slices": 6,
+          "tone": "magenta"
+        },
+        "startedAtMs": 28400,
+        "targetId": "dogfood-sigil"
+      },
+      "dogfood-camera-jolt": {
+        "durationMs": 1900,
+        "id": "dogfood-camera-jolt",
+        "kind": "camera_jolt",
+        "loop": false,
+        "props": {
+          "intensity": 0.82,
+          "phase": "after",
+          "roll": 0.013,
+          "seed": 91,
+          "zoom": 0.018
+        },
+        "startedAtMs": 28400,
+        "targetId": "dogfood-sigil"
+      },
+      "dogfood-camera-path": {
+        "durationMs": 5200,
+        "id": "dogfood-camera-path",
+        "kind": "camera_path",
+        "loop": true,
+        "props": {
+          "keyframes": [
+            {
+              "at": 0,
+              "rotation": -0.004,
+              "scale": 1.0,
+              "x": -0.014,
+              "y": 0.01
+            },
+            {
+              "at": 0.48,
+              "rotation": 0.01,
+              "scale": 1.038,
+              "x": 0.026,
+              "y": -0.02
+            },
+            {
+              "at": 1,
+              "rotation": -0.003,
+              "scale": 1.012,
+              "x": 0.006,
+              "y": 0.006
+            }
+          ],
+          "phase": "lifecycle",
+          "position": {
+            "x": 0.5,
+            "y": 0.5
+          },
+          "seed": 79,
+          "yoyo": true
+        },
+        "startedAtMs": 28400,
+        "targetId": "dogfood-tunnel"
+      },
+      "dogfood-city-extrude": {
+        "durationMs": 3400,
+        "id": "dogfood-city-extrude",
+        "kind": "extrude",
+        "loop": true,
+        "props": {
+          "phase": "after",
+          "sequence": 8,
+          "tone": "cyan"
+        },
+        "startedAtMs": 28400,
+        "targetId": "dogfood-city"
+      },
+      "dogfood-cues": {
+        "durationMs": 4200,
+        "id": "dogfood-cues",
+        "kind": "timeline_cue",
+        "loop": true,
+        "props": {
+          "accentTone": "white",
+          "cues": [
+            {
+              "at": 0.04,
+              "label": "HOOK",
+              "showLabel": true,
+              "tone": "green"
+            },
+            {
+              "at": 0.3,
+              "label": "AFTER",
+              "tone": "magenta"
+            },
+            {
+              "at": 0.58,
+              "label": "TOOL_RESUL",
+              "tone": "white"
+            },
+            {
+              "at": 0.86,
+              "label": "7 FILES",
+              "showLabel": true,
+              "tone": "amber"
+            }
+          ],
+          "label": "LIVE HARN WINDOW",
+          "offsetY": 0.19,
+          "phase": "after",
+          "sequence": 8,
+          "tone": "magenta",
+          "width": 0.42,
+          "window": 0.12
+        },
+        "startedAtMs": 28400,
+        "targetId": "dogfood-sigil"
+      },
+      "dogfood-packets": {
+        "durationMs": 2600,
+        "id": "dogfood-packets",
+        "kind": "packet_burst",
+        "loop": true,
+        "props": {
+          "phase": "after",
+          "sequence": 8,
+          "tone": "magenta"
+        },
+        "startedAtMs": 28400,
+        "targetId": "dogfood-route"
+      },
+      "dogfood-scan": {
+        "durationMs": 3200,
+        "id": "dogfood-scan",
+        "kind": "scan",
+        "loop": true,
+        "props": {
+          "direction": "down",
+          "phase": "after",
+          "sequence": 8,
+          "tone": "green"
+        },
+        "startedAtMs": 28400,
+        "targetId": "scan-grid"
+      }
+    },
+    "log": [
+      {
+        "eventType": "dogfood_renderer",
+        "phase": "before",
+        "sequence": 1,
+        "summary": "input: user input: build a repo-map fixture for Gibson city rendering",
+        "title": "Dogfood renderer"
+      },
+      {
+        "eventType": "dogfood_renderer",
+        "phase": "before",
+        "sequence": 2,
+        "summary": "tool_call: bash starting with {command}",
+        "title": "Dogfood renderer"
+      },
+      {
+        "eventType": "dogfood_renderer",
+        "phase": "after",
+        "sequence": 3,
+        "summary": "tool_result: bash completed: ok; repo skeleton created",
+        "title": "Dogfood renderer"
+      },
+      {
+        "eventType": "dogfood_renderer",
+        "phase": "before",
+        "sequence": 4,
+        "summary": "tool_call: bash starting with {command}",
+        "title": "Dogfood renderer"
+      },
+      {
+        "eventType": "dogfood_renderer",
+        "phase": "after",
+        "sequence": 5,
+        "summary": "tool_result: bash completed: error; intentional missing-file behavior failed",
+        "title": "Dogfood renderer"
+      },
+      {
+        "eventType": "dogfood_renderer",
+        "phase": "before",
+        "sequence": 6,
+        "summary": "tool_call: bash starting with {command}",
+        "title": "Dogfood renderer"
+      },
+      {
+        "eventType": "dogfood_renderer",
+        "phase": "lifecycle",
+        "sequence": 7,
+        "summary": "browser_input: queued steering input from Gibson display",
+        "title": "Dogfood renderer"
+      },
+      {
+        "eventType": "dogfood_renderer",
+        "phase": "after",
+        "sequence": 8,
+        "summary": "tool_result: bash completed: ok; tests passed, line counts printed, repository map ready",
+        "title": "Dogfood renderer"
+      }
+    ],
+    "metadata": {
+      "lastRenderIntent": {
+        "effects": [
+          "patch",
+          "append_log",
+          "primitive:data_rain",
+          "primitive:glyph_layer",
+          "primitive:tunnel_grid",
+          "primitive:data_vault",
+          "primitive:mesh",
+          "primitive:signal_scope",
+          "primitive:node_graph",
+          "primitive:trace_route",
+          "primitive:city_block",
+          "primitive:particle_field",
+          "primitive:hologram",
+          "primitive:ribbon",
+          "primitive:svg_layer",
+          "animation:timeline_cue",
+          "animation:camera_path",
+          "animation:camera_jolt",
+          "animation:packet_burst",
+          "animation:scan",
+          "animation:extrude",
+          "animation:breach_wave"
+        ],
+        "eventTypes": [
+          "tool_result"
+        ],
+        "intent": "stage tool_result as a Hollywood terminal intrusion",
+        "metadata": {
+          "eventType": "tool_result",
+          "intent": "stage tool_result as a Hollywood terminal intrusion",
+          "phase": "after",
+          "renderer": "gibson-dogfood-showcase",
+          "touchedFileCount": 7
+        },
+        "mutationCount": 22,
+        "renderer": "gibson-dogfood-showcase",
+        "requestCount": 1,
+        "routes": [
+          "renderer_agent"
+        ],
+        "schema": "harn-gibson.render-intent.v1",
+        "stepCount": 1,
+        "targets": [
+          "status",
+          "dogfood-rain",
+          "dogfood-opcodes",
+          "dogfood-tunnel",
+          "dogfood-vault",
+          "dogfood-ice-mesh",
+          "dogfood-scope",
+          "dogfood-control-graph",
+          "dogfood-route",
+          "dogfood-city",
+          "dogfood-file-sparks",
+          "dogfood-hologram",
+          "dogfood-command-ribbon",
+          "dogfood-sigil",
+          "scan-grid"
+        ],
+        "timeline": {
+          "durationMs": 0
+        }
+      },
+      "renderIntents": [
+        {
+          "effects": [
+            "patch",
+            "append_log",
+            "primitive:data_rain",
+            "primitive:glyph_layer",
+            "primitive:tunnel_grid",
+            "primitive:data_vault",
+            "primitive:mesh",
+            "primitive:signal_scope",
+            "primitive:node_graph",
+            "primitive:trace_route",
+            "primitive:city_block",
+            "primitive:particle_field",
+            "primitive:hologram",
+            "primitive:ribbon",
+            "primitive:svg_layer",
+            "animation:timeline_cue",
+            "animation:camera_path",
+            "animation:camera_jolt",
+            "animation:packet_burst",
+            "animation:scan",
+            "animation:extrude"
+          ],
+          "eventTypes": [
+            "input"
+          ],
+          "intent": "stage input as a Hollywood terminal intrusion",
+          "metadata": {
+            "eventType": "input",
+            "intent": "stage input as a Hollywood terminal intrusion",
+            "phase": "before",
+            "renderer": "gibson-dogfood-showcase",
+            "touchedFileCount": 0
+          },
+          "mutationCount": 21,
+          "renderer": "gibson-dogfood-showcase",
+          "requestCount": 1,
+          "routes": [
+            "renderer_agent"
+          ],
+          "schema": "harn-gibson.render-intent.v1",
+          "stepCount": 1,
+          "targets": [
+            "status",
+            "dogfood-rain",
+            "dogfood-opcodes",
+            "dogfood-tunnel",
+            "dogfood-vault",
+            "dogfood-ice-mesh",
+            "dogfood-scope",
+            "dogfood-control-graph",
+            "dogfood-route",
+            "dogfood-city",
+            "dogfood-file-sparks",
+            "dogfood-hologram",
+            "dogfood-command-ribbon",
+            "dogfood-sigil",
+            "scan-grid"
+          ],
+          "timeline": {
+            "durationMs": 0
+          }
+        },
+        {
+          "effects": [
+            "patch",
+            "append_log",
+            "primitive:data_rain",
+            "primitive:glyph_layer",
+            "primitive:tunnel_grid",
+            "primitive:data_vault",
+            "primitive:mesh",
+            "primitive:signal_scope",
+            "primitive:node_graph",
+            "primitive:trace_route",
+            "primitive:city_block",
+            "primitive:particle_field",
+            "primitive:hologram",
+            "primitive:ribbon",
+            "primitive:svg_layer",
+            "animation:timeline_cue",
+            "animation:camera_path",
+            "animation:camera_jolt",
+            "animation:packet_burst",
+            "animation:scan",
+            "animation:extrude"
+          ],
+          "eventTypes": [
+            "tool_call"
+          ],
+          "intent": "stage tool_call as a Hollywood terminal intrusion",
+          "metadata": {
+            "eventType": "tool_call",
+            "intent": "stage tool_call as a Hollywood terminal intrusion",
+            "phase": "before",
+            "renderer": "gibson-dogfood-showcase",
+            "touchedFileCount": 1
+          },
+          "mutationCount": 21,
+          "renderer": "gibson-dogfood-showcase",
+          "requestCount": 1,
+          "routes": [
+            "renderer_agent"
+          ],
+          "schema": "harn-gibson.render-intent.v1",
+          "stepCount": 1,
+          "targets": [
+            "status",
+            "dogfood-rain",
+            "dogfood-opcodes",
+            "dogfood-tunnel",
+            "dogfood-vault",
+            "dogfood-ice-mesh",
+            "dogfood-scope",
+            "dogfood-control-graph",
+            "dogfood-route",
+            "dogfood-city",
+            "dogfood-file-sparks",
+            "dogfood-hologram",
+            "dogfood-command-ribbon",
+            "dogfood-sigil",
+            "scan-grid"
+          ],
+          "timeline": {
+            "durationMs": 0
+          }
+        },
+        {
+          "effects": [
+            "patch",
+            "append_log",
+            "primitive:data_rain",
+            "primitive:glyph_layer",
+            "primitive:tunnel_grid",
+            "primitive:data_vault",
+            "primitive:mesh",
+            "primitive:signal_scope",
+            "primitive:node_graph",
+            "primitive:trace_route",
+            "primitive:city_block",
+            "primitive:particle_field",
+            "primitive:hologram",
+            "primitive:ribbon",
+            "primitive:svg_layer",
+            "animation:timeline_cue",
+            "animation:camera_path",
+            "animation:camera_jolt",
+            "animation:packet_burst",
+            "animation:scan",
+            "animation:extrude",
+            "animation:breach_wave"
+          ],
+          "eventTypes": [
+            "tool_result"
+          ],
+          "intent": "stage tool_result as a Hollywood terminal intrusion",
+          "metadata": {
+            "eventType": "tool_result",
+            "intent": "stage tool_result as a Hollywood terminal intrusion",
+            "phase": "after",
+            "renderer": "gibson-dogfood-showcase",
+            "touchedFileCount": 8
+          },
+          "mutationCount": 22,
+          "renderer": "gibson-dogfood-showcase",
+          "requestCount": 1,
+          "routes": [
+            "renderer_agent"
+          ],
+          "schema": "harn-gibson.render-intent.v1",
+          "stepCount": 1,
+          "targets": [
+            "status",
+            "dogfood-rain",
+            "dogfood-opcodes",
+            "dogfood-tunnel",
+            "dogfood-vault",
+            "dogfood-ice-mesh",
+            "dogfood-scope",
+            "dogfood-control-graph",
+            "dogfood-route",
+            "dogfood-city",
+            "dogfood-file-sparks",
+            "dogfood-hologram",
+            "dogfood-command-ribbon",
+            "dogfood-sigil",
+            "scan-grid"
+          ],
+          "timeline": {
+            "durationMs": 0
+          }
+        },
+        {
+          "effects": [
+            "patch",
+            "append_log",
+            "primitive:data_rain",
+            "primitive:glyph_layer",
+            "primitive:tunnel_grid",
+            "primitive:data_vault",
+            "primitive:mesh",
+            "primitive:signal_scope",
+            "primitive:node_graph",
+            "primitive:trace_route",
+            "primitive:city_block",
+            "primitive:particle_field",
+            "primitive:hologram",
+            "primitive:ribbon",
+            "primitive:svg_layer",
+            "animation:timeline_cue",
+            "animation:camera_path",
+            "animation:camera_jolt",
+            "animation:packet_burst",
+            "animation:scan",
+            "animation:extrude"
+          ],
+          "eventTypes": [
+            "tool_call"
+          ],
+          "intent": "stage tool_call as a Hollywood terminal intrusion",
+          "metadata": {
+            "eventType": "tool_call",
+            "intent": "stage tool_call as a Hollywood terminal intrusion",
+            "phase": "before",
+            "renderer": "gibson-dogfood-showcase",
+            "touchedFileCount": 1
+          },
+          "mutationCount": 21,
+          "renderer": "gibson-dogfood-showcase",
+          "requestCount": 1,
+          "routes": [
+            "renderer_agent"
+          ],
+          "schema": "harn-gibson.render-intent.v1",
+          "stepCount": 1,
+          "targets": [
+            "status",
+            "dogfood-rain",
+            "dogfood-opcodes",
+            "dogfood-tunnel",
+            "dogfood-vault",
+            "dogfood-ice-mesh",
+            "dogfood-scope",
+            "dogfood-control-graph",
+            "dogfood-route",
+            "dogfood-city",
+            "dogfood-file-sparks",
+            "dogfood-hologram",
+            "dogfood-command-ribbon",
+            "dogfood-sigil",
+            "scan-grid"
+          ],
+          "timeline": {
+            "durationMs": 0
+          }
+        },
+        {
+          "effects": [
+            "patch",
+            "append_log",
+            "primitive:data_rain",
+            "primitive:glyph_layer",
+            "primitive:tunnel_grid",
+            "primitive:data_vault",
+            "primitive:mesh",
+            "primitive:signal_scope",
+            "primitive:node_graph",
+            "primitive:trace_route",
+            "primitive:city_block",
+            "primitive:particle_field",
+            "primitive:hologram",
+            "primitive:ribbon",
+            "primitive:svg_layer",
+            "animation:timeline_cue",
+            "animation:camera_path",
+            "animation:camera_jolt",
+            "animation:packet_burst",
+            "animation:scan",
+            "animation:extrude",
+            "animation:breach_wave"
+          ],
+          "eventTypes": [
+            "tool_result"
+          ],
+          "intent": "stage tool_result as a Hollywood terminal intrusion",
+          "metadata": {
+            "eventType": "tool_result",
+            "intent": "stage tool_result as a Hollywood terminal intrusion",
+            "phase": "after",
+            "renderer": "gibson-dogfood-showcase",
+            "touchedFileCount": 2
+          },
+          "mutationCount": 22,
+          "renderer": "gibson-dogfood-showcase",
+          "requestCount": 1,
+          "routes": [
+            "renderer_agent"
+          ],
+          "schema": "harn-gibson.render-intent.v1",
+          "stepCount": 1,
+          "targets": [
+            "status",
+            "dogfood-rain",
+            "dogfood-opcodes",
+            "dogfood-tunnel",
+            "dogfood-vault",
+            "dogfood-ice-mesh",
+            "dogfood-scope",
+            "dogfood-control-graph",
+            "dogfood-route",
+            "dogfood-city",
+            "dogfood-file-sparks",
+            "dogfood-hologram",
+            "dogfood-command-ribbon",
+            "dogfood-sigil",
+            "scan-grid"
+          ],
+          "timeline": {
+            "durationMs": 0
+          }
+        },
+        {
+          "effects": [
+            "patch",
+            "append_log",
+            "primitive:data_rain",
+            "primitive:glyph_layer",
+            "primitive:tunnel_grid",
+            "primitive:data_vault",
+            "primitive:mesh",
+            "primitive:signal_scope",
+            "primitive:node_graph",
+            "primitive:trace_route",
+            "primitive:city_block",
+            "primitive:particle_field",
+            "primitive:hologram",
+            "primitive:ribbon",
+            "primitive:svg_layer",
+            "animation:timeline_cue",
+            "animation:camera_path",
+            "animation:camera_jolt",
+            "animation:packet_burst",
+            "animation:scan",
+            "animation:extrude"
+          ],
+          "eventTypes": [
+            "tool_call"
+          ],
+          "intent": "stage tool_call as a Hollywood terminal intrusion",
+          "metadata": {
+            "eventType": "tool_call",
+            "intent": "stage tool_call as a Hollywood terminal intrusion",
+            "phase": "before",
+            "renderer": "gibson-dogfood-showcase",
+            "touchedFileCount": 1
+          },
+          "mutationCount": 21,
+          "renderer": "gibson-dogfood-showcase",
+          "requestCount": 1,
+          "routes": [
+            "renderer_agent"
+          ],
+          "schema": "harn-gibson.render-intent.v1",
+          "stepCount": 1,
+          "targets": [
+            "status",
+            "dogfood-rain",
+            "dogfood-opcodes",
+            "dogfood-tunnel",
+            "dogfood-vault",
+            "dogfood-ice-mesh",
+            "dogfood-scope",
+            "dogfood-control-graph",
+            "dogfood-route",
+            "dogfood-city",
+            "dogfood-file-sparks",
+            "dogfood-hologram",
+            "dogfood-command-ribbon",
+            "dogfood-sigil",
+            "scan-grid"
+          ],
+          "timeline": {
+            "durationMs": 0
+          }
+        },
+        {
+          "effects": [
+            "patch",
+            "append_log",
+            "primitive:data_rain",
+            "primitive:glyph_layer",
+            "primitive:tunnel_grid",
+            "primitive:data_vault",
+            "primitive:mesh",
+            "primitive:signal_scope",
+            "primitive:node_graph",
+            "primitive:trace_route",
+            "primitive:city_block",
+            "primitive:particle_field",
+            "primitive:hologram",
+            "primitive:ribbon",
+            "primitive:svg_layer",
+            "animation:timeline_cue",
+            "animation:camera_path",
+            "animation:camera_jolt",
+            "animation:packet_burst",
+            "animation:scan",
+            "animation:extrude"
+          ],
+          "eventTypes": [
+            "browser_input"
+          ],
+          "intent": "stage browser_input as a Hollywood terminal intrusion",
+          "metadata": {
+            "eventType": "browser_input",
+            "intent": "stage browser_input as a Hollywood terminal intrusion",
+            "phase": "lifecycle",
+            "renderer": "gibson-dogfood-showcase",
+            "touchedFileCount": 0
+          },
+          "mutationCount": 21,
+          "renderer": "gibson-dogfood-showcase",
+          "requestCount": 1,
+          "routes": [
+            "renderer_agent"
+          ],
+          "schema": "harn-gibson.render-intent.v1",
+          "stepCount": 1,
+          "targets": [
+            "status",
+            "dogfood-rain",
+            "dogfood-opcodes",
+            "dogfood-tunnel",
+            "dogfood-vault",
+            "dogfood-ice-mesh",
+            "dogfood-scope",
+            "dogfood-control-graph",
+            "dogfood-route",
+            "dogfood-city",
+            "dogfood-file-sparks",
+            "dogfood-hologram",
+            "dogfood-command-ribbon",
+            "dogfood-sigil",
+            "scan-grid"
+          ],
+          "timeline": {
+            "durationMs": 0
+          }
+        },
+        {
+          "effects": [
+            "patch",
+            "append_log",
+            "primitive:data_rain",
+            "primitive:glyph_layer",
+            "primitive:tunnel_grid",
+            "primitive:data_vault",
+            "primitive:mesh",
+            "primitive:signal_scope",
+            "primitive:node_graph",
+            "primitive:trace_route",
+            "primitive:city_block",
+            "primitive:particle_field",
+            "primitive:hologram",
+            "primitive:ribbon",
+            "primitive:svg_layer",
+            "animation:timeline_cue",
+            "animation:camera_path",
+            "animation:camera_jolt",
+            "animation:packet_burst",
+            "animation:scan",
+            "animation:extrude",
+            "animation:breach_wave"
+          ],
+          "eventTypes": [
+            "tool_result"
+          ],
+          "intent": "stage tool_result as a Hollywood terminal intrusion",
+          "metadata": {
+            "eventType": "tool_result",
+            "intent": "stage tool_result as a Hollywood terminal intrusion",
+            "phase": "after",
+            "renderer": "gibson-dogfood-showcase",
+            "touchedFileCount": 7
+          },
+          "mutationCount": 22,
+          "renderer": "gibson-dogfood-showcase",
+          "requestCount": 1,
+          "routes": [
+            "renderer_agent"
+          ],
+          "schema": "harn-gibson.render-intent.v1",
+          "stepCount": 1,
+          "targets": [
+            "status",
+            "dogfood-rain",
+            "dogfood-opcodes",
+            "dogfood-tunnel",
+            "dogfood-vault",
+            "dogfood-ice-mesh",
+            "dogfood-scope",
+            "dogfood-control-graph",
+            "dogfood-route",
+            "dogfood-city",
+            "dogfood-file-sparks",
+            "dogfood-hologram",
+            "dogfood-command-ribbon",
+            "dogfood-sigil",
+            "scan-grid"
+          ],
+          "timeline": {
+            "durationMs": 0
+          }
+        }
+      ]
+    },
+    "primitives": {
+      "decision-log": {
+        "children": [],
+        "id": "decision-log",
+        "kind": "code",
+        "props": {
+          "language": "json",
+          "text": "[]"
+        },
+        "region": "side"
+      },
+      "dogfood-city": {
+        "children": [],
+        "id": "dogfood-city",
+        "kind": "city_block",
+        "props": {
+          "accentTone": "white",
+          "blocks": [
+            {
+              "d": 0.08,
+              "h": 0.28,
+              "id": "dogfood-city-core",
+              "label": "ROOT",
+              "path": ".",
+              "tone": "amber",
+              "w": 0.07,
+              "x": 0.1,
+              "y": 0.64
+            },
+            {
+              "d": 0.07,
+              "h": 0.411,
+              "id": "dogfood-city-0",
+              "label": "docs",
+              "lines": 29,
+              "path": "docs",
+              "tone": "magenta",
+              "touched": 1,
+              "w": 0.058,
+              "x": 0.17,
+              "y": 0.69
+            },
+            {
+              "d": 0.07,
+              "h": 0.306,
+              "id": "dogfood-city-1",
+              "label": "fixtures",
+              "lines": 8,
+              "path": "fixtures",
+              "tone": "magenta",
+              "touched": 1,
+              "w": 0.058,
+              "x": 0.255,
+              "y": 0.69
+            },
+            {
+              "d": 0.07,
+              "h": 0.351,
+              "id": "dogfood-city-2",
+              "label": "scripts",
+              "lines": 17,
+              "path": "scripts",
+              "tone": "magenta",
+              "touched": 1,
+              "w": 0.058,
+              "x": 0.34,
+              "y": 0.69
+            },
+            {
+              "d": 0.07,
+              "h": 0.266,
+              "id": "dogfood-city-3",
+              "label": "src",
+              "lines": 0,
+              "path": "src",
+              "tone": "magenta",
+              "touched": 1,
+              "w": 0.058,
+              "x": 0.425,
+              "y": 0.69
+            },
+            {
+              "d": 0.07,
+              "h": 0.446,
+              "id": "dogfood-city-4",
+              "label": "tests",
+              "lines": 36,
+              "path": "tests",
+              "tone": "magenta",
+              "touched": 1,
+              "w": 0.058,
+              "x": 0.17,
+              "y": 0.57
+            },
+            {
+              "d": 0.07,
+              "h": 0.315,
+              "id": "dogfood-city-5",
+              "label": "pyproject.to",
+              "lines": 15,
+              "path": "pyproject.toml",
+              "tone": "magenta",
+              "touched": 1,
+              "w": 0.058,
+              "x": 0.255,
+              "y": 0.57
+            },
+            {
+              "d": 0.07,
+              "h": 0.33,
+              "id": "dogfood-city-6",
+              "label": "README.md",
+              "lines": 18,
+              "path": "README.md",
+              "tone": "magenta",
+              "touched": 1,
+              "w": 0.058,
+              "x": 0.34,
+              "y": 0.57
+            }
+          ],
+          "cameraPath": {
+            "durationMs": 8200,
+            "keyframes": [
+              {
+                "at": 0,
+                "scale": 0.995,
+                "x": -0.012,
+                "y": 0.004
+              },
+              {
+                "at": 0.48,
+                "scale": 1.045,
+                "x": 0.024,
+                "y": -0.018
+              },
+              {
+                "at": 1,
+                "scale": 1.01,
+                "x": 0.006,
+                "y": 0.008
+              }
+            ],
+            "loop": true,
+            "yoyo": true
+          },
+          "focusBlockId": "dogfood-city-0",
+          "heightScale": 1.18,
+          "labels": [
+            "DOGFOOD CITY",
+            "7 touched"
+          ],
+          "tone": "magenta"
+        },
+        "region": "stage"
+      },
+      "dogfood-command-ribbon": {
+        "children": [],
+        "id": "dogfood-command-ribbon",
+        "kind": "ribbon",
+        "props": {
+          "direction": "west",
+          "labels": [
+            "AFTER",
+            "TOOL_RESULT"
+          ],
+          "material": "white",
+          "points": [
+            {
+              "x": 0.08,
+              "y": 0.78
+            },
+            {
+              "x": 0.24,
+              "y": 0.6
+            },
+            {
+              "x": 0.43,
+              "y": 0.59
+            },
+            {
+              "x": 0.6,
+              "y": 0.48
+            },
+            {
+              "x": 0.8,
+              "y": 0.5
+            }
+          ],
+          "seed": 61,
+          "width": 3.6
+        },
+        "region": "stage"
+      },
+      "dogfood-control-graph": {
+        "children": [],
+        "id": "dogfood-control-graph",
+        "kind": "node_graph",
+        "props": {
+          "accentTone": "white",
+          "edges": [
+            {
+              "label": "hook",
+              "source": "agent",
+              "target": "router"
+            },
+            {
+              "label": "after",
+              "source": "router",
+              "target": "event"
+            },
+            {
+              "label": "plan",
+              "source": "event",
+              "target": "scene"
+            },
+            {
+              "label": "sse",
+              "source": "scene",
+              "target": "browser"
+            },
+            {
+              "label": "touch",
+              "source": "scene",
+              "target": "file-0"
+            },
+            {
+              "label": "touch",
+              "source": "scene",
+              "target": "file-1"
+            },
+            {
+              "label": "touch",
+              "source": "scene",
+              "target": "file-2"
+            }
+          ],
+          "focusNodeId": "file-0",
+          "label": "CONTROL GRAPH",
+          "layout": "fixed",
+          "nodes": [
+            {
+              "id": "agent",
+              "label": "AGENT",
+              "tone": "green",
+              "x": 0.18,
+              "y": 0.24
+            },
+            {
+              "id": "router",
+              "label": "ROUTER",
+              "tone": "cyan",
+              "x": 0.31,
+              "y": 0.18
+            },
+            {
+              "id": "event",
+              "label": "TOOL_RESULT",
+              "tone": "magenta",
+              "x": 0.45,
+              "y": 0.22
+            },
+            {
+              "id": "scene",
+              "label": "SCENE",
+              "tone": "white",
+              "x": 0.58,
+              "y": 0.18
+            },
+            {
+              "id": "browser",
+              "label": "BROWSER",
+              "tone": "amber",
+              "x": 0.72,
+              "y": 0.24
+            },
+            {
+              "id": "file-0",
+              "label": "README.md",
+              "tone": "magenta",
+              "x": 0.62,
+              "y": 0.34
+            },
+            {
+              "id": "file-1",
+              "label": "pyproject.to",
+              "tone": "magenta",
+              "x": 0.7,
+              "y": 0.395
+            },
+            {
+              "id": "file-2",
+              "label": "cli.py",
+              "tone": "magenta",
+              "x": 0.78,
+              "y": 0.45
+            }
+          ],
+          "seed": 39,
+          "tone": "magenta"
+        },
+        "region": "stage"
+      },
+      "dogfood-file-sparks": {
+        "children": [],
+        "id": "dogfood-file-sparks",
+        "kind": "particle_field",
+        "props": {
+          "blend": "screen",
+          "color": "white",
+          "count": 169,
+          "emitter": {
+            "angle": -0.95,
+            "color": "magenta",
+            "count": 21,
+            "label": "README.md",
+            "seed": 8,
+            "spread": 0.3,
+            "x": 0.34,
+            "y": 0.505
+          },
+          "emitters": [
+            {
+              "angle": -0.95,
+              "color": "magenta",
+              "count": 21,
+              "label": "README.md",
+              "seed": 8,
+              "spread": 0.3,
+              "x": 0.34,
+              "y": 0.505
+            },
+            {
+              "angle": -0.83,
+              "color": "white",
+              "count": 22,
+              "label": "pyproject.to",
+              "seed": 25,
+              "spread": 0.34,
+              "x": 0.255,
+              "y": 0.505
+            },
+            {
+              "angle": -0.71,
+              "color": "magenta",
+              "count": 23,
+              "label": "cli.py",
+              "seed": 42,
+              "spread": 0.38,
+              "x": 0.425,
+              "y": 0.625
+            },
+            {
+              "angle": -0.59,
+              "color": "white",
+              "count": 24,
+              "label": "test_cli.py",
+              "seed": 59,
+              "spread": 0.3,
+              "x": 0.17,
+              "y": 0.505
+            },
+            {
+              "angle": -0.47,
+              "color": "magenta",
+              "count": 25,
+              "label": "usage.md",
+              "seed": 76,
+              "spread": 0.34,
+              "x": 0.17,
+              "y": 0.625
+            },
+            {
+              "angle": -0.35,
+              "color": "white",
+              "count": 26,
+              "label": "tasks.txt",
+              "seed": 93,
+              "spread": 0.38,
+              "x": 0.255,
+              "y": 0.625
+            },
+            {
+              "angle": -0.23,
+              "color": "magenta",
+              "count": 28,
+              "label": "line_summary",
+              "seed": 110,
+              "spread": 0.3,
+              "x": 0.34,
+              "y": 0.625
+            }
+          ],
+          "label": "7 TOUCHED FILES",
+          "seed": 117,
+          "velocity": 0.74
+        },
+        "region": "stage"
+      },
+      "dogfood-hologram": {
+        "children": [],
+        "id": "dogfood-hologram",
+        "kind": "hologram",
+        "props": {
+          "accentTone": "white",
+          "beams": 15,
+          "label": "REPO-MAP",
+          "motes": 64,
+          "opacity": 0.84,
+          "panels": 10,
+          "position": {
+            "x": 0.24,
+            "y": 0.34
+          },
+          "rings": 9,
+          "scale": 0.185,
+          "scan": true,
+          "seed": 148,
+          "spin": -0.42,
+          "tone": "magenta"
+        },
+        "region": "stage"
+      },
+      "dogfood-ice-mesh": {
+        "children": [],
+        "id": "dogfood-ice-mesh",
+        "kind": "mesh",
+        "props": {
+          "accentTone": "white",
+          "edges": [
+            [
+              0,
+              1
+            ],
+            [
+              1,
+              2
+            ],
+            [
+              2,
+              3
+            ],
+            [
+              3,
+              0
+            ],
+            [
+              4,
+              5
+            ],
+            [
+              5,
+              6
+            ],
+            [
+              6,
+              7
+            ],
+            [
+              7,
+              4
+            ],
+            [
+              0,
+              4
+            ],
+            [
+              1,
+              5
+            ],
+            [
+              2,
+              6
+            ],
+            [
+              3,
+              7
+            ],
+            [
+              0,
+              8
+            ],
+            [
+              2,
+              8
+            ],
+            [
+              4,
+              8
+            ],
+            [
+              6,
+              8
+            ],
+            [
+              1,
+              9
+            ],
+            [
+              3,
+              9
+            ],
+            [
+              5,
+              9
+            ],
+            [
+              7,
+              9
+            ]
+          ],
+          "faces": [
+            [
+              0,
+              1,
+              5,
+              4
+            ],
+            [
+              2,
+              3,
+              7,
+              6
+            ],
+            [
+              0,
+              3,
+              9
+            ],
+            [
+              1,
+              2,
+              9
+            ],
+            [
+              4,
+              5,
+              8
+            ],
+            [
+              6,
+              7,
+              8
+            ]
+          ],
+          "label": "ICE TOOL RESULT",
+          "material": "magenta",
+          "position": {
+            "x": 0.51,
+            "y": 0.46
+          },
+          "rotation": {
+            "x": 0.7,
+            "y": 0.82
+          },
+          "scale": 0.22,
+          "seed": 45,
+          "spin": 0.52,
+          "tone": "magenta",
+          "vertices": [
+            [
+              -0.52,
+              -0.42,
+              -0.52
+            ],
+            [
+              0.52,
+              -0.42,
+              -0.52
+            ],
+            [
+              0.52,
+              0.42,
+              -0.52
+            ],
+            [
+              -0.52,
+              0.42,
+              -0.52
+            ],
+            [
+              -0.38,
+              -0.94,
+              0.34
+            ],
+            [
+              0.38,
+              -0.94,
+              0.34
+            ],
+            [
+              0.48,
+              0.36,
+              0.48
+            ],
+            [
+              -0.48,
+              0.36,
+              0.48
+            ],
+            [
+              0.0,
+              -0.08,
+              0.92
+            ],
+            [
+              0.0,
+              0.6,
+              -0.06
+            ]
+          ]
+        },
+        "region": "stage"
+      },
+      "dogfood-opcodes": {
+        "children": [],
+        "id": "dogfood-opcodes",
+        "kind": "glyph_layer",
+        "props": {
+          "accentTone": "white",
+          "density": 0.395,
+          "font": "terminal",
+          "motion": "drift",
+          "palette": "magenta",
+          "seed": 15,
+          "text": "GIBSON TOOL-RESULT BASH COMPLETED: OK; TESTS PASSED, LINE COUNTS PRINTED, REPOSITORY MAP READY README.MD PYPROJECT.TO CLI.PY TEST_CLI.PY TRACE ROUTE ICE MESH NODE GRAPH",
+          "tone": "magenta"
+        },
+        "region": "stage"
+      },
+      "dogfood-rain": {
+        "children": [],
+        "id": "dogfood-rain",
+        "kind": "data_rain",
+        "props": {
+          "accentTone": "white",
+          "bands": 3,
+          "columns": 52,
+          "density": 0.78,
+          "direction": "down",
+          "glitch": 0.18,
+          "glyphs": "TOOL_RESULT BASH COMPLETED: OK; TESTS PASSED, LINE COUNTS PRINTED, REPOSITORY MAP READY ACCESS GRANTED 0xC0DE 2600 GIBSON",
+          "opacity": 0.42,
+          "position": {
+            "x": 0.5,
+            "y": 0.5
+          },
+          "seed": 8,
+          "size": {
+            "h": 0.92,
+            "w": 1.0
+          },
+          "speed": 0.82,
+          "tone": "magenta",
+          "trail": 18
+        },
+        "region": "stage"
+      },
+      "dogfood-route": {
+        "children": [],
+        "id": "dogfood-route",
+        "kind": "trace_route",
+        "props": {
+          "accentTone": "white",
+          "focusHopId": "target-0",
+          "hops": [
+            {
+              "id": "agent",
+              "label": "AGENT",
+              "tone": "green",
+              "x": 0.1,
+              "y": 0.84
+            },
+            {
+              "id": "router",
+              "label": "AFTER",
+              "tone": "magenta",
+              "x": 0.29,
+              "y": 0.72
+            },
+            {
+              "id": "event",
+              "label": "TOOL_RESULT",
+              "tone": "white",
+              "x": 0.48,
+              "y": 0.62
+            },
+            {
+              "id": "gibson-core",
+              "label": "GIBSON",
+              "tone": "cyan",
+              "x": 0.69,
+              "y": 0.48
+            },
+            {
+              "id": "target-0",
+              "label": "README.md",
+              "tone": "magenta",
+              "x": 0.78,
+              "y": 0.35
+            },
+            {
+              "id": "target-1",
+              "label": "pyproject.to",
+              "tone": "magenta",
+              "x": 0.84,
+              "y": 0.47
+            },
+            {
+              "id": "target-2",
+              "label": "cli.py",
+              "tone": "magenta",
+              "x": 0.9,
+              "y": 0.59
+            }
+          ],
+          "label": "LIVE ROUTE",
+          "links": [
+            {
+              "label": "hook",
+              "source": "agent",
+              "target": "router"
+            },
+            {
+              "label": "route",
+              "source": "router",
+              "target": "event"
+            },
+            {
+              "label": "render",
+              "source": "event",
+              "target": "gibson-core"
+            },
+            {
+              "label": "bash:after",
+              "source": "gibson-core",
+              "target": "target-0"
+            },
+            {
+              "label": "bash:after",
+              "source": "gibson-core",
+              "target": "target-1"
+            },
+            {
+              "label": "bash:after",
+              "source": "gibson-core",
+              "target": "target-2"
+            }
+          ],
+          "packets": 56,
+          "seed": 49,
+          "speed": 0.92,
+          "tone": "magenta"
+        },
+        "region": "stage"
+      },
+      "dogfood-scope": {
+        "children": [],
+        "id": "dogfood-scope",
+        "kind": "signal_scope",
+        "props": {
+          "accentTone": "white",
+          "blips": [
+            {
+              "angle": 0.72,
+              "intensity": 0.9,
+              "label": "README.md",
+              "radius": 0.22,
+              "tone": "magenta"
+            },
+            {
+              "angle": 1.56,
+              "intensity": 0.9,
+              "label": "pyproject.to",
+              "radius": 0.35,
+              "tone": "magenta"
+            },
+            {
+              "angle": 2.4,
+              "intensity": 0.9,
+              "label": "cli.py",
+              "radius": 0.48,
+              "tone": "magenta"
+            },
+            {
+              "angle": 3.24,
+              "intensity": 0.9,
+              "label": "test_cli.py",
+              "radius": 0.61,
+              "tone": "magenta"
+            },
+            {
+              "angle": 4.08,
+              "intensity": 0.9,
+              "label": "usage.md",
+              "radius": 0.74,
+              "tone": "magenta"
+            },
+            {
+              "angle": 4.92,
+              "intensity": 0.9,
+              "label": "tasks.txt",
+              "radius": 0.22,
+              "tone": "magenta"
+            }
+          ],
+          "label": "after:tool_result",
+          "mode": "radar",
+          "opacity": 0.9,
+          "position": {
+            "x": 0.78,
+            "y": 0.3
+          },
+          "rings": 5,
+          "scale": 0.17,
+          "seed": 37,
+          "spokes": 10,
+          "sweep": true,
+          "sweepSpeed": 1.15,
+          "tone": "magenta",
+          "waveforms": [
+            {
+              "amplitude": 0.22,
+              "frequency": 3.1,
+              "label": "IO",
+              "speed": 0.0022,
+              "tone": "magenta"
+            },
+            {
+              "amplitude": 0.15,
+              "frequency": 6.2,
+              "label": "CPU",
+              "speed": 0.0016,
+              "tone": "white"
+            }
+          ]
+        },
+        "region": "stage"
+      },
+      "dogfood-sigil": {
+        "children": [],
+        "id": "dogfood-sigil",
+        "kind": "svg_layer",
+        "props": {
+          "accentTone": "white",
+          "blend": "screen",
+          "clip": {
+            "durationMs": 2600,
+            "kind": "iris",
+            "loop": true,
+            "yoyo": true
+          },
+          "durationMs": 7200,
+          "filters": [
+            {
+              "intensity": 0.8,
+              "kind": "chromatic_split",
+              "offset": 1.2
+            },
+            {
+              "alpha": 0.36,
+              "kind": "scanline",
+              "spacing": 6
+            }
+          ],
+          "gradients": [
+            {
+              "center": {
+                "x": 50,
+                "y": 52
+              },
+              "id": "dogfood-core",
+              "innerRadius": 4,
+              "outerRadius": 58,
+              "stops": [
+                {
+                  "alpha": 0.95,
+                  "offset": 0,
+                  "tone": "white"
+                },
+                {
+                  "alpha": 0.72,
+                  "offset": 0.42,
+                  "tone": "magenta"
+                },
+                {
+                  "alpha": 0.7,
+                  "offset": 1,
+                  "tone": "white"
+                }
+              ],
+              "type": "radial"
+            }
+          ],
+          "keyframes": [
+            {
+              "at": 0,
+              "opacity": 0.84,
+              "rotation": -0.03,
+              "scale": 1.0
+            },
+            {
+              "at": 0.42,
+              "opacity": 1.0,
+              "rotation": 0.05,
+              "scale": 1.08
+            },
+            {
+              "at": 1,
+              "opacity": 0.9,
+              "rotation": -0.01,
+              "scale": 1.02
+            }
+          ],
+          "labels": [
+            {
+              "size": 6.4,
+              "text": "TOOL RESULT",
+              "tone": "white",
+              "x": 50,
+              "y": 56
+            },
+            {
+              "size": 4.4,
+              "text": "BASH COMPLETED: O...",
+              "tone": "white",
+              "x": 50,
+              "y": 66
+            }
+          ],
+          "loop": true,
+          "paths": [
+            {
+              "d": "M50 5 L91 29 L83 82 L50 96 L17 82 L9 29 Z",
+              "fill": "gradient:dogfood-core",
+              "fillAlpha": 0.12,
+              "morphs": [
+                {
+                  "at": 0,
+                  "d": "M50 5 L91 29 L83 82 L50 96 L17 82 L9 29 Z"
+                },
+                {
+                  "at": 0.5,
+                  "d": "M50 8 L87 24 L91 74 L50 92 L9 74 L13 24 Z"
+                },
+                {
+                  "at": 1,
+                  "d": "M50 5 L91 29 L83 82 L50 96 L17 82 L9 29 Z"
+                }
+              ],
+              "stroke": "gradient:dogfood-core",
+              "width": 1.8
+            },
+            {
+              "d": "M23 60 C35 25 65 25 77 60 M28 64 L50 32 L72 64",
+              "dash": [
+                8,
+                7
+              ],
+              "reveal": true,
+              "speed": 0.018,
+              "tone": "white",
+              "width": 2.2
+            }
+          ],
+          "position": {
+            "x": 0.48,
+            "y": 0.34
+          },
+          "scale": 0.2,
+          "seed": 67,
+          "symbols": [
+            {
+              "accentTone": "white",
+              "kind": "globe",
+              "packets": 7,
+              "r": 17,
+              "tone": "magenta",
+              "x": 50,
+              "y": 42
+            },
+            {
+              "accentTone": "magenta",
+              "h": 36,
+              "kind": "filesystem_gate",
+              "open": true,
+              "tone": "white",
+              "w": 54,
+              "x": 50,
+              "y": 42
+            },
+            {
+              "accentTone": "white",
+              "kind": "reticle",
+              "r": 28,
+              "tone": "white",
+              "x": 50,
+              "y": 42
+            },
+            {
+              "accentTone": "white",
+              "h": 42,
+              "kind": "ice_wall",
+              "tone": "cyan",
+              "w": 66,
+              "x": 50,
+              "y": 43
+            }
+          ],
+          "tone": "magenta",
+          "traces": [
+            {
+              "count": 17,
+              "gradient": "gradient:dogfood-core",
+              "points": [
+                {
+                  "x": 18,
+                  "y": 78
+                },
+                {
+                  "x": 32,
+                  "y": 28
+                },
+                {
+                  "x": 68,
+                  "y": 28
+                },
+                {
+                  "x": 82,
+                  "y": 78
+                },
+                {
+                  "x": 50,
+                  "y": 91
+                },
+                {
+                  "x": 18,
+                  "y": 78
+                }
+              ],
+              "speed": 0.00024,
+              "tail": 0.09
+            }
+          ],
+          "viewBox": [
+            0,
+            0,
+            100,
+            100
+          ],
+          "yoyo": true
+        },
+        "region": "stage"
+      },
+      "dogfood-tunnel": {
+        "children": [],
+        "id": "dogfood-tunnel",
+        "kind": "tunnel_grid",
+        "props": {
+          "accentTone": "white",
+          "depth": 1.25,
+          "direction": "inward",
+          "label": "TOOL RESULT",
+          "lanes": 9,
+          "opacity": 0.74,
+          "packets": 86,
+          "position": {
+            "x": 0.52,
+            "y": 0.46
+          },
+          "rings": 18,
+          "seed": 21,
+          "size": {
+            "h": 0.54,
+            "w": 0.72
+          },
+          "speed": 0.86,
+          "spokes": 18,
+          "tone": "magenta",
+          "twist": -0.44
+        },
+        "region": "stage"
+      },
+      "dogfood-vault": {
+        "children": [],
+        "id": "dogfood-vault",
+        "kind": "data_vault",
+        "props": {
+          "accentTone": "white",
+          "label": "REPO-MAP",
+          "layers": 5,
+          "locks": 12,
+          "opacity": 0.86,
+          "packets": 102,
+          "panels": 12,
+          "position": {
+            "x": 0.36,
+            "y": 0.42
+          },
+          "rings": 10,
+          "scale": 0.175,
+          "seed": 176,
+          "spin": -0.52,
+          "tone": "magenta"
+        },
+        "region": "stage"
+      },
+      "event-feed": {
+        "children": [],
+        "id": "event-feed",
+        "kind": "feed",
+        "props": {
+          "maxItems": 80
+        },
+        "region": "side"
+      },
+      "scan-grid": {
+        "children": [],
+        "id": "scan-grid",
+        "kind": "grid",
+        "props": {
+          "intensity": 0.2
+        },
+        "region": "stage"
+      },
+      "stage": {
+        "children": [
+          "status",
+          "event-feed",
+          "trace-log",
+          "decision-log",
+          "scan-grid"
+        ],
+        "id": "stage",
+        "kind": "viewport",
+        "props": {
+          "theme": "gibson",
+          "title": "GIBSON LINK"
+        },
+        "region": "root"
+      },
+      "status": {
+        "children": [],
+        "id": "status",
+        "kind": "status",
+        "props": {
+          "phase": "after",
+          "text": "dogfood::tool_result",
+          "tone": "magenta"
+        },
+        "region": "mast"
+      },
+      "trace-log": {
+        "children": [],
+        "id": "trace-log",
+        "kind": "code",
+        "props": {
+          "language": "text",
+          "text": []
+        },
+        "region": "side"
+      }
+    },
+    "revision": 8,
+    "schema": "harn-gibson.scene.v1"
+  },
+  "schema": "harn-gibson.replay-baseline.v1",
+  "stepCount": 8
+}

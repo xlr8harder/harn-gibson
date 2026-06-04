@@ -81,7 +81,6 @@ from harn_gibson.server import GibsonServerState, build_state_from_env
 ROOT = Path(__file__).resolve().parents[1]
 EXAMPLE_REPLAYS = ROOT / "examples" / "replays"
 EXAMPLE_DOGFOOD_REPLAYS = ROOT / "examples" / "dogfood-replays"
-EXAMPLE_DOGFOOD_WORKSPACE = ROOT / "examples" / "dogfood-workspaces" / "tiny-project"
 
 
 def dogfood_renderer_state() -> GibsonServerState:
@@ -91,8 +90,6 @@ def dogfood_renderer_state() -> GibsonServerState:
                 ["uv", "run", "python", str(ROOT / "examples" / "renderers" / "gibson_dogfood_renderer.py")]
             ),
             "HARN_GIBSON_RENDERER_TIMEOUT_MS": "10000",
-            "HARN_GIBSON_PROJECT_ROOT": str(EXAMPLE_DOGFOOD_WORKSPACE),
-            "HARN_GIBSON_PROJECT_NAME": "tiny-project",
         }
     )
 
@@ -1560,6 +1557,31 @@ def test_checked_in_dogfood_runtime_replay_exercises_failure_scene() -> None:
     assert result.scene.metadata["lastRenderIntent"]["eventTypes"] == ["runtime_error"]
 
 
+def test_checked_in_dogfood_repo_map_replay_exercises_topology_scene() -> None:
+    state = dogfood_renderer_state()
+    try:
+        result = run_replay_file(EXAMPLE_DOGFOOD_REPLAYS / "repo-map-trajectory.json", state)
+    finally:
+        state.pipeline.stop()
+
+    blocks = result.scene.primitives["dogfood-city"].props["blocks"]
+    block_paths = {block["path"]: block for block in blocks}
+    assert [step.kind for step in result.steps] == ["event"] * 8
+    assert len(result.expectations) == 15
+    assert result.scene.primitives["status"].props["text"] == "dogfood::tool_result"
+    assert result.scene.primitives["dogfood-city"].props["labels"] == ["DOGFOOD CITY", "7 touched"]
+    assert result.scene.primitives["dogfood-file-sparks"].props["label"] == "7 TOUCHED FILES"
+    assert result.scene.primitives["dogfood-hologram"].props["label"] == "REPO-MAP"
+    assert result.scene.primitives["dogfood-vault"].props["label"] == "REPO-MAP"
+    assert block_paths["README.md"]["tone"] == "magenta"
+    assert block_paths["docs"]["lines"] >= 20
+    assert block_paths["tests"]["lines"] >= 30
+    assert result.scene.animations["dogfood-city-extrude"].kind == "extrude"
+    assert result.scene.animations["dogfood-city-extrude"].target_id == "dogfood-city"
+    assert result.scene.animations["dogfood-city-extrude"].props["sequence"] == 8
+    assert result.scene.metadata["lastRenderIntent"]["metadata"]["touchedFileCount"] == 7
+
+
 def test_checked_in_dogfood_replay_suite_summarizes_trajectory_coverage() -> None:
     suite = run_replay_suite(EXAMPLE_DOGFOOD_REPLAYS, state_factory=dogfood_renderer_state)
     payload = suite.to_dict()
@@ -1611,120 +1633,90 @@ def test_checked_in_dogfood_replay_suite_summarizes_trajectory_coverage() -> Non
         ],
     }
 
+    summary = payload["summary"]
+    event_summary = summary["eventSummary"]
+    touched_files = event_summary["touchedFiles"]
     assert suite.ok is True
-    assert payload["summary"] == {
-        "eventSummary": {
-            "durationMs": 24600,
-            "eventCount": 12,
-            "eventTypeCounts": {
-                "browser_input": 1,
-                "input": 2,
-                "runtime_error": 1,
-                "tool_call": 4,
-                "tool_result": 4,
-            },
-            "eventTypes": ["browser_input", "input", "runtime_error", "tool_call", "tool_result"],
-            "firstSequence": 1,
-            "firstTimestampMs": 1000,
-            "lastSequence": 7,
-            "lastTimestampMs": 25600,
-            "phaseCounts": {"after": 5, "before": 6, "lifecycle": 1},
-            "phases": ["after", "before", "lifecycle"],
-            "sourceCounts": {"browser": 1, "harn": 10, "harn-gibson": 1},
-            "sources": ["browser", "harn", "harn-gibson"],
-            "tools": {
-                "commandCount": 8,
-                "failedToolResultCount": 2,
-                "toolCounts": {"bash": 8},
-                "toolNames": ["bash"],
-            },
-            "touchedFiles": {
-                "schema": "harn-gibson.touched-files.v1",
-                "files": [
-                    {
-                        "path": "README.md",
-                        "operation": "bash:after",
-                        "firstSequence": 7,
-                        "lastSequence": 7,
-                        "phases": ["after"],
-                        "sources": ["filePath.0"],
-                    },
-                    {
-                        "path": "pyproject.toml",
-                        "operation": "bash:after",
-                        "firstSequence": 7,
-                        "lastSequence": 7,
-                        "phases": ["after"],
-                        "sources": ["filePath.1"],
-                    },
-                    {
-                        "path": "src/tiny_tasks",
-                        "operation": "bash:before",
-                        "firstSequence": 4,
-                        "lastSequence": 4,
-                        "phases": ["before"],
-                        "sources": ["input.command"],
-                    },
-                    {
-                        "path": "src/tiny_tasks/__init__.py",
-                        "operation": "bash:before",
-                        "firstSequence": 4,
-                        "lastSequence": 4,
-                        "phases": ["before"],
-                        "sources": ["input.command"],
-                    },
-                    {
-                        "path": "src/tiny_tasks/cli.py",
-                        "operation": "bash:after",
-                        "firstSequence": 3,
-                        "lastSequence": 7,
-                        "phases": ["after", "before"],
-                        "sources": ["filePath.0", "filePath", "input.command", "filePath.2"],
-                    },
-                    {
-                        "path": "tests/test_cli.py",
-                        "operation": "bash:before",
-                        "firstSequence": 2,
-                        "lastSequence": 7,
-                        "phases": ["before", "after"],
-                        "sources": ["input.command", "filePath.1", "filePath.3"],
-                    },
-                ],
-                "paths": [
-                    "README.md",
-                    "pyproject.toml",
-                    "src/tiny_tasks",
-                    "src/tiny_tasks/__init__.py",
-                    "src/tiny_tasks/cli.py",
-                    "tests/test_cli.py",
-                ],
-                "count": 6,
-                "truncated": False,
-                "topLevelCounts": {"README.md": 1, "pyproject.toml": 1, "src": 3, "tests": 1},
-            },
-        },
-        "expectationCount": 30,
-        "failedCount": 0,
-        "fileCount": 2,
-        "okCount": 2,
-        "rendererCounts": {"gibson-dogfood-showcase": 12},
-        "renderers": ["gibson-dogfood-showcase"],
-        "routeCounts": {"renderer_agent": 12},
-        "routes": ["renderer_agent"],
-        "screenshotCount": 0,
-        "screenshotExpectationCount": 0,
-        "stepCount": 12,
-        "visualContinuitySummary": dogfood_visual_summary,
+    assert summary["fileCount"] == 3
+    assert summary["okCount"] == 3
+    assert summary["failedCount"] == 0
+    assert summary["stepCount"] == 20
+    assert summary["expectationCount"] == 45
+    assert summary["rendererCounts"] == {"gibson-dogfood-showcase": 20}
+    assert summary["routeCounts"] == {"renderer_agent": 20}
+    assert summary["screenshotCount"] == 0
+    assert summary["screenshotExpectationCount"] == 0
+    assert summary["visualContinuitySummary"] == dogfood_visual_summary
+    assert event_summary["durationMs"] == 27400
+    assert event_summary["eventCount"] == 20
+    assert event_summary["eventTypeCounts"] == {
+        "browser_input": 2,
+        "input": 3,
+        "runtime_error": 1,
+        "tool_call": 7,
+        "tool_result": 7,
     }
+    assert event_summary["phaseCounts"] == {"after": 8, "before": 10, "lifecycle": 2}
+    assert event_summary["sourceCounts"] == {"browser": 1, "harn": 18, "harn-gibson": 1}
+    assert event_summary["tools"] == {
+        "commandCount": 14,
+        "failedToolResultCount": 3,
+        "toolCounts": {"bash": 14},
+        "toolNames": ["bash"],
+    }
+    assert touched_files["count"] == 12
+    assert touched_files["topLevelCounts"] == {
+        "README.md": 1,
+        "docs": 1,
+        "fixtures": 1,
+        "pyproject.toml": 1,
+        "scripts": 1,
+        "src": 6,
+        "tests": 1,
+    }
+    assert touched_files["paths"] == [
+        "README.md",
+        "docs/usage.md",
+        "fixtures/tasks.txt",
+        "pyproject.toml",
+        "scripts/line_summary.py",
+        "src/repo_map",
+        "src/repo_map/__init__.py",
+        "src/repo_map/cli.py",
+        "src/tiny_tasks",
+        "src/tiny_tasks/__init__.py",
+        "src/tiny_tasks/cli.py",
+        "tests/test_cli.py",
+    ]
+    assert [file_result["path"] for file_result in payload["files"]] == [
+        "repo-map-trajectory.json",
+        "runtime-diagnostic-trajectory.json",
+        "tiny-project-trajectory.json",
+    ]
     assert payload["files"][0]["eventSummary"]["eventTypeCounts"] == {
+        "browser_input": 1,
+        "input": 1,
+        "tool_call": 3,
+        "tool_result": 3,
+    }
+    assert payload["files"][0]["eventSummary"]["touchedFiles"]["topLevelCounts"] == {
+        "README.md": 1,
+        "docs": 1,
+        "fixtures": 1,
+        "pyproject.toml": 1,
+        "scripts": 1,
+        "src": 3,
+        "tests": 1,
+    }
+    assert payload["files"][1]["eventSummary"]["eventTypeCounts"] == {
         "browser_input": 1,
         "input": 1,
         "runtime_error": 1,
         "tool_call": 1,
         "tool_result": 1,
     }
-    assert payload["files"][1]["rendererCounts"] == {"gibson-dogfood-showcase": 7}
-    assert payload["files"][1]["visualContinuitySummary"] == dogfood_visual_summary
+    assert payload["files"][2]["rendererCounts"] == {"gibson-dogfood-showcase": 7}
+    assert payload["files"][2]["visualContinuitySummary"] == dogfood_visual_summary
 
 
 def test_replay_raw_events_render_plans_and_mutations() -> None:
@@ -1964,6 +1956,51 @@ def test_replay_suite_can_run_with_style_pack(tmp_path: Path) -> None:
     assert suite.ok is True
     assert suite.files[0].scene_revision == 0
     assert suite.files[0].expectations == 3
+
+
+def test_replay_project_metadata_configures_renderer_context(tmp_path: Path) -> None:
+    project_root = tmp_path / "repo-map"
+    explicit_root = tmp_path / "explicit-root"
+    project_root.joinpath("src").mkdir(parents=True)
+    explicit_root.mkdir()
+    project_root.joinpath("README.md").write_text("# Repo Map\n", encoding="utf-8")
+    project_root.joinpath("src", "main.py").write_text("def main():\n    return 'ok'\n", encoding="utf-8")
+    explicit_root.joinpath("explicit.txt").write_text("keep explicit state\n", encoding="utf-8")
+    event = event_payload(1, "tool_call", {"toolName": "bash", "input": {"command": "python src/main.py"}})
+    replay_data = {
+        "metadata": {
+            "projectRoot": str(project_root),
+            "projectName": "repo-map fixture",
+        },
+        "steps": [{"type": "event", "event": event}],
+    }
+    explicit_state = GibsonServerState(project_name="explicit", project_root=str(explicit_root))
+
+    metadata_result = run_replay_data(replay_data, capture_renderer_contexts=True)
+    explicit_result = run_replay_data(replay_data, explicit_state, capture_renderer_contexts=True)
+    named_result = run_replay_data(
+        {
+            "metadata": {"projectName": "named-only fixture"},
+            "steps": [{"type": "event", "event": event}],
+        },
+        capture_renderer_contexts=True,
+    )
+
+    metadata_context = metadata_result.renderer_contexts[0].context
+    explicit_context = explicit_result.renderer_contexts[0].context
+    named_context = named_result.renderer_contexts[0].context
+    assert metadata_context["project"]["name"] == "repo-map fixture"
+    assert metadata_context["project"]["repoTopology"]["rootName"] == "repo-map"
+    assert sorted(entry["path"] for entry in metadata_context["project"]["repoTopology"]["entries"]) == [
+        "README.md",
+        "src",
+    ]
+    assert explicit_context["project"]["name"] == "explicit"
+    assert explicit_context["project"]["repoTopology"]["rootName"] == "explicit-root"
+    assert [entry["path"] for entry in explicit_context["project"]["repoTopology"]["entries"]] == ["explicit.txt"]
+    assert named_context["project"]["name"] == "named-only fixture"
+    assert named_context["project"]["repoTopology"]["rootName"] == Path.cwd().resolve().name
+    explicit_state.pipeline.stop()
 
 
 def test_replay_suite_captures_screenshots(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

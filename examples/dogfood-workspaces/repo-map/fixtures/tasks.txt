@@ -1,0 +1,8 @@
+# owner::task
+agent::capture full event trajectory
+renderer::map top-level directories to city districts
+!tests::cover failing command and fix
+docs::write replay review instructions
+browser::capture final screenshot
+git::commit logical milestones
+style::verify satellite uplink palette

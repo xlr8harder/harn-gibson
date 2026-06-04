@@ -1,0 +1,15 @@
+[project]
+name = "repo-map-capture"
+version = "0.1.0"
+requires-python = ">=3.12"
+description = "Fixture project for harn-gibson repo topology captures"
+
+[project.scripts]
+repo-map = "repo_map.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

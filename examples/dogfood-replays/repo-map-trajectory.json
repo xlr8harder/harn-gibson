@@ -1,0 +1,332 @@
+{
+  "schema": "harn-gibson.replay.v1",
+  "name": "repo map dogfood trajectory",
+  "metadata": {
+    "purpose": "exercise the hard-coded dogfood renderer against a topology-heavy repo-map trajectory",
+    "renderer": "examples/renderers/gibson_dogfood_renderer.py",
+    "projectRoot": "examples/dogfood-workspaces/repo-map",
+    "projectName": "repo-map"
+  },
+  "expect": {
+    "sceneRevision": 8,
+    "checks": [
+      {
+        "path": "primitives.status.props.text",
+        "equals": "dogfood::tool_result"
+      },
+      {
+        "path": "primitives.dogfood-city.props.labels",
+        "contains": "7 touched"
+      },
+      {
+        "path": "primitives.dogfood-city.props.blocks",
+        "contains": {
+          "id": "dogfood-city-6",
+          "path": "README.md",
+          "tone": "magenta",
+          "touched": 1
+        }
+      },
+      {
+        "path": "primitives.dogfood-file-sparks.props.label",
+        "equals": "7 TOUCHED FILES"
+      },
+      {
+        "path": "primitives.dogfood-hologram.props.label",
+        "equals": "REPO-MAP"
+      },
+      {
+        "path": "primitives.dogfood-opcodes.kind",
+        "equals": "glyph_layer"
+      },
+      {
+        "path": "primitives.dogfood-control-graph.kind",
+        "equals": "node_graph"
+      },
+      {
+        "path": "primitives.dogfood-ice-mesh.kind",
+        "equals": "mesh"
+      },
+      {
+        "path": "primitives.dogfood-vault.kind",
+        "equals": "data_vault"
+      },
+      {
+        "path": "primitives.dogfood-route.props.focusHopId",
+        "equals": "target-0"
+      },
+      {
+        "path": "animations.dogfood-cues.kind",
+        "equals": "timeline_cue"
+      },
+      {
+        "path": "animations.dogfood-city-extrude.kind",
+        "equals": "extrude"
+      },
+      {
+        "path": "metadata.lastRenderIntent.renderer",
+        "equals": "gibson-dogfood-showcase"
+      },
+      {
+        "path": "metadata.lastRenderIntent.eventTypes",
+        "contains": "tool_result"
+      }
+    ]
+  },
+  "screenshotExpect": {
+    "nonblank": true,
+    "checks": [
+      {"path": "canvasMetrics.litRatio", "min": 0.02},
+      {"path": "canvasMetrics.maxChannelTotal", "min": 60}
+    ]
+  },
+  "steps": [
+    {
+      "type": "event",
+      "event": {
+        "schema": "harn-gibson.event.v1",
+        "sequence": 1,
+        "timestampMs": 1000,
+        "source": "harn",
+        "eventType": "input",
+        "phase": "before",
+        "title": "Input intercept",
+        "summary": "user input: build a repo-map fixture for Gibson city rendering",
+        "payload": {
+          "type": "input",
+          "source": "user",
+          "text": "create a depth-2 repo-map project and capture topology-heavy display events"
+        },
+        "recentContext": [
+          "user wants long dogfood trajectories that can become renderer regression fixtures"
+        ],
+        "visualizationContext": [
+          "map repository areas to city blocks and animate touched-file batches"
+        ]
+      }
+    },
+    {
+      "type": "event",
+      "event": {
+        "schema": "harn-gibson.event.v1",
+        "sequence": 2,
+        "timestampMs": 2600,
+        "source": "harn",
+        "eventType": "tool_call",
+        "phase": "before",
+        "title": "Tool preflight",
+        "summary": "bash starting with {command}",
+        "payload": {
+          "type": "tool_call",
+          "toolName": "bash",
+          "input": {
+            "command": "git init && mkdir -p src/repo_map tests docs fixtures scripts"
+          }
+        },
+        "recentContext": [
+          "agent is creating a broad depth-2 workspace"
+        ],
+        "visualizationContext": [
+          "stage new top-level areas as city districts"
+        ]
+      }
+    },
+    {
+      "type": "event",
+      "event": {
+        "schema": "harn-gibson.event.v1",
+        "sequence": 3,
+        "timestampMs": 5200,
+        "source": "harn",
+        "eventType": "tool_result",
+        "phase": "after",
+        "title": "Tool result",
+        "summary": "bash completed: ok; repo skeleton created",
+        "payload": {
+          "type": "tool_result",
+          "toolName": "bash",
+          "filePath": [
+            "README.md",
+            "pyproject.toml",
+            "src/repo_map/__init__.py",
+            "src/repo_map/cli.py",
+            "tests/test_cli.py",
+            "docs/usage.md",
+            "fixtures/tasks.txt",
+            "scripts/line_summary.py"
+          ],
+          "input": {
+            "command": "find . -maxdepth 2 -type d | sort"
+          },
+          "content": [
+            {
+              "type": "text",
+              "text": ".\\n./docs\\n./fixtures\\n./scripts\\n./src\\n./src/repo_map\\n./tests"
+            }
+          ]
+        },
+        "recentContext": [
+          "agent populated several repo districts"
+        ],
+        "visualizationContext": [
+          "flash every newly touched district"
+        ]
+      }
+    },
+    {
+      "type": "event",
+      "event": {
+        "schema": "harn-gibson.event.v1",
+        "sequence": 4,
+        "timestampMs": 9600,
+        "source": "harn",
+        "eventType": "tool_call",
+        "phase": "before",
+        "title": "Tool preflight",
+        "summary": "bash starting with {command}",
+        "payload": {
+          "type": "tool_call",
+          "toolName": "bash",
+          "input": {
+            "command": "python -m pytest tests/test_cli.py"
+          }
+        },
+        "recentContext": [
+          "agent is running the first test pass"
+        ],
+        "visualizationContext": [
+          "show test district scanning"
+        ]
+      }
+    },
+    {
+      "type": "event",
+      "event": {
+        "schema": "harn-gibson.event.v1",
+        "sequence": 5,
+        "timestampMs": 13800,
+        "source": "harn",
+        "eventType": "tool_result",
+        "phase": "after",
+        "title": "Tool result",
+        "summary": "bash completed: error; intentional missing-file behavior failed",
+        "payload": {
+          "type": "tool_result",
+          "toolName": "bash",
+          "isError": true,
+          "filePath": [
+            "src/repo_map/cli.py",
+            "tests/test_cli.py"
+          ],
+          "input": {
+            "command": "python -m pytest tests/test_cli.py"
+          },
+          "content": [
+            {
+              "type": "text",
+              "text": "FAILED tests/test_cli.py::test_format_summary_reports_missing_file - DID NOT RAISE FileNotFoundError"
+            }
+          ]
+        },
+        "recentContext": [
+          "agent intentionally captured a failing test"
+        ],
+        "visualizationContext": [
+          "pulse source and tests as a breach before the fix"
+        ]
+      }
+    },
+    {
+      "type": "event",
+      "event": {
+        "schema": "harn-gibson.event.v1",
+        "sequence": 6,
+        "timestampMs": 18400,
+        "source": "harn",
+        "eventType": "tool_call",
+        "phase": "before",
+        "title": "Tool preflight",
+        "summary": "bash starting with {command}",
+        "payload": {
+          "type": "tool_call",
+          "toolName": "bash",
+          "input": {
+            "command": "python -m pytest && python scripts/line_summary.py && git status --short"
+          }
+        },
+        "recentContext": [
+          "agent fixed the failing behavior and is collecting line-count evidence"
+        ],
+        "visualizationContext": [
+          "turn line counts into varied city heights"
+        ]
+      }
+    },
+    {
+      "type": "event",
+      "event": {
+        "schema": "harn-gibson.event.v1",
+        "sequence": 7,
+        "timestampMs": 22800,
+        "source": "harn",
+        "eventType": "browser_input",
+        "phase": "lifecycle",
+        "title": "Browser input",
+        "summary": "queued steering input from Gibson display",
+        "payload": {
+          "type": "browser_input",
+          "id": "input-repo-map-1",
+          "message": "highlight touched repository districts and keep the city readable",
+          "deliverAs": "steer"
+        },
+        "recentContext": [
+          "browser steering asks for repo-city focus"
+        ],
+        "visualizationContext": [
+          "treat browser input as a live control node"
+        ]
+      }
+    },
+    {
+      "type": "event",
+      "event": {
+        "schema": "harn-gibson.event.v1",
+        "sequence": 8,
+        "timestampMs": 28400,
+        "source": "harn",
+        "eventType": "tool_result",
+        "phase": "after",
+        "title": "Tool result",
+        "summary": "bash completed: ok; tests passed, line counts printed, repository map ready",
+        "payload": {
+          "type": "tool_result",
+          "toolName": "bash",
+          "filePath": [
+            "README.md",
+            "pyproject.toml",
+            "src/repo_map/cli.py",
+            "tests/test_cli.py",
+            "docs/usage.md",
+            "fixtures/tasks.txt",
+            "scripts/line_summary.py"
+          ],
+          "input": {
+            "command": "python -m pytest && python scripts/line_summary.py && git add . && git commit -m 'capture repo map fixture' && git status --short"
+          },
+          "content": [
+            {
+              "type": "text",
+              "text": "3 passed\\n019 README.md\\n039 src/repo_map/cli.py\\n031 tests/test_cli.py\\n025 docs/usage.md\\n008 fixtures/tasks.txt\\n[main 9f00d42] capture repo map fixture\\nnothing to commit, working tree clean"
+            }
+          ]
+        },
+        "recentContext": [
+          "agent finished the topology-heavy fixture with a clean working tree"
+        ],
+        "visualizationContext": [
+          "leave repo-city focused on the final touched-file spread"
+        ]
+      }
+    }
+  ]
+}
