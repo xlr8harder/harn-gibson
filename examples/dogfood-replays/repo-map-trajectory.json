@@ -51,6 +51,10 @@
         "equals": "glyph_layer"
       },
       {
+        "path": "primitives.dogfood-terminal-wall.kind",
+        "equals": "terminal_wall"
+      },
+      {
         "path": "primitives.dogfood-control-graph.kind",
         "equals": "node_graph"
       },

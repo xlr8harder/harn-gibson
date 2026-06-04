@@ -47,6 +47,9 @@
       {"path": "primitives.gallery-landscape.props.rows", "equals": 13},
       {"path": "primitives.gallery-landscape.props.peaks.2.label", "equals": "GIBSON"},
       {"path": "primitives.gallery-landscape.props.focusPeakId", "equals": "gibson"},
+      {"path": "primitives.gallery-terminal.kind", "equals": "terminal_wall"},
+      {"path": "primitives.gallery-terminal.props.panels.1.title", "equals": "COMMAND"},
+      {"path": "primitives.gallery-terminal.props.panels.2.lines.0", "equals": "src/harn_gibson/server.py"},
       {"path": "primitives.gallery-city.kind", "equals": "city_block"},
       {"path": "primitives.gallery-city.props.cameraPath.keyframes.1.scale", "equals": 1.04},
       {"path": "primitives.gallery-trace.kind", "equals": "trace_route"},
@@ -293,6 +296,61 @@
                 {"id": "ice", "label": "ICE", "x": 0.38, "z": 0.48, "height": 0.62, "radius": 0.20, "tone": "amber"},
                 {"id": "gibson", "label": "GIBSON", "x": 0.62, "z": 0.42, "height": 0.88, "radius": 0.23, "tone": "magenta"},
                 {"id": "fs", "label": "FS", "x": 0.82, "z": 0.66, "height": 0.42, "radius": 0.18, "tone": "cyan"}
+              ]
+            }
+          }
+        },
+        {
+          "op": "upsert",
+          "primitive": {
+            "id": "gallery-terminal",
+            "kind": "terminal_wall",
+            "region": "stage",
+            "props": {
+              "title": "TERMINAL WALL",
+              "position": {"x": 0.50, "y": 0.60},
+              "size": {"w": 0.82, "h": 0.22},
+              "columns": 2,
+              "rows": 2,
+              "tone": "green",
+              "accentTone": "cyan",
+              "opacity": 0.76,
+              "scan": true,
+              "cursor": true,
+              "speed": 0.72,
+              "seed": 818,
+              "panels": [
+                {
+                  "id": "evt",
+                  "title": "EVENT",
+                  "lines": ["SEQ 900", "primitive_gallery", "renderer catalog online"],
+                  "tone": "green",
+                  "accentTone": "cyan",
+                  "active": true
+                },
+                {
+                  "id": "cmd",
+                  "title": "COMMAND",
+                  "lines": ["uv run harn-gibson replay", "--screenshot primitive-gallery.png"],
+                  "tone": "cyan",
+                  "accentTone": "magenta",
+                  "streaming": true
+                },
+                {
+                  "id": "files",
+                  "title": "FILES",
+                  "lines": ["src/harn_gibson/server.py", "docs/renderer-agent.md", "examples/replays/primitive-gallery.json"],
+                  "tone": "magenta",
+                  "accentTone": "white"
+                },
+                {
+                  "id": "out",
+                  "title": "OUTPUT",
+                  "lines": ["browser canvas nonblank", "catalog state inspected", "terminal panes stable"],
+                  "tone": "amber",
+                  "accentTone": "green",
+                  "streaming": true
+                }
               ]
             }
           }

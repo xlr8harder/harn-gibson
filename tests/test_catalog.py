@@ -41,6 +41,7 @@ def test_default_visual_catalog_has_generic_and_cinematic_building_blocks() -> N
         "signal_scope",
         "tunnel_grid",
         "wire_landscape",
+        "terminal_wall",
         "data_vault",
         "black_ice",
         "svg_layer",
@@ -133,6 +134,10 @@ def test_default_visual_catalog_has_generic_and_cinematic_building_blocks() -> N
     assert wire_landscape is not None
     assert {"rows", "columns", "peaks", "focusPeakId", "packets", "speed", "label"} <= set(wire_landscape.props)
     assert {"gibson", "cinematic", "motion", "3d", "map"} <= set(wire_landscape.tags)
+    terminal_wall = catalog.entry("terminal_wall")
+    assert terminal_wall is not None
+    assert {"panels", "columns", "rows", "scan", "cursor", "speed", "seed"} <= set(terminal_wall.props)
+    assert {"gibson", "cinematic", "motion", "text", "terminal"} <= set(terminal_wall.tags)
     data_vault = catalog.entry("data_vault")
     assert data_vault is not None
     assert {"layers", "rings", "panels", "locks", "packets", "spin", "label", "seed"} <= set(data_vault.props)

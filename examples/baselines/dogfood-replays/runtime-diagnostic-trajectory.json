@@ -263,6 +263,7 @@
           "append_log",
           "primitive:data_rain",
           "primitive:glyph_layer",
+          "primitive:terminal_wall",
           "primitive:tunnel_grid",
           "primitive:wire_landscape",
           "primitive:data_vault",
@@ -296,7 +297,7 @@
           "renderer": "gibson-dogfood-showcase",
           "touchedFileCount": 1
         },
-        "mutationCount": 25,
+        "mutationCount": 26,
         "renderer": "gibson-dogfood-showcase",
         "requestCount": 1,
         "routes": [
@@ -308,6 +309,7 @@
           "status",
           "dogfood-rain",
           "dogfood-opcodes",
+          "dogfood-terminal-wall",
           "dogfood-tunnel",
           "dogfood-landscape",
           "dogfood-vault",
@@ -334,6 +336,7 @@
             "append_log",
             "primitive:data_rain",
             "primitive:glyph_layer",
+            "primitive:terminal_wall",
             "primitive:tunnel_grid",
             "primitive:wire_landscape",
             "primitive:data_vault",
@@ -367,7 +370,7 @@
             "renderer": "gibson-dogfood-showcase",
             "touchedFileCount": 0
           },
-          "mutationCount": 25,
+          "mutationCount": 26,
           "renderer": "gibson-dogfood-showcase",
           "requestCount": 1,
           "routes": [
@@ -379,6 +382,7 @@
             "status",
             "dogfood-rain",
             "dogfood-opcodes",
+            "dogfood-terminal-wall",
             "dogfood-tunnel",
             "dogfood-landscape",
             "dogfood-vault",
@@ -404,6 +408,7 @@
             "append_log",
             "primitive:data_rain",
             "primitive:glyph_layer",
+            "primitive:terminal_wall",
             "primitive:tunnel_grid",
             "primitive:wire_landscape",
             "primitive:data_vault",
@@ -436,7 +441,7 @@
             "renderer": "gibson-dogfood-showcase",
             "touchedFileCount": 1
           },
-          "mutationCount": 24,
+          "mutationCount": 25,
           "renderer": "gibson-dogfood-showcase",
           "requestCount": 1,
           "routes": [
@@ -448,6 +453,7 @@
             "status",
             "dogfood-rain",
             "dogfood-opcodes",
+            "dogfood-terminal-wall",
             "dogfood-tunnel",
             "dogfood-landscape",
             "dogfood-vault",
@@ -473,6 +479,7 @@
             "append_log",
             "primitive:data_rain",
             "primitive:glyph_layer",
+            "primitive:terminal_wall",
             "primitive:tunnel_grid",
             "primitive:wire_landscape",
             "primitive:data_vault",
@@ -506,7 +513,7 @@
             "renderer": "gibson-dogfood-showcase",
             "touchedFileCount": 2
           },
-          "mutationCount": 25,
+          "mutationCount": 26,
           "renderer": "gibson-dogfood-showcase",
           "requestCount": 1,
           "routes": [
@@ -518,6 +525,7 @@
             "status",
             "dogfood-rain",
             "dogfood-opcodes",
+            "dogfood-terminal-wall",
             "dogfood-tunnel",
             "dogfood-landscape",
             "dogfood-vault",
@@ -543,6 +551,7 @@
             "append_log",
             "primitive:data_rain",
             "primitive:glyph_layer",
+            "primitive:terminal_wall",
             "primitive:tunnel_grid",
             "primitive:wire_landscape",
             "primitive:data_vault",
@@ -575,7 +584,7 @@
             "renderer": "gibson-dogfood-showcase",
             "touchedFileCount": 0
           },
-          "mutationCount": 24,
+          "mutationCount": 25,
           "renderer": "gibson-dogfood-showcase",
           "requestCount": 1,
           "routes": [
@@ -587,6 +596,7 @@
             "status",
             "dogfood-rain",
             "dogfood-opcodes",
+            "dogfood-terminal-wall",
             "dogfood-tunnel",
             "dogfood-landscape",
             "dogfood-vault",
@@ -612,6 +622,7 @@
             "append_log",
             "primitive:data_rain",
             "primitive:glyph_layer",
+            "primitive:terminal_wall",
             "primitive:tunnel_grid",
             "primitive:wire_landscape",
             "primitive:data_vault",
@@ -645,7 +656,7 @@
             "renderer": "gibson-dogfood-showcase",
             "touchedFileCount": 1
           },
-          "mutationCount": 25,
+          "mutationCount": 26,
           "renderer": "gibson-dogfood-showcase",
           "requestCount": 1,
           "routes": [
@@ -657,6 +668,7 @@
             "status",
             "dogfood-rain",
             "dogfood-opcodes",
+            "dogfood-terminal-wall",
             "dogfood-tunnel",
             "dogfood-landscape",
             "dogfood-vault",
@@ -1658,6 +1670,78 @@
             100
           ],
           "yoyo": true
+        },
+        "region": "stage"
+      },
+      "dogfood-terminal-wall": {
+        "children": [],
+        "id": "dogfood-terminal-wall",
+        "kind": "terminal_wall",
+        "props": {
+          "accentTone": "white",
+          "columns": 2,
+          "cursor": true,
+          "opacity": 0.78,
+          "panels": [
+            {
+              "accentTone": "white",
+              "active": true,
+              "id": "event",
+              "lines": [
+                "SEQ 5",
+                "error: provider credential missing during dogfood retry",
+                "1 TOUCHED / 4 AREAS",
+                "ROUTE renderer_agent"
+              ],
+              "title": "AFTER::RUNTIME_ERROR",
+              "tone": "magenta"
+            },
+            {
+              "accentTone": "white",
+              "id": "command",
+              "lines": [
+                "harn event runtime_error",
+                "awaiting tool command field"
+              ],
+              "streaming": false,
+              "title": "COMMAND BUS",
+              "tone": "cyan"
+            },
+            {
+              "accentTone": "white",
+              "active": true,
+              "id": "files",
+              "lines": [
+                "src/tiny_tasks/cli.py"
+              ],
+              "title": "TOUCHED FILES",
+              "tone": "magenta"
+            },
+            {
+              "accentTone": "white",
+              "id": "output",
+              "lines": [
+                "provider credential missing during dogfood retry"
+              ],
+              "streaming": true,
+              "title": "OUTPUT TRACE",
+              "tone": "amber"
+            }
+          ],
+          "position": {
+            "x": 0.5,
+            "y": 0.62
+          },
+          "rows": 2,
+          "scan": true,
+          "seed": 44,
+          "size": {
+            "h": 0.24,
+            "w": 0.86
+          },
+          "speed": 0.78,
+          "title": "HOLLYWOOD TERMINAL WALL",
+          "tone": "magenta"
         },
         "region": "stage"
       },

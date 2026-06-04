@@ -305,6 +305,7 @@ def test_browser_display_renders_vector_symbols_and_data_rain() -> None:
                 page.wait_for_function("window.__gibsonTunnelState?.['gallery-tunnel']?.packetCount === 44")
                 page.wait_for_function("window.__gibsonWireLandscapeState?.['gallery-landscape']?.peakCount === 4")
                 page.wait_for_function("window.__gibsonCityState?.['gallery-city']?.cameraKeyframeCount === 3")
+                page.wait_for_function("window.__gibsonTerminalWallState?.['gallery-terminal']?.panelCount === 4")
                 page.wait_for_function("window.__gibsonDataRainState?.['gallery-rain']?.visibleColumns > 0")
                 page.wait_for_function("window.__gibsonTraceRouteState?.['gallery-trace']?.packetCount === 18")
                 vector_state = page.evaluate(
@@ -336,6 +337,9 @@ def test_browser_display_renders_vector_symbols_and_data_rain() -> None:
                 )
                 city_state = page.evaluate(
                     """() => window.__gibsonCityState["gallery-city"]"""
+                )
+                terminal_wall_state = page.evaluate(
+                    """() => window.__gibsonTerminalWallState["gallery-terminal"]"""
                 )
                 data_rain_state = page.evaluate(
                     """() => window.__gibsonDataRainState["gallery-rain"]"""
@@ -446,6 +450,18 @@ def test_browser_display_renders_vector_symbols_and_data_rain() -> None:
                 assert city_state["cameraKeyframeCount"] == 3
                 assert 0 <= city_state["cameraProgress"] <= 1
                 assert city_state["cameraScale"] > 0
+                assert terminal_wall_state == {
+                    "panelCount": 4,
+                    "lineCount": 11,
+                    "columnCount": 2,
+                    "rowCount": 2,
+                    "activePanelId": "evt",
+                    "streamingCount": 3,
+                    "tone": "green",
+                    "accentTone": "cyan",
+                    "hasScan": True,
+                    "hasCursor": True,
+                }
                 assert data_rain_state == {
                     "columns": 42,
                     "direction": "down",

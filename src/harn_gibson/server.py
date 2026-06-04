@@ -1502,6 +1502,7 @@ function drawScenePrimitives(scene, w, h, now) {
     "ribbon",
     "trace_route",
     "node_graph",
+    "terminal_wall",
     "glyph_layer",
   ];
   for (const kind of orderedKinds) {
@@ -1524,6 +1525,7 @@ function drawPrimitive(primitive, w, h, now) {
   if (primitive.kind === "node_graph") drawNodeGraph(primitive, w, h);
   if (primitive.kind === "trace_route") drawTraceRoute(primitive, w, h, now);
   if (primitive.kind === "ribbon") drawRibbon(primitive, w, h, now);
+  if (primitive.kind === "terminal_wall") drawTerminalWall(primitive, w, h, now);
   if (primitive.kind === "glyph_layer") drawGlyphLayer(primitive, w, h, now);
   if (primitive.kind === "data_rain") drawDataRain(primitive, w, h, now);
   if (primitive.kind === "particle_field") drawParticleField(primitive, w, h, now);
@@ -5227,6 +5229,197 @@ function drawGlyphLayer(primitive, w, h, now) {
       const alpha = 0.18 + (((col + row + drift) % 7) / 7) * 0.42;
       ctx.fillStyle = toneColor(tone, alpha);
       ctx.fillText(text[index], x, y);
+    }
+  }
+  ctx.restore();
+}
+
+function terminalWallRect(props, w, h) {
+  const size = props.size && typeof props.size === "object" ? props.size : {};
+  const position = props.position && typeof props.position === "object" ? props.position : {x: 0.5, y: 0.5};
+  const width = clamp(finiteNumber(size.w ?? size.width ?? props.width, 0.72), 0.08, 1.4) * w;
+  const height = clamp(finiteNumber(size.h ?? size.height ?? props.height, 0.32), 0.06, 1.2) * h;
+  const x = finiteNumber(position.x, 0.5) * w - width * 0.5;
+  const y = finiteNumber(position.y, 0.5) * h - height * 0.5;
+  return {x, y, width, height};
+}
+
+function terminalWallPanelLines(panel) {
+  const rawLines = Array.isArray(panel.lines)
+    ? panel.lines
+    : String(panel.text || panel.content || "").split(/\\r?\\n/);
+  return rawLines
+    .filter((line) => line !== null && line !== undefined)
+    .slice(0, 48)
+    .map((line) => String(line).replace(/\\s+/g, " ").trim())
+    .filter((line) => line.length > 0);
+}
+
+function terminalWallPanels(props) {
+  const rawPanels = Array.isArray(props.panels) && props.panels.length ? props.panels : [
+    {
+      id: "terminal-0",
+      title: props.title || "TERMINAL",
+      lines: Array.isArray(props.lines) ? props.lines : [props.text || "AWAITING HARN STREAM"],
+      active: true,
+    },
+  ];
+  return rawPanels
+    .filter((panel) => panel && typeof panel === "object")
+    .slice(0, 12)
+    .map((panel, index) => {
+      const id = String(panel.id || `panel-${index}`);
+      const lines = terminalWallPanelLines(panel);
+      return {
+        ...panel,
+        id,
+        title: String(panel.title || panel.label || id).slice(0, 28),
+        lines: lines.length ? lines : ["NO SIGNAL"],
+      };
+    });
+}
+
+function drawTerminalWall(primitive, w, h, now) {
+  const props = primitive.props || {};
+  const panels = terminalWallPanels(props);
+  if (!panels.length) return;
+  const rect = terminalWallRect(props, w, h);
+  const defaultColumns = Math.ceil(Math.sqrt(panels.length));
+  const columns = Math.max(1, Math.min(4, Math.floor(finiteNumber(props.columns, defaultColumns))));
+  const defaultRows = Math.ceil(panels.length / columns);
+  const rows = Math.max(1, Math.min(4, Math.floor(finiteNumber(props.rows, defaultRows))));
+  const tone = props.tone || "green";
+  const accentTone = props.accentTone || props.accent || "cyan";
+  const opacity = clamp(finiteNumber(props.opacity, 0.74), 0, 1);
+  const hasScan = props.scan !== false;
+  const hasCursor = props.cursor !== false;
+  const speed = Math.max(0, finiteNumber(props.speed, 0.72));
+  const seed = finiteNumber(props.seed, 0);
+  const gap = 8 * devicePixelRatio;
+  const panelWidth = Math.max(18 * devicePixelRatio, (rect.width - gap * (columns - 1)) / columns);
+  const panelHeight = Math.max(20 * devicePixelRatio, (rect.height - gap * (rows - 1)) / rows);
+  const fontSize = Math.max(7 * devicePixelRatio, finiteNumber(props.fontSize, 10) * devicePixelRatio);
+  const lineHeight = fontSize * 1.25;
+  const headerHeight = Math.max(16 * devicePixelRatio, lineHeight * 1.7);
+  const streamingCount = panels.filter((panel) => panel.streaming || panel.active).length;
+  const activePanel = panels.find((panel) => panel.active || panel.streaming) || panels[0];
+  const lineCount = panels.reduce((total, panel) => total + panel.lines.length, 0);
+
+  if (typeof window !== "undefined") {
+    window.__gibsonTerminalWallState = window.__gibsonTerminalWallState || {};
+    window.__gibsonTerminalWallState[primitive.id] = {
+      panelCount: panels.length,
+      lineCount,
+      columnCount: columns,
+      rowCount: rows,
+      activePanelId: activePanel.id,
+      streamingCount,
+      tone,
+      accentTone,
+      hasScan,
+      hasCursor,
+    };
+  }
+
+  ctx.save();
+  ctx.globalCompositeOperation = props.blend === "source-over" ? "source-over" : "screen";
+  ctx.lineJoin = "round";
+  ctx.lineCap = "round";
+  ctx.shadowColor = toneColor(tone, 0.58 * opacity);
+  ctx.shadowBlur = 16 * devicePixelRatio;
+  ctx.fillStyle = toneColor("white", 0.025 * opacity);
+  ctx.strokeStyle = toneColor(tone, 0.28 * opacity);
+  ctx.lineWidth = Math.max(1, 1.1 * devicePixelRatio);
+  ctx.strokeRect(rect.x, rect.y, rect.width, rect.height);
+  if (props.title) {
+    ctx.font = `${10.5 * devicePixelRatio}px ui-monospace, monospace`;
+    ctx.textAlign = "left";
+    ctx.textBaseline = "bottom";
+    ctx.fillStyle = toneColor("white", 0.68 * opacity);
+    ctx.fillText(String(props.title).slice(0, 42), rect.x + 7 * devicePixelRatio, rect.y - 4 * devicePixelRatio);
+  }
+
+  for (const [index, panel] of panels.entries()) {
+    const col = index % columns;
+    const row = Math.floor(index / columns);
+    if (row >= rows) continue;
+    const x = rect.x + col * (panelWidth + gap);
+    const y = rect.y + row * (panelHeight + gap);
+    const panelTone = panel.tone || (panel.active || panel.streaming ? accentTone : tone);
+    const panelAccent = panel.accentTone || accentTone;
+    const activity = panel.active || panel.streaming ? 1 : 0.36 + seededUnit(seed + index * 13.7) * 0.26;
+    const panelOpacity = opacity * clamp(finiteNumber(panel.opacity, 0.82), 0, 1);
+    const bodyTop = y + headerHeight;
+    const visibleLines = Math.max(1, Math.floor((panelHeight - headerHeight - 7 * devicePixelRatio) / lineHeight));
+    const scroll = panel.lines.length > visibleLines
+      ? Math.floor(now * speed * 0.0022 + seed + index * 3.1) % panel.lines.length
+      : 0;
+
+    ctx.fillStyle = toneColor(panelTone, 0.035 * panelOpacity + activity * 0.018);
+    ctx.fillRect(x, y, panelWidth, panelHeight);
+    ctx.strokeStyle = toneColor(panelTone, (0.25 + activity * 0.28) * panelOpacity);
+    ctx.lineWidth = Math.max(1, (0.8 + activity * 0.6) * devicePixelRatio);
+    ctx.strokeRect(x, y, panelWidth, panelHeight);
+
+    const headerGradient = ctx.createLinearGradient(x, y, x + panelWidth, y);
+    headerGradient.addColorStop(0, toneColor(panelTone, 0.14 * panelOpacity));
+    headerGradient.addColorStop(0.55, toneColor(panelAccent, 0.08 * panelOpacity));
+    headerGradient.addColorStop(1, toneColor(panelTone, 0.02));
+    ctx.fillStyle = headerGradient;
+    ctx.fillRect(x, y, panelWidth, headerHeight);
+
+    ctx.font = `${8.5 * devicePixelRatio}px ui-monospace, monospace`;
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = toneColor("white", (0.54 + activity * 0.24) * panelOpacity);
+    ctx.fillText(panel.title, x + 7 * devicePixelRatio, y + headerHeight * 0.52);
+
+    const meterWidth = panelWidth * (0.18 + 0.72 * seededUnit(seed + index * 5.2 + Math.floor(now / 260)));
+    ctx.fillStyle = toneColor(panelAccent, (0.20 + activity * 0.22) * panelOpacity);
+    ctx.fillRect(
+      x + panelWidth - meterWidth - 6 * devicePixelRatio,
+      y + headerHeight - 4 * devicePixelRatio,
+      meterWidth,
+      1.6 * devicePixelRatio
+    );
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(x + 5 * devicePixelRatio, bodyTop, panelWidth - 10 * devicePixelRatio, panelHeight - headerHeight);
+    ctx.clip();
+    ctx.font = `${fontSize}px ui-monospace, monospace`;
+    ctx.textBaseline = "top";
+    for (let lineIndex = 0; lineIndex < visibleLines; lineIndex++) {
+      const sourceIndex = (scroll + lineIndex) % panel.lines.length;
+      const text = panel.lines[sourceIndex];
+      const yLine = bodyTop + 4 * devicePixelRatio + lineIndex * lineHeight;
+      const isHot = sourceIndex === panel.lines.length - 1 && (panel.streaming || panel.active);
+      const prefix = isHot ? ">" : (lineIndex % 3 === 0 ? "$" : " ");
+      const maxChars = Math.max(8, Math.floor((panelWidth - 16 * devicePixelRatio) / (fontSize * 0.62)));
+      const displayText = `${prefix} ${text}`.slice(0, maxChars);
+      ctx.fillStyle = toneColor(isHot ? panelAccent : panelTone, (isHot ? 0.84 : 0.42) * panelOpacity);
+      ctx.fillText(displayText, x + 7 * devicePixelRatio, yLine);
+    }
+    ctx.restore();
+
+    if (hasScan) {
+      const scanY = bodyTop + ((now * speed * 0.026 + index * 19 + seed) % Math.max(1, panelHeight - headerHeight));
+      const scanGradient = ctx.createLinearGradient(x, scanY, x + panelWidth, scanY);
+      scanGradient.addColorStop(0, toneColor(panelAccent, 0));
+      scanGradient.addColorStop(0.5, toneColor(panelAccent, 0.20 * panelOpacity));
+      scanGradient.addColorStop(1, toneColor(panelAccent, 0));
+      ctx.fillStyle = scanGradient;
+      ctx.fillRect(x + 4 * devicePixelRatio, scanY, panelWidth - 8 * devicePixelRatio, 1.4 * devicePixelRatio);
+    }
+
+    if (hasCursor && (panel.active || panel.streaming) && Math.floor(now / 320 + index) % 2 === 0) {
+      ctx.fillStyle = toneColor("white", 0.76 * panelOpacity);
+      ctx.fillRect(
+        x + panelWidth - 12 * devicePixelRatio,
+        y + headerHeight * 0.36,
+        6 * devicePixelRatio,
+        8 * devicePixelRatio,
+      );
     }
   }
   ctx.restore();

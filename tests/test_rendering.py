@@ -702,6 +702,7 @@ def test_dogfood_showcase_renderer_returns_valid_event_reactive_plan(tmp_path: P
     assert primitive_kinds == {
         "dogfood-rain": "data_rain",
         "dogfood-opcodes": "glyph_layer",
+        "dogfood-terminal-wall": "terminal_wall",
         "dogfood-tunnel": "tunnel_grid",
         "dogfood-landscape": "wire_landscape",
         "dogfood-vault": "data_vault",
@@ -737,6 +738,16 @@ def test_dogfood_showcase_renderer_returns_valid_event_reactive_plan(tmp_path: P
     assert scene.state.primitives["dogfood-vault"].props["locks"] == 11
     assert scene.state.primitives["dogfood-vault"].props["packets"] > 32
     assert scene.state.primitives["dogfood-opcodes"].props["density"] == 0.295
+    assert scene.state.primitives["dogfood-terminal-wall"].props["panels"][1]["title"] == "COMMAND BUS"
+    assert scene.state.primitives["dogfood-terminal-wall"].props["panels"][1]["lines"][0] == (
+        "cat src/app.py docs/plan.md"
+    )
+    terminal_file_lines = scene.state.primitives["dogfood-terminal-wall"].props["panels"][2]["lines"]
+    assert "docs/plan.md" in terminal_file_lines
+    assert "src/app.py" in terminal_file_lines
+    assert scene.state.primitives["dogfood-terminal-wall"].props["panels"][3]["lines"] == [
+        "updated src/app.py and docs/plan.md"
+    ]
     assert scene.state.primitives["dogfood-control-graph"].props["focusNodeId"] == "file-0"
     assert scene.state.primitives["dogfood-command-ribbon"].props["labels"] == ["AFTER", "TOOL_RESULT"]
     assert scene.state.primitives["dogfood-route"].props["focusHopId"] == "target-0"

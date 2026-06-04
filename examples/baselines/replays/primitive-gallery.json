@@ -41,6 +41,7 @@
           "primitive:mesh",
           "primitive:tunnel_grid",
           "primitive:wire_landscape",
+          "primitive:terminal_wall",
           "primitive:svg_layer",
           "primitive:city_block",
           "primitive:trace_route",
@@ -60,7 +61,7 @@
           "renderer": "replay",
           "stepType": "mutations"
         },
-        "mutationCount": 19,
+        "mutationCount": 20,
         "renderer": "replay",
         "requestCount": 1,
         "routes": [
@@ -77,6 +78,7 @@
           "gallery-mesh",
           "gallery-tunnel",
           "gallery-landscape",
+          "gallery-terminal",
           "gallery-vector",
           "gallery-city",
           "gallery-trace",
@@ -103,6 +105,7 @@
             "primitive:mesh",
             "primitive:tunnel_grid",
             "primitive:wire_landscape",
+            "primitive:terminal_wall",
             "primitive:svg_layer",
             "primitive:city_block",
             "primitive:trace_route",
@@ -122,7 +125,7 @@
             "renderer": "replay",
             "stepType": "mutations"
           },
-          "mutationCount": 19,
+          "mutationCount": 20,
           "renderer": "replay",
           "requestCount": 1,
           "routes": [
@@ -139,6 +142,7 @@
             "gallery-mesh",
             "gallery-tunnel",
             "gallery-landscape",
+            "gallery-terminal",
             "gallery-vector",
             "gallery-city",
             "gallery-trace",
@@ -735,6 +739,80 @@
               "tone": "white"
             }
           ]
+        },
+        "region": "stage"
+      },
+      "gallery-terminal": {
+        "children": [],
+        "id": "gallery-terminal",
+        "kind": "terminal_wall",
+        "props": {
+          "accentTone": "cyan",
+          "columns": 2,
+          "cursor": true,
+          "opacity": 0.76,
+          "panels": [
+            {
+              "accentTone": "cyan",
+              "active": true,
+              "id": "evt",
+              "lines": [
+                "SEQ 900",
+                "primitive_gallery",
+                "renderer catalog online"
+              ],
+              "title": "EVENT",
+              "tone": "green"
+            },
+            {
+              "accentTone": "magenta",
+              "id": "cmd",
+              "lines": [
+                "uv run harn-gibson replay",
+                "--screenshot primitive-gallery.png"
+              ],
+              "streaming": true,
+              "title": "COMMAND",
+              "tone": "cyan"
+            },
+            {
+              "accentTone": "white",
+              "id": "files",
+              "lines": [
+                "src/harn_gibson/server.py",
+                "docs/renderer-agent.md",
+                "examples/replays/primitive-gallery.json"
+              ],
+              "title": "FILES",
+              "tone": "magenta"
+            },
+            {
+              "accentTone": "green",
+              "id": "out",
+              "lines": [
+                "browser canvas nonblank",
+                "catalog state inspected",
+                "terminal panes stable"
+              ],
+              "streaming": true,
+              "title": "OUTPUT",
+              "tone": "amber"
+            }
+          ],
+          "position": {
+            "x": 0.5,
+            "y": 0.6
+          },
+          "rows": 2,
+          "scan": true,
+          "seed": 818,
+          "size": {
+            "h": 0.22,
+            "w": 0.82
+          },
+          "speed": 0.72,
+          "title": "TERMINAL WALL",
+          "tone": "green"
         },
         "region": "stage"
       },

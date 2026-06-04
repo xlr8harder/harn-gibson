@@ -46,6 +46,7 @@ def main() -> None:
         },
         _upsert_data_rain(event_type, summary, tone, accent, sequence),
         _upsert_opcode_glyphs(event_type, summary, tone, accent, sequence, touched),
+        _upsert_terminal_wall(event, summary, entries, touched, tone, accent, sequence),
         _upsert_tunnel(event_type, tone, accent, sequence, touched),
         _upsert_wire_landscape(entries, touched, event_type, tone, accent, sequence),
         _upsert_data_vault(project_name, event_type, tone, accent, sequence, touched, entries),
@@ -191,6 +192,89 @@ def _upsert_opcode_glyphs(
                 "tone": tone,
                 "accentTone": accent,
                 "seed": sequence + 7,
+            },
+        },
+    }
+
+
+def _upsert_terminal_wall(
+    event: dict[str, Any],
+    summary: str,
+    entries: list[dict[str, Any]],
+    touched: list[dict[str, Any]],
+    tone: str,
+    accent: str,
+    sequence: int,
+) -> dict[str, Any]:
+    payload = _dict(event.get("payload"))
+    event_type = _text(event.get("eventType"), "event")
+    phase = _text(event.get("phase"), "lifecycle")
+    command_lines = _event_command_lines(payload)
+    output_lines = _event_output_lines(payload)
+    file_lines = [_clip(_text(item.get("path"), "file"), 56) for item in touched[:8]]
+    repo_lines = [
+        _clip(f"{_text(entry.get('path') or entry.get('name'), 'entry')}::{_text(entry.get('kind'), 'node')}", 56)
+        for entry in entries[:6]
+    ]
+    panels = [
+        {
+            "id": "event",
+            "title": f"{phase.upper()}::{event_type.upper()[:16]}",
+            "lines": [
+                f"SEQ {_int(event.get('sequence'), 0)}",
+                _clip(summary, 64),
+                f"{len(touched)} TOUCHED / {len(entries)} AREAS",
+                "ROUTE renderer_agent",
+            ],
+            "tone": tone,
+            "accentTone": accent,
+            "active": True,
+        },
+        {
+            "id": "command",
+            "title": "COMMAND BUS",
+            "lines": command_lines or [f"harn event {event_type}", "awaiting tool command field"],
+            "tone": "cyan",
+            "accentTone": accent,
+            "streaming": event_type in {"tool_call", "tool_result"},
+        },
+        {
+            "id": "files",
+            "title": "TOUCHED FILES",
+            "lines": file_lines or repo_lines or ["no touched-file signal", "sampling repo topology"],
+            "tone": "magenta" if touched else tone,
+            "accentTone": "white",
+            "active": bool(touched),
+        },
+        {
+            "id": "output",
+            "title": "OUTPUT TRACE",
+            "lines": output_lines or [_clip(summary, 58), "renderer coalescing event batch"],
+            "tone": "amber",
+            "accentTone": accent,
+            "streaming": event_type in {"stream", "tool_result", "runtime_error"},
+        },
+    ]
+    return {
+        "op": "upsert",
+        "primitive": {
+            "id": "dogfood-terminal-wall",
+            "kind": "terminal_wall",
+            "region": "stage",
+            "props": {
+                "title": "HOLLYWOOD TERMINAL WALL",
+                "position": {"x": 0.50, "y": 0.62},
+                "size": {"w": 0.86, "h": 0.24},
+                "columns": 2,
+                "rows": 2,
+                "panels": panels,
+                "tone": tone,
+                "accentTone": accent,
+                "opacity": 0.78,
+                "scan": True,
+                "cursor": True,
+                "speed": 0.78,
+                "seed": sequence + len(touched) * 19 + len(entries) * 5,
             },
         },
     }
@@ -1228,6 +1312,62 @@ def _entry_tone(kind: str, tone: str, accent: str) -> str:
     if kind == "symlink":
         return "amber"
     return tone if kind == "dir" else accent
+
+
+def _event_command_lines(payload: dict[str, Any]) -> list[str]:
+    command_source = _dict(payload.get("input"))
+    command = _text(
+        command_source.get("command")
+        or command_source.get("cmd")
+        or command_source.get("shellCommand")
+        or payload.get("command")
+        or payload.get("cmd"),
+        "",
+    )
+    if not command:
+        return []
+    return _wrapped_lines(command, 58)[:6]
+
+
+def _event_output_lines(payload: dict[str, Any]) -> list[str]:
+    lines: list[str] = []
+    content = payload.get("content")
+    if isinstance(content, str):
+        lines.extend(_wrapped_lines(content, 58))
+    for item in _list(content):
+        if isinstance(item, str):
+            lines.extend(_wrapped_lines(item, 58))
+        else:
+            text = _text(_dict(item).get("text"), "")
+            if text:
+                lines.extend(_wrapped_lines(text, 58))
+    for key in ("output", "stdout", "stderr"):
+        value = payload.get(key)
+        if isinstance(value, str):
+            lines.extend(_wrapped_lines(value, 58))
+    message = _text(payload.get("message") or payload.get("details") or payload.get("traceback"), "")
+    if message:
+        lines.extend(_wrapped_lines(message, 58))
+    return lines[:8]
+
+
+def _wrapped_lines(value: str, width: int) -> list[str]:
+    words = value.replace("\n", " ").split()
+    if not words:
+        return []
+    lines: list[str] = []
+    current = ""
+    for word in words:
+        if not current:
+            current = word[:width]
+        elif len(current) + len(word) + 1 <= width:
+            current = f"{current} {word}"
+        else:
+            lines.append(current)
+            current = word[:width]
+    if current:
+        lines.append(current)
+    return [_clip(line, width) for line in lines]
 
 
 def _entry_line_count(entry: dict[str, Any]) -> int:
