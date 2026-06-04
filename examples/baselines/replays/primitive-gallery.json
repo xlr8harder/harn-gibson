@@ -36,6 +36,7 @@
           "append_log",
           "primitive:hologram",
           "primitive:signal_scope",
+          "primitive:data_vault",
           "primitive:mesh",
           "primitive:tunnel_grid",
           "primitive:svg_layer",
@@ -57,7 +58,7 @@
           "renderer": "replay",
           "stepType": "mutations"
         },
-        "mutationCount": 16,
+        "mutationCount": 17,
         "renderer": "replay",
         "requestCount": 1,
         "routes": [
@@ -69,6 +70,7 @@
           "status",
           "gallery-hologram",
           "gallery-scope",
+          "gallery-vault",
           "gallery-mesh",
           "gallery-tunnel",
           "gallery-vector",
@@ -92,6 +94,7 @@
             "append_log",
             "primitive:hologram",
             "primitive:signal_scope",
+            "primitive:data_vault",
             "primitive:mesh",
             "primitive:tunnel_grid",
             "primitive:svg_layer",
@@ -113,7 +116,7 @@
             "renderer": "replay",
             "stepType": "mutations"
           },
-          "mutationCount": 16,
+          "mutationCount": 17,
           "renderer": "replay",
           "requestCount": 1,
           "routes": [
@@ -125,6 +128,7 @@
             "status",
             "gallery-hologram",
             "gallery-scope",
+            "gallery-vault",
             "gallery-mesh",
             "gallery-tunnel",
             "gallery-vector",
@@ -722,6 +726,30 @@
           "spokes": 18,
           "tone": "cyan",
           "twist": 0.54
+        },
+        "region": "stage"
+      },
+      "gallery-vault": {
+        "children": [],
+        "id": "gallery-vault",
+        "kind": "data_vault",
+        "props": {
+          "accentTone": "cyan",
+          "label": "DATA VAULT",
+          "layers": 4,
+          "locks": 5,
+          "opacity": 0.86,
+          "packets": 36,
+          "panels": 6,
+          "position": {
+            "x": 0.22,
+            "y": 0.35
+          },
+          "rings": 5,
+          "scale": 0.14,
+          "seed": 404,
+          "spin": 0.68,
+          "tone": "amber"
         },
         "region": "stage"
       },

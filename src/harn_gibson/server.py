@@ -1236,6 +1236,7 @@ function drawScenePrimitives(scene, w, h, now) {
     "data_rain",
     "tunnel_grid",
     "particle_field",
+    "data_vault",
     "mesh",
     "city_block",
     "hologram",
@@ -1259,6 +1260,7 @@ function drawPrimitive(primitive, w, h, now) {
   if (primitive.kind === "hologram") drawHologram(primitive, w, h, now);
   if (primitive.kind === "signal_scope") drawSignalScope(primitive, w, h, now);
   if (primitive.kind === "tunnel_grid") drawTunnelGrid(primitive, w, h, now);
+  if (primitive.kind === "data_vault") drawDataVault(primitive, w, h, now);
   if (primitive.kind === "svg_layer") drawSvgLayer(primitive, w, h, now);
   if (primitive.kind === "node_graph") drawNodeGraph(primitive, w, h);
   if (primitive.kind === "trace_route") drawTraceRoute(primitive, w, h, now);
@@ -2160,6 +2162,234 @@ function drawHologram(primitive, w, h, now) {
     ctx.fillStyle = toneColor("white", 0.86);
     ctx.shadowBlur = 8 * devicePixelRatio;
     ctx.fillText(String(props.label).slice(0, 18), 0, -scale * 0.92);
+  }
+
+  ctx.restore();
+}
+
+function dataVaultProjectPoint(x, y, z, size, phase) {
+  const yaw = phase;
+  const pitch = phase * 0.43;
+  const cy = Math.cos(yaw);
+  const sy = Math.sin(yaw);
+  const cx = Math.cos(pitch);
+  const sx = Math.sin(pitch);
+  const rx = x * cy - z * sy;
+  let rz = x * sy + z * cy;
+  const ry = y * cx - rz * sx;
+  rz = y * sx + rz * cx;
+  const perspective = 1 / Math.max(0.32, 1 + rz * 0.34);
+  return {
+    x: rx * size * perspective,
+    y: ry * size * 0.72 * perspective,
+    z: rz,
+    perspective,
+  };
+}
+
+function drawDataVaultCube(size, phase, layerScale, tone, accentTone, alpha) {
+  const vertices = [
+    [-1, -1, -1],
+    [1, -1, -1],
+    [1, 1, -1],
+    [-1, 1, -1],
+    [-1, -1, 1],
+    [1, -1, 1],
+    [1, 1, 1],
+    [-1, 1, 1],
+  ].map((point) => dataVaultProjectPoint(
+    point[0] * layerScale,
+    point[1] * layerScale,
+    point[2] * layerScale,
+    size,
+    phase,
+  ));
+  const edges = [
+    [0, 1],
+    [1, 2],
+    [2, 3],
+    [3, 0],
+    [4, 5],
+    [5, 6],
+    [6, 7],
+    [7, 4],
+    [0, 4],
+    [1, 5],
+    [2, 6],
+    [3, 7],
+  ];
+  const faces = [
+    [0, 1, 2, 3],
+    [4, 5, 6, 7],
+    [1, 5, 6, 2],
+  ];
+
+  for (const [faceIndex, face] of faces.entries()) {
+    const averageZ = face.reduce((total, index) => total + vertices[index].z, 0) / face.length;
+    const faceTone = faceIndex % 2 ? accentTone : tone;
+    ctx.fillStyle = toneColor(faceTone, alpha * (0.035 + Math.max(0, averageZ) * 0.012));
+    ctx.beginPath();
+    ctx.moveTo(vertices[face[0]].x, vertices[face[0]].y);
+    for (const index of face.slice(1)) ctx.lineTo(vertices[index].x, vertices[index].y);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  for (const [edgeIndex, edge] of edges.entries()) {
+    const left = vertices[edge[0]];
+    const right = vertices[edge[1]];
+    const depth = clamp((left.z + right.z + 2) / 4, 0, 1);
+    const edgeTone = edgeIndex % 3 === 0 ? accentTone : tone;
+    ctx.strokeStyle = toneColor(edgeTone, alpha * (0.26 + depth * 0.34));
+    ctx.lineWidth = Math.max(0.6, (0.8 + depth * 1.3) * devicePixelRatio);
+    ctx.beginPath();
+    ctx.moveTo(left.x, left.y);
+    ctx.lineTo(right.x, right.y);
+    ctx.stroke();
+  }
+
+  return vertices;
+}
+
+function drawDataVault(primitive, w, h, now) {
+  const props = primitive.props || {};
+  const center = normalizedPoint(props.position || {x: 0.5, y: 0.5}, w, h);
+  const size = clamp(finiteNumber(props.scale, 0.18), 0.04, 0.52) * Math.min(w, h);
+  const tone = props.tone || "cyan";
+  const accentTone = props.accentTone || props.accent || "magenta";
+  const opacity = clamp(finiteNumber(props.opacity, 0.82), 0, 1);
+  const layerCount = Math.max(1, Math.min(7, Math.floor(finiteNumber(props.layers, 3))));
+  const ringCount = Math.max(0, Math.min(12, Math.floor(finiteNumber(props.rings, 4))));
+  const panelCount = Math.max(0, Math.min(16, Math.floor(finiteNumber(props.panels, 4))));
+  const lockCount = Math.max(0, Math.min(16, Math.floor(finiteNumber(props.locks, 4))));
+  const packetCount = Math.max(0, Math.min(120, Math.floor(finiteNumber(props.packets, 28))));
+  const spin = finiteNumber(props.spin, 0.58);
+  const seed = finiteNumber(props.seed, 0);
+  const phase = now * 0.00032 * spin + seed * 0.041;
+  const hasLabel = Boolean(props.label);
+
+  if (typeof window !== "undefined") {
+    window.__gibsonDataVaultState = window.__gibsonDataVaultState || {};
+    window.__gibsonDataVaultState[primitive.id] = {
+      layerCount,
+      ringCount,
+      panelCount,
+      lockCount,
+      packetCount,
+      tone,
+      accentTone,
+      hasLabel,
+      phase: vectorRounded(((phase / (Math.PI * 2)) % 1 + 1) % 1),
+    };
+  }
+
+  ctx.save();
+  ctx.globalCompositeOperation = props.blend === "source-over" ? "source-over" : "screen";
+  ctx.globalAlpha *= opacity;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.translate(center.x, center.y);
+  ctx.shadowColor = toneColor(tone, 0.72);
+  ctx.shadowBlur = 18 * devicePixelRatio;
+
+  for (let ring = 0; ring < ringCount; ring++) {
+    const progress = (ring + 1) / Math.max(1, ringCount);
+    const radius = size * (0.38 + progress * 0.82);
+    const ringTone = ring % 2 ? accentTone : tone;
+    ctx.save();
+    ctx.rotate(phase * (ring % 2 ? -0.52 : 0.68) + ring * 0.34);
+    ctx.scale(1, 0.28 + progress * 0.16);
+    ctx.setLineDash([
+      (8 + ring * 2) * devicePixelRatio,
+      (7 + ring) * devicePixelRatio,
+    ]);
+    ctx.lineDashOffset = -now * 0.026 * (ring % 2 ? -1 : 1);
+    ctx.strokeStyle = toneColor(ringTone, 0.16 + progress * 0.24);
+    ctx.lineWidth = Math.max(0.6, (0.7 + progress * 1.2) * devicePixelRatio);
+    ctx.beginPath();
+    ctx.arc(0, 0, radius, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
+  ctx.setLineDash([]);
+
+  let coreVertices = [];
+  for (let layer = 0; layer < layerCount; layer++) {
+    const depth = layerCount <= 1 ? 1 : layer / (layerCount - 1);
+    const layerScale = 0.42 + depth * 0.58;
+    const layerTone = layer % 2 ? accentTone : tone;
+    const vertices = drawDataVaultCube(size, phase + layer * 0.16, layerScale, layerTone, tone, 0.92 - depth * 0.18);
+    if (layer === layerCount - 1) coreVertices = vertices;
+  }
+
+  for (let panel = 0; panel < panelCount; panel++) {
+    const angle = phase * 0.88 + panel * (Math.PI * 2 / Math.max(1, panelCount));
+    const x = Math.cos(angle) * size * 1.08;
+    const y = Math.sin(angle) * size * 0.48;
+    const width = size * (0.18 + seededUnit(seed + panel * 5.7) * 0.08);
+    const height = size * (0.10 + seededUnit(seed + panel * 8.1) * 0.06);
+    const panelTone = panel % 2 ? accentTone : tone;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(Math.sin(angle) * 0.28);
+    ctx.fillStyle = toneColor(panelTone, 0.065);
+    ctx.strokeStyle = toneColor(panelTone, 0.42);
+    ctx.lineWidth = Math.max(0.5, 0.85 * devicePixelRatio);
+    ctx.fillRect(-width * 0.5, -height * 0.5, width, height);
+    ctx.strokeRect(-width * 0.5, -height * 0.5, width, height);
+    const scan = ((now * 0.00024 + panel * 0.17 + seed * 0.003) % 1 - 0.5) * width;
+    ctx.strokeStyle = toneColor("white", 0.38);
+    ctx.beginPath();
+    ctx.moveTo(scan, -height * 0.42);
+    ctx.lineTo(scan, height * 0.42);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  for (let lock = 0; lock < lockCount; lock++) {
+    const angle = phase * (lock % 2 ? -1.18 : 1.34) + lock * (Math.PI * 2 / Math.max(1, lockCount));
+    const x = Math.cos(angle) * size * 0.72;
+    const y = Math.sin(angle) * size * 0.34;
+    const radius = size * (0.045 + seededUnit(seed + lock * 4.4) * 0.025);
+    const lockTone = lock % 3 === 0 ? "white" : (lock % 2 ? accentTone : tone);
+    ctx.strokeStyle = toneColor(lockTone, 0.58);
+    ctx.lineWidth = Math.max(0.7, 1.1 * devicePixelRatio);
+    ctx.beginPath();
+    ctx.arc(x, y, radius, Math.PI * 0.15, Math.PI * 1.85);
+    ctx.stroke();
+    ctx.strokeRect(x - radius * 0.58, y - radius * 0.06, radius * 1.16, radius * 0.92);
+  }
+
+  for (let packet = 0; packet < packetCount; packet++) {
+    const packetSeed = seed + packet * 11.37;
+    const angle = phase * (0.7 + seededUnit(packetSeed) * 1.4) + packet * 2.399;
+    const orbit = size * (0.48 + seededUnit(packetSeed + 2.1) * 0.55);
+    const x = Math.cos(angle) * orbit;
+    const y = Math.sin(angle * 0.74 + seededUnit(packetSeed + 3.2)) * orbit * 0.36;
+    const alpha = 0.18 + seededUnit(packetSeed + 5.5) * 0.48;
+    ctx.fillStyle = toneColor(packet % 5 === 0 ? "white" : (packet % 2 ? accentTone : tone), alpha);
+    ctx.beginPath();
+    ctx.arc(x, y, (0.85 + seededUnit(packetSeed + 8.8) * 1.8) * devicePixelRatio, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  if (coreVertices.length) {
+    ctx.fillStyle = toneColor("white", 0.66);
+    for (const point of coreVertices.filter((_, index) => index % 2 === 0)) {
+      ctx.beginPath();
+      ctx.arc(point.x, point.y, Math.max(1.1, 1.5 * point.perspective) * devicePixelRatio, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  if (hasLabel) {
+    ctx.font = `${Math.max(9, size * 0.092)}px ui-monospace, monospace`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.shadowColor = toneColor(accentTone, 0.82);
+    ctx.shadowBlur = 10 * devicePixelRatio;
+    ctx.fillStyle = toneColor("white", 0.84);
+    ctx.fillText(String(props.label).slice(0, 20), 0, -size * 1.18);
   }
 
   ctx.restore();

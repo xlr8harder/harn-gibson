@@ -244,6 +244,7 @@ def test_browser_display_renders_vector_symbols_and_data_rain() -> None:
                 page.wait_for_function("window.__gibsonVectorAnimationState?.['gallery-vector']?.keyframeCount === 6")
                 page.wait_for_function("window.__gibsonVectorEffectState?.['gallery-vector']?.filterCount === 2")
                 page.wait_for_function("window.__gibsonHologramState?.['gallery-hologram']?.ringCount === 6")
+                page.wait_for_function("window.__gibsonDataVaultState?.['gallery-vault']?.lockCount === 5")
                 page.wait_for_function("window.__gibsonSignalScopeState?.['gallery-scope']?.blipCount === 3")
                 page.wait_for_function("window.__gibsonTunnelState?.['gallery-tunnel']?.packetCount === 44")
                 page.wait_for_function("window.__gibsonCityState?.['gallery-city']?.cameraKeyframeCount === 3")
@@ -260,6 +261,9 @@ def test_browser_display_renders_vector_symbols_and_data_rain() -> None:
                 )
                 hologram_state = page.evaluate(
                     """() => window.__gibsonHologramState["gallery-hologram"]"""
+                )
+                data_vault_state = page.evaluate(
+                    """() => window.__gibsonDataVaultState["gallery-vault"]"""
                 )
                 signal_scope_state = page.evaluate(
                     """() => window.__gibsonSignalScopeState["gallery-scope"]"""
@@ -318,6 +322,18 @@ def test_browser_display_renders_vector_symbols_and_data_rain() -> None:
                     "accentTone": "magenta",
                     "hasScan": True,
                 }
+                assert data_vault_state == {
+                    "layerCount": 4,
+                    "ringCount": 5,
+                    "panelCount": 6,
+                    "lockCount": 5,
+                    "packetCount": 36,
+                    "tone": "amber",
+                    "accentTone": "cyan",
+                    "hasLabel": True,
+                    "phase": data_vault_state["phase"],
+                }
+                assert 0 <= data_vault_state["phase"] <= 1
                 assert signal_scope_state == {
                     "mode": "hybrid",
                     "ringCount": 5,

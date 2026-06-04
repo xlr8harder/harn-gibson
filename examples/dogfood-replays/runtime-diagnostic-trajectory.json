@@ -38,6 +38,10 @@
         "equals": "mesh"
       },
       {
+        "path": "primitives.dogfood-vault.kind",
+        "equals": "data_vault"
+      },
+      {
         "path": "primitives.dogfood-command-ribbon.kind",
         "equals": "ribbon"
       },

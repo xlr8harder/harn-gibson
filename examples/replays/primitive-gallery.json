@@ -31,6 +31,9 @@
       {"path": "primitives.gallery-hologram.kind", "equals": "hologram"},
       {"path": "primitives.gallery-hologram.props.rings", "equals": 6},
       {"path": "primitives.gallery-hologram.props.panels", "equals": 4},
+      {"path": "primitives.gallery-vault.kind", "equals": "data_vault"},
+      {"path": "primitives.gallery-vault.props.locks", "equals": 5},
+      {"path": "primitives.gallery-vault.props.packets", "equals": 36},
       {"path": "primitives.gallery-scope.kind", "equals": "signal_scope"},
       {"path": "primitives.gallery-scope.props.blips.1.label", "equals": "ICE"},
       {"path": "primitives.gallery-scope.props.waveforms.0.label", "equals": "CPU"},
@@ -134,6 +137,29 @@
                 {"label": "CPU", "tone": "cyan", "amplitude": 0.22, "frequency": 3.2, "phase": 0.18},
                 {"label": "IO", "tone": "white", "amplitude": 0.16, "frequency": 5.4, "phase": 0.48}
               ]
+            }
+          }
+        },
+        {
+          "op": "upsert",
+          "primitive": {
+            "id": "gallery-vault",
+            "kind": "data_vault",
+            "region": "stage",
+            "props": {
+              "label": "DATA VAULT",
+              "position": {"x": 0.22, "y": 0.35},
+              "scale": 0.14,
+              "tone": "amber",
+              "accentTone": "cyan",
+              "opacity": 0.86,
+              "layers": 4,
+              "rings": 5,
+              "panels": 6,
+              "locks": 5,
+              "packets": 36,
+              "spin": 0.68,
+              "seed": 404
             }
           }
         },

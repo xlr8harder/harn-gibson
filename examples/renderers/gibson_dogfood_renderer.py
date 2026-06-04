@@ -47,6 +47,7 @@ def main() -> None:
         _upsert_data_rain(event_type, summary, tone, accent, sequence),
         _upsert_opcode_glyphs(event_type, summary, tone, accent, sequence, touched),
         _upsert_tunnel(event_type, tone, accent, sequence, touched),
+        _upsert_data_vault(project_name, event_type, tone, accent, sequence, touched, entries),
         _upsert_ice_mesh(event_type, phase, tone, accent, sequence, touched),
         _upsert_scope(event_type, phase, tone, accent, sequence, touched),
         _upsert_control_graph(event_type, phase, tone, accent, sequence, touched),
@@ -268,6 +269,40 @@ def _upsert_scope(
                 ],
                 "label": _clip(f"{phase}:{event_type}", 20),
                 "seed": sequence + 29,
+            },
+        },
+    }
+
+
+def _upsert_data_vault(
+    project_name: str,
+    event_type: str,
+    tone: str,
+    accent: str,
+    sequence: int,
+    touched: list[dict[str, Any]],
+    entries: list[dict[str, Any]],
+) -> dict[str, Any]:
+    return {
+        "op": "upsert",
+        "primitive": {
+            "id": "dogfood-vault",
+            "kind": "data_vault",
+            "region": "stage",
+            "props": {
+                "label": _clip(project_name.upper().replace("_", "-"), 18),
+                "position": {"x": 0.36, "y": 0.42},
+                "scale": round(0.13 + min(0.045, len(entries) * 0.004 + len(touched) * 0.003), 3),
+                "tone": tone,
+                "accentTone": accent,
+                "opacity": 0.86,
+                "layers": 3 + min(3, len(entries) // 3),
+                "rings": 4 + min(6, len(touched) + sequence % 3),
+                "panels": 4 + min(8, len(entries) + len(touched)),
+                "locks": 3 + min(9, len(touched) * 2 + sequence % 4),
+                "packets": 32 + min(70, len(entries) * 4 + len(touched) * 8),
+                "spin": 0.62 if sequence % 2 else -0.52,
+                "seed": sequence + len(touched) * 19 + len(entries) * 5,
             },
         },
     }
