@@ -239,7 +239,7 @@ The renderer agent should not receive a full new transcript on every event. Use 
 - Current renderer state: compact `SceneState` summary, not screenshots.
 - Bounded repo topology: project root name, top-level directories/files, and an optional clipped file-tree sample.
 - Touched files: recent file paths from harn/tool events or coalesced batches, with operation hints when available.
-- World model: durable per-file activity plus command/outcome facts with observed provenance, schema `harn-gibson.world-model.v1`.
+- World model: durable per-file activity plus structured change, command, and outcome facts with observed provenance, schema `harn-gibson.world-model.v1`.
 - Recent harn events: the newest event batch plus short summaries of recent prior events.
 - Recent visualization context: recent render intents, render plans, and active animations/effects.
 - Visual continuity: compact anchors for currently visible stage objects, active animations, recent targets/effects, and style motifs.
@@ -248,9 +248,9 @@ The executable fixture for this is `RendererContext`. A renderer that only imple
 
 ## World Model
 
-The world model is the first framework-owned perception layer. `RendererContextBuilder` folds normalized harn events plus the current touched-file batch into an event-sourced `harn-gibson.world-model.v1` payload at `context.project.worldModel`. The first version tracks file entities, command entities, activity counts, phases, operation hints, source fields, command previews, command start/result pairing when possible, command status/duration, touched command paths, last observed outcome, recent tool/runtime outcomes, revision, truncation, and provenance. Every emitted fact is marked as observed with last-confirmed sequence and timestamp.
+The world model is the first framework-owned perception layer. `RendererContextBuilder` folds normalized harn events plus the current touched-file batch into an event-sourced `harn-gibson.world-model.v1` payload at `context.project.worldModel`. The first version tracks file entities, command entities, change entities, activity counts, phases, operation hints, source fields, command previews, command start/result pairing when possible, command status/duration, touched command paths, bounded added/removed line counts from structured edit/write/diff fields, last observed outcome, recent tool/runtime outcomes, revision, truncation, and provenance. Every emitted fact is marked as observed with last-confirmed sequence and timestamp.
 
-This is intentionally narrower than the long-term Gibson-world vision. It does not yet model symbols, imports, test-to-code relationships, semantic agent intent, attention, confidence beyond observed facts, or structured edit deltas. Those should be added as enrichable perception facts behind the same contract, not as one-off renderer prompt decoration.
+This is intentionally narrower than the long-term Gibson-world vision. It does not yet model symbols, imports, test-to-code relationships, semantic agent intent, attention, confidence beyond observed facts, or full semantic diffs beyond observed structured tool fields. Those should be added as enrichable perception facts behind the same contract, not as one-off renderer prompt decoration.
 
 After enough events or token growth, do a renderer compaction:
 

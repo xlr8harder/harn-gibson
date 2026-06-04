@@ -1410,7 +1410,7 @@ def test_renderer_context_builder_compaction_rolling_and_history(tmp_path: Path)
     assert compaction.project["worldModel"]["schema"] == "harn-gibson.world-model.v1"
     assert compaction.project["worldModel"]["revision"] == 1
     assert compaction.project["worldModel"]["entityCount"] == 3
-    assert compaction.project["worldModel"]["counts"] == {"files": 2, "commands": 1}
+    assert compaction.project["worldModel"]["counts"] == {"files": 2, "commands": 1, "changes": 0}
     assert compaction.project["worldModel"]["truncated"] is False
     assert [item["path"] for item in compaction.project["worldModel"]["entities"]["files"]] == [
         "src/harn_gibson/rendering.py",
@@ -1475,7 +1475,7 @@ def test_renderer_context_builder_compaction_rolling_and_history(tmp_path: Path)
     assert rolling.project["touchedFiles"]["truncated"] is True
     assert rolling.project["worldModel"]["revision"] == 1
     assert rolling.project["worldModel"]["entityCount"] == 3
-    assert rolling.project["worldModel"]["counts"] == {"files": 2, "commands": 1}
+    assert rolling.project["worldModel"]["counts"] == {"files": 2, "commands": 1, "changes": 0}
     assert rolling.catalog["mode"] == "summary"
     assert rolling.scene["schema"] == "harn-gibson.scene-summary.v1"
     assert rolling.scene["animationCount"] == 5
@@ -1659,7 +1659,7 @@ def test_renderer_context_repo_topology_handles_unavailable_root_and_duplicate_t
         "truncated": False,
     }
     assert context.project["worldModel"]["entityCount"] == 6
-    assert context.project["worldModel"]["counts"] == {"files": 4, "commands": 2}
+    assert context.project["worldModel"]["counts"] == {"files": 4, "commands": 2, "changes": 0}
     world_files = {item["path"]: item for item in context.project["worldModel"]["entities"]["files"]}
     world_commands = {item["id"]: item for item in context.project["worldModel"]["entities"]["commands"]}
     assert world_files["src/new_scene.py"]["activityCount"] == 2

@@ -16,6 +16,33 @@ _COMMAND_END_EVENTS = frozenset({"tool_result", "tool_execution_end"})
 _MAX_COMMAND_PREVIEW_CHARS = 240
 _MAX_COMMAND_SUMMARY_CHARS = 200
 _MAX_COMMAND_TOUCHED_PATHS = 12
+_MAX_CHANGE_SOURCE_CHARS = 120
+_PATH_KEYS = frozenset(
+    {
+        "destinationPath",
+        "file",
+        "fileName",
+        "filePath",
+        "filename",
+        "filepath",
+        "output",
+        "outputPath",
+        "path",
+        "sourcePath",
+        "targetPath",
+    }
+)
+_OLD_TEXT_KEYS = frozenset({"before", "old", "oldString", "oldText", "old_string", "old_text", "previous"})
+_NEW_TEXT_KEYS = frozenset(
+    {"after", "insert", "new", "newString", "newText", "new_string", "new_text", "replacement"}
+)
+_WRITE_TEXT_KEYS = frozenset({"body", "content", "data", "text"})
+_WRITE_TOOL_NAMES = frozenset({"create", "file_write", "write", "write_file"})
+_ADDED_LINE_KEYS = frozenset({"added", "addedLines", "added_lines", "linesAdded", "lines_added"})
+_REMOVED_LINE_KEYS = frozenset({"deleted", "linesRemoved", "lines_removed", "removed", "removedLines", "removed_lines"})
+_START_LINE_KEYS = frozenset({"line", "lineNumber", "lineStart", "line_start", "startLine", "start_line"})
+_END_LINE_KEYS = frozenset({"endLine", "end_line", "lineEnd", "line_end"})
+_DIFF_KEYS = frozenset({"diff", "patch", "unifiedDiff", "unified_diff"})
 
 
 @dataclass(frozen=True, slots=True)
@@ -23,6 +50,17 @@ class CommandObservation:
     tool_name: str
     command: str
     source: str
+
+
+@dataclass(frozen=True, slots=True)
+class ChangeObservation:
+    path: str
+    operation: str
+    source: str
+    added_lines: int
+    removed_lines: int
+    start_line: int | None = None
+    end_line: int | None = None
 
 
 @dataclass(slots=True)
@@ -190,6 +228,57 @@ class CommandWorldEntity:
         return payload
 
 
+@dataclass(frozen=True, slots=True)
+class ChangeWorldEntity:
+    id: str
+    path: str
+    operation: str
+    event_sequence: int
+    timestamp_ms: int
+    event_type: str
+    phase: str
+    source: str
+    tool_name: str | None = None
+    status: str = "observed"
+    added_lines: int = 0
+    removed_lines: int = 0
+    start_line: int | None = None
+    end_line: int | None = None
+    last_outcome: dict[str, Any] | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "id": self.id,
+            "kind": "change",
+            "path": self.path,
+            "operation": self.operation,
+            "status": self.status,
+            "eventSequence": self.event_sequence,
+            "timestampMs": self.timestamp_ms,
+            "eventType": self.event_type,
+            "phase": self.phase,
+            "source": self.source,
+            "provenance": {
+                "source": "observed",
+                "confidence": 1.0,
+                "lastConfirmedSequence": self.event_sequence,
+                "lastConfirmedMs": self.timestamp_ms,
+            },
+        }
+        if self.tool_name is not None:
+            payload["toolName"] = self.tool_name
+        payload["addedLines"] = self.added_lines
+        payload["removedLines"] = self.removed_lines
+        payload["magnitudeLines"] = max(0, self.added_lines) + max(0, self.removed_lines)
+        if self.start_line is not None:
+            payload["startLine"] = self.start_line
+        if self.end_line is not None:
+            payload["endLine"] = self.end_line
+        if self.last_outcome is not None:
+            payload["lastOutcome"] = dict(self.last_outcome)
+        return payload
+
+
 class WorldModel:
     """Accumulates durable facts derived from the agent event stream."""
 
@@ -197,6 +286,7 @@ class WorldModel:
         self.revision = 0
         self._files: dict[str, FileWorldEntity] = {}
         self._commands: dict[str, CommandWorldEntity] = {}
+        self._changes: dict[str, ChangeWorldEntity] = {}
         self._pending_commands: dict[tuple[str, str], list[str]] = {}
         self._recent_outcomes: list[dict[str, Any]] = []
         self._seen_event_keys: set[tuple[str, int, int, str]] = set()
@@ -240,6 +330,8 @@ class WorldModel:
             observation = command_from_event(event)
             if observation is not None:
                 self._record_command(event, observation, touches, outcome)
+            for change in changes_from_event(event, touches, outcome):
+                self._changes[change.id] = change
         if changed:
             self.revision += 1
 
@@ -247,20 +339,24 @@ class WorldModel:
         limit = max(0, max_entities)
         files = sorted(self._files.values(), key=lambda item: (-item.activity_count, item.path))
         commands = sorted(self._commands.values(), key=lambda item: (-item.last_sequence, item.id))
+        changes = sorted(self._changes.values(), key=lambda item: (-item.event_sequence, item.id))
         rendered_files = [entity.to_dict() for entity in files[:limit]]
         rendered_commands = [entity.to_dict() for entity in commands[:limit]]
+        rendered_changes = [entity.to_dict() for entity in changes[:limit]]
         return {
             "schema": WORLD_MODEL_SCHEMA,
             "revision": self.revision,
-            "entityCount": len(files) + len(commands),
-            "truncated": len(files) > limit or len(commands) > limit,
+            "entityCount": len(files) + len(commands) + len(changes),
+            "truncated": len(files) > limit or len(commands) > limit or len(changes) > limit,
             "counts": {
                 "files": len(files),
                 "commands": len(commands),
+                "changes": len(changes),
             },
             "entities": {
                 "files": rendered_files,
                 "commands": rendered_commands,
+                "changes": rendered_changes,
             },
             "recentOutcomes": list(self._recent_outcomes),
             "provenance": {
@@ -359,6 +455,30 @@ def command_from_event(event: GibsonEvent) -> CommandObservation | None:
     return CommandObservation(rendered_tool, command, source)
 
 
+def changes_from_event(
+    event: GibsonEvent,
+    touches: Sequence[Mapping[str, Any]],
+    outcome: Mapping[str, Any] | None,
+) -> tuple[ChangeWorldEntity, ...]:
+    delta = _change_delta_from_event(event)
+    if delta is None:
+        return ()
+    observations = [
+        ChangeObservation(
+            path=path,
+            operation=_change_operation(event, touch),
+            source=delta["source"],
+            added_lines=delta.get("addedLines"),
+            removed_lines=delta.get("removedLines"),
+            start_line=delta.get("startLine"),
+            end_line=delta.get("endLine"),
+        )
+        for touch in touches
+        if (path := str(touch.get("path") or ""))
+    ]
+    return tuple(_change_entity(event, observation, index, outcome) for index, observation in enumerate(observations))
+
+
 def _command_text_from_value(value: Any, key_path: tuple[str, ...]) -> tuple[str, str] | None:
     if isinstance(value, Mapping):
         for key, child in value.items():
@@ -376,6 +496,175 @@ def _command_text_from_value(value: Any, key_path: tuple[str, ...]) -> tuple[str
             if found is not None:
                 return found
     return None
+
+
+def _change_delta_from_event(event: GibsonEvent) -> dict[str, Any] | None:
+    explicit = _change_delta_from_value(event.payload, ())
+    if explicit is not None:
+        return explicit
+    if _tool_name(event) in _WRITE_TOOL_NAMES:
+        written = _write_text_delta_from_payload(event.payload)
+        if written is not None:
+            return written
+    return None
+
+
+def _change_delta_from_value(value: Any, key_path: tuple[str, ...]) -> dict[str, Any] | None:
+    if isinstance(value, Mapping):
+        explicit = _explicit_line_delta(value, key_path)
+        if explicit is not None:
+            return explicit
+        replacement = _replacement_delta(value, key_path)
+        if replacement is not None:
+            return replacement
+        diff = _diff_delta(value, key_path)
+        if diff is not None:
+            return diff
+        for key, child in value.items():
+            if str(key) in _PATH_KEYS:
+                continue
+            found = _change_delta_from_value(child, (*key_path, str(key)))
+            if found is not None:
+                return found
+        return None
+    if isinstance(value, list | tuple):
+        for index, child in enumerate(value):
+            found = _change_delta_from_value(child, (*key_path, str(index)))
+            if found is not None:
+                return found
+    return None
+
+
+def _explicit_line_delta(value: Mapping[str, Any], key_path: tuple[str, ...]) -> dict[str, Any] | None:
+    added = _int_from_keys(value, _ADDED_LINE_KEYS)
+    removed = _int_from_keys(value, _REMOVED_LINE_KEYS)
+    if added is None and removed is None:
+        return None
+    payload: dict[str, Any] = {
+        "source": _source_path(key_path, "lineCounts"),
+        "addedLines": max(0, added or 0),
+        "removedLines": max(0, removed or 0),
+    }
+    start_line = _int_from_keys(value, _START_LINE_KEYS)
+    end_line = _int_from_keys(value, _END_LINE_KEYS)
+    if start_line is not None:
+        payload["startLine"] = start_line
+    if end_line is not None:
+        payload["endLine"] = end_line
+    return payload
+
+
+def _replacement_delta(value: Mapping[str, Any], key_path: tuple[str, ...]) -> dict[str, Any] | None:
+    old_item = _string_item_for_keys(value, _OLD_TEXT_KEYS)
+    new_item = _string_item_for_keys(value, _NEW_TEXT_KEYS)
+    if old_item is None or new_item is None:
+        return None
+    old_key, old_text = old_item
+    new_key, new_text = new_item
+    source = f"{_source_path(key_path, old_key)}/{_source_path(key_path, new_key)}"
+    payload: dict[str, Any] = {
+        "source": _clip_text(source, _MAX_CHANGE_SOURCE_CHARS),
+        "addedLines": _line_count(new_text),
+        "removedLines": _line_count(old_text),
+    }
+    start_line = _int_from_keys(value, _START_LINE_KEYS)
+    end_line = _int_from_keys(value, _END_LINE_KEYS)
+    if start_line is not None:
+        payload["startLine"] = start_line
+    if end_line is not None:
+        payload["endLine"] = end_line
+    return payload
+
+
+def _diff_delta(value: Mapping[str, Any], key_path: tuple[str, ...]) -> dict[str, Any] | None:
+    item = _string_item_for_keys(value, _DIFF_KEYS)
+    if item is None:
+        return None
+    key, diff = item
+    added = 0
+    removed = 0
+    for line in diff.splitlines():
+        if line.startswith("+++") or line.startswith("---"):
+            continue
+        if line.startswith("+"):
+            added += 1
+        elif line.startswith("-"):
+            removed += 1
+    if added == 0 and removed == 0:
+        return None
+    return {
+        "source": _source_path(key_path, key),
+        "addedLines": added,
+        "removedLines": removed,
+    }
+
+
+def _write_text_delta_from_payload(payload: Mapping[str, Any]) -> dict[str, Any] | None:
+    for key in ("input", "args"):
+        value = payload.get(key)
+        found = _write_text_item(value, (key,))
+        if found is not None:
+            source, text = found
+            return {"source": source, "addedLines": _line_count(text), "removedLines": 0}
+    return None
+
+
+def _write_text_item(value: Any, key_path: tuple[str, ...]) -> tuple[str, str] | None:
+    if isinstance(value, Mapping):
+        for key, child in value.items():
+            rendered_key = str(key)
+            if rendered_key in _WRITE_TEXT_KEYS and isinstance(child, str):
+                return (_source_path(key_path, rendered_key), child)
+            found = _write_text_item(child, (*key_path, rendered_key))
+            if found is not None:
+                return found
+        return None
+    if isinstance(value, list | tuple):
+        for index, child in enumerate(value):
+            found = _write_text_item(child, (*key_path, str(index)))
+            if found is not None:
+                return found
+    return None
+
+
+def _change_entity(
+    event: GibsonEvent,
+    observation: ChangeObservation,
+    index: int,
+    outcome: Mapping[str, Any] | None,
+) -> ChangeWorldEntity:
+    rendered_tool = event.payload.get("toolName")
+    tool_name = rendered_tool if isinstance(rendered_tool, str) and rendered_tool else None
+    status = (
+        str(outcome.get("status"))
+        if outcome is not None
+        else ("planned" if event.phase == "before" else "observed")
+    )
+    last_outcome = None
+    if outcome is not None:
+        last_outcome = {
+            "status": outcome.get("status"),
+            "eventSequence": outcome.get("eventSequence"),
+            "eventType": outcome.get("eventType"),
+            "toolName": outcome.get("toolName"),
+        }
+    return ChangeWorldEntity(
+        id=f"change:{event.sequence}:{index}",
+        path=observation.path,
+        operation=observation.operation,
+        event_sequence=event.sequence,
+        timestamp_ms=event.timestamp_ms,
+        event_type=event.event_type,
+        phase=event.phase,
+        source=observation.source,
+        tool_name=tool_name,
+        status=status,
+        added_lines=observation.added_lines,
+        removed_lines=observation.removed_lines,
+        start_line=observation.start_line,
+        end_line=observation.end_line,
+        last_outcome=last_outcome,
+    )
 
 
 def _touched_files_by_sequence(touched_files: Mapping[str, Any]) -> dict[int, tuple[Mapping[str, Any], ...]]:
@@ -402,6 +691,27 @@ def _operation_for_event(event: GibsonEvent) -> str:
     return f"{event.event_type}:{event.phase}"
 
 
+def _change_operation(event: GibsonEvent, touch: Mapping[str, Any]) -> str:
+    tool_name = _tool_name(event)
+    if tool_name in _WRITE_TOOL_NAMES:
+        return "write"
+    if "patch" in tool_name:
+        return "patch"
+    if "edit" in tool_name or "replace" in tool_name:
+        return "edit"
+    operation = touch.get("operation")
+    if isinstance(operation, str) and operation:
+        return operation.split(":", 1)[0]
+    return event.event_type
+
+
+def _tool_name(event: GibsonEvent) -> str:
+    tool_name = event.payload.get("toolName")
+    if isinstance(tool_name, str) and tool_name:
+        return tool_name.lower()
+    return event.event_type.lower()
+
+
 def _append_unique(items: list[str], value: str) -> None:
     if value and value not in items:
         items.append(value)
@@ -413,13 +723,45 @@ def _clip_text(value: str, limit: int) -> str:
     return value[: limit - 1] + "..."
 
 
+def _source_path(key_path: tuple[str, ...], leaf: str) -> str:
+    if key_path:
+        return _clip_text(".".join((*key_path, leaf)), _MAX_CHANGE_SOURCE_CHARS)
+    return leaf
+
+
+def _string_item_for_keys(value: Mapping[str, Any], keys: frozenset[str]) -> tuple[str, str] | None:
+    for key in value:
+        rendered_key = str(key)
+        if rendered_key in keys and isinstance(value[key], str):
+            return rendered_key, value[key]
+    return None
+
+
+def _int_from_keys(value: Mapping[str, Any], keys: frozenset[str]) -> int | None:
+    for key in value:
+        rendered_key = str(key)
+        item = value[key]
+        if rendered_key in keys and isinstance(item, int) and not isinstance(item, bool):
+            return item
+    return None
+
+
+def _line_count(value: str) -> int:
+    if not value:
+        return 0
+    return value.count("\n") + (0 if value.endswith("\n") else 1)
+
+
 __all__ = [
     "WORLD_MODEL_SCHEMA",
+    "ChangeObservation",
+    "ChangeWorldEntity",
     "CommandObservation",
     "CommandWorldEntity",
     "FileWorldEntity",
     "WorldFactSource",
     "WorldModel",
+    "changes_from_event",
     "command_from_event",
     "outcome_from_event",
 ]

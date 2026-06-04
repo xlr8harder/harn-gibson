@@ -1,7 +1,13 @@
 from __future__ import annotations
 
 from harn_gibson.events import GibsonEvent
-from harn_gibson.world_model import WORLD_MODEL_SCHEMA, WorldModel, command_from_event, outcome_from_event
+from harn_gibson.world_model import (
+    WORLD_MODEL_SCHEMA,
+    WorldModel,
+    changes_from_event,
+    command_from_event,
+    outcome_from_event,
+)
 
 
 def test_world_model_tracks_file_activity_outcomes_and_provenance() -> None:
@@ -61,7 +67,7 @@ def test_world_model_tracks_file_activity_outcomes_and_provenance() -> None:
     assert payload["schema"] == WORLD_MODEL_SCHEMA
     assert payload["revision"] == 1
     assert payload["entityCount"] == 2
-    assert payload["counts"] == {"files": 1, "commands": 1}
+    assert payload["counts"] == {"files": 1, "commands": 1, "changes": 0}
     assert payload["truncated"] is False
     assert payload["provenance"] == {
         "source": "observed",
@@ -174,7 +180,7 @@ def test_world_model_tracks_command_entities_and_command_extraction() -> None:
     payload = model.to_dict(max_entities=2)
     commands = {item["id"]: item for item in payload["entities"]["commands"]}
 
-    assert payload["counts"] == {"files": 14, "commands": 4}
+    assert payload["counts"] == {"files": 14, "commands": 4, "changes": 0}
     assert payload["entityCount"] == 18
     assert payload["truncated"] is True
     assert list(commands) == ["command:5", "command:4"]
@@ -211,6 +217,180 @@ def test_world_model_tracks_command_entities_and_command_extraction() -> None:
     assert nested_observation.command == "make test"
     assert nested_observation.source == "args.0.shellCommand"
     assert command_from_event(empty_command) is None
+
+
+def test_world_model_tracks_structured_change_facts() -> None:
+    model = WorldModel()
+    edit_call = GibsonEvent.from_raw(
+        {
+            "type": "tool_call",
+            "toolName": "edit",
+            "input": {
+                "filePath": "src/app.py",
+                "old_string": "one\ntwo\n",
+                "new_string": "one\n2\nthree\n",
+                "startLine": 4,
+                "endLine": 5,
+            },
+        },
+        1,
+        timestamp_ms=100,
+    )
+    write_call = GibsonEvent.from_raw(
+        {"type": "tool_call", "toolName": "write", "input": {"filePath": "src/new.py", "content": "a\nb\n"}},
+        2,
+        timestamp_ms=200,
+    )
+    patch_result = GibsonEvent.from_raw(
+        {
+            "type": "tool_result",
+            "toolName": "patch",
+            "isError": True,
+            "filePath": "src/app.py",
+            "patch": "--- a/src/app.py\n+++ b/src/app.py\n context\n-old\n+new\n+two",
+        },
+        3,
+        timestamp_ms=300,
+    )
+    explicit_stats = GibsonEvent.from_raw(
+        {
+            "type": "tool_result",
+            "toolName": "edit",
+            "input": {"filePath": "src/stats.py", "addedLines": 3, "removedLines": 1, "lineStart": 10, "lineEnd": 12},
+        },
+        4,
+        timestamp_ms=400,
+    )
+    nested_write = GibsonEvent.from_raw(
+        {"type": "tool_call", "toolName": "write", "args": [{"path": "docs/nested.md", "text": "title\nbody"}]},
+        5,
+        timestamp_ms=500,
+    )
+    no_delta = GibsonEvent.from_raw({"type": "tool_call", "toolName": "edit", "input": {"filePath": "src/noop.py"}}, 6)
+    touched_files = {
+        "files": [
+            {"path": "src/app.py", "operation": "edit:before", "firstSequence": 1, "lastSequence": 1},
+            {"path": "src/new.py", "operation": "write:before", "firstSequence": 2, "lastSequence": 2},
+            {"path": "src/app.py", "operation": "patch:after", "firstSequence": 3, "lastSequence": 3},
+            {"path": "src/stats.py", "operation": "edit:after", "firstSequence": 4, "lastSequence": 4},
+            {"path": "docs/nested.md", "operation": "write:before", "firstSequence": 5, "lastSequence": 5},
+            {"path": "src/noop.py", "operation": "edit:before", "firstSequence": 6, "lastSequence": 6},
+        ]
+    }
+
+    model.apply_batch((edit_call, write_call, patch_result, explicit_stats, nested_write, no_delta), touched_files)
+    payload = model.to_dict(max_entities=10)
+    changes = {item["id"]: item for item in payload["entities"]["changes"]}
+
+    assert payload["counts"] == {"files": 5, "commands": 0, "changes": 5}
+    assert payload["entityCount"] == 10
+    assert changes["change:1:0"] == {
+        "id": "change:1:0",
+        "kind": "change",
+        "path": "src/app.py",
+        "operation": "edit",
+        "status": "planned",
+        "eventSequence": 1,
+        "timestampMs": 100,
+        "eventType": "tool_call",
+        "phase": "before",
+        "source": "input.old_string/input.new_string",
+        "toolName": "edit",
+        "addedLines": 3,
+        "removedLines": 2,
+        "magnitudeLines": 5,
+        "startLine": 4,
+        "endLine": 5,
+        "provenance": {
+            "source": "observed",
+            "confidence": 1.0,
+            "lastConfirmedSequence": 1,
+            "lastConfirmedMs": 100,
+        },
+    }
+    assert changes["change:2:0"]["operation"] == "write"
+    assert changes["change:2:0"]["source"] == "input.content"
+    assert changes["change:2:0"]["addedLines"] == 2
+    assert changes["change:2:0"]["removedLines"] == 0
+    assert changes["change:3:0"]["operation"] == "patch"
+    assert changes["change:3:0"]["status"] == "error"
+    assert changes["change:3:0"]["lastOutcome"]["status"] == "error"
+    assert changes["change:3:0"]["addedLines"] == 2
+    assert changes["change:3:0"]["removedLines"] == 1
+    assert changes["change:4:0"]["source"] == "input.lineCounts"
+    assert changes["change:4:0"]["status"] == "ok"
+    assert changes["change:4:0"]["startLine"] == 10
+    assert changes["change:4:0"]["endLine"] == 12
+    assert changes["change:5:0"]["path"] == "docs/nested.md"
+    assert changes["change:5:0"]["source"] == "args.0.text"
+    assert changes_from_event(no_delta, ({"path": "src/noop.py"},), None) == ()
+
+
+def test_world_model_change_facts_handle_optional_shapes() -> None:
+    model = WorldModel()
+    custom = GibsonEvent.from_raw(
+        {"type": "tool_call", "input": {"filePath": "src/custom.py", "old": "a", "new": "b"}},
+        1,
+    )
+    fallback = GibsonEvent.from_raw(
+        {"type": "tool_call", "input": {"filePath": "src/fallback.py", "old": "a", "new": "b"}},
+        2,
+    )
+    explicit_counts = GibsonEvent.from_raw(
+        {"type": "tool_result", "toolName": "edit", "input": {"filePath": "src/counts.py", "addedLines": 1}},
+        3,
+    )
+    empty_write = GibsonEvent.from_raw(
+        {"type": "tool_call", "toolName": "write", "input": {"filePath": "src/empty.py", "content": ""}},
+        4,
+    )
+    list_write = GibsonEvent.from_raw(
+        {"type": "tool_call", "toolName": "write", "args": [{"meta": {}}, {"wrapper": {"text": "later"}}]},
+        5,
+    )
+    nested_replace = GibsonEvent.from_raw(
+        {
+            "type": "tool_call",
+            "toolName": "edit",
+            "input": {"edits": [{"filePath": "src/nested.py", "old": "x", "new": "y"}]},
+        },
+        6,
+    )
+    touched_files = {
+        "files": [
+            {"path": "src/custom.py", "operation": "custom:before", "firstSequence": 1, "lastSequence": 1},
+            {"path": "src/fallback.py", "firstSequence": 2, "lastSequence": 2},
+            {"path": "src/counts.py", "operation": "edit:after", "firstSequence": 3, "lastSequence": 3},
+            {"path": "src/empty.py", "operation": "write:before", "firstSequence": 4, "lastSequence": 4},
+            {"path": "src/list.py", "operation": "write:before", "firstSequence": 5, "lastSequence": 5},
+            {"path": "src/nested.py", "operation": "edit:before", "firstSequence": 6, "lastSequence": 6},
+        ]
+    }
+
+    model.apply_batch((custom, fallback, explicit_counts, empty_write, list_write, nested_replace), touched_files)
+    changes = {item["id"]: item for item in model.to_dict(max_entities=10)["entities"]["changes"]}
+
+    assert "toolName" not in changes["change:1:0"]
+    assert changes["change:1:0"]["operation"] == "custom"
+    assert changes["change:2:0"]["operation"] == "tool_call"
+    assert changes["change:3:0"]["addedLines"] == 1
+    assert changes["change:3:0"]["removedLines"] == 0
+    assert "startLine" not in changes["change:3:0"]
+    assert "endLine" not in changes["change:3:0"]
+    assert changes["change:4:0"]["magnitudeLines"] == 0
+    assert changes["change:5:0"]["source"] == "args.1.wrapper.text"
+    assert changes["change:6:0"]["source"] == "input.edits.0.old/input.edits.0.new"
+
+    no_op_diff = GibsonEvent.from_raw(
+        {"type": "tool_result", "toolName": "patch", "patch": "--- a\n+++ b\n context"},
+        7,
+    )
+    empty_write_args = GibsonEvent.from_raw(
+        {"type": "tool_call", "toolName": "write", "args": [{"meta": {}}]},
+        8,
+    )
+    assert changes_from_event(no_op_diff, ({"path": "src/noop.py"},), outcome_from_event(no_op_diff)) == ()
+    assert changes_from_event(empty_write_args, ({"path": "src/noop.py"},), None) == ()
 
 
 def test_world_model_clips_long_command_previews() -> None:
