@@ -1601,17 +1601,32 @@ def _replay_step_timestamps(steps: Sequence[Any]) -> tuple[int | None, ...]:
     return tuple(_replay_step_timestamp_ms(step) for step in steps)
 
 
-_QUIET_EVENT_TYPES = frozenset({"message_update", "tool_execution_update"})
+_SALIENT_EVENT_TYPES = frozenset({
+    "tool_call",
+    "tool_result",
+    "tool_execution_start",
+    "tool_execution_end",
+    "user_bash",
+    "runtime_error",
+    "input",
+    "session_start",
+    "session_shutdown",
+    "agent_start",
+    "agent_end",
+    "harn_exit",
+})
 
 
 def _replay_quiet_flags(steps: Sequence[Any]) -> tuple[bool, ...]:
-    """Low-salience steps (streamed message/tool chunks) that recorded demos
-    can fast-forward through without losing any visible beat."""
+    """Salience is an allowlist: only steps that produce a visible beat keep
+    their recorded pacing. Streamed chunks AND administrative lifecycle events
+    (context, provider round-trips, message boundaries) fast-forward --
+    otherwise the model's first-turn latency stacks into dead air."""
     flags = []
     for step in steps:
         event = step.get("event") if isinstance(step, Mapping) else None
         event_type = str(event.get("eventType") or "") if isinstance(event, Mapping) else ""
-        flags.append(event_type in _QUIET_EVENT_TYPES)
+        flags.append(bool(event_type) and event_type not in _SALIENT_EVENT_TYPES)
     return tuple(flags)
 
 

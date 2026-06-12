@@ -199,9 +199,13 @@ def test_quiet_step_pacing_fast_forwards_streamed_chunks() -> None:
         {"type": "event", "event": {"eventType": "message_update"}},
         {"type": "event", "event": {"eventType": "tool_result"}},
         "not-a-mapping",
+        # administrative lifecycle events are quiet too: provider latency
+        # between them must not stack into dead air
+        {"type": "event", "event": {"eventType": "before_provider_request"}},
+        {"type": "event", "event": {"eventType": "context"}},
     ]
     flags = _replay_quiet_flags(steps)
-    assert flags == (False, True, False, False)
+    assert flags == (False, True, False, False, True, True)
 
     timestamps = [0, 8000, 16000, 24000]
     # next step is a quiet chunk: the tighter cap applies
