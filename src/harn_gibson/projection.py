@@ -189,7 +189,7 @@ class ProjectionEngine:
             "nodes": [nodes[node_id] for node_id in sorted(nodes)],
             "edges": edges,
             "effects": [dict(effect) for effect in self._effects],
-            "camera": self._camera(focus, root_id, nodes),
+            "camera": self._camera(focus, root_id, nodes, blast, mood),
             "hud": self._hud(perception, entities, relations, events, mood, focus),
             # layers laid out by the force solver: the browser runs a live
             # spring-mass simulation for these between updates, anchored to
@@ -529,14 +529,30 @@ class ProjectionEngine:
             return {"name": "work", "label": "AGENT ACTIVE", "tone": "base", "alert": False}
         return {"name": "idle", "label": "STANDBY", "tone": "warn", "alert": False}
 
-    def _camera(self, focus: str, root_id: str, nodes: Mapping[str, Mapping[str, Any]]) -> dict[str, Any]:
-        follow = str(_dict(self.spec.get("camera")).get("follow") or "")
-        pin = str(_dict(self.spec.get("camera")).get("target") or "")
+    def _camera(
+        self,
+        focus: str,
+        root_id: str,
+        nodes: Mapping[str, Mapping[str, Any]],
+        blast: set[str],
+        mood: Mapping[str, Any],
+    ) -> dict[str, Any]:
+        """Camera output is a set of points of interest; the browser frames
+        their bounding box (so an alert keeps every implicated node on
+        screen), gliding and zooming to fit."""
+        spec_camera = _dict(self.spec.get("camera"))
+        pin = str(spec_camera.get("target") or "")
         if pin and pin in nodes:
-            return {"target": pin, "zoom": 1.0}
-        if follow == "focused_on" and focus in nodes:
-            return {"target": focus, "zoom": 1.12}
-        return {"target": root_id, "zoom": 1.0}
+            return {"target": pin, "targets": [pin]}
+        targets: list[str] = []
+        if mood.get("alert"):
+            targets.extend(target for target in sorted(blast) if target in nodes)
+        follow = str(spec_camera.get("follow") or "")
+        if follow == "focused_on" and focus in nodes and focus not in targets:
+            targets.append(focus)
+        if not targets and root_id in nodes:
+            targets.append(root_id)
+        return {"target": targets[0] if targets else "", "targets": targets}
 
     def _hud(
         self,

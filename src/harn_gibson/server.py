@@ -419,7 +419,12 @@ def make_handler(state: GibsonServerState) -> type[BaseHTTPRequestHandler]:
         def do_GET(self) -> None:
             request_path = urlsplit(self.path).path
             if request_path in {"/", "/index.html"}:
-                self._write(HTTPStatus.OK, HTML, "text/html; charset=utf-8")
+                kicker = _escape_html(state.project_name.upper() or "HARN DISPLAY")
+                self._write(
+                    HTTPStatus.OK,
+                    HTML.replace("__HARN_GIBSON_KICKER__", kicker),
+                    "text/html; charset=utf-8",
+                )
                 return
             if request_path == "/assets/app.css":
                 self._write(HTTPStatus.OK, CSS, "text/css; charset=utf-8")
@@ -609,6 +614,10 @@ def health_payload(state: GibsonServerState) -> dict[str, Any]:
         "inputBridge": state.input_bridge.snapshot(pending_inputs=state.inputs.pending_count()),
         "streams": state.router.stream_snapshot(),
     }
+
+
+def _escape_html(text: str) -> str:
+    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
 def projection_status_payload(state: GibsonServerState) -> dict[str, Any]:
@@ -877,7 +886,7 @@ HTML = """<!doctype html>
         <canvas id="grid" width="1400" height="780"></canvas>
         <div class="mast">
           <div>
-            <p class="kicker">HARN DISPLAY RELAY</p>
+            <p class="kicker">__HARN_GIBSON_KICKER__</p>
             <h1>GIBSON LINK</h1>
           </div>
           <div class="topbar">
@@ -6384,19 +6393,46 @@ function drawProjectionScene(primitive, w, h, now) {
     if (tween.opacity < 0.04) projectionTweens.delete(id);
   }
 
-  // effect clocks run on the browser timebase, keyed by effect id
+  // effect clocks run on the browser timebase, keyed by effect id; a newly
+  // arrived effect also kicks the physics simulation at its target nodes
   const liveEffects = new Set();
   for (const effect of effects) {
     liveEffects.add(effect.id);
-    if (!projectionEffectClocks.has(effect.id)) projectionEffectClocks.set(effect.id, now);
+    if (!projectionEffectClocks.has(effect.id)) {
+      projectionEffectClocks.set(effect.id, now);
+      if (simulate) kickProjectionPhysics(effect);
+    }
   }
   for (const id of Array.from(projectionEffectClocks.keys())) {
     if (!liveEffects.has(id)) projectionEffectClocks.delete(id);
   }
 
-  // camera glides toward its target node (plus shake displacement)
-  const cameraTarget = props.camera && props.camera.target ? projectionTweens.get(props.camera.target) : null;
-  const wantZoom = cameraTarget ? Number(props.camera.zoom || 1) : 1;
+  // camera frames the bounding box of the points of interest: center glides
+  // to their midpoint and zoom is chosen so every POI stays on screen
+  const poiIds = props.camera && Array.isArray(props.camera.targets) && props.camera.targets.length
+    ? props.camera.targets
+    : (props.camera && props.camera.target ? [props.camera.target] : []);
+  const pois = poiIds.map((id) => projectionTweens.get(id)).filter(Boolean);
+  let wantX = 0.5;
+  let wantY = 0.5;
+  let wantZoom = 1.0;
+  if (pois.length) {
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minY = Infinity;
+    let maxY = -Infinity;
+    for (const poi of pois) {
+      minX = Math.min(minX, poi.x);
+      maxX = Math.max(maxX, poi.x);
+      minY = Math.min(minY, poi.y);
+      maxY = Math.max(maxY, poi.y);
+    }
+    wantX = (minX + maxX) / 2;
+    wantY = (minY + maxY) / 2;
+    const fitX = 0.9 / ((maxX - minX) + 0.45);
+    const fitY = 0.9 / ((maxY - minY) + 0.45);
+    wantZoom = Math.min(1.15, Math.max(0.85, Math.min(fitX, fitY)));
+  }
   let shakeX = 0;
   let shakeY = 0;
   for (const effect of effects) {
@@ -6408,8 +6444,8 @@ function drawProjectionScene(primitive, w, h, now) {
       shakeY += Math.cos(now * 0.117) * 0.010 * decay;
     }
   }
-  projectionCameraState.x += ((cameraTarget ? cameraTarget.x : 0.5) - projectionCameraState.x) * ease * 0.7;
-  projectionCameraState.y += ((cameraTarget ? cameraTarget.y : 0.5) - projectionCameraState.y) * ease * 0.7;
+  projectionCameraState.x += (wantX - projectionCameraState.x) * ease * 0.7;
+  projectionCameraState.y += (wantY - projectionCameraState.y) * ease * 0.7;
   projectionCameraState.zoom += (wantZoom - projectionCameraState.zoom) * ease * 0.7;
   const camera = {
     x: projectionCameraState.x + shakeX,
@@ -6576,6 +6612,33 @@ function drawProjectionScene(primitive, w, h, now) {
   ctx.restore();
 }
 
+const PROJECTION_KICKS = {breach: 0.34, shake: 0.0, alarm: 0.0, banner: 0.0, ring: 0.16, pulse: 0.1, beam: 0.08};
+
+function kickProjectionPhysics(effect) {
+  // events are physical: a breach detonates at its nodes and ripples the web
+  const strength = PROJECTION_KICKS[effect.kind] ?? 0.08;
+  if (strength <= 0) return;
+  const magnitude = Math.max(0.2, Number(effect.magnitude || 1));
+  const targets = Array.isArray(effect.targets) ? effect.targets : [];
+  for (const targetId of targets) {
+    const epicenter = projectionTweens.get(targetId);
+    if (!epicenter || !epicenter.node) continue;
+    const phase = (epicenter.phase ?? 0) + targets.length;
+    epicenter.vx = (epicenter.vx || 0) + Math.cos(phase) * strength * magnitude;
+    epicenter.vy = (epicenter.vy || 0) + Math.sin(phase) * strength * magnitude;
+    for (const other of projectionTweens.values()) {
+      if (other === epicenter || !other.node || other.leaving) continue;
+      const dx = other.x - epicenter.x;
+      const dy = other.y - epicenter.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < 0.0001 || dist > 0.22) continue;
+      const shove = strength * magnitude * 0.6 * (1 - dist / 0.22);
+      other.vx = (other.vx || 0) + (dx / dist) * shove;
+      other.vy = (other.vy || 0) + (dy / dist) * shove;
+    }
+  }
+}
+
 function stepProjectionPhysics(edges, physicsLayers, dt, now) {
   // Live spring-mass integration between engine updates. The engine's
   // resolved positions stay canonical: every node is softly attracted to its
@@ -6735,14 +6798,12 @@ const PROJECTION_TICKER_GLYPHS = {
 };
 
 function drawProjectionHud(props, theme, mood, hud, rect, w, h, now) {
-  const inkAlpha = theme.paper ? 0.85 : 0.8;
+  // top-left belongs to the page mast (project kicker + GIBSON LINK); the
+  // canvas only adds the mood readout at top-right
   ctx.font = `${13 * devicePixelRatio}px ui-monospace, monospace`;
-  ctx.textAlign = "left";
   ctx.textBaseline = "top";
   ctx.shadowColor = projectionTone(theme, "accent", theme.glow ? 0.5 : 0);
   ctx.shadowBlur = theme.glow ? 6 : 0;
-  ctx.fillStyle = `rgba(${theme.ink},${inkAlpha})`;
-  ctx.fillText(String(props.title || "GIBSON"), rect.x, h * 0.025);
   ctx.textAlign = "right";
   ctx.fillStyle = projectionTone(theme, mood.tone || "base", 0.9);
   ctx.fillText(String(mood.label || ""), rect.x + rect.width, h * 0.025);
@@ -6754,9 +6815,12 @@ function drawProjectionHud(props, theme, mood, hud, rect, w, h, now) {
   ctx.fillStyle = `rgba(${theme.ink},0.72)`;
   const focusLine = hud.focus ? `FOCUS ${hud.focus}` : "FOCUS \\u2014";
   const commandLine = hud.command ? `$ ${hud.command} [${hud.commandStatus || "?"}]` : "";
+  const workspaceLine = [String(props.title || ""), String(hud.workspace || "")]
+    .filter(Boolean)
+    .join(" // ");
   ctx.fillText(focusLine, rect.x, hudTop);
   if (commandLine) ctx.fillText(commandLine, rect.x, hudTop + 14 * devicePixelRatio);
-  ctx.fillText(String(hud.workspace || ""), rect.x, hudTop + 28 * devicePixelRatio);
+  ctx.fillText(workspaceLine, rect.x, hudTop + 28 * devicePixelRatio);
   ctx.textAlign = "right";
   ctx.fillStyle = projectionTone(theme, mood.alert ? "alarm" : "good", 0.85);
   ctx.fillText(String(hud.checks || ""), rect.x + rect.width, hudTop);

@@ -105,7 +105,9 @@ def test_default_projection_resolves_a_complete_scene() -> None:
     assert not any(edge["to"] == "file:README.md" and edge["style"] == "flow" for edge in scene["edges"])
     assert ("agent", "file:src/app.py", "beam") in edge_styles
 
-    assert scene["camera"]["target"] == "file:src/app.py"
+    # under alert, the camera frames every blast node (plus focus)
+    assert scene["camera"]["targets"] == ["file:README.md", "file:src/app.py"]
+    assert scene["camera"]["target"] == "file:README.md"
     assert scene["hud"]["focus"] == "src/app.py"
     assert "TEST:ERROR" in scene["hud"]["checks"]
     assert "main @ abc123d" in scene["hud"]["workspace"]
@@ -424,14 +426,29 @@ def test_mood_progression_idle_work_verify() -> None:
     assert engine.resolve(_perception(entities=running), now_ms=3)["mood"]["name"] == "verify"
 
 
-def test_camera_pin_and_fallback() -> None:
+def test_camera_pin_focus_and_fallback() -> None:
     pinned = ProjectionEngine({"camera": {"target": "dir:."}})
-    assert pinned.resolve(_perception(), now_ms=1)["camera"] == {"target": "dir:.", "zoom": 1.0}
+    assert pinned.resolve(_perception(), now_ms=1)["camera"] == {"target": "dir:.", "targets": ["dir:."]}
 
-    no_focus = [r for r in _default_relations() if r["type"] != "focused_on"]
+    # calm session with focus: the camera follows the focused file alone
+    calm_entities = [
+        {"id": "agent", "type": "agent", "attrs": {}},
+        {"id": "dir:.", "type": "dir", "attrs": {"root": True}},
+        {"id": "file:src/app.py", "type": "file", "attrs": {"touchCount": 1}},
+    ]
+    calm_relations = [
+        {"type": "contains", "from": "dir:.", "to": "file:src/app.py"},
+        {"type": "focused_on", "from": "agent", "to": "file:src/app.py"},
+    ]
+    follow = ProjectionEngine()
+    camera = follow.resolve(_perception(entities=calm_entities, relations=calm_relations), now_ms=1)["camera"]
+    assert camera == {"target": "file:src/app.py", "targets": ["file:src/app.py"]}
+
+    # no focus, no alert: fall back to framing the root
+    no_focus = [r for r in calm_relations if r["type"] != "focused_on"]
     fallback = ProjectionEngine()
-    camera = fallback.resolve(_perception(relations=no_focus), now_ms=1)["camera"]
-    assert camera == {"target": "dir:.", "zoom": 1.0}
+    camera = fallback.resolve(_perception(entities=calm_entities, relations=no_focus), now_ms=1)["camera"]
+    assert camera == {"target": "dir:.", "targets": ["dir:."]}
 
 
 def test_renderer_adapter_produces_valid_plans() -> None:
