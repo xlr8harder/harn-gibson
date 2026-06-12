@@ -104,6 +104,11 @@ def test_default_projection_resolves_a_complete_scene() -> None:
     # the stale touched relation is excluded by the recent filter
     assert not any(edge["to"] == "file:README.md" and edge["style"] == "flow" for edge in scene["edges"])
     assert ("agent", "file:src/app.py", "beam") in edge_styles
+    # edge roles carry distinct default tones: structure/causality/attention
+    tones = {(edge["style"], edge["tone"]) for edge in scene["edges"]}
+    assert ("skeleton", "base") in tones
+    assert ("flow", "accent") in tones
+    assert ("beam", "warn") in tones
 
     # under alert, the camera frames every blast node (plus focus)
     assert scene["camera"]["targets"] == ["file:README.md", "file:src/app.py"]

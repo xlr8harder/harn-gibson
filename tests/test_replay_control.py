@@ -89,6 +89,30 @@ def test_reset_session_gives_a_fresh_world() -> None:
         state.pipeline.stop()
 
 
+def test_reset_session_clears_stream_buffers() -> None:
+    state = build_state_from_env({"HARN_GIBSON_PROJECTION": "1"})
+    try:
+        stream_event = {
+            "schema": "harn-gibson.event.v1",
+            "sequence": 2,
+            "timestampMs": 200,
+            "source": "harn",
+            "eventType": "message_update",
+            "phase": "during",
+            "title": "Assistant",
+            "summary": "streaming",
+            "payload": {"type": "message_update", "text": "writing the cli entrypoint"},
+        }
+        submit_event_to_renderer(dict(stream_event), state)
+        assert state.router.stream_buffers
+        reset_session(state)
+        # replayed message_update events start from an empty buffer instead of
+        # appending onto the previous run's text
+        assert state.router.stream_buffers == {}
+    finally:
+        state.pipeline.stop()
+
+
 def test_reset_session_with_renderer_lacking_reset() -> None:
     state = GibsonServerState()
     try:

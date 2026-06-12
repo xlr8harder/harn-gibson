@@ -759,8 +759,11 @@ def _layer_edges(
                 source = "agent"  # causality flows from the cursor in spatial views
             if source not in nodes or target not in nodes:
                 continue
+            # default tones keep the three edge roles distinguishable: cyan
+            # structure, magenta causality flow, amber attention beam
+            default_tone = {"skeleton": "base", "beam": "warn"}.get(style, "accent")
             edges.append({"from": source, "to": target, "style": style,
-                          "tone": str(rule.get("tone") or ("accent" if style != "skeleton" else "base"))})
+                          "tone": str(rule.get("tone") or default_tone)})
     return edges
 
 

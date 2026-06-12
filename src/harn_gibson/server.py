@@ -143,6 +143,9 @@ def reset_session(state: GibsonServerState) -> None:
     reset = getattr(pipeline.renderer, "reset", None)
     if callable(reset):
         reset()
+    # stream buffers accumulate assistant text per stream id; without this a
+    # replayed session re-appends every chunk onto the previous run's text
+    state.router.stream_buffers.clear()
     state.scene.apply((SceneMutation(op="reset_scene"),), now_ms=0)
 
 
@@ -6798,17 +6801,9 @@ const PROJECTION_TICKER_GLYPHS = {
 };
 
 function drawProjectionHud(props, theme, mood, hud, rect, w, h, now) {
-  // top-left belongs to the page mast (project kicker + GIBSON LINK); the
-  // canvas only adds the mood readout at top-right
-  ctx.font = `${13 * devicePixelRatio}px ui-monospace, monospace`;
+  // top of the stage belongs to the page mast and status chip (the chip
+  // already shows the mood text); the canvas HUD draws only the bottom strip
   ctx.textBaseline = "top";
-  ctx.shadowColor = projectionTone(theme, "accent", theme.glow ? 0.5 : 0);
-  ctx.shadowBlur = theme.glow ? 6 : 0;
-  ctx.textAlign = "right";
-  ctx.fillStyle = projectionTone(theme, mood.tone || "base", 0.9);
-  ctx.fillText(String(mood.label || ""), rect.x + rect.width, h * 0.025);
-  ctx.shadowBlur = 0;
-
   const hudTop = h * 0.685;
   ctx.font = `${10.5 * devicePixelRatio}px ui-monospace, monospace`;
   ctx.textAlign = "left";
