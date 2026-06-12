@@ -85,6 +85,14 @@ def test_default_projection_resolves_a_complete_scene() -> None:
     assert {"dir:.", "dir:src", "file:src/app.py", "file:src/util.py", "file:README.md", "agent"} <= set(nodes)
     root = nodes["dir:."]
     assert (root["x"], root["y"]) == (0.5, 0.5)
+    # tree annotations drive the materialize wavefront: parent + depth
+    assert root["depth"] == 0
+    assert "parent" not in root
+    assert nodes["dir:src"]["parent"] == "dir:."
+    assert nodes["dir:src"]["depth"] == 1
+    assert nodes["file:src/app.py"]["parent"] == "dir:src"
+    assert nodes["file:src/app.py"]["depth"] == 2
+    assert nodes["agent"]["depth"] == 0
     # labels are literal: real casing, root shows the workspace name, and
     # clipped labels are visibly clipped
     assert root["label"] == "repo"

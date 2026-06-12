@@ -6355,10 +6355,11 @@ function drawProjectionScene(primitive, w, h, now) {
   projectionLastNow = now;
   const ease = 1 - Math.exp(-dt * 5.0);
 
-  // tween node state toward engine targets; the first scene snaps (no birth
-  // animation on initial population), later newcomers grow in from 35%.
-  // Nodes in physics layers are integrated by the live simulation below
-  // instead of eased, so the graph keeps rebalancing between updates.
+  // tween node state toward engine targets. New nodes materialize as a
+  // wavefront: a pulse travels down the link from the parent and the node
+  // appears when it arrives -- the whole tree on first contact, single buds
+  // later. Capture mode snaps (deterministic frames). Nodes in physics layers
+  // are integrated by the live simulation instead of eased.
   const physicsLayers = new Set(
     props.physics && Array.isArray(props.physics.layers) ? props.physics.layers : [],
   );
@@ -6369,12 +6370,27 @@ function drawProjectionScene(primitive, w, h, now) {
     liveIds.add(node.id);
     let tween = projectionTweens.get(node.id);
     if (!tween) {
-      tween = firstScene
-        ? {x: node.x, y: node.y, size: node.size, opacity: node.opacity ?? 1, lift: node.lift || 0}
-        : {x: node.x, y: node.y, size: node.size * 0.35, opacity: (node.opacity ?? 1) * 0.35, lift: 0};
-      tween.vx = 0;
-      tween.vy = 0;
+      tween = {x: node.x, y: node.y, size: node.size, opacity: node.opacity ?? 1,
+               lift: node.lift || 0, vx: 0, vy: 0};
+      if (!captureMode) {
+        const depth = Number(node.depth || 0);
+        tween.revealAt = firstScene ? now + 350 + depth * 260 : now + 60;
+        tween.reveal = 0;
+      } else {
+        tween.reveal = 1;
+      }
       projectionTweens.set(node.id, tween);
+    }
+    if (tween.revealAt !== undefined) {
+      const progress = (now - tween.revealAt) / 520;
+      if (progress >= 1) {
+        tween.revealAt = undefined;
+        tween.reveal = 1;
+      } else {
+        tween.reveal = Math.max(0, progress);
+      }
+    } else {
+      tween.reveal = 1;
     }
     if (!(simulate && physicsLayers.has(node.layer))) {
       tween.x += (node.x - tween.x) * ease;
@@ -6506,6 +6522,32 @@ function drawProjectionScene(primitive, w, h, now) {
     const b = pointFor(edge.to);
     if (!a || !b) continue;
     const tone = edge.tone || "base";
+    const sourceReveal = projectionTweens.get(edge.from)?.reveal ?? 1;
+    const targetReveal = projectionTweens.get(edge.to)?.reveal ?? 1;
+    if (sourceReveal <= 0 || targetReveal <= 0) continue;
+    if (targetReveal < 1) {
+      // the materialize pulse: the link draws itself toward the unborn node,
+      // a bright head riding the wavefront
+      const t = targetReveal * targetReveal * (3 - 2 * targetReveal);
+      const tipX = a.x + (b.x - a.x) * t;
+      const tipY = a.y + (b.y - a.y) * t;
+      ctx.setLineDash([]);
+      ctx.strokeStyle = projectionTone(theme, tone, 0.55);
+      ctx.lineWidth = 1.3 * devicePixelRatio;
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(tipX, tipY);
+      ctx.stroke();
+      ctx.save();
+      ctx.shadowColor = projectionTone(theme, "accent", 0.9);
+      ctx.shadowBlur = 10 * devicePixelRatio;
+      ctx.fillStyle = projectionTone(theme, "accent", 0.95);
+      ctx.beginPath();
+      ctx.arc(tipX, tipY, 2.4 * devicePixelRatio, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+      continue;
+    }
     if (edge.style === "flow") {
       ctx.setLineDash([7, 9]);
       ctx.lineDashOffset = -now * 0.04;
@@ -6539,13 +6581,19 @@ function drawProjectionScene(primitive, w, h, now) {
   for (const tween of projectionTweens.values()) {
     const node = tween.node;
     if (!node) continue;
+    const reveal = tween.reveal ?? 1;
+    if (reveal <= 0) continue;
     const point = projectionNodePoint(rect, tween, camera);
-    const radius = (3.5 + tween.size * 11) * devicePixelRatio;
+    // a materializing node blooms in over the tail of its reveal
+    const bloom = reveal >= 1 ? 1 : Math.max(0, (reveal - 0.72) / 0.28);
+    if (bloom <= 0) continue;
+    const radius = (3.5 + tween.size * 11) * devicePixelRatio * (0.4 + 0.6 * bloom);
     const tone = node.tone || "base";
     const isFocus = Boolean(node.focus) && !tween.leaving;
-    const showLabel = !tween.leaving && node.label && (showAllLabels || isFocus || tone === "alarm");
+    const showLabel = !tween.leaving && bloom >= 1
+      && node.label && (showAllLabels || isFocus || tone === "alarm");
     ctx.save();
-    ctx.globalAlpha *= Math.max(0.05, tween.opacity);
+    ctx.globalAlpha *= Math.max(0.05, tween.opacity) * bloom;
     if (tween.lift > 0.02) {
       ctx.strokeStyle = projectionTone(theme, tone, 0.3);
       ctx.lineWidth = devicePixelRatio;

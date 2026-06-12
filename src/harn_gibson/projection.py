@@ -177,6 +177,9 @@ class ProjectionEngine:
         if "dir:." in nodes:
             root_name = str(_dict(perception.get("workspace")).get("rootName") or project_name or ".")
             nodes["dir:."]["label"] = _clip_label(root_name)
+        # every node carries its tree parent and depth so themes can stage
+        # reveals as a wavefront from the root (materialize / budding pulses)
+        _annotate_tree(nodes, relations)
 
         # edges resolve after every layer has placed its nodes, so cross-layer
         # anchors (e.g. flow edges re-rooted on the agent cursor) always exist
@@ -867,6 +870,32 @@ def _node_tone(
     if attrs.get("dirty") is True:
         return "warn"
     return "base"
+
+
+def _annotate_tree(nodes: Mapping[str, dict[str, Any]], relations: list[Mapping[str, Any]]) -> None:
+    parent_of = {
+        str(r.get("to")): str(r.get("from"))
+        for r in relations
+        if str(r.get("type")) == "contains"
+    }
+    for node_id, node in nodes.items():
+        parent = parent_of.get(node_id)
+        hops = 0
+        while parent is not None and parent not in nodes and hops < 12:
+            parent = parent_of.get(parent)
+            hops += 1
+        if parent in nodes and parent != node_id:
+            node["parent"] = parent
+        depth = 0
+        cursor = node_id
+        seen = {node_id}
+        while cursor in parent_of and depth < 12:
+            cursor = parent_of[cursor]
+            if cursor in seen:
+                break
+            seen.add(cursor)
+            depth += 1
+        node["depth"] = depth
 
 
 def _node_label(node_id: str, kind: str, attrs: Mapping[str, Any], label_rule: Mapping[str, Any]) -> str:

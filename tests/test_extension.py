@@ -123,6 +123,22 @@ def test_relay_updates_camel_and_snake_ui() -> None:
     assert ("set_status", ("gibson", None)) in snake.calls
 
 
+def test_extension_file_loads_the_way_harn_loads_it(monkeypatch: Any) -> None:
+    # harn executes the entry file as a synthetic module WITHOUT registering it
+    # in sys.modules; module-level dataclasses crash that path because the
+    # dataclass machinery resolves annotations via sys.modules[__module__].
+    import importlib.util
+
+    monkeypatch.setenv("HARN_GIBSON_ENDPOINT", "none")
+    spec = importlib.util.spec_from_file_location("harn_extension_synthetic", extension_path())
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)  # must not raise
+    harn = FakeHarn()
+    module.default(harn)
+    assert set(harn.handlers) == set(HARN_EVENTS)
+
+
 def test_extension_factory_registers_every_event(monkeypatch: Any) -> None:
     monkeypatch.setenv("HARN_GIBSON_ENDPOINT", "none")
     harn = FakeHarn()

@@ -9,7 +9,6 @@ import traceback
 import urllib.error
 import urllib.request
 from collections.abc import Mapping
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -87,14 +86,26 @@ class GibsonRelay:
         await self.sink.publish(event, ())
 
 
-@dataclass(slots=True)
 class BrowserInputPoller:
-    harn: Any
-    endpoint: str | None
-    diagnostic_relay: GibsonRelay | None = None
-    poll_interval: float = 0.25
-    timeout: float = 0.2
-    task: asyncio.Task[None] | None = None
+    # Deliberately NOT a dataclass: harn's extension loader executes this file
+    # as a module that is never registered in sys.modules, and dataclass
+    # machinery resolves annotations via sys.modules[cls.__module__].__dict__,
+    # which crashes extension loading ("'NoneType' object has no attribute
+    # '__dict__'"). A plain __init__ keeps the entry file loader-safe.
+    def __init__(
+        self,
+        harn: Any,
+        endpoint: str | None,
+        diagnostic_relay: GibsonRelay | None = None,
+        poll_interval: float = 0.25,
+        timeout: float = 0.2,
+    ) -> None:
+        self.harn = harn
+        self.endpoint = endpoint
+        self.diagnostic_relay = diagnostic_relay
+        self.poll_interval = poll_interval
+        self.timeout = timeout
+        self.task: asyncio.Task[None] | None = None
 
     def start(self) -> None:
         if self.endpoint is None:
