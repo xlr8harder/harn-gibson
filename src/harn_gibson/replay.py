@@ -341,6 +341,7 @@ def play_replay_file(
     time_scale: float = 1.0,
     max_step_delay_ms: int | None = None,
     quiet_step_delay_ms: int | None = None,
+    min_step_delay_ms: int | None = None,
     start_index: int = 0,
     end_index: int | None = None,
     check_expectations: bool = True,
@@ -356,6 +357,7 @@ def play_replay_file(
         time_scale=time_scale,
         max_step_delay_ms=max_step_delay_ms,
         quiet_step_delay_ms=quiet_step_delay_ms,
+        min_step_delay_ms=min_step_delay_ms,
         start_index=start_index,
         end_index=end_index,
         check_expectations=check_expectations,
@@ -374,6 +376,7 @@ def play_replay_data(
     time_scale: float = 1.0,
     max_step_delay_ms: int | None = None,
     quiet_step_delay_ms: int | None = None,
+    min_step_delay_ms: int | None = None,
     start_index: int = 0,
     end_index: int | None = None,
     check_expectations: bool = True,
@@ -422,6 +425,7 @@ def play_replay_data(
                 time_scale=time_scale,
                 max_step_delay_ms=max_step_delay_ms,
                 quiet_step_delay_ms=quiet_step_delay_ms,
+                min_step_delay_ms=min_step_delay_ms,
                 quiet_flags=quiet_flags,
             )
             if delay_ms > 0:
@@ -1620,6 +1624,7 @@ def _replay_step_delay_ms(
     time_scale: float,
     max_step_delay_ms: int | None,
     quiet_step_delay_ms: int | None = None,
+    min_step_delay_ms: int | None = None,
     quiet_flags: Sequence[bool] = (),
 ) -> float:
     if playback_timing == "fixed":
@@ -1633,12 +1638,13 @@ def _replay_step_delay_ms(
     delay_ms = max(0, following - current) / time_scale
     if max_step_delay_ms is not None:
         delay_ms = min(delay_ms, max_step_delay_ms)
-    if (
-        quiet_step_delay_ms is not None
-        and index + 1 < len(quiet_flags)
-        and quiet_flags[index + 1]
-    ):
+    next_is_quiet = index + 1 < len(quiet_flags) and quiet_flags[index + 1]
+    if quiet_step_delay_ms is not None and next_is_quiet:
         delay_ms = min(delay_ms, quiet_step_delay_ms)
+    if min_step_delay_ms is not None and not next_is_quiet:
+        # salient beats get breathing room: recorded bursts (several tool
+        # events within milliseconds) should not machine-gun past at speed
+        delay_ms = max(delay_ms, min_step_delay_ms)
     return delay_ms
 
 

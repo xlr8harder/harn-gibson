@@ -234,6 +234,12 @@ def build_parser() -> argparse.ArgumentParser:
         "fast-forwards reasoning-heavy stretches in recorded demos without losing visible beats",
     )
     watch_replay.add_argument(
+        "--min-step-delay-ms",
+        type=int,
+        default=None,
+        help="delay floor before salient steps so recorded bursts do not machine-gun past at speed",
+    )
+    watch_replay.add_argument(
         "--start-step",
         type=int,
         default=1,
@@ -826,6 +832,7 @@ def _rerun_replay(
     speed: float,
     max_step_delay_ms: int | None,
     quiet_step_delay_ms: int | None = None,
+    min_step_delay_ms: int | None = None,
     progress: object,
 ) -> None:
     """Runner registered behind the browser replay button: reset the session
@@ -843,6 +850,7 @@ def _rerun_replay(
         time_scale=speed,
         max_step_delay_ms=max_step_delay_ms,
         quiet_step_delay_ms=quiet_step_delay_ms,
+        min_step_delay_ms=min_step_delay_ms,
         check_expectations=False,
         progress=progress,
     )
@@ -898,6 +906,7 @@ def run_watch_replay(args: argparse.Namespace) -> int:
             speed=args.speed,
             max_step_delay_ms=args.max_step_delay_ms,
             quiet_step_delay_ms=args.quiet_step_delay_ms,
+            min_step_delay_ms=args.min_step_delay_ms,
             progress=report_progress,
         ),
     )
@@ -918,6 +927,7 @@ def run_watch_replay(args: argparse.Namespace) -> int:
                 time_scale=args.speed,
                 max_step_delay_ms=args.max_step_delay_ms,
                 quiet_step_delay_ms=args.quiet_step_delay_ms,
+                min_step_delay_ms=args.min_step_delay_ms,
                 start_index=start_index,
                 end_index=end_index,
                 check_expectations=check_expectations,

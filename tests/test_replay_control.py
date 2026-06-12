@@ -219,6 +219,19 @@ def test_quiet_step_pacing_fast_forwards_streamed_chunks() -> None:
         0, timestamps=timestamps, playback_timing="real-time", step_delay_ms=0,
         time_scale=1.0, max_step_delay_ms=4000, quiet_step_delay_ms=None, quiet_flags=flags,
     ) == 4000
+    # salient beats get a delay FLOOR so recorded bursts cannot machine-gun
+    burst_timestamps = [0, 5, 10, 15]
+    assert _replay_step_delay_ms(
+        1, timestamps=burst_timestamps, playback_timing="real-time", step_delay_ms=0,
+        time_scale=8.0, max_step_delay_ms=4000, quiet_step_delay_ms=250,
+        min_step_delay_ms=600, quiet_flags=flags,
+    ) == 600
+    # the floor does NOT apply before quiet chunks (they should flow fast)
+    assert _replay_step_delay_ms(
+        0, timestamps=burst_timestamps, playback_timing="real-time", step_delay_ms=0,
+        time_scale=8.0, max_step_delay_ms=4000, quiet_step_delay_ms=250,
+        min_step_delay_ms=600, quiet_flags=flags,
+    ) < 600
 
 
 def test_rerun_replay_resets_and_plays_the_file(tmp_path: Path) -> None:
