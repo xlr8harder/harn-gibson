@@ -7053,8 +7053,7 @@ function drawProjectionPeek(effect, theme, point, now) {
 
 const projectionNarrationStack = [];
 let projectionNarrationBounds = null; // exclusion zone other widgets respect
-const NARRATION_HOLD_MS = 9000; // the narrative is the storyline: hold for reading
-const NARRATION_RETIRED_HOLD_MS = 6000; // a superseded message fades on its own time
+const NARRATION_RETIRED_HOLD_MS = 2200; // a superseded message lingers briefly, then fades
 const NARRATION_SCROLL_DELAY_MS = 2600; // read the head before the scroll begins
 const NARRATION_WINK_MS = 280;
 const NARRATION_VISIBLE_LINES = 12;
@@ -7096,12 +7095,7 @@ function drawProjectionNarration(hud, theme, rect, now) {
     projectionNarrationStack.unshift(current);
   } else if (text && text !== current.text) {
     if (text.startsWith(current.text)) {
-      // the message grew; if its window had fully winked out during a long
-      // quiet gap (thinking between text blocks), re-open it properly
-      if (now - current.lastChangeAt > NARRATION_HOLD_MS + NARRATION_WINK_MS) {
-        current.openedAt = now;
-      }
-      current.text = text;
+      current.text = text;                       // the message grew
       current.lines = wrapNarration(text);
       current.lastChangeAt = now;
     } else {
@@ -7149,15 +7143,18 @@ function drawProjectionNarration(hud, theme, rect, now) {
       if (now - entry.openedAt > NARRATION_SCROLL_DELAY_MS) {
         entry.offset = Math.min(targetOffset, entry.offset + dt * 3.2);
       }
-      // pending scroll counts as activity: the full reading hold starts only
-      // AFTER the last line has arrived (no vanishing on the final word)
-      if (targetOffset - entry.offset > 0.5) entry.lastChangeAt = now;
     }
-    const quiet = retired ? now - entry.retiredAt : now - entry.lastChangeAt;
-    const holdMs = retired ? NARRATION_RETIRED_HOLD_MS : NARRATION_HOLD_MS;
+    // the narrative is the storyline: a live message is PERMANENT until the
+    // next one replaces it; only retired entries fade (briefly), so nothing
+    // can wink out early and be "resurrected" by its own retirement
+    const quiet = retired ? now - entry.retiredAt : 0;
     const openRamp = Math.min(1, (now - entry.openedAt) / 240);
-    const wink = quiet > holdMs ? Math.max(0, 1 - (quiet - holdMs) / NARRATION_WINK_MS) : 1;
-    const openness = quiet > holdMs + NARRATION_WINK_MS ? 0 : Math.min(openRamp, wink);
+    const wink = retired && quiet > NARRATION_RETIRED_HOLD_MS
+      ? Math.max(0, 1 - (quiet - NARRATION_RETIRED_HOLD_MS) / NARRATION_WINK_MS)
+      : 1;
+    const openness = retired && quiet > NARRATION_RETIRED_HOLD_MS + NARRATION_WINK_MS
+      ? 0
+      : Math.min(openRamp, wink);
     const dim = retired ? 0.55 : 1;
 
     // every slot height is EASED, never snapped: whatever state transition
