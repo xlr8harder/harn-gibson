@@ -1,2 +1,4 @@
 test-artifacts/
 captures/
+.coverage
+__pycache__/
