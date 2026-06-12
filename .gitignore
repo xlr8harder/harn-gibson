@@ -2,3 +2,6 @@ test-artifacts/
 captures/
 .coverage
 __pycache__/
+# session captures converted to replay fixtures run tens of MB; share them
+# out-of-band rather than through git history
+examples/claude-gibson-replays/venture-*.json

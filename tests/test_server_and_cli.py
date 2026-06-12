@@ -1254,6 +1254,80 @@ def test_cli_watch_replay_runs_browser_playback(tmp_path: Path, monkeypatch: Any
     assert "watched 1 replay steps; scene revision 1" in captured.err
 
 
+def test_await_replay_directive_polls_and_handles_interrupt(monkeypatch: Any) -> None:
+    class _State:
+        def __init__(self) -> None:
+            self.inputs = BrowserInputQueue()
+
+    state = _State()
+    state.inputs.enqueue("make me a million dollars")
+    assert cli._await_replay_directive(state) == "make me a million dollars"
+
+    sleeps: list[float] = []
+
+    def fake_sleep(seconds: float) -> None:
+        sleeps.append(seconds)
+        state.inputs.enqueue("second directive")
+
+    monkeypatch.setattr(cli.time, "sleep", fake_sleep)
+    assert cli._await_replay_directive(state) == "second directive"
+    assert sleeps == [0.4]
+
+    def interrupted_sleep(seconds: float) -> None:
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(cli.time, "sleep", interrupted_sleep)
+    assert cli._await_replay_directive(state) is None
+
+
+def test_cli_watch_replay_wait_for_input_gates_playback(
+    tmp_path: Path, monkeypatch: Any, capsys: Any
+) -> None:
+    replay_path = tmp_path / "watch.json"
+    replay_path.write_text(
+        json.dumps(
+            {
+                "name": "watch fixture",
+                "expect": {"sceneRevision": 1},
+                "steps": [
+                    {
+                        "type": "mutations",
+                        "mutations": [{"op": "patch", "targetId": "status", "props": {"text": "watching"}}],
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(cli.webbrowser, "open", lambda url: None)
+    monkeypatch.setattr(cli, "_hold_display", lambda url: None)
+    # the typed directive is the curtain cue: playback starts once it arrives
+    monkeypatch.setattr(cli, "_await_replay_directive", lambda state: "make me a million dollars")
+    args = cli.build_parser().parse_args(
+        [
+            "watch-replay",
+            str(replay_path),
+            "--wait-for-input",
+            "--start-delay-ms",
+            "0",
+            "--step-delay-ms",
+            "0",
+            "--end-step",
+            "1",
+        ]
+    )
+    assert cli.run_watch_replay(args) == 0
+    captured = capsys.readouterr()
+    assert "directive received: 'make me a million dollars'" in captured.err
+    assert "watched 1 replay steps" in captured.err
+
+    # walking away (Ctrl-C) during the wait shuts the display down cleanly
+    monkeypatch.setattr(cli, "_await_replay_directive", lambda state: None)
+    assert cli.run_watch_replay(args) == 130
+    captured = capsys.readouterr()
+    assert "closed without a directive" in captured.err
+
+
 def test_cli_watch_replay_error_paths(monkeypatch: Any, capsys: Any) -> None:
     parser = cli.build_parser()
     bad_start = parser.parse_args(["watch-replay", "fixture.json", "--start-delay-ms", "-1"])

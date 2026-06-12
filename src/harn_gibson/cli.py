@@ -215,6 +215,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="use a fixed delay or replay source timestamp deltas between steps",
     )
     watch_replay.add_argument(
+        "--wait-for-input",
+        action="store_true",
+        help="hold the display idle until a directive is typed into the browser "
+        "composer, then start playback -- lets a recording open on the prompt "
+        "being typed and the session appearing to launch from it",
+    )
+    watch_replay.add_argument(
         "--speed",
         type=float,
         default=1.0,
@@ -823,6 +830,20 @@ def _hold_display(display_url: str) -> None:  # pragma: no cover - manual playba
         return
 
 
+def _await_replay_directive(state: object, *, poll_seconds: float = 0.4) -> str | None:
+    """Hold the boot until the browser composer delivers a directive. The
+    typed prompt is part of the show: a recording opens on it being entered
+    and the session appears to launch from it."""
+    try:
+        while True:
+            item = state.inputs.pop()
+            if item is not None:
+                return str(item.message).strip()
+            time.sleep(poll_seconds)
+    except KeyboardInterrupt:
+        return None
+
+
 def _rerun_replay(
     path: str,
     state: object,
@@ -912,6 +933,27 @@ def run_watch_replay(args: argparse.Namespace) -> int:
     )
     if args.browser:
         webbrowser.open(display_url)
+    if args.wait_for_input:
+        from harn_gibson.server import publish_diagnostic_event
+
+        publish_diagnostic_event(
+            state, 1,
+            message="AWAITING DIRECTIVE :: type your command below and press SEND",
+            event_type="lobby_idle", title="Gibson lobby",
+        )
+        directive = _await_replay_directive(state)
+        if directive is None:
+            print("watch-replay closed without a directive", file=sys.stderr)
+            state.pipeline.stop()
+            server.shutdown()
+            server.server_close()
+            return 130
+        print(f"directive received: {directive!r}", file=sys.stderr)
+        publish_diagnostic_event(
+            state, 2,
+            message=f"DIRECTIVE RECEIVED :: {directive[:80]}",
+            event_type="lobby_directive", title="Directive",
+        )
     start_index = args.start_step - 1
     end_index = args.end_step
     partial_playback = args.start_step != 1 or args.end_step is not None

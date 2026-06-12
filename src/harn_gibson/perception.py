@@ -54,6 +54,7 @@ _MAX_GIT_FILES = 4000
 _MAX_UNTRACKED_FILES = 200
 _MAX_COMMAND_PREVIEW_CHARS = 200
 _MAX_NARRATION_CHARS = 6000
+_TRANSCRIPT_EVENT_TYPES = frozenset({"context", "before_provider_request"})
 
 _EXCLUDED_NAMES = {
     ".coverage",
@@ -423,7 +424,14 @@ class PerceptionModel:
             self.latest_seen_ms = max(self.latest_seen_ms, event.timestamp_ms)
             if event.phase == "after":
                 saw_after_phase = True
-            touches = touched_by_sequence.get(event.sequence, ())
+            # transcript events (the full conversation re-broadcast before each
+            # provider request) re-report every path the agent EVER mentioned;
+            # treating those as touches parks attention on the first file in
+            # history -- the agent re-reading its memory is not an action
+            if event.event_type in _TRANSCRIPT_EVENT_TYPES:
+                touches: Sequence[Mapping[str, Any]] = ()
+            else:
+                touches = touched_by_sequence.get(event.sequence, ())
             self._observe_narration(event)
             if event.event_type in {"agent_end", "session_shutdown", "harn_exit"}:
                 # closing pose: the work is done; attention returns to the

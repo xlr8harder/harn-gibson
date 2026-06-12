@@ -610,6 +610,33 @@ def test_duplicate_start_and_completion_events_do_not_double_checks(tmp_path: Pa
     assert len(checks) == 2
 
 
+def test_transcript_events_do_not_touch_files(tmp_path: Path) -> None:
+    # harn re-broadcasts the whole conversation before each provider request
+    # ("context" events); the path extractor mines that transcript, so every
+    # file the agent EVER wrote re-reports as touched on every turn -- and
+    # attention parks forever on the first file in history (pyproject.toml)
+    root = _git_fixture(tmp_path)
+    model = PerceptionModel(project_root=str(root))
+    context_event = GibsonEvent.from_raw(
+        {"type": "context", "messages": []}, sequence=1, timestamp_ms=100
+    )
+    touched = {
+        "schema": "harn-gibson.touched-files.v1",
+        "files": [
+            {"path": "src/app_pkg/app.py", "operation": "context:before", "firstSequence": 1,
+             "lastSequence": 1, "phases": ["before"], "sources": ["messages.3.content.2.arguments.path"]},
+        ],
+        "count": 1,
+        "truncated": False,
+    }
+    model.apply_batch((context_event,), touched)
+    payload = model.to_dict()
+    assert not [r for r in payload["relations"] if r["type"] == "focused_on"]
+    # the file exists on disk (workspace discovery) but records NO touch
+    app = next(e for e in payload["entities"] if e["id"] == "file:src/app_pkg/app.py")
+    assert app["attrs"]["touchCount"] == 0
+
+
 def test_streamed_argument_prefixes_do_not_become_files(tmp_path: Path) -> None:
     root = _git_fixture(tmp_path)
     model = PerceptionModel(project_root=str(root))
