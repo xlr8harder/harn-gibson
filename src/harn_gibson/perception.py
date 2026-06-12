@@ -206,8 +206,9 @@ def _message_text(payload: Mapping[str, Any]) -> str:
     return ""
 
 
-_MAX_DIFF_PREVIEW_LINES = 12
+_MAX_DIFF_PREVIEW_LINES = 24
 _MAX_DIFF_LINE_CHARS = 88
+_MAX_DIFF_LINES_PER_SIDE = 8
 
 
 def _diff_preview_from_payload(payload: Mapping[str, Any]) -> list[str]:
@@ -230,12 +231,12 @@ def _diff_preview_from_payload(payload: Mapping[str, Any]) -> list[str]:
 
     edits = inner.get("edits")
     if isinstance(edits, list):
-        for edit in edits[:2]:
+        for edit in edits[:3]:
             if isinstance(edit, Mapping):
-                take(edit.get("oldText"), "-", 4)
-                take(edit.get("newText"), "+", 4)
+                take(edit.get("oldText"), "-", _MAX_DIFF_LINES_PER_SIDE)
+                take(edit.get("newText"), "+", _MAX_DIFF_LINES_PER_SIDE)
     elif tool in {"write", "create", "file_write", "write_file"}:
-        take(inner.get("content") or inner.get("text"), "+", 6)
+        take(inner.get("content") or inner.get("text"), "+", _MAX_DIFF_LINES_PER_SIDE)
     return lines
 
 
@@ -556,7 +557,9 @@ class PerceptionModel:
             if change.added_lines or change.removed_lines:
                 payload["addedLines"] = change.added_lines
                 payload["removedLines"] = change.removed_lines
-            if diff_preview:
+            # the tool_result repeats the tool_call's input verbatim; attach
+            # the preview once, at the canonical edit moment
+            if diff_preview and event.phase == "before":
                 payload["diffPreview"] = diff_preview
             self._append_event(payload)
 

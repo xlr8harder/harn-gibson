@@ -642,21 +642,42 @@ def test_diff_preview_rides_payload_change_events(tmp_path: Path) -> None:
     changed = [e for e in model.to_dict()["events"]
                if e["kind"] == "file_changed" and e["entity"].endswith("new.py")]
     assert changed[0]["diffPreview"][0] == "+x = 1"
-    assert len(changed[0]["diffPreview"]) <= 12
+    assert len(changed[0]["diffPreview"]) <= 24
+
+    # the tool_result repeats the tool_call input; no duplicate preview
+    result = GibsonEvent.from_raw(
+        {
+            "type": "tool_result",
+            "toolName": "edit",
+            "input": {
+                "path": "src/app_pkg/app.py",
+                "edits": [{"oldText": "        return 2\n", "newText": "        return 0\n"}],
+                "addedLines": 1,
+                "removedLines": 1,
+            },
+        },
+        sequence=3,
+        timestamp_ms=300,
+    )
+    model.apply_batch((result,), _touched("src/app_pkg/app.py", 3))
+    repeated = [e for e in model.to_dict()["events"]
+                if e["kind"] == "file_changed" and e.get("seq") == 3]
+    assert repeated and "diffPreview" not in repeated[0]
 
 
 def test_diff_preview_caps_total_lines_and_skips_malformed_edits() -> None:
     from harn_gibson.perception import _diff_preview_from_payload
 
-    block = "\n".join(f"line {i}" for i in range(6))
+    block = "\n".join(f"line {i}" for i in range(10))
     preview = _diff_preview_from_payload({
         "toolName": "edit",
         "input": {"path": "x.py", "edits": [
             {"oldText": block, "newText": block},
             {"oldText": block, "newText": block},
+            {"oldText": block, "newText": block},
         ]},
     })
-    assert len(preview) == 12  # hard cap across all edits
+    assert len(preview) == 24  # hard cap across all edits, 8 per side
     skipped = _diff_preview_from_payload({
         "toolName": "edit",
         "input": {"path": "x.py", "edits": ["not-a-mapping", {"newText": "y = 1\n"}]},

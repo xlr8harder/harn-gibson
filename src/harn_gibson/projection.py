@@ -552,7 +552,7 @@ class ProjectionEngine:
         if isinstance(lines, str) and lines.startswith("$"):
             lines = event.get(lines[1:])
         if isinstance(lines, list):
-            instance["lines"] = [str(line)[:96] for line in lines[:12] if isinstance(line, str)]
+            instance["lines"] = [str(line)[:96] for line in lines[:24] if isinstance(line, str)]
         return instance
 
     # -- mood / camera / hud --------------------------------------------------------

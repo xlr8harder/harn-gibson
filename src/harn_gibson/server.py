@@ -6869,43 +6869,71 @@ function drawProjectionEffect(effect, theme, rect, pointFor, now, w, h) {
   }
 }
 
-const projectionPeekClocks = new Map();
-const PROJECTION_PEEK_WALL_MS = 3200;
+const projectionPeekWindows = new Map();
+const PEEK_HOLD_MS = 2600;   // window stays open this long after the last new diff
+const PEEK_OPEN_MS = 220;
+const PEEK_WINK_MS = 260;
+const PEEK_VISIBLE_LINES = 8;
+const PEEK_BACKLOG_LINES = 60;
 
 function drawProjectionPeek(effect, theme, point, now) {
-  // a little terminal box pops open at the node, scrolls the diff past,
-  // and winks back out like a CRT switching off. Paced by WALL time with a
-  // clock keyed to the target (not the effect id), so replay speed and
-  // rapid-fire refreshes cannot reduce it to an unreadable blink.
+  // an accruing terminal window per node: diffs append as the agent edits,
+  // the box grows up to PEEK_VISIBLE_LINES then bottom-follows like a tail,
+  // and it winks closed after a quiet period. One edit = one short visit;
+  // a burst of edits keeps the window open and scrolling.
   if (!point) return;
-  const lines = Array.isArray(effect.lines) ? effect.lines : [];
-  if (!lines.length) return;
-  const clockKey = `peek:${effect.targets[0]}`;
-  let clock = projectionPeekClocks.get(clockKey);
-  if (!clock) {
-    clock = {effectId: effect.id, startedAt: now};
-    projectionPeekClocks.set(clockKey, clock);
-  } else if (clock.effectId !== effect.id) {
-    // new content for an in-flight box: stay open, restart the scroll
-    clock.effectId = effect.id;
-    clock.startedAt = now - PROJECTION_PEEK_WALL_MS * 0.2;
+  const newLines = Array.isArray(effect.lines) ? effect.lines : [];
+  const key = `peek:${effect.targets[0]}`;
+  let win = projectionPeekWindows.get(key);
+  if (!win) {
+    win = {lines: [], seen: new Set(), lastChunk: "", openedAt: now,
+           lastAppendAt: now, offset: 0, lastNow: now, drawnAt: 0};
+    projectionPeekWindows.set(key, win);
   }
-  const progress = (now - clock.startedAt) / PROJECTION_PEEK_WALL_MS;
-  if (progress >= 1) {
-    projectionPeekClocks.delete(clockKey);
+  if (!win.seen.has(effect.id)) {
+    win.seen.add(effect.id);
+    const chunk = newLines.join("\\n");
+    if (chunk && chunk !== win.lastChunk) {
+      win.lastChunk = chunk;
+      win.lines.push(...newLines);
+      win.lastAppendAt = now;
+      if (win.lines.length > PEEK_BACKLOG_LINES) {
+        const dropped = win.lines.length - PEEK_BACKLOG_LINES;
+        win.lines.splice(0, dropped);
+        win.offset = Math.max(0, win.offset - dropped);
+      }
+    }
+  }
+  if (win.drawnAt === now) return; // several live effects, one window
+  win.drawnAt = now;
+  if (!win.lines.length) return;
+
+  const quiet = now - win.lastAppendAt;
+  if (quiet > PEEK_HOLD_MS + PEEK_WINK_MS) {
+    projectionPeekWindows.delete(key);
     return;
   }
+  const dt = Math.min(0.1, (now - win.lastNow) / 1000);
+  win.lastNow = now;
+  const openRamp = Math.min(1, (now - win.openedAt) / PEEK_OPEN_MS);
+  const wink = quiet > PEEK_HOLD_MS ? 1 - (quiet - PEEK_HOLD_MS) / PEEK_WINK_MS : 1;
+  const openness = Math.min(openRamp, Math.max(0, wink));
+
   const lineHeight = 11 * devicePixelRatio;
-  const boxWidth = 250 * devicePixelRatio;
-  const boxHeight = Math.min(6, lines.length) * lineHeight + 10 * devicePixelRatio;
-  const popIn = Math.min(1, progress / 0.07);
-  const winkOut = progress > 0.92 ? Math.max(0, 1 - (progress - 0.92) / 0.08) : 1;
-  const openness = Math.min(popIn, winkOut);
+  const visibleLines = Math.min(PEEK_VISIBLE_LINES, win.lines.length);
+  const innerHeight = visibleLines * lineHeight;
+  const boxHeight = innerHeight + 10 * devicePixelRatio;
+  const boxWidth = 260 * devicePixelRatio;
+  // bottom-follow: ease the view toward the newest lines
+  const targetOffset = Math.max(0, win.lines.length - visibleLines);
+  win.offset += (targetOffset - win.offset) * Math.min(1, dt * 4);
+
   // keep the box on screen: prefer above-right of the node, flip when clipped
   let x = point.x + 14 * devicePixelRatio;
   if (x + boxWidth > canvas.width - 4) x = point.x - boxWidth - 14 * devicePixelRatio;
   let y = point.y - boxHeight - 10 * devicePixelRatio;
   if (y < 4) y = point.y + 14 * devicePixelRatio;
+
   ctx.save();
   // vertical openness gives the pop/wink; width stays (CRT collapse)
   const visibleHeight = Math.max(1.5 * devicePixelRatio, boxHeight * openness);
@@ -6917,24 +6945,22 @@ function drawProjectionPeek(effect, theme, point, now) {
   ctx.rect(x, boxY, boxWidth, visibleHeight);
   ctx.fill();
   ctx.stroke();
-  if (openness > 0.6) {
+  if (openness > 0.55) {
     ctx.beginPath();
     ctx.rect(x, boxY, boxWidth, visibleHeight);
     ctx.clip();
-    ctx.globalAlpha *= Math.min(1, (openness - 0.6) / 0.3);
+    ctx.globalAlpha *= Math.min(1, (openness - 0.55) / 0.35);
     ctx.font = `${8.5 * devicePixelRatio}px ui-monospace, monospace`;
     ctx.textAlign = "left";
     ctx.textBaseline = "top";
-    // the scroll: content drifts upward through the window over the body
-    // of the effect's lifetime
-    const scrollSpan = Math.max(0, lines.length * lineHeight - (boxHeight - 10 * devicePixelRatio));
-    const scrollPhase = Math.min(1, Math.max(0, (progress - 0.15) / 0.65));
-    const offset = scrollSpan * scrollPhase;
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
+    const baseY = boxY + 5 * devicePixelRatio - win.offset * lineHeight;
+    for (let i = 0; i < win.lines.length; i++) {
+      const lineY = baseY + i * lineHeight;
+      if (lineY < boxY - lineHeight || lineY > boxY + visibleHeight) continue;
+      const line = win.lines[i];
       const tone = line.startsWith("+") ? "good" : line.startsWith("-") ? "alarm" : "ghost";
       ctx.fillStyle = projectionTone(theme, tone, 0.95);
-      ctx.fillText(line.slice(0, 44), x + 5 * devicePixelRatio, boxY + 5 * devicePixelRatio + i * lineHeight - offset);
+      ctx.fillText(line.slice(0, 46), x + 5 * devicePixelRatio, lineY);
     }
   }
   ctx.restore();
