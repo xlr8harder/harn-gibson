@@ -121,6 +121,11 @@ class ProjectionEngine:
         self._check_errors_seen: set[str] = set()
         self._attr_max: dict[tuple[str, str], float] = {}
 
+    def redirect(self, spec: Mapping[str, Any] | None) -> None:
+        """Swap the projection while keeping warm positions, effect lifetimes,
+        and check history -- so a projection change morphs instead of cutting."""
+        self.spec = _merge_spec(spec)
+
     # -- resolution -------------------------------------------------------------
 
     def resolve(self, perception: Mapping[str, Any], *, project_name: str = "", now_ms: int = 0) -> dict[str, Any]:
@@ -774,6 +779,13 @@ class ProjectionSceneRenderer:
 
     def __init__(self, spec: Mapping[str, Any] | None = None) -> None:
         self.engine = ProjectionEngine(spec)
+        self._pending_spec: dict[str, Any] | None = None
+
+    def redirect(self, spec: Mapping[str, Any] | None) -> None:
+        """Queue a projection change (the director hook). Applied at the start
+        of the next plan, under the pipeline lock, so a swap arriving mid-render
+        can never produce a scene resolved from two different specs."""
+        self._pending_spec = dict(spec or {})
 
     def render(self, requests: Sequence[Any], _scene: SceneState) -> Any:
         return self._plan(requests, {"entities": [], "relations": [], "events": []}, "")
@@ -786,6 +798,9 @@ class ProjectionSceneRenderer:
     def _plan(self, requests: Sequence[Any], perception: Mapping[str, Any], project_name: str) -> Any:
         from .rendering import RenderPlan, RenderStep  # adapter-local: avoids an import cycle
 
+        pending, self._pending_spec = self._pending_spec, None
+        if pending is not None:
+            self.engine.redirect(pending)
         event = requests[-1].event if requests else None
         now_ms = event.timestamp_ms if event is not None else 0
         props = self.engine.resolve(perception, project_name=project_name, now_ms=now_ms)

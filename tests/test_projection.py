@@ -505,6 +505,117 @@ def test_int_coercion_rejects_bools_and_accepts_integral_floats() -> None:
     assert _int("9", 7) == 7
 
 
+def test_engine_redirect_swaps_spec_but_keeps_history() -> None:
+    engine = ProjectionEngine()
+    error_events = [{"seq": 6, "ts": 6000, "kind": "check_completed", "entity": "check:test:6",
+                     "category": "test", "status": "error"}]
+    first = engine.resolve(_perception(events=error_events), now_ms=6000)
+    assert any(effect["kind"] == "breach" for effect in first["effects"])
+
+    engine.redirect({"theme": "blueprint", "layers": [
+        {"id": "w", "select": {"types": ["file"]}, "layout": {"kind": "grid"}},
+    ]})
+    second = engine.resolve(_perception(events=error_events), now_ms=6500)
+    assert second["theme"] == "blueprint"
+    # seen-event history survives the redirect: the same events do not re-fire
+    assert not any(effect["kind"] == "breach" and effect["startedAtMs"] > 6000 for effect in second["effects"])
+    # default rules survive too (redirect merges over defaults)
+    assert second["nodes"]
+
+
+def test_renderer_redirect_is_applied_at_the_next_plan() -> None:
+    renderer = ProjectionSceneRenderer()
+    event = GibsonEvent.from_raw(
+        {"type": "tool_result", "toolName": "bash", "input": {"command": "ls"}},
+        sequence=1,
+        timestamp_ms=100,
+    )
+    request = RenderRequest(event)
+
+    class _Context:
+        project = {"name": "repo", "perceptionModel": _perception()}
+
+    plan = renderer.render_with_context((request,), SceneEngine().state, _Context())
+    assert plan.metadata["theme"] == "gibson"
+    renderer.redirect({"theme": "blueprint"})
+    plan = renderer.render_with_context((request,), SceneEngine().state, _Context())
+    assert plan.metadata["theme"] == "blueprint"
+
+
+def test_projection_http_endpoints_redirect_live_sessions() -> None:
+    import threading
+    import urllib.request
+
+    from harn_gibson.server import build_state_from_env, create_server
+
+    state = build_state_from_env({"HARN_GIBSON_PROJECTION": "1"})
+    server = create_server("127.0.0.1", 0, state)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    host, port = server.server_address
+    base = f"http://{host}:{port}"
+
+    def _request(path: str, data: bytes | None = None) -> tuple[int, dict]:
+        request = urllib.request.Request(
+            f"{base}{path}", data=data, method="POST" if data is not None else "GET"
+        )
+        if data is not None:
+            request.add_header("Content-Type", "application/json")
+        try:
+            with urllib.request.urlopen(request, timeout=2) as response:  # noqa: S310
+                return response.status, json.loads(response.read().decode("utf-8"))
+        except urllib.error.HTTPError as error:
+            return error.code, json.loads(error.read().decode("utf-8"))
+
+    try:
+        status, payload = _request("/projection")
+        assert status == 200
+        assert payload["active"] is True
+        assert payload["spec"]["theme"] == "gibson"
+
+        status, payload = _request("/projection", json.dumps({"theme": "blueprint"}).encode("utf-8"))
+        assert status == 202
+        assert payload["spec"]["theme"] == "blueprint"
+        # the nudge event re-rendered the scene under the new projection
+        assert payload["engineRevision"] >= 1
+
+        status, payload = _request("/projection", b"not-json")
+        assert status == 400
+    finally:
+        server.shutdown()
+        server.server_close()
+        state.pipeline.stop()
+
+
+def test_projection_post_conflicts_without_projection_renderer() -> None:
+    import threading
+    import urllib.error
+    import urllib.request
+
+    from harn_gibson.server import GibsonServerState, create_server, projection_status_payload
+
+    state = GibsonServerState()
+    assert projection_status_payload(state) == {"active": False, "schema": "harn-gibson.projection.v1"}
+    server = create_server("127.0.0.1", 0, state)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    host, port = server.server_address
+    try:
+        request = urllib.request.Request(
+            f"http://{host}:{port}/projection", data=b"{}", method="POST",
+            headers={"Content-Type": "application/json"},
+        )
+        try:
+            urllib.request.urlopen(request, timeout=2)  # noqa: S310
+            raise AssertionError("expected HTTP 409")
+        except urllib.error.HTTPError as error:
+            assert error.code == 409
+    finally:
+        server.shutdown()
+        server.server_close()
+        state.pipeline.stop()
+
+
 def test_example_projection_specs_parse_and_resolve() -> None:
     root = Path(__file__).resolve().parents[1] / "examples" / "projections"
     for spec_path in sorted(root.glob("*.json")):

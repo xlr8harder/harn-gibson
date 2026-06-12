@@ -19,7 +19,7 @@ from harn_gibson.catalog import VisualCatalog, default_visual_catalog
 from harn_gibson.events import GibsonEvent, diagnostic_event
 from harn_gibson.external_renderer import external_renderer_from_env
 from harn_gibson.model_renderer import model_renderer_from_env
-from harn_gibson.projection import ProjectionSceneRenderer, load_projection_spec
+from harn_gibson.projection import PROJECTION_SCHEMA, ProjectionSceneRenderer, load_projection_spec
 from harn_gibson.rendering import (
     DeterministicSceneRenderer,
     RendererContextBuilder,
@@ -386,6 +386,9 @@ def make_handler(state: GibsonServerState) -> type[BaseHTTPRequestHandler]:
             if request_path == "/backend-contract":
                 self._json(HTTPStatus.OK, backend_contract_payload(state))
                 return
+            if request_path == "/projection":
+                self._json(HTTPStatus.OK, projection_status_payload(state))
+                return
             if request_path == "/input/next":
                 item = state.inputs.pop()
                 state.input_bridge.record_input_poll(delivered=item is not None)
@@ -407,7 +410,32 @@ def make_handler(state: GibsonServerState) -> type[BaseHTTPRequestHandler]:
             if request_path == "/input":
                 self._handle_input_post()
                 return
+            if request_path == "/projection":
+                self._handle_projection_post()
+                return
             self._json(HTTPStatus.NOT_FOUND, {"error": "not found"})
+
+        def _handle_projection_post(self) -> None:
+            spec = self._read_json_payload("projection spec must be an object")
+            if spec is None:
+                return
+            renderer = state.pipeline.renderer
+            if not isinstance(renderer, ProjectionSceneRenderer):
+                self._json(
+                    HTTPStatus.CONFLICT,
+                    {"error": "active renderer is not projection-driven; start with HARN_GIBSON_PROJECTION"},
+                )
+                return
+            renderer.redirect(spec)
+            # nudge the pipeline so the new projection lands without waiting
+            # for the next agent event
+            publish_diagnostic_event(
+                state,
+                state.scene.state.revision + 1,
+                message=f"projection redirected (theme {spec.get('theme') or 'default'})",
+                event_type="projection_update",
+            )
+            self._json(HTTPStatus.ACCEPTED, projection_status_payload(state))
 
         def _handle_event_post(self) -> None:
             payload = self._read_json_payload("event payload must be an object")
@@ -514,6 +542,19 @@ def health_payload(state: GibsonServerState) -> dict[str, Any]:
         "pendingRenderJobs": state.pipeline.pending_count(),
         "inputBridge": state.input_bridge.snapshot(pending_inputs=state.inputs.pending_count()),
         "streams": state.router.stream_snapshot(),
+    }
+
+
+def projection_status_payload(state: GibsonServerState) -> dict[str, Any]:
+    renderer = state.pipeline.renderer
+    if not isinstance(renderer, ProjectionSceneRenderer):
+        return {"active": False, "schema": PROJECTION_SCHEMA}
+    return {
+        "active": True,
+        "schema": PROJECTION_SCHEMA,
+        "spec": renderer.engine.spec,
+        "engineRevision": renderer.engine.revision,
+        "sceneRevision": state.scene.state.revision,
     }
 
 
@@ -6230,9 +6271,16 @@ function drawProjectionScene(primitive, w, h, now) {
     tween.size += (node.size - tween.size) * ease;
     tween.opacity += ((node.opacity ?? 1) - tween.opacity) * ease;
     tween.lift += ((node.lift || 0) - tween.lift) * ease;
+    tween.node = node;
+    tween.leaving = false;
   }
-  for (const id of Array.from(projectionTweens.keys())) {
-    if (!liveIds.has(id)) projectionTweens.delete(id);
+  // deselected nodes fade out in place instead of popping
+  for (const [id, tween] of Array.from(projectionTweens.entries())) {
+    if (liveIds.has(id)) continue;
+    tween.leaving = true;
+    tween.opacity += (0 - tween.opacity) * ease * 1.6;
+    tween.size += (0 - tween.size) * ease * 0.8;
+    if (tween.opacity < 0.04) projectionTweens.delete(id);
   }
 
   // effect clocks run on the browser timebase, keyed by effect id
@@ -6345,12 +6393,14 @@ function drawProjectionScene(primitive, w, h, now) {
   }
 
   const showAllLabels = nodes.length <= 26;
-  for (const node of nodes) {
-    const tween = projectionTweens.get(node.id);
-    if (!tween) continue;
+  for (const tween of projectionTweens.values()) {
+    const node = tween.node;
+    if (!node) continue;
     const point = projectionNodePoint(rect, tween, camera);
     const radius = (3.5 + tween.size * 11) * devicePixelRatio;
     const tone = node.tone || "base";
+    const isFocus = Boolean(node.focus) && !tween.leaving;
+    const showLabel = !tween.leaving && node.label && (showAllLabels || isFocus || tone === "alarm");
     ctx.save();
     ctx.globalAlpha *= Math.max(0.05, tween.opacity);
     if (tween.lift > 0.02) {
@@ -6361,13 +6411,13 @@ function drawProjectionScene(primitive, w, h, now) {
       ctx.lineTo(point.x, point.y);
       ctx.stroke();
     }
-    ctx.shadowColor = projectionTone(theme, tone, node.focus ? 0.95 : 0.6);
-    ctx.shadowBlur = theme.glow * (node.focus ? 1.6 : 1) * devicePixelRatio * 0.12 * 8;
-    ctx.fillStyle = projectionTone(theme, tone, node.focus ? 0.7 : 0.42);
+    ctx.shadowColor = projectionTone(theme, tone, isFocus ? 0.95 : 0.6);
+    ctx.shadowBlur = theme.glow * (isFocus ? 1.6 : 1) * devicePixelRatio * 0.12 * 8;
+    ctx.fillStyle = projectionTone(theme, tone, isFocus ? 0.7 : 0.42);
     ctx.strokeStyle = theme.paper
       ? `rgba(${theme.ink},0.85)`
-      : projectionTone(theme, tone, node.focus ? 1.0 : 0.8);
-    ctx.lineWidth = (node.focus ? 1.9 : 1.1) * devicePixelRatio;
+      : projectionTone(theme, tone, isFocus ? 1.0 : 0.8);
+    ctx.lineWidth = (isFocus ? 1.9 : 1.1) * devicePixelRatio;
     ctx.beginPath();
     if (node.kind === "agent") {
       const wob = 1 + Math.sin(now * 0.008) * 0.12;
@@ -6386,21 +6436,21 @@ function drawProjectionScene(primitive, w, h, now) {
     }
     ctx.fill();
     ctx.stroke();
-    if (node.focus) {
+    if (isFocus) {
       ctx.setLineDash([4, 5]);
       ctx.beginPath();
       ctx.arc(point.x, point.y, radius * 1.7, now * 0.002, now * 0.002 + Math.PI * 2);
       ctx.stroke();
       ctx.setLineDash([]);
     }
-    if (node.label && (showAllLabels || node.focus || tone === "alarm")) {
+    if (showLabel) {
       ctx.shadowBlur = 3;
       ctx.font = `${9.5 * devicePixelRatio}px ui-monospace, monospace`;
       ctx.textAlign = "center";
       ctx.textBaseline = "top";
       ctx.fillStyle = theme.paper
-        ? `rgba(${theme.ink},${node.focus ? 0.95 : 0.7})`
-        : `rgba(${theme.ink},${node.focus ? 0.95 : 0.62})`;
+        ? `rgba(${theme.ink},${isFocus ? 0.95 : 0.7})`
+        : `rgba(${theme.ink},${isFocus ? 0.95 : 0.62})`;
       ctx.fillText(String(node.label), point.x, point.y + radius + 4 * devicePixelRatio);
     }
     ctx.restore();
