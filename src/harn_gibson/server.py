@@ -6801,7 +6801,7 @@ function drawProjectionEffect(effect, theme, rect, pointFor, now, w, h) {
     return;
   }
   if (effect.kind === "peek" && targets.length) {
-    drawProjectionPeek(effect, theme, pointFor(targets[0]), progress, fade);
+    drawProjectionPeek(effect, theme, pointFor(targets[0]), now);
     return;
   }
   if (effect.kind === "beam" && targets.length >= 2) {
@@ -6863,48 +6863,71 @@ function drawProjectionEffect(effect, theme, rect, pointFor, now, w, h) {
   }
 }
 
-function drawProjectionPeek(effect, theme, point, progress, fade) {
+const projectionPeekClocks = new Map();
+const PROJECTION_PEEK_WALL_MS = 3200;
+
+function drawProjectionPeek(effect, theme, point, now) {
   // a little terminal box pops open at the node, scrolls the diff past,
-  // and winks back out like a CRT switching off
+  // and winks back out like a CRT switching off. Paced by WALL time with a
+  // clock keyed to the target (not the effect id), so replay speed and
+  // rapid-fire refreshes cannot reduce it to an unreadable blink.
   if (!point) return;
   const lines = Array.isArray(effect.lines) ? effect.lines : [];
   if (!lines.length) return;
+  const clockKey = `peek:${effect.targets[0]}`;
+  let clock = projectionPeekClocks.get(clockKey);
+  if (!clock) {
+    clock = {effectId: effect.id, startedAt: now};
+    projectionPeekClocks.set(clockKey, clock);
+  } else if (clock.effectId !== effect.id) {
+    // new content for an in-flight box: stay open, restart the scroll
+    clock.effectId = effect.id;
+    clock.startedAt = now - PROJECTION_PEEK_WALL_MS * 0.2;
+  }
+  const progress = (now - clock.startedAt) / PROJECTION_PEEK_WALL_MS;
+  if (progress >= 1) {
+    projectionPeekClocks.delete(clockKey);
+    return;
+  }
   const lineHeight = 11 * devicePixelRatio;
   const boxWidth = 250 * devicePixelRatio;
   const boxHeight = Math.min(6, lines.length) * lineHeight + 10 * devicePixelRatio;
-  const popIn = Math.min(1, progress / 0.08);
-  const winkOut = progress > 0.9 ? Math.max(0, 1 - (progress - 0.9) / 0.1) : 1;
+  const popIn = Math.min(1, progress / 0.07);
+  const winkOut = progress > 0.92 ? Math.max(0, 1 - (progress - 0.92) / 0.08) : 1;
   const openness = Math.min(popIn, winkOut);
-  const x = point.x + 14 * devicePixelRatio;
-  const y = point.y - boxHeight - 10 * devicePixelRatio;
+  // keep the box on screen: prefer above-right of the node, flip when clipped
+  let x = point.x + 14 * devicePixelRatio;
+  if (x + boxWidth > canvas.width - 4) x = point.x - boxWidth - 14 * devicePixelRatio;
+  let y = point.y - boxHeight - 10 * devicePixelRatio;
+  if (y < 4) y = point.y + 14 * devicePixelRatio;
   ctx.save();
-  ctx.globalAlpha *= Math.max(0, Math.min(1, fade * 3));
   // vertical openness gives the pop/wink; width stays (CRT collapse)
   const visibleHeight = Math.max(1.5 * devicePixelRatio, boxHeight * openness);
   const boxY = y + (boxHeight - visibleHeight) / 2;
-  ctx.fillStyle = "rgba(2,6,10,0.88)";
-  ctx.strokeStyle = projectionTone(theme, effect.tone || "accent", 0.8);
+  ctx.fillStyle = "rgba(2,6,10,0.9)";
+  ctx.strokeStyle = projectionTone(theme, effect.tone || "accent", 0.85);
   ctx.lineWidth = devicePixelRatio;
   ctx.beginPath();
   ctx.rect(x, boxY, boxWidth, visibleHeight);
   ctx.fill();
   ctx.stroke();
-  if (openness > 0.85) {
+  if (openness > 0.6) {
     ctx.beginPath();
     ctx.rect(x, boxY, boxWidth, visibleHeight);
     ctx.clip();
+    ctx.globalAlpha *= Math.min(1, (openness - 0.6) / 0.3);
     ctx.font = `${8.5 * devicePixelRatio}px ui-monospace, monospace`;
     ctx.textAlign = "left";
     ctx.textBaseline = "top";
     // the scroll: content drifts upward through the window over the body
     // of the effect's lifetime
-    const scrollSpan = Math.max(0, lines.length * lineHeight - (visibleHeight - 8 * devicePixelRatio));
-    const scrollPhase = Math.min(1, Math.max(0, (progress - 0.12) / 0.7));
+    const scrollSpan = Math.max(0, lines.length * lineHeight - (boxHeight - 10 * devicePixelRatio));
+    const scrollPhase = Math.min(1, Math.max(0, (progress - 0.15) / 0.65));
     const offset = scrollSpan * scrollPhase;
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
       const tone = line.startsWith("+") ? "good" : line.startsWith("-") ? "alarm" : "ghost";
-      ctx.fillStyle = projectionTone(theme, tone, 0.92);
+      ctx.fillStyle = projectionTone(theme, tone, 0.95);
       ctx.fillText(line.slice(0, 44), x + 5 * devicePixelRatio, boxY + 5 * devicePixelRatio + i * lineHeight - offset);
     }
   }

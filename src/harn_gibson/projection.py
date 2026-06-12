@@ -48,7 +48,9 @@ _EFFECT_TTLS_MS = {
     "shake": 1200,
     "alarm": 2600,
     "banner": 2600,
-    "peek": 3600,
+    # peeks are paced by WALL time in the browser (~3.2s); the scene-side TTL
+    # is generous so fast replays cannot evict the effect mid-animation
+    "peek": 15000,
 }
 _MAX_NODES_PER_LAYER = 150
 _FORCE_COLD_ITERATIONS = 360
