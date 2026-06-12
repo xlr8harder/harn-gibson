@@ -53,7 +53,7 @@ _GIT_TIMEOUT_SECONDS = 3.0
 _MAX_GIT_FILES = 4000
 _MAX_UNTRACKED_FILES = 200
 _MAX_COMMAND_PREVIEW_CHARS = 200
-_MAX_NARRATION_CHARS = 400
+_MAX_NARRATION_CHARS = 2000
 
 _EXCLUDED_NAMES = {
     ".coverage",
@@ -389,9 +389,18 @@ class PerceptionModel:
                 saw_after_phase = True
             touches = touched_by_sequence.get(event.sequence, ())
             self._observe_narration(event)
-            self._observe_command(event)
+            check_launched = self._observe_command(event)
             command_id = self._command_for_sequence(event.sequence)
-            self._observe_touches(event, touches, command_id)
+            # narrative attention: launching a check means attending to the
+            # whole project, not the file paths named in the command line --
+            # the cursor travels to the root BEFORE the verdict lands there
+            if check_launched:
+                self._upsert_relation(
+                    "focused_on", "agent", "dir:.",
+                    seq=event.sequence, provenance="inferred", confidence=0.7,
+                    exclusive=True,
+                )
+            self._observe_touches(event, touches, command_id, suppress_focus=check_launched)
             outcome = outcome_from_event(event)
             if outcome is not None:
                 self._observe_outcome(event, outcome, command_id)
@@ -412,18 +421,21 @@ class PerceptionModel:
             if self._narration_complete:
                 self._narration = ""
                 self._narration_complete = False
-            self._narration = (self._narration + text)[-_MAX_NARRATION_CHARS:]
+            # keep the HEAD on overflow: the thesis of a message lives at the
+            # start; displays scroll forward through it
+            self._narration = (self._narration + text)[:_MAX_NARRATION_CHARS]
             self._narration_seq = event.sequence
         elif event.event_type == "message_end":
             if text:
-                self._narration = text[-_MAX_NARRATION_CHARS:]
+                self._narration = text[:_MAX_NARRATION_CHARS]
             self._narration_seq = event.sequence
             self._narration_complete = True
 
-    def _observe_command(self, event: GibsonEvent) -> None:
+    def _observe_command(self, event: GibsonEvent) -> bool:
+        """Returns True when this event launches a health check (test/build)."""
         observation = command_from_event(event)
         if observation is None:
-            return
+            return False
         pending_key = (observation.tool_name, observation.command)
         if event.phase == "before":
             command_id = f"command:{event.sequence}"
@@ -445,6 +457,7 @@ class PerceptionModel:
                     "entity": command_id,
                     "category": category,
                 })
+                return True
         else:
             command_id = self._pending_commands.get(pending_key)
             existing = self._commands.get(command_id) if command_id else None
@@ -463,6 +476,7 @@ class PerceptionModel:
                         start_seq=event.sequence,
                     )
                     self._pending_commands[pending_key] = replacement_id
+        return False
 
     def _command_for_sequence(self, sequence: int) -> str | None:
         # insertion order is ascending start_seq, so the last match is the
@@ -474,7 +488,12 @@ class PerceptionModel:
         return best.id if best else None
 
     def _observe_touches(
-        self, event: GibsonEvent, touches: Sequence[Mapping[str, Any]], command_id: str | None
+        self,
+        event: GibsonEvent,
+        touches: Sequence[Mapping[str, Any]],
+        command_id: str | None,
+        *,
+        suppress_focus: bool = False,
     ) -> None:
         primary: str | None = None
         for touch in touches:
@@ -494,7 +513,9 @@ class PerceptionModel:
                 "touched", source, f"file:{path}",
                 seq=event.sequence, provenance="observed", confidence=1.0,
             )
-        if primary is not None:
+        if primary is not None and not suppress_focus:
+            # paths named in a check's command line are arguments, not where
+            # the attention is -- focus stays on the project while it runs
             self._focused_path = primary
             self._agent_action = {
                 "eventType": event.event_type,

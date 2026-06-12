@@ -295,21 +295,22 @@ def test_perception_tracks_agent_narration(tmp_path: Path) -> None:
     assert agent["attrs"]["narration"] == "patched the exit code"
     assert agent["attrs"]["narrationComplete"] is True
 
-    # a new message after completion starts fresh instead of appending,
-    # and the buffer keeps only a bounded tail of very long messages
+    # a new message after completion starts fresh instead of appending, and
+    # the buffer keeps the HEAD of very long messages (the thesis comes first)
     flood = GibsonEvent.from_raw(
-        {"type": "message_update", "text": "x" * 1000}, sequence=4, timestamp_ms=400
+        {"type": "message_update", "text": "HEAD-MARKER " + "x" * 2500}, sequence=4, timestamp_ms=400
     )
     model.apply_batch((flood,), empty)
     agent = next(e for e in model.to_dict()["entities"] if e["id"] == "agent")
-    assert agent["attrs"]["narration"] == "x" * 400
+    assert agent["attrs"]["narration"].startswith("HEAD-MARKER ")
+    assert len(agent["attrs"]["narration"]) == 2000
     assert agent["attrs"]["narrationComplete"] is False
 
     # message_end without text keeps the accumulated narration, sealed
     silent_end = GibsonEvent.from_raw({"type": "message_end"}, sequence=5, timestamp_ms=500)
     model.apply_batch((silent_end,), empty)
     agent = next(e for e in model.to_dict()["entities"] if e["id"] == "agent")
-    assert agent["attrs"]["narration"] == "x" * 400
+    assert agent["attrs"]["narration"].startswith("HEAD-MARKER ")
     assert agent["attrs"]["narrationComplete"] is True
 
     # streamed tool-call argument deltas are not the agent's voice
@@ -530,6 +531,36 @@ def test_perception_ignores_invisible_and_empty_touches(tmp_path: Path) -> None:
     assert not any("Successfully" in entity["id"] or "seed linkjar" in entity["id"]
                    for entity in payload["entities"])
     assert not any(r["type"] == "focused_on" for r in payload["relations"])
+
+
+def test_check_launch_moves_attention_to_the_project_root(tmp_path: Path) -> None:
+    root = _git_fixture(tmp_path)
+    model = PerceptionModel(project_root=str(root))
+    # focus starts on a file the agent edited
+    first = _command_pair("cat src/app_pkg/app.py", start_seq=1, path="src/app_pkg/app.py")
+    model.apply_batch(first[:2], first[2])
+
+    # launching the test suite: attention travels to the whole project,
+    # even though the command line names test files
+    call = GibsonEvent.from_raw(
+        {"type": "tool_call", "toolName": "bash", "input": {"command": "uv run pytest tests/test_app.py"}},
+        sequence=4,
+        timestamp_ms=400,
+    )
+    model.apply_batch((call,), _touched("tests/test_app.py", 4))
+    focused = [r for r in model.to_dict()["relations"] if r["type"] == "focused_on"]
+    assert [(r["from"], r["to"]) for r in focused] == [("agent", "dir:.")]
+
+    # the verdict arrives with touched files: attention moves to the evidence
+    result = GibsonEvent.from_raw(
+        {"type": "tool_result", "toolName": "bash",
+         "input": {"command": "uv run pytest tests/test_app.py"}, "isError": True},
+        sequence=5,
+        timestamp_ms=500,
+    )
+    model.apply_batch((result,), _touched("tests/test_app.py", 5))
+    focused = [r for r in model.to_dict()["relations"] if r["type"] == "focused_on"]
+    assert [(r["from"], r["to"]) for r in focused] == [("agent", "file:tests/test_app.py")]
 
 
 def test_perception_keeps_primary_focus_for_multi_path_touches(tmp_path: Path) -> None:

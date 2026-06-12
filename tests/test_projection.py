@@ -157,11 +157,11 @@ def test_event_rules_fire_effects_once_with_blast_and_recovery() -> None:
     scene = engine.resolve(_perception(events=error_events), now_ms=30000)
     assert scene["effects"] == []
 
-    # recovery: an ok check for a category that previously erred fires the ring
-    recovered_entities = [
-        entity for entity in _default_entities()
-        if entity["id"] != "check:test:6"
-    ] + [{"id": "check:test:9", "type": "check", "attrs": {"category": "test", "status": "ok", "seq": 9}}]
+    # recovery: an ok check for a category that previously erred fires the
+    # ring (perception keeps both the old error check and the new green one)
+    recovered_entities = _default_entities() + [
+        {"id": "check:test:9", "type": "check", "attrs": {"category": "test", "status": "ok", "seq": 9}},
+    ]
     recovery_events = error_events + [
         {"seq": 9, "ts": 9000, "kind": "check_completed", "entity": "check:test:9",
          "category": "test", "status": "ok"},
@@ -465,6 +465,22 @@ def test_tone_and_label_encode_rules_override_defaults() -> None:
     assert nodes["file:src/util.py"]["tone"] == "ghost"
 
 
+def test_hud_displays_directory_focus_readably() -> None:
+    relations = [r for r in _default_relations() if r["type"] != "focused_on"]
+    relations.append({"type": "focused_on", "from": "agent", "to": "dir:."})
+    engine = ProjectionEngine()
+    # an in-flight check status neither errors nor celebrates
+    events = [{"seq": 5, "ts": 5000, "kind": "check_completed", "entity": "check:test:5",
+               "category": "test", "status": "running"}]
+    scene = engine.resolve(_perception(relations=relations, events=events), now_ms=5000)
+    assert scene["hud"]["focus"] == "repo (whole project)"
+
+    nested = [r for r in _default_relations() if r["type"] != "focused_on"]
+    nested.append({"type": "focused_on", "from": "agent", "to": "dir:src"})
+    scene = ProjectionEngine().resolve(_perception(relations=nested), now_ms=1000)
+    assert scene["hud"]["focus"] == "src/"
+
+
 def test_hud_carries_agent_narration() -> None:
     entities = [entity for entity in _default_entities() if entity["id"] != "agent"]
     entities.append({
@@ -655,6 +671,21 @@ def test_repeated_beats_refresh_instead_of_stacking() -> None:
     scene = engine.resolve(_perception(events=burst), now_ms=100)
     pulses = [effect for effect in scene["effects"] if effect["kind"] == "pulse"]
     assert len(pulses) == 1  # eight rapid edits, one live pulse on the node
+
+
+def test_recovery_celebrates_once_then_stays_quiet() -> None:
+    engine = ProjectionEngine()
+    error_event = {"seq": 6, "ts": 6000, "kind": "check_completed", "entity": "check:test:6",
+                   "category": "test", "status": "error"}
+    green_one = {"seq": 9, "ts": 9000, "kind": "check_completed", "entity": "check:test:9",
+                 "category": "test", "status": "ok"}
+    green_two = {"seq": 12, "ts": 12000, "kind": "check_completed", "entity": "check:test:12",
+                 "category": "test", "status": "ok"}
+    scene = engine.resolve(_perception(events=[error_event, green_one]), now_ms=9000)
+    assert any(e["kind"] == "ring" and e["label"] == "LOCK RELEASED" for e in scene["effects"])
+    # a later green check does NOT re-fire the celebration
+    scene = engine.resolve(_perception(events=[error_event, green_one, green_two]), now_ms=30000)
+    assert not any(e["kind"] == "ring" and e["label"] == "LOCK RELEASED" for e in scene["effects"])
 
 
 def test_recovers_rule_does_not_fire_without_prior_error() -> None:

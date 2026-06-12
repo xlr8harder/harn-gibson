@@ -7015,6 +7015,114 @@ function drawProjectionPeek(effect, theme, point, now) {
   ctx.restore();
 }
 
+const projectionNarration = {
+  text: "", lines: [], offset: 0, lastChangeAt: 0, openedAt: 0, lastNow: 0,
+};
+const NARRATION_HOLD_MS = 3200;
+const NARRATION_WINK_MS = 280;
+const NARRATION_VISIBLE_LINES = 6;
+const NARRATION_WRAP_CHARS = 56;
+
+function wrapNarration(text) {
+  const lines = [];
+  const cleaned = text.replace(/[*_`#]+/g, "");
+  for (const paragraph of cleaned.split(/\\n+/)) {
+    let current = "";
+    for (const word of paragraph.split(/\\s+/)) {
+      if (!word) continue;
+      if (current && current.length + word.length + 1 > NARRATION_WRAP_CHARS) {
+        lines.push(current);
+        current = word;
+      } else {
+        current = current ? `${current} ${word}` : word;
+      }
+    }
+    if (current) lines.push(current);
+    lines.push(""); // paragraph break
+  }
+  while (lines.length && lines[lines.length - 1] === "") lines.pop();
+  return lines;
+}
+
+function drawProjectionNarration(hud, theme, rect, now) {
+  // the agent's voice: a terminal window under the mast that streams the
+  // current message from its head, wraps real paragraphs, tail-follows while
+  // streaming, and winks away when the agent goes quiet
+  const state = projectionNarration;
+  const text = String(hud.narration || "");
+  if (text !== state.text) {
+    const opening = !state.text || now - state.lastChangeAt > NARRATION_HOLD_MS + NARRATION_WINK_MS;
+    if (opening) {
+      state.openedAt = now;
+      state.offset = 0;
+    }
+    if (!text.startsWith(state.text)) state.offset = 0; // new message, not a grown one
+    state.text = text;
+    state.lines = wrapNarration(text);
+    state.lastChangeAt = now;
+  }
+  if (!state.lines.length) return;
+  const dt = Math.min(0.1, (now - state.lastNow) / 1000);
+  state.lastNow = now;
+
+  const lineHeight = 13 * devicePixelRatio;
+  const visibleLines = Math.min(NARRATION_VISIBLE_LINES, state.lines.length);
+  const boxHeight = visibleLines * lineHeight + 14 * devicePixelRatio;
+  const boxWidth = 330 * devicePixelRatio;
+  const targetOffset = Math.max(0, state.lines.length - visibleLines);
+  state.offset = Math.min(targetOffset, state.offset + dt * 6);
+  if (targetOffset - state.offset > 0.5) {
+    state.lastChangeAt = Math.max(state.lastChangeAt, now - NARRATION_HOLD_MS + 400);
+  }
+
+  const quiet = now - state.lastChangeAt;
+  if (quiet > NARRATION_HOLD_MS + NARRATION_WINK_MS) return;
+  const openRamp = Math.min(1, (now - state.openedAt) / 240);
+  const wink = quiet > NARRATION_HOLD_MS ? 1 - (quiet - NARRATION_HOLD_MS) / NARRATION_WINK_MS : 1;
+  const openness = Math.min(openRamp, Math.max(0, wink));
+
+  const x = rect.x + 6 * devicePixelRatio;
+  const y = rect.y + 38 * devicePixelRatio;
+  const visibleHeight = Math.max(1.5 * devicePixelRatio, boxHeight * openness);
+  const boxY = y + (boxHeight - visibleHeight) / 2;
+  ctx.save();
+  ctx.fillStyle = "rgba(2,6,10,0.82)";
+  ctx.strokeStyle = projectionTone(theme, "good", 0.55);
+  ctx.lineWidth = devicePixelRatio;
+  ctx.beginPath();
+  ctx.rect(x, boxY, boxWidth, visibleHeight);
+  ctx.fill();
+  ctx.stroke();
+  if (openness > 0.55) {
+    ctx.beginPath();
+    ctx.rect(x, boxY, boxWidth, visibleHeight);
+    ctx.clip();
+    ctx.globalAlpha *= Math.min(1, (openness - 0.55) / 0.35);
+    ctx.font = `${10 * devicePixelRatio}px ui-monospace, monospace`;
+    ctx.textAlign = "left";
+    ctx.textBaseline = "top";
+    const baseY = boxY + 7 * devicePixelRatio - state.offset * lineHeight;
+    for (let i = 0; i < state.lines.length; i++) {
+      const lineY = baseY + i * lineHeight;
+      if (lineY < boxY - lineHeight || lineY > boxY + visibleHeight) continue;
+      ctx.fillStyle = projectionTone(theme, "good", 0.85);
+      ctx.fillText(state.lines[i], x + 6 * devicePixelRatio, lineY);
+    }
+    // streaming cursor while the message is still arriving
+    if (hud.narrationComplete === false) {
+      const cursorOn = Math.floor(now / 420) % 2 === 0;
+      if (cursorOn) {
+        ctx.fillStyle = projectionTone(theme, "good", 0.9);
+        const lastIndex = state.lines.length - 1;
+        const lastY = baseY + lastIndex * lineHeight;
+        const width = ctx.measureText(state.lines[lastIndex] || "").width;
+        ctx.fillRect(x + 8 * devicePixelRatio + width, lastY, 5 * devicePixelRatio, lineHeight * 0.8);
+      }
+    }
+  }
+  ctx.restore();
+}
+
 const PROJECTION_TICKER_GLYPHS = {
   file_changed: "\\u0394",
   command_completed: "$",
@@ -7038,15 +7146,7 @@ function drawProjectionHud(props, theme, mood, hud, rect, w, h, now) {
   ctx.fillText(focusLine, rect.x, hudTop);
   if (commandLine) ctx.fillText(commandLine, rect.x, hudTop + 14 * devicePixelRatio);
   ctx.fillText(workspaceLine, rect.x, hudTop + 28 * devicePixelRatio);
-  if (hud.narration) {
-    // the agent's voice, owned by the projection: tail of the current message,
-    // markdown emphasis stripped so it reads as speech rather than source
-    ctx.fillStyle = projectionTone(theme, "good", 0.78);
-    const maxChars = Math.max(40, Math.floor(rect.width / (6.4 * devicePixelRatio)));
-    const tail = String(hud.narration).replace(/[*_`#]+/g, "").replace(/\\s+/g, " ").trim();
-    const clipped = tail.length > maxChars ? `\\u2026${tail.slice(-maxChars)}` : tail;
-    ctx.fillText(`\\u00BB ${clipped}`, rect.x, hudTop + 44 * devicePixelRatio);
-  }
+  drawProjectionNarration(hud, theme, rect, now);
   ctx.textAlign = "right";
   ctx.fillStyle = projectionTone(theme, mood.alert ? "alarm" : "good", 0.85);
   ctx.fillText(String(hud.checks || ""), rect.x + rect.width, hudTop);

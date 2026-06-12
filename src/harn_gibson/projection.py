@@ -486,8 +486,15 @@ class ProjectionEngine:
                         if (effect["kind"], tuple(effect["targets"])) != shape
                     ]
                     self._effects.append(instance)
-            if key[1] == "check_completed" and str(event.get("status")) == "error":
-                self._check_errors_seen.add(str(event.get("category") or "check"))
+            if key[1] == "check_completed":
+                category = str(event.get("category") or "check")
+                if str(event.get("status")) == "error":
+                    self._check_errors_seen.add(category)
+                elif str(event.get("status")) == "ok":
+                    # the red->green transition is consumed once celebrated;
+                    # without this, EVERY later green check re-fires recovery
+                    # (rings chaining into a single endless fade)
+                    self._check_errors_seen.discard(category)
         # prune only keys that have scrolled out of the perception event window:
         # sequences are sparse, so a fixed seq-distance cutoff can forget events
         # that are STILL in the window and re-fire their effects every resolve
@@ -575,7 +582,12 @@ class ProjectionEngine:
     # -- mood / camera / hud --------------------------------------------------------
 
     def _mood(self, entities: Mapping[str, Mapping[str, Any]]) -> dict[str, Any]:
+        # mood derives from entity history locally; the event-driven
+        # _check_errors_seen set belongs to the effect rules (where red->green
+        # transitions are consumed once celebrated) and must not be re-seeded
+        # from historical entities on every resolve
         latest_by_category: dict[str, str] = {}
+        errored_categories: set[str] = set()
         for entity in sorted(
             (e for e in entities.values() if str(e.get("type")) == "check"),
             key=lambda e: _int(_dict(e.get("attrs")).get("seq"), 0),
@@ -584,12 +596,12 @@ class ProjectionEngine:
             category = str(attrs.get("category") or "check")
             latest_by_category[category] = str(attrs.get("status") or "")
             if latest_by_category[category] == "error":
-                self._check_errors_seen.add(category)
+                errored_categories.add(category)
         failing = next((c for c, status in latest_by_category.items() if status == "error"), "")
         if failing:
             return {"name": "alert", "label": f"BREACH :: {failing.upper()} RED", "tone": "alarm", "alert": True}
         recovered = next(
-            (c for c, status in latest_by_category.items() if status == "ok" and c in self._check_errors_seen),
+            (c for c, status in latest_by_category.items() if status == "ok" and c in errored_categories),
             "",
         )
         if recovered:
@@ -657,10 +669,21 @@ class ProjectionEngine:
             for c in checks[:3]
         )
         agent_attrs = _dict(_dict(entities.get("agent")).get("attrs"))
+        if focus.startswith("file:"):
+            focus_display = focus[5:]
+        elif focus == "dir:.":
+            root_name = str(_dict(perception.get("workspace")).get("rootName") or ".")
+            focus_display = f"{root_name} (whole project)"
+        elif focus.startswith("dir:"):
+            focus_display = f"{focus[4:]}/"
+        else:
+            focus_display = focus
         return {
             "mood": str(mood.get("label") or ""),
             "narration": str(agent_attrs.get("narration") or ""),
-            "focus": focus[5:] if focus.startswith("file:") else focus,
+            "narrationComplete": bool(agent_attrs.get("narrationComplete", True)),
+            "narrationSeq": _int(agent_attrs.get("narrationSeq"), 0),
+            "focus": focus_display,
             "command": _clip_text(str(command_attrs.get("preview") or ""), 96),
             "commandStatus": str(command_attrs.get("status") or ""),
             "checks": check_line,
