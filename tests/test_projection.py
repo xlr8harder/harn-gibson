@@ -272,6 +272,18 @@ def test_force_layout_buds_new_nodes_beside_connected_neighbors() -> None:
     assert distance < 0.25  # budded beside its parent, not flown in from a hash ring
 
 
+def test_physics_block_marks_force_layers_for_live_simulation() -> None:
+    force_engine = ProjectionEngine({"layers": [
+        {"id": "web", "select": {"types": ["file"]}, "layout": {"kind": "force"}},
+        {"id": "cursor", "select": {"ids": ["agent"]}, "place": {"near": "$focus"}},
+    ]})
+    scene = force_engine.resolve(_perception(), now_ms=1000)
+    assert scene["physics"] == {"layers": ["web"]}
+
+    static_engine = ProjectionEngine()  # default radial-tree projection
+    assert static_engine.resolve(_perception(), now_ms=1000)["physics"] == {"layers": []}
+
+
 def test_radial_tree_handles_missing_root_and_interior_nodes() -> None:
     # no explicit root and no dir entities: root inferred from parent links
     entities = [

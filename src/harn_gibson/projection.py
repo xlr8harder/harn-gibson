@@ -146,6 +146,10 @@ class ProjectionEngine:
         root_id = ""
 
         layers = [layer for layer in _list(self.spec.get("layers")) if isinstance(layer, Mapping)]
+        physics_layers: list[str] = []
+        for layer in layers:
+            if str(_dict(layer.get("layout")).get("kind") or "") == "force":
+                physics_layers.append(str(layer.get("id") or "layer"))
         for layer in layers:
             selected = _select(entities, _dict(layer.get("select")))
             placed, layer_root = self._layout(layer, selected, relations, nodes)
@@ -187,6 +191,10 @@ class ProjectionEngine:
             "effects": [dict(effect) for effect in self._effects],
             "camera": self._camera(focus, root_id, nodes),
             "hud": self._hud(perception, entities, relations, events, mood, focus),
+            # layers laid out by the force solver: the browser runs a live
+            # spring-mass simulation for these between updates, anchored to
+            # the engine's deterministic positions
+            "physics": {"layers": physics_layers},
         }
 
     # -- layout -----------------------------------------------------------------

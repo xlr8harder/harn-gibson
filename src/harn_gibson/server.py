@@ -6344,7 +6344,13 @@ function drawProjectionScene(primitive, w, h, now) {
   const ease = 1 - Math.exp(-dt * 5.0);
 
   // tween node state toward engine targets; the first scene snaps (no birth
-  // animation on initial population), later newcomers grow in from 35%
+  // animation on initial population), later newcomers grow in from 35%.
+  // Nodes in physics layers are integrated by the live simulation below
+  // instead of eased, so the graph keeps rebalancing between updates.
+  const physicsLayers = new Set(
+    props.physics && Array.isArray(props.physics.layers) ? props.physics.layers : [],
+  );
+  const simulate = physicsLayers.size > 0 && !captureMode;
   const firstScene = projectionTweens.size === 0;
   const liveIds = new Set();
   for (const node of nodes) {
@@ -6354,16 +6360,21 @@ function drawProjectionScene(primitive, w, h, now) {
       tween = firstScene
         ? {x: node.x, y: node.y, size: node.size, opacity: node.opacity ?? 1, lift: node.lift || 0}
         : {x: node.x, y: node.y, size: node.size * 0.35, opacity: (node.opacity ?? 1) * 0.35, lift: 0};
+      tween.vx = 0;
+      tween.vy = 0;
       projectionTweens.set(node.id, tween);
     }
-    tween.x += (node.x - tween.x) * ease;
-    tween.y += (node.y - tween.y) * ease;
+    if (!(simulate && physicsLayers.has(node.layer))) {
+      tween.x += (node.x - tween.x) * ease;
+      tween.y += (node.y - tween.y) * ease;
+    }
     tween.size += (node.size - tween.size) * ease;
     tween.opacity += ((node.opacity ?? 1) - tween.opacity) * ease;
     tween.lift += ((node.lift || 0) - tween.lift) * ease;
     tween.node = node;
     tween.leaving = false;
   }
+  if (simulate) stepProjectionPhysics(edges, physicsLayers, dt, now);
   // deselected nodes fade out in place instead of popping
   for (const [id, tween] of Array.from(projectionTweens.entries())) {
     if (liveIds.has(id)) continue;
@@ -6563,6 +6574,74 @@ function drawProjectionScene(primitive, w, h, now) {
     }
   }
   ctx.restore();
+}
+
+function stepProjectionPhysics(edges, physicsLayers, dt, now) {
+  // Live spring-mass integration between engine updates. The engine's
+  // resolved positions stay canonical: every node is softly attracted to its
+  // target, so the simulation adds continuous motion without drift.
+  const bodies = [];
+  for (const tween of projectionTweens.values()) {
+    if (tween.node && physicsLayers.has(tween.node.layer) && !tween.leaving) bodies.push(tween);
+  }
+  if (!bodies.length) return;
+  const byId = new Map(bodies.map((tween) => [tween.node.id, tween]));
+  const rest = Math.max(0.10, Math.min(0.20, 0.55 / Math.sqrt(bodies.length)));
+  const clampedDt = Math.min(0.05, dt);
+  for (const tween of bodies) {
+    if (tween.phase === undefined) {
+      let hash = 5381;
+      for (const ch of tween.node.id) hash = (hash * 33 + ch.charCodeAt(0)) % 6283;
+      tween.phase = hash / 1000;
+    }
+    tween.fx = (tween.node.x - tween.x) * 6.0;       // anchor to engine layout
+    tween.fy = (tween.node.y - tween.y) * 6.0;
+    tween.fx += (0.5 - tween.x) * 0.4;               // gentle center gravity
+    tween.fy += (0.5 - tween.y) * 0.4;
+    // ambient excitation so the web never fully freezes between events
+    tween.fx += Math.sin(now * 0.0009 + tween.phase) * 0.07;
+    tween.fy += Math.cos(now * 0.0007 + tween.phase * 1.7) * 0.07;
+  }
+  for (let i = 0; i < bodies.length; i++) {
+    for (let j = i + 1; j < bodies.length; j++) {
+      const a = bodies[i];
+      const b = bodies[j];
+      const dx = a.x - b.x;
+      const dy = a.y - b.y;
+      const distSq = Math.max(0.0004, dx * dx + dy * dy);
+      const push = 0.0011 / distSq;
+      a.fx += dx * push;
+      a.fy += dy * push;
+      b.fx -= dx * push;
+      b.fy -= dy * push;
+    }
+  }
+  for (const edge of edges) {
+    if (edge.style !== "skeleton") continue;
+    const a = byId.get(edge.from);
+    const b = byId.get(edge.to);
+    if (!a || !b) continue;
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const dist = Math.sqrt(dx * dx + dy * dy) || 0.0001;
+    const pull = (dist - rest) * 3.2;
+    a.fx += (dx / dist) * pull;
+    a.fy += (dy / dist) * pull;
+    b.fx -= (dx / dist) * pull;
+    b.fy -= (dy / dist) * pull;
+  }
+  const damping = Math.pow(0.0035, clampedDt); // strong exponential damping
+  for (const tween of bodies) {
+    tween.vx = (tween.vx + tween.fx * clampedDt) * damping;
+    tween.vy = (tween.vy + tween.fy * clampedDt) * damping;
+    const speed = Math.sqrt(tween.vx * tween.vx + tween.vy * tween.vy);
+    if (speed > 0.5) {
+      tween.vx *= 0.5 / speed;
+      tween.vy *= 0.5 / speed;
+    }
+    tween.x = Math.min(0.98, Math.max(0.02, tween.x + tween.vx * clampedDt));
+    tween.y = Math.min(0.98, Math.max(0.02, tween.y + tween.vy * clampedDt));
+  }
 }
 
 function projectionEffectProgress(effect, now) {
