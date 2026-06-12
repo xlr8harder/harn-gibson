@@ -290,6 +290,26 @@ def test_radial_tree_handles_missing_root_and_interior_nodes() -> None:
     assert empty_engine.resolve(_perception(), now_ms=1000)["nodes"] == []
 
 
+def test_radial_tree_places_nodes_stranded_by_relation_cycles() -> None:
+    entities = [
+        {"id": "dir:.", "type": "dir", "attrs": {"root": True}},
+        {"id": "file:x.py", "type": "file", "attrs": {"touchCount": 1}},
+        {"id": "file:y.py", "type": "file", "attrs": {"touchCount": 1}},
+    ]
+    # malformed: x and y contain each other, so neither is reachable from root
+    relations = [
+        {"type": "contains", "from": "file:y.py", "to": "file:x.py"},
+        {"type": "contains", "from": "file:x.py", "to": "file:y.py"},
+    ]
+    engine = ProjectionEngine({"layers": [
+        {"id": "w", "select": {"types": ["dir", "file"]},
+         "layout": {"kind": "radial-tree", "relation": "contains", "root": "dir:."}},
+    ]})
+    scene = engine.resolve(_perception(entities=entities, relations=relations), now_ms=1000)
+    nodes = {node["id"] for node in scene["nodes"]}
+    assert {"dir:.", "file:x.py", "file:y.py"} <= nodes
+
+
 def test_pinned_layers_track_focus_or_named_anchor() -> None:
     engine = ProjectionEngine()  # default cursor layer pins near $focus
     scene = engine.resolve(_perception(), now_ms=1000)

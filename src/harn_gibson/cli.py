@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import functools
 import json
 import math
 import os
@@ -798,10 +799,39 @@ def _hold_display(display_url: str) -> None:  # pragma: no cover - manual playba
         return
 
 
+def _rerun_replay(
+    path: str,
+    state: object,
+    *,
+    step_delay_ms: int,
+    playback_timing: str,
+    speed: float,
+    max_step_delay_ms: int | None,
+    progress: object,
+) -> None:
+    """Runner registered behind the browser replay button: reset the session
+    (fresh perception/scene under the same config) and play the file again."""
+    from harn_gibson.replay import play_replay_file
+    from harn_gibson.server import reset_session
+
+    reset_session(state)
+    play_replay_file(
+        path,
+        state,
+        start_delay_ms=1500,
+        step_delay_ms=step_delay_ms,
+        playback_timing=playback_timing,
+        time_scale=speed,
+        max_step_delay_ms=max_step_delay_ms,
+        check_expectations=False,
+        progress=progress,
+    )
+
+
 def run_watch_replay(args: argparse.Namespace) -> int:
     from harn_gibson.replay import ReplayExpectationError, ReplayStepResult, play_replay_file
     from harn_gibson.scene import SceneState
-    from harn_gibson.server import create_server
+    from harn_gibson.server import ReplayControl, create_server
 
     if args.start_delay_ms < 0:
         print("--start-delay-ms must be non-negative", file=sys.stderr)
@@ -837,6 +867,19 @@ def run_watch_replay(args: argparse.Namespace) -> int:
         )
 
     print(f"harn-gibson replay display: {display_url}", file=sys.stderr)
+    state.replay_control = ReplayControl(
+        description=str(args.path),
+        runner=functools.partial(
+            _rerun_replay,
+            args.path,
+            state,
+            step_delay_ms=args.step_delay_ms,
+            playback_timing=args.playback_timing,
+            speed=args.speed,
+            max_step_delay_ms=args.max_step_delay_ms,
+            progress=report_progress,
+        ),
+    )
     if args.browser:
         webbrowser.open(display_url)
     start_index = args.start_step - 1

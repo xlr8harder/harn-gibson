@@ -560,41 +560,76 @@ def _layout_radial_tree(
     relations: list[Mapping[str, Any]],
     selected: Mapping[str, Mapping[str, Any]],
 ) -> tuple[dict[str, tuple[float, float]], str]:
+    """Recursive radial tree: every node owns an angular slice of its parent's
+    wedge, sized by subtree weight, at a radius set by its true depth. Interior
+    nodes (a dir containing only dirs) sit *inside* their own wedge, so a
+    subtree can never land across an unrelated one."""
     relation_type = str(spec.get("relation") or "contains")
     parent_of = {
         str(r.get("to")): str(r.get("from"))
         for r in relations
         if str(r.get("type")) == relation_type
     }
+    id_set = set(ids)
     root = str(spec.get("root") or "")
-    if root not in ids:
-        candidates = [node_id for node_id in ids if parent_of.get(node_id) not in ids]
+    if root not in id_set:
+        candidates = [node_id for node_id in ids if parent_of.get(node_id) not in id_set]
         root = candidates[0] if candidates else ids[0]
-    parents = set(parent_of.values())
-    leaves = [node_id for node_id in ids if node_id != root and node_id not in parents]
-    hubs_of_leaf = {leaf: _nearest_in(parent_of, leaf, set(ids) | {root}, root) for leaf in leaves}
-    by_hub: dict[str, list[str]] = {}
-    for leaf in leaves:
-        by_hub.setdefault(hubs_of_leaf[leaf], []).append(leaf)
+
+    children: dict[str, list[str]] = {}
+    for node_id in ids:
+        if node_id == root:
+            continue
+        parent = _nearest_in(parent_of, node_id, id_set - {node_id}, root)
+        children.setdefault(parent, []).append(node_id)
+
+    # Each non-root node has exactly one parent, so the subtree reachable from
+    # the root is a true tree; weights are computed only over that subtree.
+    weights: dict[str, float] = {}
+
+    def _weight(node_id: str) -> float:
+        if node_id not in weights:
+            weights[node_id] = max(1.0, sum(_weight(kid) for kid in children.get(node_id, [])))
+        return weights[node_id]
+
+    _weight(root)
+    max_depth = 1
+    depth_scan: list[tuple[str, int]] = [(root, 0)]
+    while depth_scan:
+        node_id, depth = depth_scan.pop(0)
+        max_depth = max(max_depth, depth)
+        depth_scan.extend((kid, depth + 1) for kid in children.get(node_id, []))
+
     positions: dict[str, tuple[float, float]] = {root: (0.5, 0.5)}
-    hubs = sorted(by_hub)
-    total = sum(len(by_hub[hub]) + 1.5 for hub in hubs) or 1.0
-    angle = -math.pi / 2
-    for hub in hubs:
-        members = sorted(by_hub[hub])
-        wedge = (len(members) + 1.5) / total * math.tau
-        mid = angle + wedge / 2
-        if hub != root:
-            positions[hub] = _polar(mid, 0.24)
-        spread = wedge * 0.72
-        for index, leaf in enumerate(members):
-            t = 0.5 if len(members) == 1 else index / (len(members) - 1)
-            positions[leaf] = _polar(mid + (t - 0.5) * spread, 0.45)
-        angle += wedge
-    # interior nodes that are neither root, hubs, nor leaves sit on the hub ring
+    # radial dendrogram: leaves sit on the outer rim; interior nodes sit at
+    # depth-proportional radius at the middle of their own wedge, so a subtree
+    # can never cross an unrelated one. Children divide the parent's wedge by
+    # subtree weight.
+    pending: list[tuple[str, float, float, int]] = [(root, -math.pi / 2, -math.pi / 2 + math.tau, 0)]
+    while pending:
+        node_id, start, end, depth = pending.pop(0)
+        kids = sorted(children.get(node_id, []))
+        if not kids:
+            continue
+        total = sum(_weight(kid) for kid in kids)
+        gap = (end - start) * 0.05  # breathing room between sibling subtrees
+        cursor = start + gap / 2
+        span = (end - start) - gap
+        for kid in kids:
+            slice_width = span * _weight(kid) / total
+            mid = cursor + slice_width / 2
+            if children.get(kid):
+                radius = min(0.38, max(0.16, 0.45 * (depth + 1) / max_depth))
+            else:
+                radius = 0.45
+            positions[kid] = _polar(mid, radius)
+            pending.append((kid, cursor, cursor + slice_width, depth + 1))
+            cursor += slice_width
+    # nodes unreachable from the root (malformed relation cycles) still get a
+    # stable rim position instead of silently vanishing
     for node_id in ids:
         if node_id not in positions:
-            positions[node_id] = _polar((_fnv(node_id) % 6283) / 1000.0, 0.24)
+            positions[node_id] = _polar((_fnv(node_id) % 6283) / 1000.0, 0.45)
     return positions, root
 
 
@@ -786,6 +821,11 @@ class ProjectionSceneRenderer:
         of the next plan, under the pipeline lock, so a swap arriving mid-render
         can never produce a scene resolved from two different specs."""
         self._pending_spec = dict(spec or {})
+
+    def reset(self) -> None:
+        """Forget session state (positions, effects, event history) but keep
+        the active spec -- used when a replay restarts from scratch."""
+        self.engine = ProjectionEngine(self.engine.spec)
 
     def render(self, requests: Sequence[Any], _scene: SceneState) -> Any:
         return self._plan(requests, {"entities": [], "relations": [], "events": []}, "")

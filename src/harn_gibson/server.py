@@ -6,7 +6,7 @@ import json
 import queue
 import threading
 import time
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field, replace
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -45,7 +45,13 @@ from harn_gibson.routing import (
     renderer_event_interest_from_renderer,
     renderer_event_interest_from_value,
 )
-from harn_gibson.scene import SCENE_MUTATION_OPS, SceneEngine, apply_style_to_scene, initial_scene
+from harn_gibson.scene import (
+    SCENE_MUTATION_OPS,
+    SceneEngine,
+    SceneMutation,
+    apply_style_to_scene,
+    initial_scene,
+)
 from harn_gibson.sinks import EventBuffer
 from harn_gibson.styles import DEFAULT_STYLE_ID, STYLE_PACKS, StylePack, default_style_pack, style_pack_from_name
 
@@ -76,6 +82,7 @@ class GibsonServerState:
     project_name: str = "harn-gibson"
     project_root: str | None = None
     renderer_context_config: RendererContextConfig = field(default_factory=RendererContextConfig)
+    replay_control: ReplayControl | None = None
     pipeline: RenderPipeline = field(init=False)
 
     def __post_init__(self) -> None:
@@ -103,6 +110,52 @@ class GibsonServerState:
             batch_window_ms=self.render_batch_window_ms,
             timing_mode=self.render_timing_mode,
         )
+
+
+@dataclass(slots=True)
+class ReplayControl:
+    """Registered by watch-replay: lets the browser (or anything else) re-run
+    the loaded replay against a freshly reset session."""
+
+    description: str
+    runner: Callable[[], None]
+    runs: int = 0
+    _thread: threading.Thread | None = field(default=None, repr=False)
+
+    @property
+    def running(self) -> bool:
+        return self._thread is not None and self._thread.is_alive()
+
+    def restart(self) -> bool:
+        if self.running:
+            return False
+        self.runs += 1
+        self._thread = threading.Thread(target=self.runner, name="harn-gibson-replay-restart", daemon=True)
+        self._thread.start()
+        return True
+
+
+def reset_session(state: GibsonServerState) -> None:
+    """Fresh perception/world models and scene under the same config, so a
+    replay restart actually replays (instead of every event deduping away)."""
+    pipeline = state.pipeline
+    pipeline.context_builder = RendererContextBuilder(pipeline.context_builder.config)
+    reset = getattr(pipeline.renderer, "reset", None)
+    if callable(reset):
+        reset()
+    state.scene.apply((SceneMutation(op="reset_scene"),), now_ms=0)
+
+
+def replay_status_payload(state: GibsonServerState) -> dict[str, Any]:
+    control = state.replay_control
+    if control is None:
+        return {"available": False}
+    return {
+        "available": True,
+        "description": control.description,
+        "runs": control.runs,
+        "running": control.running,
+    }
 
 
 @dataclass(frozen=True, slots=True)
@@ -389,6 +442,9 @@ def make_handler(state: GibsonServerState) -> type[BaseHTTPRequestHandler]:
             if request_path == "/projection":
                 self._json(HTTPStatus.OK, projection_status_payload(state))
                 return
+            if request_path == "/replay":
+                self._json(HTTPStatus.OK, replay_status_payload(state))
+                return
             if request_path == "/input/next":
                 item = state.inputs.pop()
                 state.input_bridge.record_input_poll(delivered=item is not None)
@@ -412,6 +468,16 @@ def make_handler(state: GibsonServerState) -> type[BaseHTTPRequestHandler]:
                 return
             if request_path == "/projection":
                 self._handle_projection_post()
+                return
+            if request_path == "/replay/restart":
+                control = state.replay_control
+                if control is None:
+                    self._json(HTTPStatus.CONFLICT, {"error": "no replay registered on this display"})
+                    return
+                restarted = control.restart()
+                payload = replay_status_payload(state)
+                payload["restarted"] = restarted
+                self._json(HTTPStatus.ACCEPTED, payload)
                 return
             self._json(HTTPStatus.NOT_FOUND, {"error": "not found"})
 
@@ -815,6 +881,7 @@ HTML = """<!doctype html>
             <h1>GIBSON LINK</h1>
           </div>
           <div class="topbar">
+            <button id="replayButton" class="debug-toggle" type="button" hidden>&#8635; REPLAY</button>
             <button id="debugToggle" class="debug-toggle" type="button" aria-expanded="false">DEBUG</button>
             <div id="bridgeStatus" class="status bridge-status">harn bridge idle</div>
             <div id="status" class="status">awaiting signal</div>
@@ -1311,6 +1378,29 @@ debugToggle.addEventListener("click", () => {
   const expanded = document.body.classList.toggle("debug-open");
   debugToggle.setAttribute("aria-expanded", String(expanded));
 });
+
+const replayButton = document.getElementById("replayButton");
+async function initReplayControl() {
+  try {
+    const response = await fetch("/replay");
+    const payload = await response.json();
+    if (payload && payload.available) replayButton.hidden = false;
+  } catch (error) {
+    /* display is not replay-driven */
+  }
+}
+replayButton.addEventListener("click", async () => {
+  replayButton.disabled = true;
+  try {
+    await fetch("/replay/restart", {method: "POST"});
+  } catch (error) {
+    /* server unreachable; re-enable below */
+  }
+  setTimeout(() => {
+    replayButton.disabled = false;
+  }, 4000);
+});
+if (!captureMode) initReplayControl();
 
 debugClose.addEventListener("click", () => {
   document.body.classList.remove("debug-open");
