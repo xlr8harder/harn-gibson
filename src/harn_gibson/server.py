@@ -370,6 +370,11 @@ def renderer_context_config_from_env(source: Mapping[str, str]) -> RendererConte
             source.get("HARN_GIBSON_RENDERER_MAX_WORLD_ENTITIES"),
             defaults.max_world_entities,
         ),
+        perception_discovery=(
+            "stream"
+            if (source.get("HARN_GIBSON_PERCEPTION_DISCOVERY") or "").strip().lower() == "stream"
+            else "workspace"
+        ),
         include_semantic_graph=coerce_context_flag(
             source.get("HARN_GIBSON_RENDERER_SEMANTIC_GRAPH"),
             defaults.include_semantic_graph,
@@ -7135,7 +7140,9 @@ function drawProjectionNarration(hud, theme, rect, now) {
     const dim = retired ? 0.55 : 1;
 
     const visibleHeight = Math.max(1.5 * devicePixelRatio, boxHeight * openness);
-    const boxY = y + (boxHeight - visibleHeight) / 2;
+    // top-anchored: the box opens/collapses at its bottom edge, so stacked
+    // neighbors below never get overlapped mid-animation
+    const boxY = y;
     ctx.save();
     ctx.globalAlpha *= dim;
     ctx.fillStyle = "rgba(2,6,10,0.82)";

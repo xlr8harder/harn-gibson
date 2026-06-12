@@ -849,6 +849,25 @@ def test_tool_call_delta_detection_tolerates_malformed_content() -> None:
     assert _delta_channel({"contentIndex": 0, "partial": {"content": [{"type": "refusal"}]}}) == "plain"
 
 
+def test_stream_discovery_grows_the_tree_only_as_touched(tmp_path: Path) -> None:
+    root = _git_fixture(tmp_path)
+    model = PerceptionModel(project_root=str(root), discovery="stream")
+    call, result, touched = _command_pair("cat src/app_pkg/app.py", start_seq=1, path="src/app_pkg/app.py")
+    model.apply_batch((call, result), touched)
+    payload = model.to_dict()
+    file_ids = {e["id"] for e in payload["entities"] if e["type"] == "file"}
+    # only the touched file exists in story time; the rest of the disk stays dark
+    assert file_ids == {"file:src/app_pkg/app.py"}
+    assert payload["workspace"]["fileCount"] == 1
+    # but the touched file carries real disk facts
+    touched_entity = next(e for e in payload["entities"] if e["id"] == "file:src/app_pkg/app.py")
+    assert touched_entity["attrs"]["sizeBytes"] > 0
+    assert touched_entity["attrs"]["exists"] is True
+
+    # invalid mode falls back to workspace discovery
+    assert PerceptionModel(project_root=str(root), discovery="bogus").discovery == "workspace"
+
+
 def test_perception_with_git_disabled_uses_filesystem_basis(tmp_path: Path) -> None:
     root = _git_fixture(tmp_path)
     model = PerceptionModel(project_root=str(root), git_enabled=False)

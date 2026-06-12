@@ -590,9 +590,13 @@ def test_cli_projection_flag_maps_to_env() -> None:
         renderer_command=None, renderer_model_command=None,
         renderer_timeout_ms=None, renderer_model_timeout_ms=None,
         projection="examples/projections/gibson-sector.json",
+        discovery="stream",
     )
     env = _explicit_replay_renderer_env_from_args(args)
-    assert env == {"HARN_GIBSON_PROJECTION": "examples/projections/gibson-sector.json"}
+    assert env == {
+        "HARN_GIBSON_PROJECTION": "examples/projections/gibson-sector.json",
+        "HARN_GIBSON_PERCEPTION_DISCOVERY": "stream",
+    }
 
 
 def test_blast_and_focus_fall_back_gracefully() -> None:

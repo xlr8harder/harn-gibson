@@ -368,7 +368,14 @@ class PerceptionModel:
         max_events: int = 24,
         max_stat_files: int = 600,
         git_enabled: bool = True,
+        discovery: str = "workspace",
     ) -> None:
+        # discovery="workspace": the tree is known from git/fs immediately.
+        # discovery="stream": files enter the world only when the event
+        # stream touches them -- replays of recorded sessions grow the way
+        # the session actually did, instead of showing the final disk state
+        # at step zero (replay cannot rewind the workspace).
+        self.discovery = discovery if discovery in {"workspace", "stream"} else "workspace"
         self.project_root = (
             Path(project_root).expanduser().resolve() if project_root else Path.cwd().resolve()
         )
@@ -667,6 +674,10 @@ class PerceptionModel:
             untracked = set()
             basis = "filesystem"
 
+        if self.discovery == "stream":
+            self._workspace_paths = tuple(
+                path for path in self._workspace_paths if path in self._files
+            )
         known = set(self._workspace_paths)
         for path in known:
             state = self._files.get(path)

@@ -313,6 +313,7 @@ class RendererContextConfig:
     max_perception_entities: int = 96
     max_perception_relations: int = 144
     max_perception_events: int = 24
+    perception_discovery: str = "workspace"
 
 
 @dataclass(frozen=True, slots=True)
@@ -354,6 +355,7 @@ class RendererContextBuilder:
         self._perception_model = PerceptionModel(
             project_root=self.config.project_root,
             max_events=self.config.max_perception_events,
+            discovery=self.config.perception_discovery,
         )
 
     def build(

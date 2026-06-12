@@ -339,6 +339,14 @@ def _add_replay_renderer_arguments(parser: argparse.ArgumentParser) -> None:
         "or a path to a harn-gibson.projection.v1 JSON spec",
     )
     parser.add_argument(
+        "--discovery",
+        choices=("workspace", "stream"),
+        default=None,
+        help="perception tree discovery: 'workspace' knows the tree from git/fs immediately; "
+        "'stream' grows it as events touch files (use for replays of recorded sessions, "
+        "since replay cannot rewind the workspace to its starting state)",
+    )
+    parser.add_argument(
         "--renderer-timeout-ms",
         default=None,
         help="external renderer timeout in milliseconds; also used by model renderer if no model timeout is set",
@@ -394,6 +402,9 @@ def _explicit_replay_renderer_env_from_args(args: argparse.Namespace) -> dict[st
     projection = getattr(args, "projection", None)
     if projection:
         renderer_env["HARN_GIBSON_PROJECTION"] = projection
+    discovery = getattr(args, "discovery", None)
+    if discovery:
+        renderer_env["HARN_GIBSON_PERCEPTION_DISCOVERY"] = discovery
     return renderer_env
 
 
