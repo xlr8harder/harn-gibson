@@ -21,7 +21,10 @@
   ],
   "camera": {"follow": "focused_on"},
   "on": [
-    {"event": "file_changed", "effects": [{"kind": "pulse", "target": "$entity", "magnitude": "$churnFraction"}]},
+    {"event": "file_changed", "effects": [
+      {"kind": "pulse", "target": "$entity", "magnitude": "$churnFraction"},
+      {"kind": "peek", "target": "$entity", "lines": "$diffPreview"}
+    ]},
     {"event": "check_completed", "when": {"status": "error"},
      "effects": [{"kind": "alarm"}, {"kind": "breach", "target": "$blast"}, {"kind": "shake"}]},
     {"event": "check_completed", "when": {"status": "ok", "recovers": true},
