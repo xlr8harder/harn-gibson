@@ -21,7 +21,20 @@ uv run harn-gibson watch-replay examples/claude-gibson-replays/linkjar-live-sess
 
 Then open `http://127.0.0.1:8765`. The pacing flags are the tuned "demo cut": low-salience stretches (streamed reasoning, admin events) fast-forward under a 250ms cap while salient beats (tool runs, verdicts, commits) get at least 2.2s of breathing room. `--discovery stream` makes files materialize as the agent first touches them instead of showing the finished tree at boot. Add `--wait-for-input` to hold the display idle until a directive is typed into the page's composer -- a screen recording can open on the prompt being typed, with the session appearing to launch from it. The browser replay button re-runs the same file.
 
-To capture a session of your own, `scripts/million_dollar_demo.py` boots the display, waits for a directive from the composer, launches harn against a scratch workspace with theatrical TDD house rules, captures the event log, and converts it into a replay fixture under `examples/claude-gibson-replays/`.
+## Live Sessions
+
+The projection display attaches to a live harn run three ways. The display server reads `HARN_GIBSON_PROJECTION` from the environment, so the simplest is dogfood with the env var set:
+
+```bash
+HARN_GIBSON_PROJECTION=examples/projections/gibson-organic.json \
+uv run harn-gibson dogfood -- -p "your task here"
+```
+
+This starts the display server, opens the browser, and launches harn with the extension wired in; the projection engine owns the stage instead of the legacy renderer. `HARN_GIBSON_PERCEPTION_DISCOVERY=stream` makes files materialize as they are touched.
+
+For the full show-floor experience, `scripts/million_dollar_demo.py` boots the display idle, waits for a directive typed into the page composer, then launches harn against a scratch workspace with theatrical TDD house rules (failing tests first, dramatic commits, a closing soliloquy), captures the event log, and converts it into a replay fixture under `examples/claude-gibson-replays/` when the session ends.
+
+Manual wiring (display and harn in separate terminals): start `HARN_GIBSON_PROJECTION=... uv run harn-gibson serve`, then run harn with the gibson extension loaded and `HARN_GIBSON_ENDPOINT=http://127.0.0.1:8765/events` in its environment. A running session can also be re-projected live: `POST /projection` swaps the active projection spec, `GET /projection` introspects it.
 
 The remainder of this README documents the earlier deterministic renderer / scene-primitive channels, which still work and still pass the full test suite; the perception + projection pipeline above is where current work happens.
 
