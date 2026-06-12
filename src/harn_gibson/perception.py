@@ -53,7 +53,7 @@ _GIT_TIMEOUT_SECONDS = 3.0
 _MAX_GIT_FILES = 4000
 _MAX_UNTRACKED_FILES = 200
 _MAX_COMMAND_PREVIEW_CHARS = 200
-_MAX_NARRATION_CHARS = 2000
+_MAX_NARRATION_CHARS = 6000
 
 _EXCLUDED_NAMES = {
     ".coverage",
@@ -231,9 +231,11 @@ def _delta_channel(nested: Mapping[str, Any]) -> str:
     return "plain"
 
 
-_MAX_DIFF_PREVIEW_LINES = 160
-_MAX_DIFF_LINE_CHARS = 100
-_MAX_DIFF_LINES_PER_SIDE = 60
+# sanity caps only: the full diff scrolling past is the show, so these
+# trigger on genuinely insane payloads, not ordinary large edits
+_MAX_DIFF_PREVIEW_LINES = 2000
+_MAX_DIFF_LINE_CHARS = 240
+_MAX_DIFF_LINES_PER_SIDE = 800
 
 
 def _diff_preview_from_payload(payload: Mapping[str, Any]) -> list[str]:
@@ -256,7 +258,7 @@ def _diff_preview_from_payload(payload: Mapping[str, Any]) -> list[str]:
 
     edits = inner.get("edits")
     if isinstance(edits, list):
-        for edit in edits[:6]:
+        for edit in edits[:64]:
             if isinstance(edit, Mapping):
                 take(edit.get("oldText"), "-", _MAX_DIFF_LINES_PER_SIDE)
                 take(edit.get("newText"), "+", _MAX_DIFF_LINES_PER_SIDE)
@@ -395,6 +397,7 @@ class PerceptionModel:
         self._narration_seq: int = 0
         self._narration_complete: bool = False
         self._narration_channel: str = ""
+        self._narration_message_index: int = 0
         self._focused_path: str | None = None
         self._relations: dict[tuple[str, str, str], dict[str, Any]] = {}
         self._events: list[dict[str, Any]] = []
@@ -464,11 +467,13 @@ class PerceptionModel:
                 self._narration = ""
                 self._narration_channel = ""
                 self._narration_complete = False
+                self._narration_message_index += 1
             # a message streams its inner monologue (thinking) and then its
-            # spoken text; showing both reads as the agent repeating itself,
-            # so the spoken text supersedes the monologue when it starts
-            if channel == "text" and self._narration_channel == "thinking":
-                self._narration = ""
+            # spoken text; blinking the monologue away mid-read is jarring, so
+            # the spoken text CONTINUES beneath it in the same window -- one
+            # message, one scroll
+            if channel == "text" and self._narration_channel == "thinking" and self._narration:
+                self._narration = self._narration.rstrip() + "\n\n"
             if channel in {"thinking", "text"}:
                 self._narration_channel = channel
             # keep the HEAD on overflow: the thesis of a message lives at the
@@ -489,6 +494,18 @@ class PerceptionModel:
             return False
         pending_key = (observation.tool_name, observation.command)
         if event.phase == "before":
+            prior_id = self._pending_commands.get(pending_key)
+            prior = self._commands.get(prior_id) if prior_id else None
+            if (
+                prior is not None
+                and prior.status == "running"
+                and event.sequence - prior.start_seq <= 2
+            ):
+                # one run announces itself twice (tool_execution_start, then
+                # tool_call); a second running command here would leave an
+                # orphan for tool_execution_end to settle -- doubling the
+                # check, the breach, and the check_started beat
+                return False
             command_id = f"command:{event.sequence}"
             self._commands[command_id] = _CommandState(
                 id=command_id,
@@ -512,6 +529,18 @@ class PerceptionModel:
         else:
             command_id = self._pending_commands.get(pending_key)
             existing = self._commands.get(command_id) if command_id else None
+            verdict = "error" if bool(event.payload.get("isError")) else "ok"
+            if (
+                existing is not None
+                and existing.status == verdict
+                and event.sequence - existing.end_seq <= 2
+            ):
+                # the same run reports completion twice (tool_result then
+                # tool_execution_end) with the same verdict; minting a
+                # "re-run" here would double every check -- and every breach.
+                # A nearby completion with a DIFFERENT verdict is a real
+                # retry and falls through to mint a fresh command.
+                return False
             if existing is None or existing.status != "running":
                 # No live command for this text: either the call event was never
                 # seen, or this is a re-run of an already-settled command (the
@@ -852,6 +881,7 @@ class PerceptionModel:
             agent_attrs["narration"] = self._narration
             agent_attrs["narrationSeq"] = self._narration_seq
             agent_attrs["narrationComplete"] = self._narration_complete
+            agent_attrs["narrationMessageIndex"] = self._narration_message_index
         entities: list[dict[str, Any]] = []
         entities.append({
             "id": "agent",

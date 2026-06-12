@@ -576,7 +576,7 @@ class ProjectionEngine:
         if isinstance(lines, str) and lines.startswith("$"):
             lines = event.get(lines[1:])
         if isinstance(lines, list):
-            instance["lines"] = [str(line)[:104] for line in lines[:160] if isinstance(line, str)]
+            instance["lines"] = [str(line)[:244] for line in lines[:2000] if isinstance(line, str)]
         return instance
 
     # -- mood / camera / hud --------------------------------------------------------
@@ -683,6 +683,7 @@ class ProjectionEngine:
             "narration": str(agent_attrs.get("narration") or ""),
             "narrationComplete": bool(agent_attrs.get("narrationComplete", True)),
             "narrationSeq": _int(agent_attrs.get("narrationSeq"), 0),
+            "narrationMessageIndex": _int(agent_attrs.get("narrationMessageIndex"), 0),
             "focus": focus_display,
             "command": _clip_text(str(command_attrs.get("preview") or ""), 96),
             "commandStatus": str(command_attrs.get("status") or ""),

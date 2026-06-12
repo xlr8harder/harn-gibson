@@ -135,7 +135,7 @@ def test_summarize_event_with_object_fields() -> None:
 
 
 def test_to_jsonable_variants() -> None:
-    long_text = "x" * 4010
+    long_text = "x" * 64010
 
     assert to_jsonable(None) is None
     assert to_jsonable(True) is True

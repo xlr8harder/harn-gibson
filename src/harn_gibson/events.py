@@ -194,9 +194,11 @@ def to_jsonable(value: Any) -> Any:
     if value is None or isinstance(value, bool | int | float):
         return value
     if isinstance(value, str):
-        if len(value) <= 4000:
+        # generous: payload strings carry whole written files for the diff
+        # peeks; this only guards against genuinely insane single values
+        if len(value) <= 64000:
             return value
-        return value[:3999] + "..."
+        return value[:63999] + "..."
     if isinstance(value, Mapping):
         return {str(key): to_jsonable(item) for key, item in value.items()}
     if isinstance(value, list | tuple):

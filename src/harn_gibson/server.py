@@ -6654,6 +6654,7 @@ function drawProjectionScene(primitive, w, h, now) {
   for (const effect of effects) {
     drawProjectionEffect(effect, theme, rect, pointFor, now, w, h);
   }
+  flushProjectionPeekWindows(theme, now);
 
   const showAllLabels = nodes.length <= 40;
   for (const tween of projectionTweens.values()) {
@@ -6940,13 +6941,15 @@ const PEEK_HOLD_MS = 2600;   // window stays open this long after the last new d
 const PEEK_OPEN_MS = 220;
 const PEEK_WINK_MS = 260;
 const PEEK_VISIBLE_LINES = 10;
-const PEEK_BACKLOG_LINES = 400;
+const PEEK_BACKLOG_LINES = 4000; // sanity only: the full diff is the show
 
 function drawProjectionPeek(effect, theme, point, now) {
   // an accruing terminal window per node: diffs append as the agent edits,
   // the box grows up to PEEK_VISIBLE_LINES then bottom-follows like a tail,
   // and it winks closed after a quiet period. One edit = one short visit;
-  // a burst of edits keeps the window open and scrolling.
+  // a burst of edits keeps the window open and scrolling. The WINDOW outlives
+  // the effect (flushProjectionPeekWindows): a long diff finishes its scroll
+  // even after the scene drops the effect that delivered it.
   if (!point) return;
   const newLines = Array.isArray(effect.lines) ? effect.lines : [];
   const key = `peek:${effect.targets[0]}`;
@@ -6960,6 +6963,8 @@ function drawProjectionPeek(effect, theme, point, now) {
            lastAppendAt: now, offset: 0, lastNow: now, drawnAt: 0};
     projectionPeekWindows.set(key, win);
   }
+  win.point = point;
+  win.tone = effect.tone || "accent";
   if (unseen) {
     projectionPeekConsumed.add(effect.id);
     if (projectionPeekConsumed.size > 600) projectionPeekConsumed.clear();
@@ -6975,9 +6980,22 @@ function drawProjectionPeek(effect, theme, point, now) {
       }
     }
   }
+  renderProjectionPeekWindow(key, win, theme, now);
+}
+
+function flushProjectionPeekWindows(theme, now) {
+  // windows whose delivering effects have expired keep drawing until their
+  // scroll completes and the quiet hold runs out
+  for (const [key, win] of projectionPeekWindows) {
+    if (win.drawnAt !== now) renderProjectionPeekWindow(key, win, theme, now);
+  }
+}
+
+function renderProjectionPeekWindow(key, win, theme, now) {
   if (win.drawnAt === now) return; // several live effects, one window
   win.drawnAt = now;
-  if (!win.lines.length) return;
+  if (!win.lines.length || !win.point) return;
+  const point = win.point;
 
   const dt = Math.min(0.1, (now - win.lastNow) / 1000);
   win.lastNow = now;
@@ -6986,10 +7004,12 @@ function drawProjectionPeek(effect, theme, point, now) {
   const innerHeight = visibleLines * lineHeight;
   const boxHeight = innerHeight + 10 * devicePixelRatio;
   const boxWidth = 260 * devicePixelRatio;
-  // stream toward the newest lines at a readable, constant rate -- a long
-  // diff visibly flies past instead of snapping to its tail
+  // stream toward the newest lines at a readable pace, but let a huge
+  // backlog FLY past (rate scales with distance) and decelerate into a
+  // readable tail as it catches up
   const targetOffset = Math.max(0, win.lines.length - visibleLines);
-  win.offset = Math.min(targetOffset, win.offset + dt * 14);
+  const rate = Math.max(14, (targetOffset - win.offset) * 0.6);
+  win.offset = Math.min(targetOffset, win.offset + dt * rate);
   if (targetOffset - win.offset > 0.5) win.lastAppendAt = now; // scrolling counts as activity
 
   const quiet = now - win.lastAppendAt;
@@ -7018,7 +7038,7 @@ function drawProjectionPeek(effect, theme, point, now) {
   const visibleHeight = Math.max(1.5 * devicePixelRatio, boxHeight * openness);
   const boxY = y + (boxHeight - visibleHeight) / 2;
   ctx.fillStyle = "rgba(2,6,10,0.9)";
-  ctx.strokeStyle = projectionTone(theme, effect.tone || "accent", 0.85);
+  ctx.strokeStyle = projectionTone(theme, win.tone || "accent", 0.85);
   ctx.lineWidth = devicePixelRatio;
   ctx.beginPath();
   ctx.rect(x, boxY, boxWidth, visibleHeight);
@@ -7088,20 +7108,24 @@ function drawProjectionNarration(hud, theme, rect, now) {
   // blinking cursor); a new message pushes the previous one DOWN, where it
   // collapses to its tail and fades out on its own time.
   const text = String(hud.narration || "");
+  const messageIndex = Number(hud.narrationMessageIndex || 0);
   let current = projectionNarrationStack[0];
   if (text && (!current || current.retiredAt)) {
-    current = {text, lines: wrapNarration(text), offset: 0,
+    current = {text, messageIndex, lines: wrapNarration(text), offset: 0,
                openedAt: now, lastChangeAt: now, retiredAt: null};
     projectionNarrationStack.unshift(current);
   } else if (text && text !== current.text) {
-    if (text.startsWith(current.text)) {
-      current.text = text;                       // the message grew
+    if (messageIndex === current.messageIndex) {
+      // same message: it grew, or its spoken text superseded the monologue --
+      // replace in place rather than churning the stack
+      if (!text.startsWith(current.text)) current.offset = 0;
+      current.text = text;
       current.lines = wrapNarration(text);
       current.lastChangeAt = now;
     } else {
       current.retiredAt = now;                   // a NEW message supersedes it
       projectionNarrationStack.unshift({
-        text, lines: wrapNarration(text), offset: 0,
+        text, messageIndex, lines: wrapNarration(text), offset: 0,
         openedAt: now, lastChangeAt: now, retiredAt: null,
       });
     }

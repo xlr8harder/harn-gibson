@@ -485,11 +485,13 @@ def test_hud_carries_agent_narration() -> None:
     entities = [entity for entity in _default_entities() if entity["id"] != "agent"]
     entities.append({
         "id": "agent", "type": "agent",
-        "attrs": {"narration": "patching the exit code", "narrationSeq": 9, "narrationComplete": False},
+        "attrs": {"narration": "patching the exit code", "narrationSeq": 9, "narrationComplete": False,
+                  "narrationMessageIndex": 4},
     })
     engine = ProjectionEngine()
     scene = engine.resolve(_perception(entities=entities), now_ms=1000)
     assert scene["hud"]["narration"] == "patching the exit code"
+    assert scene["hud"]["narrationMessageIndex"] == 4
 
 
 def test_mood_progression_idle_work_verify() -> None:

@@ -286,6 +286,7 @@ def test_perception_tracks_agent_narration(tmp_path: Path) -> None:
     assert agent["attrs"]["narration"] == "scanning the cli module and patching the exit code"
     assert agent["attrs"]["narrationComplete"] is False
     assert agent["attrs"]["narrationSeq"] == 2
+    assert agent["attrs"]["narrationMessageIndex"] == 0
 
     done = GibsonEvent.from_raw(
         {"type": "message_end", "content": "patched the exit code"}, sequence=3, timestamp_ms=300
@@ -298,13 +299,16 @@ def test_perception_tracks_agent_narration(tmp_path: Path) -> None:
     # a new message after completion starts fresh instead of appending, and
     # the buffer keeps the HEAD of very long messages (the thesis comes first)
     flood = GibsonEvent.from_raw(
-        {"type": "message_update", "text": "HEAD-MARKER " + "x" * 2500}, sequence=4, timestamp_ms=400
+        {"type": "message_update", "text": "HEAD-MARKER " + "x" * 6500}, sequence=4, timestamp_ms=400
     )
     model.apply_batch((flood,), empty)
     agent = next(e for e in model.to_dict()["entities"] if e["id"] == "agent")
     assert agent["attrs"]["narration"].startswith("HEAD-MARKER ")
-    assert len(agent["attrs"]["narration"]) == 2000
+    assert len(agent["attrs"]["narration"]) == 6000
     assert agent["attrs"]["narrationComplete"] is False
+    # crossing a message boundary bumps the index; chunks within one message
+    # share it (displays replace in place within a message, push across them)
+    assert agent["attrs"]["narrationMessageIndex"] == 1
 
     # message_end without text keeps the accumulated narration, sealed
     silent_end = GibsonEvent.from_raw({"type": "message_end"}, sequence=5, timestamp_ms=500)
@@ -563,6 +567,49 @@ def test_check_launch_moves_attention_to_the_project_root(tmp_path: Path) -> Non
     assert [(r["from"], r["to"]) for r in focused] == [("agent", "file:tests/test_app.py")]
 
 
+def test_duplicate_start_and_completion_events_do_not_double_checks(tmp_path: Path) -> None:
+    # harn announces one bash run FOUR times: tool_execution_start, tool_call,
+    # tool_result, tool_execution_end. Each pair must collapse to one command,
+    # one check_started, one check -- one breach, not two.
+    root = _git_fixture(tmp_path)
+    model = PerceptionModel(project_root=str(root))
+    command = "uv run pytest tests"
+    execution_start = GibsonEvent.from_raw(
+        {"type": "tool_execution_start", "toolName": "bash", "input": {"command": command}},
+        sequence=1, timestamp_ms=100,
+    )
+    call = GibsonEvent.from_raw(
+        {"type": "tool_call", "toolName": "bash", "input": {"command": command}},
+        sequence=2, timestamp_ms=110,
+    )
+    result = GibsonEvent.from_raw(
+        {"type": "tool_result", "toolName": "bash", "input": {"command": command}, "isError": True},
+        sequence=5, timestamp_ms=200,
+    )
+    execution_end = GibsonEvent.from_raw(
+        {"type": "tool_execution_end", "toolName": "bash", "input": {"command": command}, "isError": True},
+        sequence=6, timestamp_ms=210,
+    )
+    empty = {"schema": "harn-gibson.touched-files.v1", "files": [], "count": 0, "truncated": False}
+    model.apply_batch((execution_start, call, result, execution_end), empty)
+    payload = model.to_dict()
+    commands = [e for e in payload["entities"] if e["type"] == "command"]
+    assert len(commands) == 1
+    checks = [e for e in payload["entities"] if e["type"] == "check"]
+    assert len(checks) == 1  # one run, one verdict, one breach
+    started = [e for e in payload["events"] if e["kind"] == "check_started"]
+    assert len(started) == 1
+
+    # a genuine re-run (further away in the stream) still mints fresh entities
+    rerun = GibsonEvent.from_raw(
+        {"type": "tool_result", "toolName": "bash", "input": {"command": command}, "isError": False},
+        sequence=12, timestamp_ms=900,
+    )
+    model.apply_batch((rerun,), empty)
+    checks = [e for e in model.to_dict()["entities"] if e["type"] == "check"]
+    assert len(checks) == 2
+
+
 def test_streamed_argument_prefixes_do_not_become_files(tmp_path: Path) -> None:
     root = _git_fixture(tmp_path)
     model = PerceptionModel(project_root=str(root))
@@ -598,7 +645,7 @@ def test_streamed_argument_prefixes_do_not_become_files(tmp_path: Path) -> None:
     assert not any(r["type"] == "focused_on" for r in model.to_dict()["relations"])
 
 
-def test_spoken_text_supersedes_inner_monologue(tmp_path: Path) -> None:
+def test_spoken_text_continues_after_inner_monologue(tmp_path: Path) -> None:
     root = _git_fixture(tmp_path)
     model = PerceptionModel(project_root=str(root))
     empty = {"schema": "harn-gibson.touched-files.v1", "files": [], "count": 0, "truncated": False}
@@ -628,8 +675,9 @@ def test_spoken_text_supersedes_inner_monologue(tmp_path: Path) -> None:
     )
     model.apply_batch((thinking, spoken_one, spoken_two), empty)
     agent = next(e for e in model.to_dict()["entities"] if e["id"] == "agent")
-    # no doubled narrative: the spoken text replaced the monologue
-    assert agent["attrs"]["narration"] == "Behold: the scheme."
+    # the spoken text continues in the same window beneath the monologue
+    # (one message, one scroll) instead of blinking it away mid-read
+    assert agent["attrs"]["narration"] == "I shall plot the scheme.\n\nBehold: the scheme."
 
 
 def test_focus_prefers_written_files_over_command_mentions(tmp_path: Path) -> None:
@@ -819,7 +867,7 @@ def test_diff_preview_rides_payload_change_events(tmp_path: Path) -> None:
     changed = [e for e in model.to_dict()["events"]
                if e["kind"] == "file_changed" and e["entity"].endswith("new.py")]
     assert changed[0]["diffPreview"][0] == "+x = 1"
-    assert len(changed[0]["diffPreview"]) <= 160
+    assert len(changed[0]["diffPreview"]) <= 2000
 
     # the tool_result repeats the tool_call input; no duplicate preview
     result = GibsonEvent.from_raw(
@@ -845,7 +893,7 @@ def test_diff_preview_rides_payload_change_events(tmp_path: Path) -> None:
 def test_diff_preview_caps_total_lines_and_skips_malformed_edits() -> None:
     from harn_gibson.perception import _diff_preview_from_payload
 
-    block = "\n".join(f"line {i}" for i in range(70))
+    block = "\n".join(f"line {i}" for i in range(900))
     preview = _diff_preview_from_payload({
         "toolName": "edit",
         "input": {"path": "x.py", "edits": [
@@ -853,9 +901,9 @@ def test_diff_preview_caps_total_lines_and_skips_malformed_edits() -> None:
             {"oldText": block, "newText": block},
         ]},
     })
-    assert len(preview) == 160  # hard cap across all edits, 60 per side
+    assert len(preview) == 2000  # hard cap across all edits, 800 per side
     assert preview[0] == "-line 0"
-    assert preview[60] == "+line 0"
+    assert preview[800] == "+line 0"
     skipped = _diff_preview_from_payload({
         "toolName": "edit",
         "input": {"path": "x.py", "edits": ["not-a-mapping", {"newText": "y = 1\n"}]},
