@@ -89,6 +89,36 @@ def test_reset_session_gives_a_fresh_world() -> None:
         state.pipeline.stop()
 
 
+def test_stream_route_decoration_is_dropped_under_projection() -> None:
+    stream_event = {
+        "schema": "harn-gibson.event.v1",
+        "sequence": 2,
+        "timestampMs": 200,
+        "source": "harn",
+        "eventType": "message_update",
+        "phase": "during",
+        "title": "Assistant",
+        "summary": "streaming",
+        "payload": {"type": "message_update", "text": "narrating"},
+    }
+    projection_state = build_state_from_env({"HARN_GIBSON_PROJECTION": "1"})
+    try:
+        submit_event_to_renderer(dict(stream_event), projection_state)
+        assert projection_state.scene.state.animations == {}
+        assert projection_state.scene.state.primitives["status"].props.get("text") != "stream:assistant-main"
+        # the stream text buffer itself still updates (state, not decoration)
+        assert "assistant-stream" in projection_state.scene.state.primitives
+    finally:
+        projection_state.pipeline.stop()
+
+    legacy_state = GibsonServerState()
+    try:
+        submit_event_to_renderer(dict(stream_event), legacy_state)
+        assert any(a.kind == "stream-pulse" for a in legacy_state.scene.state.animations.values())
+    finally:
+        legacy_state.pipeline.stop()
+
+
 def test_reset_session_clears_stream_buffers() -> None:
     state = build_state_from_env({"HARN_GIBSON_PROJECTION": "1"})
     try:
