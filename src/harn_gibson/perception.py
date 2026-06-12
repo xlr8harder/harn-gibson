@@ -199,6 +199,12 @@ def _message_delta(payload: Mapping[str, Any]) -> tuple[str, str]:
     if isinstance(nested, Mapping):
         if _is_tool_call_delta(nested):
             return "", ""  # streamed tool-call argument JSON is not narration
+        nested_type = str(nested.get("type") or "")
+        if nested_type.endswith("_start") or nested_type.endswith("_end"):
+            # block lifecycle markers: *_end events carry the COMPLETE block
+            # content, which the deltas already streamed -- appending it
+            # doubles every block verbatim
+            return "", ""
         for key in ("text", "delta", "content"):
             value = nested.get(key)
             if isinstance(value, str) and value:
@@ -409,6 +415,15 @@ class PerceptionModel:
                 saw_after_phase = True
             touches = touched_by_sequence.get(event.sequence, ())
             self._observe_narration(event)
+            if event.event_type in {"agent_end", "session_shutdown", "harn_exit"}:
+                # closing pose: the work is done; attention returns to the
+                # whole project instead of lingering on the last touched file
+                self._focused_path = None
+                self._upsert_relation(
+                    "focused_on", "agent", "dir:.",
+                    seq=event.sequence, provenance="inferred", confidence=0.7,
+                    exclusive=True,
+                )
             check_launched = self._observe_command(event)
             command_id = self._command_for_sequence(event.sequence)
             # narrative attention: launching a check means attending to the

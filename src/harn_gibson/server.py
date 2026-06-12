@@ -6367,6 +6367,18 @@ function projectionNodePoint(rect, tween, camera) {
 
 function drawProjectionScene(primitive, w, h, now) {
   const props = primitive.props || {};
+  // a session reset rebuilds the engine and its revision counter restarts:
+  // clear all presentation state so the world re-materializes from scratch
+  if (Number(props.revision || 0) < (drawProjectionScene.lastRevision || 0)) {
+    projectionTweens.clear();
+    projectionEdgeTweens.clear();
+    projectionEffectClocks.clear();
+    projectionPeekWindows.clear();
+    projectionPeekConsumed.clear();
+    projectionNarrationStack.length = 0;
+    projectionCameraState = {x: 0.5, y: 0.5, zoom: 1.0};
+  }
+  drawProjectionScene.lastRevision = Number(props.revision || 0);
   const theme = PROJECTION_THEMES[String(props.theme || "gibson")] || PROJECTION_THEMES.gibson;
   const nodes = Array.isArray(props.nodes) ? props.nodes : [];
   const edges = Array.isArray(props.edges) ? props.edges : [];
@@ -7018,12 +7030,14 @@ function drawProjectionPeek(effect, theme, point, now) {
   ctx.restore();
 }
 
-const projectionNarration = {
-  text: "", lines: [], offset: 0, lastChangeAt: 0, openedAt: 0, lastNow: 0,
-};
+const projectionNarrationStack = [];
 const NARRATION_HOLD_MS = 9000; // the narrative is the storyline: hold for reading
+const NARRATION_RETIRED_HOLD_MS = 6000; // a superseded message fades on its own time
+const NARRATION_SCROLL_DELAY_MS = 2600; // read the head before the scroll begins
 const NARRATION_WINK_MS = 280;
-const NARRATION_VISIBLE_LINES = 8;
+const NARRATION_VISIBLE_LINES = 12;
+const NARRATION_RETIRED_LINES = 3; // retired messages collapse to their tail
+const NARRATION_STACK = 3;
 const NARRATION_WRAP_CHARS = 56;
 
 function wrapNarration(text) {
@@ -7048,82 +7062,119 @@ function wrapNarration(text) {
 }
 
 function drawProjectionNarration(hud, theme, rect, now) {
-  // the agent's voice: a terminal window under the mast that streams the
-  // current message from its head, wraps real paragraphs, tail-follows while
-  // streaming, and winks away when the agent goes quiet
-  const state = projectionNarration;
+  // the agent's voice: a stack of terminal windows under the mast. The live
+  // message streams on top (head-first, wrapped paragraphs, tail-follow,
+  // blinking cursor); a new message pushes the previous one DOWN, where it
+  // collapses to its tail and fades out on its own time.
   const text = String(hud.narration || "");
-  if (text !== state.text) {
-    const opening = !state.text || now - state.lastChangeAt > NARRATION_HOLD_MS + NARRATION_WINK_MS;
-    if (opening) {
-      state.openedAt = now;
-      state.offset = 0;
+  let current = projectionNarrationStack[0];
+  if (text && (!current || current.retiredAt)) {
+    current = {text, lines: wrapNarration(text), offset: 0,
+               openedAt: now, lastChangeAt: now, retiredAt: null};
+    projectionNarrationStack.unshift(current);
+  } else if (text && text !== current.text) {
+    if (text.startsWith(current.text)) {
+      current.text = text;                       // the message grew
+      current.lines = wrapNarration(text);
+      current.lastChangeAt = now;
+    } else {
+      current.retiredAt = now;                   // a NEW message supersedes it
+      projectionNarrationStack.unshift({
+        text, lines: wrapNarration(text), offset: 0,
+        openedAt: now, lastChangeAt: now, retiredAt: null,
+      });
     }
-    if (!text.startsWith(state.text)) state.offset = 0; // new message, not a grown one
-    state.text = text;
-    state.lines = wrapNarration(text);
-    state.lastChangeAt = now;
   }
-  if (!state.lines.length) return;
-  const dt = Math.min(0.1, (now - state.lastNow) / 1000);
-  state.lastNow = now;
+  while (projectionNarrationStack.length > NARRATION_STACK) projectionNarrationStack.pop();
+  if (!projectionNarrationStack.length) return;
 
+  const dt = Math.min(0.1, (now - (projectionNarrationStack.lastNow || now)) / 1000);
+  projectionNarrationStack.lastNow = now;
   const lineHeight = 13 * devicePixelRatio;
-  const visibleLines = Math.min(NARRATION_VISIBLE_LINES, state.lines.length);
-  const boxHeight = visibleLines * lineHeight + 14 * devicePixelRatio;
   const boxWidth = 330 * devicePixelRatio;
-  const targetOffset = Math.max(0, state.lines.length - visibleLines);
-  state.offset = Math.min(targetOffset, state.offset + dt * 3.2); // reading pace
-  if (targetOffset - state.offset > 0.5) {
-    state.lastChangeAt = Math.max(state.lastChangeAt, now - NARRATION_HOLD_MS + 400);
-  }
-
-  const quiet = now - state.lastChangeAt;
-  if (quiet > NARRATION_HOLD_MS + NARRATION_WINK_MS) return;
-  const openRamp = Math.min(1, (now - state.openedAt) / 240);
-  const wink = quiet > NARRATION_HOLD_MS ? 1 - (quiet - NARRATION_HOLD_MS) / NARRATION_WINK_MS : 1;
-  const openness = Math.min(openRamp, Math.max(0, wink));
-
   const x = rect.x + 6 * devicePixelRatio;
-  const y = rect.y + 38 * devicePixelRatio;
-  const visibleHeight = Math.max(1.5 * devicePixelRatio, boxHeight * openness);
-  const boxY = y + (boxHeight - visibleHeight) / 2;
-  ctx.save();
-  ctx.fillStyle = "rgba(2,6,10,0.82)";
-  ctx.strokeStyle = projectionTone(theme, "good", 0.55);
-  ctx.lineWidth = devicePixelRatio;
-  ctx.beginPath();
-  ctx.rect(x, boxY, boxWidth, visibleHeight);
-  ctx.fill();
-  ctx.stroke();
-  if (openness > 0.55) {
-    ctx.beginPath();
-    ctx.rect(x, boxY, boxWidth, visibleHeight);
-    ctx.clip();
-    ctx.globalAlpha *= Math.min(1, (openness - 0.55) / 0.35);
-    ctx.font = `${10 * devicePixelRatio}px ui-monospace, monospace`;
-    ctx.textAlign = "left";
-    ctx.textBaseline = "top";
-    const baseY = boxY + 7 * devicePixelRatio - state.offset * lineHeight;
-    for (let i = 0; i < state.lines.length; i++) {
-      const lineY = baseY + i * lineHeight;
-      if (lineY < boxY - lineHeight || lineY > boxY + visibleHeight) continue;
-      ctx.fillStyle = projectionTone(theme, "good", 0.85);
-      ctx.fillText(state.lines[i], x + 6 * devicePixelRatio, lineY);
-    }
-    // streaming cursor while the message is still arriving
-    if (hud.narrationComplete === false) {
-      const cursorOn = Math.floor(now / 420) % 2 === 0;
-      if (cursorOn) {
-        ctx.fillStyle = projectionTone(theme, "good", 0.9);
-        const lastIndex = state.lines.length - 1;
-        const lastY = baseY + lastIndex * lineHeight;
-        const width = ctx.measureText(state.lines[lastIndex] || "").width;
-        ctx.fillRect(x + 8 * devicePixelRatio + width, lastY, 5 * devicePixelRatio, lineHeight * 0.8);
+  let y = rect.y + 38 * devicePixelRatio;
+
+  for (let index = projectionNarrationStack.length - 1; index >= 0; index--) {
+    const entry = projectionNarrationStack[index];
+    const retired = Boolean(entry.retiredAt);
+    if (retired) {
+      const age = now - entry.retiredAt;
+      if (age > NARRATION_RETIRED_HOLD_MS + NARRATION_WINK_MS) {
+        projectionNarrationStack.splice(index, 1);
+        continue;
       }
     }
   }
-  ctx.restore();
+  // draw newest at the top, older entries stacked beneath it
+  for (const entry of projectionNarrationStack) {
+    const retired = Boolean(entry.retiredAt);
+    const visibleLines = retired
+      ? Math.min(NARRATION_RETIRED_LINES, entry.lines.length)
+      : Math.min(NARRATION_VISIBLE_LINES, entry.lines.length);
+    const boxHeight = visibleLines * lineHeight + 14 * devicePixelRatio;
+    const targetOffset = Math.max(0, entry.lines.length - visibleLines);
+    if (retired) {
+      entry.offset = targetOffset;               // retired entries show their tail
+    } else {
+      // an initial pause lets the head be read before the scroll begins;
+      // then reading pace
+      if (now - entry.openedAt > NARRATION_SCROLL_DELAY_MS) {
+        entry.offset = Math.min(targetOffset, entry.offset + dt * 3.2);
+      }
+      // pending scroll counts as activity: the full reading hold starts only
+      // AFTER the last line has arrived (no vanishing on the final word)
+      if (targetOffset - entry.offset > 0.5) entry.lastChangeAt = now;
+    }
+    const quiet = retired ? now - entry.retiredAt : now - entry.lastChangeAt;
+    const holdMs = retired ? NARRATION_RETIRED_HOLD_MS : NARRATION_HOLD_MS;
+    if (quiet > holdMs + NARRATION_WINK_MS) continue;
+    const openRamp = Math.min(1, (now - entry.openedAt) / 240);
+    const wink = quiet > holdMs ? 1 - (quiet - holdMs) / NARRATION_WINK_MS : 1;
+    const openness = Math.min(openRamp, Math.max(0, wink));
+    const dim = retired ? 0.55 : 1;
+
+    const visibleHeight = Math.max(1.5 * devicePixelRatio, boxHeight * openness);
+    const boxY = y + (boxHeight - visibleHeight) / 2;
+    ctx.save();
+    ctx.globalAlpha *= dim;
+    ctx.fillStyle = "rgba(2,6,10,0.82)";
+    ctx.strokeStyle = projectionTone(theme, "good", retired ? 0.3 : 0.55);
+    ctx.lineWidth = devicePixelRatio;
+    ctx.beginPath();
+    ctx.rect(x, boxY, boxWidth, visibleHeight);
+    ctx.fill();
+    ctx.stroke();
+    if (openness > 0.55) {
+      ctx.beginPath();
+      ctx.rect(x, boxY, boxWidth, visibleHeight);
+      ctx.clip();
+      ctx.globalAlpha *= Math.min(1, (openness - 0.55) / 0.35);
+      ctx.font = `${10 * devicePixelRatio}px ui-monospace, monospace`;
+      ctx.textAlign = "left";
+      ctx.textBaseline = "top";
+      const baseY = boxY + 7 * devicePixelRatio - entry.offset * lineHeight;
+      for (let i = 0; i < entry.lines.length; i++) {
+        const lineY = baseY + i * lineHeight;
+        if (lineY < boxY - lineHeight || lineY > boxY + visibleHeight) continue;
+        ctx.fillStyle = projectionTone(theme, "good", 0.85);
+        ctx.fillText(entry.lines[i], x + 6 * devicePixelRatio, lineY);
+      }
+      // streaming cursor on the live message only
+      if (!retired && hud.narrationComplete === false) {
+        const cursorOn = Math.floor(now / 420) % 2 === 0;
+        if (cursorOn) {
+          ctx.fillStyle = projectionTone(theme, "good", 0.9);
+          const lastIndex = entry.lines.length - 1;
+          const lastY = baseY + lastIndex * lineHeight;
+          const width = ctx.measureText(entry.lines[lastIndex] || "").width;
+          ctx.fillRect(x + 8 * devicePixelRatio + width, lastY, 5 * devicePixelRatio, lineHeight * 0.8);
+        }
+      }
+    }
+    ctx.restore();
+    y += visibleHeight + 6 * devicePixelRatio;
+  }
 }
 
 const PROJECTION_TICKER_GLYPHS = {

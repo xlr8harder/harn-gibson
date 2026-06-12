@@ -632,6 +632,42 @@ def test_spoken_text_supersedes_inner_monologue(tmp_path: Path) -> None:
     assert agent["attrs"]["narration"] == "Behold: the scheme."
 
 
+def test_session_end_returns_attention_to_the_project(tmp_path: Path) -> None:
+    root = _git_fixture(tmp_path)
+    model = PerceptionModel(project_root=str(root))
+    first = _command_pair("cat src/app_pkg/app.py", start_seq=1, path="src/app_pkg/app.py")
+    model.apply_batch(first[:2], first[2])
+    ending = GibsonEvent.from_raw({"type": "agent_end"}, sequence=4, timestamp_ms=400)
+    empty = {"schema": "harn-gibson.touched-files.v1", "files": [], "count": 0, "truncated": False}
+    model.apply_batch((ending,), empty)
+    focused = [r for r in model.to_dict()["relations"] if r["type"] == "focused_on"]
+    assert [(r["from"], r["to"]) for r in focused] == [("agent", "dir:.")]
+
+
+def test_block_lifecycle_markers_do_not_double_narration(tmp_path: Path) -> None:
+    root = _git_fixture(tmp_path)
+    model = PerceptionModel(project_root=str(root))
+    empty = {"schema": "harn-gibson.touched-files.v1", "files": [], "count": 0, "truncated": False}
+    partial = {"content": [{"type": "text"}]}
+    events = [
+        GibsonEvent.from_raw({"type": "message_update", "assistantMessageEvent": {
+            "type": "text_start", "contentIndex": 0, "partial": partial}}, sequence=1, timestamp_ms=100),
+        GibsonEvent.from_raw({"type": "message_update", "assistantMessageEvent": {
+            "type": "text_delta", "contentIndex": 0, "delta": "Only ", "partial": partial}},
+            sequence=2, timestamp_ms=200),
+        GibsonEvent.from_raw({"type": "message_update", "assistantMessageEvent": {
+            "type": "text_delta", "contentIndex": 0, "delta": "leverage.", "partial": partial}},
+            sequence=3, timestamp_ms=300),
+        # the *_end marker repeats the COMPLETE block content; it must not append
+        GibsonEvent.from_raw({"type": "message_update", "assistantMessageEvent": {
+            "type": "text_end", "contentIndex": 0, "content": "Only leverage.", "partial": partial}},
+            sequence=4, timestamp_ms=400),
+    ]
+    model.apply_batch(tuple(events), empty)
+    agent = next(e for e in model.to_dict()["entities"] if e["id"] == "agent")
+    assert agent["attrs"]["narration"] == "Only leverage."
+
+
 def test_perception_keeps_primary_focus_for_multi_path_touches(tmp_path: Path) -> None:
     root = _git_fixture(tmp_path)
     model = PerceptionModel(project_root=str(root))
