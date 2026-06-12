@@ -503,6 +503,20 @@ def test_mood_progression_idle_work_verify() -> None:
     assert engine.resolve(_perception(entities=running), now_ms=3)["mood"]["name"] == "verify"
 
 
+def test_stale_focus_drifts_home_to_the_root() -> None:
+    relations = [r for r in _default_relations() if r["type"] != "focused_on"]
+    relations.append({"type": "focused_on", "from": "agent", "to": "file:src/app.py", "lastSeq": 2})
+    engine = ProjectionEngine()
+    # focus reinforced 2 seqs ago at latest 9: still live
+    scene = engine.resolve(_perception(relations=relations, latest_seq=9), now_ms=1000)
+    assert scene["hud"]["focus"] == "src/app.py"
+    # 40 events later with no reinforcement: attention has wandered home
+    scene = engine.resolve(_perception(relations=relations, latest_seq=42), now_ms=2000)
+    assert scene["hud"]["focus"] == "repo (whole project)" or scene["camera"]["target"] != "file:src/app.py"
+    nodes = {node["id"]: node for node in scene["nodes"]}
+    assert nodes["file:src/app.py"]["focus"] is False
+
+
 def test_camera_pin_focus_and_fallback() -> None:
     pinned = ProjectionEngine({"camera": {"target": "dir:."}})
     assert pinned.resolve(_perception(), now_ms=1)["camera"] == {"target": "dir:.", "targets": ["dir:."]}

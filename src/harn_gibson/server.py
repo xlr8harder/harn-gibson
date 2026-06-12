@@ -7022,13 +7022,17 @@ function drawProjectionPeek(effect, theme, point, now) {
   ctx.stroke();
   if (openness > 0.55) {
     ctx.beginPath();
-    ctx.rect(x, boxY, boxWidth, visibleHeight);
+    // clip to the content area (not the border) so tail-offset lines never
+    // bleed half-glyphs into the top padding
+    ctx.rect(x, boxY + 4 * devicePixelRatio, boxWidth,
+             Math.max(1, visibleHeight - 7 * devicePixelRatio));
     ctx.clip();
     ctx.globalAlpha *= Math.min(1, (openness - 0.55) / 0.35);
     ctx.font = `${8.5 * devicePixelRatio}px ui-monospace, monospace`;
     ctx.textAlign = "left";
     ctx.textBaseline = "top";
     const baseY = boxY + 5 * devicePixelRatio - win.offset * lineHeight;
+    let drew = 0;
     for (let i = 0; i < win.lines.length; i++) {
       const lineY = baseY + i * lineHeight;
       if (lineY < boxY - lineHeight || lineY > boxY + visibleHeight) continue;
@@ -7036,7 +7040,9 @@ function drawProjectionPeek(effect, theme, point, now) {
       const tone = line.startsWith("+") ? "good" : line.startsWith("-") ? "alarm" : "ghost";
       ctx.fillStyle = projectionTone(theme, tone, 0.95);
       ctx.fillText(line.slice(0, 46), x + 5 * devicePixelRatio, lineY);
+      drew += 1;
     }
+    if (drew === 0) win.lastAppendAt = Math.min(win.lastAppendAt, now - PEEK_HOLD_MS);
   }
   ctx.restore();
 }
@@ -7175,7 +7181,11 @@ function drawProjectionNarration(hud, theme, rect, now) {
     ctx.stroke();
     if (openness > 0.55) {
       ctx.beginPath();
-      ctx.rect(x, boxY, boxWidth, visibleHeight);
+      // clip to the CONTENT area, not the border: a tail-offset line above
+      // the window must not bleed its bottom half into the top padding
+      // (which reads as the box above overlapping this one)
+      ctx.rect(x, boxY + 5 * devicePixelRatio, boxWidth,
+               Math.max(1, visibleHeight - 9 * devicePixelRatio));
       ctx.clip();
       ctx.globalAlpha *= Math.min(1, (openness - 0.55) / 0.35);
       ctx.font = `${10 * devicePixelRatio}px ui-monospace, monospace`;

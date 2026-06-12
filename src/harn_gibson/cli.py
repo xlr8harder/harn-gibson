@@ -227,6 +227,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="cap each real-time replay delay in milliseconds",
     )
     watch_replay.add_argument(
+        "--quiet-step-delay-ms",
+        type=int,
+        default=None,
+        help="tighter delay cap before low-salience steps (streamed message/tool chunks): "
+        "fast-forwards reasoning-heavy stretches in recorded demos without losing visible beats",
+    )
+    watch_replay.add_argument(
         "--start-step",
         type=int,
         default=1,
@@ -818,6 +825,7 @@ def _rerun_replay(
     playback_timing: str,
     speed: float,
     max_step_delay_ms: int | None,
+    quiet_step_delay_ms: int | None = None,
     progress: object,
 ) -> None:
     """Runner registered behind the browser replay button: reset the session
@@ -834,6 +842,7 @@ def _rerun_replay(
         playback_timing=playback_timing,
         time_scale=speed,
         max_step_delay_ms=max_step_delay_ms,
+        quiet_step_delay_ms=quiet_step_delay_ms,
         check_expectations=False,
         progress=progress,
     )
@@ -888,6 +897,7 @@ def run_watch_replay(args: argparse.Namespace) -> int:
             playback_timing=args.playback_timing,
             speed=args.speed,
             max_step_delay_ms=args.max_step_delay_ms,
+            quiet_step_delay_ms=args.quiet_step_delay_ms,
             progress=report_progress,
         ),
     )
@@ -907,6 +917,7 @@ def run_watch_replay(args: argparse.Namespace) -> int:
                 playback_timing=args.playback_timing,
                 time_scale=args.speed,
                 max_step_delay_ms=args.max_step_delay_ms,
+                quiet_step_delay_ms=args.quiet_step_delay_ms,
                 start_index=start_index,
                 end_index=end_index,
                 check_expectations=check_expectations,

@@ -340,6 +340,7 @@ def play_replay_file(
     playback_timing: ReplayPlaybackTiming = "fixed",
     time_scale: float = 1.0,
     max_step_delay_ms: int | None = None,
+    quiet_step_delay_ms: int | None = None,
     start_index: int = 0,
     end_index: int | None = None,
     check_expectations: bool = True,
@@ -354,6 +355,7 @@ def play_replay_file(
         playback_timing=playback_timing,
         time_scale=time_scale,
         max_step_delay_ms=max_step_delay_ms,
+        quiet_step_delay_ms=quiet_step_delay_ms,
         start_index=start_index,
         end_index=end_index,
         check_expectations=check_expectations,
@@ -371,6 +373,7 @@ def play_replay_data(
     playback_timing: ReplayPlaybackTiming = "fixed",
     time_scale: float = 1.0,
     max_step_delay_ms: int | None = None,
+    quiet_step_delay_ms: int | None = None,
     start_index: int = 0,
     end_index: int | None = None,
     check_expectations: bool = True,
@@ -399,6 +402,7 @@ def play_replay_data(
     selected_steps = tuple(enumerate(steps[start_index:end_index], start_index))
     selected_payloads = tuple(step for _, step in selected_steps)
     timestamps = _replay_step_timestamps(selected_payloads)
+    quiet_flags = _replay_quiet_flags(selected_payloads)
     if selected_steps and start_delay_ms > 0:
         sleep_fn(start_delay_ms / 1000)
     for position, (index, step) in enumerate(selected_steps):
@@ -417,6 +421,8 @@ def play_replay_data(
                 step_delay_ms=step_delay_ms,
                 time_scale=time_scale,
                 max_step_delay_ms=max_step_delay_ms,
+                quiet_step_delay_ms=quiet_step_delay_ms,
+                quiet_flags=quiet_flags,
             )
             if delay_ms > 0:
                 sleep_fn(delay_ms / 1000)
@@ -1591,6 +1597,20 @@ def _replay_step_timestamps(steps: Sequence[Any]) -> tuple[int | None, ...]:
     return tuple(_replay_step_timestamp_ms(step) for step in steps)
 
 
+_QUIET_EVENT_TYPES = frozenset({"message_update", "tool_execution_update"})
+
+
+def _replay_quiet_flags(steps: Sequence[Any]) -> tuple[bool, ...]:
+    """Low-salience steps (streamed message/tool chunks) that recorded demos
+    can fast-forward through without losing any visible beat."""
+    flags = []
+    for step in steps:
+        event = step.get("event") if isinstance(step, Mapping) else None
+        event_type = str(event.get("eventType") or "") if isinstance(event, Mapping) else ""
+        flags.append(event_type in _QUIET_EVENT_TYPES)
+    return tuple(flags)
+
+
 def _replay_step_delay_ms(
     index: int,
     *,
@@ -1599,6 +1619,8 @@ def _replay_step_delay_ms(
     step_delay_ms: int,
     time_scale: float,
     max_step_delay_ms: int | None,
+    quiet_step_delay_ms: int | None = None,
+    quiet_flags: Sequence[bool] = (),
 ) -> float:
     if playback_timing == "fixed":
         return float(step_delay_ms)
@@ -1611,6 +1633,12 @@ def _replay_step_delay_ms(
     delay_ms = max(0, following - current) / time_scale
     if max_step_delay_ms is not None:
         delay_ms = min(delay_ms, max_step_delay_ms)
+    if (
+        quiet_step_delay_ms is not None
+        and index + 1 < len(quiet_flags)
+        and quiet_flags[index + 1]
+    ):
+        delay_ms = min(delay_ms, quiet_step_delay_ms)
     return delay_ms
 
 

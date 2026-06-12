@@ -632,6 +632,32 @@ def test_spoken_text_supersedes_inner_monologue(tmp_path: Path) -> None:
     assert agent["attrs"]["narration"] == "Behold: the scheme."
 
 
+def test_focus_prefers_written_files_over_command_mentions(tmp_path: Path) -> None:
+    root = _git_fixture(tmp_path)
+    model = PerceptionModel(project_root=str(root))
+    event = GibsonEvent.from_raw(
+        {"type": "tool_result", "toolName": "edit",
+         "input": {"path": "src/app_pkg/app.py", "edits": [{"oldText": "a", "newText": "b"}]}},
+        sequence=1,
+        timestamp_ms=100,
+    )
+    touched = {
+        "schema": "harn-gibson.touched-files.v1",
+        "files": [
+            # a manifest merely mentioned by tooling, listed FIRST
+            {"path": "README.md", "operation": "bash:after", "firstSequence": 1, "lastSequence": 1,
+             "phases": ["after"], "sources": ["input.command"]},
+            {"path": "src/app_pkg/app.py", "operation": "edit:after", "firstSequence": 1, "lastSequence": 1,
+             "phases": ["after"], "sources": ["input.path"]},
+        ],
+        "count": 2,
+        "truncated": False,
+    }
+    model.apply_batch((event,), touched)
+    focused = [r for r in model.to_dict()["relations"] if r["type"] == "focused_on"]
+    assert [(r["from"], r["to"]) for r in focused] == [("agent", "file:src/app_pkg/app.py")]
+
+
 def test_session_end_returns_attention_to_the_project(tmp_path: Path) -> None:
     root = _git_fixture(tmp_path)
     model = PerceptionModel(project_root=str(root))

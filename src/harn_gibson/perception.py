@@ -547,6 +547,7 @@ class PerceptionModel:
         suppress_focus: bool = False,
     ) -> None:
         primary: str | None = None
+        primary_is_write = False
         for touch in touches:
             path = str(touch.get("path") or "")
             if not path or not _path_visible(path) or not _plausible_touch_path(path):
@@ -563,8 +564,13 @@ class PerceptionModel:
                 self._files[path] = state
             state.touch_count += 1
             state.last_touched_seq = event.sequence
-            if primary is None:
+            # focus prefers files the agent WRITES over files merely named on a
+            # command line (uv sync mentioning pyproject.toml is not attention)
+            operation = str(touch.get("operation") or "")
+            is_write = operation.split(":", 1)[0] in {"edit", "write", "create", "file_write", "write_file"}
+            if primary is None or (is_write and not primary_is_write):
                 primary = path
+                primary_is_write = is_write
             source = command_id or f"event:{event.sequence}"
             self._upsert_relation(
                 "touched", source, f"file:{path}",

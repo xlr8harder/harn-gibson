@@ -191,6 +191,36 @@ def test_replay_endpoints_drive_restart(tmp_path: Path) -> None:
         state.pipeline.stop()
 
 
+def test_quiet_step_pacing_fast_forwards_streamed_chunks() -> None:
+    from harn_gibson.replay import _replay_quiet_flags, _replay_step_delay_ms
+
+    steps = [
+        {"type": "event", "event": {"eventType": "tool_call"}},
+        {"type": "event", "event": {"eventType": "message_update"}},
+        {"type": "event", "event": {"eventType": "tool_result"}},
+        "not-a-mapping",
+    ]
+    flags = _replay_quiet_flags(steps)
+    assert flags == (False, True, False, False)
+
+    timestamps = [0, 8000, 16000, 24000]
+    # next step is a quiet chunk: the tighter cap applies
+    assert _replay_step_delay_ms(
+        0, timestamps=timestamps, playback_timing="real-time", step_delay_ms=0,
+        time_scale=1.0, max_step_delay_ms=4000, quiet_step_delay_ms=300, quiet_flags=flags,
+    ) == 300
+    # next step is salient: only the normal cap applies
+    assert _replay_step_delay_ms(
+        1, timestamps=timestamps, playback_timing="real-time", step_delay_ms=0,
+        time_scale=1.0, max_step_delay_ms=4000, quiet_step_delay_ms=300, quiet_flags=flags,
+    ) == 4000
+    # no quiet cap configured: unchanged behavior
+    assert _replay_step_delay_ms(
+        0, timestamps=timestamps, playback_timing="real-time", step_delay_ms=0,
+        time_scale=1.0, max_step_delay_ms=4000, quiet_step_delay_ms=None, quiet_flags=flags,
+    ) == 4000
+
+
 def test_rerun_replay_resets_and_plays_the_file(tmp_path: Path) -> None:
     replay_path = tmp_path / "mini.json"
     replay_path.write_text(json.dumps({

@@ -159,7 +159,7 @@ class ProjectionEngine:
 
         mood = self._mood(entities)
         blast = _blast_targets(entities, relations)
-        focus = _focus_target(relations)
+        focus = _focus_target(relations, latest_seq)
         nodes: dict[str, dict[str, Any]] = {}
         edges: list[dict[str, Any]] = []
         root_id = ""
@@ -869,9 +869,16 @@ def _layer_edges(
     return edges
 
 
-def _focus_target(relations: list[Mapping[str, Any]]) -> str:
+_FOCUS_STALE_SEQS = 12
+
+
+def _focus_target(relations: list[Mapping[str, Any]], latest_seq: int = 0) -> str:
     for relation in relations:
         if str(relation.get("type")) == "focused_on" and str(relation.get("from")) == "agent":
+            # attention that hasn't been reinforced drifts home: a long quiet
+            # stretch should not leave the cursor parked on a stale file
+            if latest_seq and _int(relation.get("lastSeq"), 0) < latest_seq - _FOCUS_STALE_SEQS:
+                return ""
             return str(relation.get("to"))
     return ""
 
