@@ -251,6 +251,27 @@ def test_grid_ring_and_force_layouts() -> None:
     assert open_engine.resolve(_perception(), now_ms=1000)["nodes"]
 
 
+def test_force_layout_buds_new_nodes_beside_connected_neighbors() -> None:
+    spec = {"layers": [
+        {"id": "f", "select": {"types": ["file"]}, "layout": {"kind": "force", "relations": ["contains"]}},
+    ]}
+    entities = [
+        {"id": "file:a.py", "type": "file", "attrs": {"touchCount": 1}},
+        {"id": "file:b.py", "type": "file", "attrs": {"touchCount": 1}},
+    ]
+    relations = [{"type": "contains", "from": "file:a.py", "to": "file:b.py"}]
+    engine = ProjectionEngine(spec)
+    first = engine.resolve(_perception(entities=entities, relations=relations), now_ms=1000)
+    anchor = next(node for node in first["nodes"] if node["id"] == "file:a.py")
+
+    grown_entities = entities + [{"id": "file:c.py", "type": "file", "attrs": {"touchCount": 1}}]
+    grown_relations = relations + [{"type": "contains", "from": "file:a.py", "to": "file:c.py"}]
+    second = engine.resolve(_perception(entities=grown_entities, relations=grown_relations), now_ms=2000)
+    newborn = next(node for node in second["nodes"] if node["id"] == "file:c.py")
+    distance = ((newborn["x"] - anchor["x"]) ** 2 + (newborn["y"] - anchor["y"]) ** 2) ** 0.5
+    assert distance < 0.25  # budded beside its parent, not flown in from a hash ring
+
+
 def test_radial_tree_handles_missing_root_and_interior_nodes() -> None:
     # no explicit root and no dir entities: root inferred from parent links
     entities = [

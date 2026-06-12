@@ -248,15 +248,34 @@ class ProjectionEngine:
             and str(r.get("from")) in id_set
             and str(r.get("to")) in id_set
         ]
+        neighbors: dict[str, list[str]] = {}
+        for a, b in springs:
+            neighbors.setdefault(a, []).append(b)
+            neighbors.setdefault(b, []).append(a)
         positions: dict[str, list[float]] = {}
         for node_id in ids:
             if node_id in self._positions:
                 x, y = self._positions[node_id]
             else:
+                # bud next to an already-placed neighbor (organic growth);
+                # only nodes with no placed connections seed on the hash ring
+                anchor = next(
+                    (self._positions[other] for other in neighbors.get(node_id, ())
+                     if other in self._positions),
+                    None,
+                )
                 angle = (_fnv(node_id) % 6283) / 1000.0
-                radius = 0.28 + ((_fnv(node_id) >> 8) % 100) / 700.0
-                x, y = 0.5 + math.cos(angle) * radius, 0.5 + math.sin(angle) * radius
+                if anchor is not None:
+                    x = anchor[0] + math.cos(angle) * 0.05
+                    y = anchor[1] + math.sin(angle) * 0.05
+                else:
+                    radius = 0.28 + ((_fnv(node_id) >> 8) % 100) / 700.0
+                    x, y = 0.5 + math.cos(angle) * radius, 0.5 + math.sin(angle) * radius
             positions[node_id] = [x, y]
+        # spring rest length scales with crowding so small graphs stay snug
+        # and large ones spread; per-step displacement is capped so the solve
+        # cools instead of slingshotting nodes into the boundary clamps
+        rest = max(0.10, min(0.20, 0.55 / math.sqrt(max(1, len(ids)))))
         for _ in range(_FORCE_ITERATIONS):
             forces = {node_id: [0.0, 0.0] for node_id in ids}
             for index, a in enumerate(ids):
@@ -264,7 +283,7 @@ class ProjectionEngine:
                     dx = positions[a][0] - positions[b][0]
                     dy = positions[a][1] - positions[b][1]
                     dist_sq = max(1e-4, dx * dx + dy * dy)
-                    push = 0.0021 / dist_sq
+                    push = 0.0007 / dist_sq
                     forces[a][0] += dx * push
                     forces[a][1] += dy * push
                     forces[b][0] -= dx * push
@@ -273,16 +292,18 @@ class ProjectionEngine:
                 dx = positions[b][0] - positions[a][0]
                 dy = positions[b][1] - positions[a][1]
                 dist = math.sqrt(dx * dx + dy * dy) or 1e-4
-                pull = (dist - 0.16) * 0.08
+                pull = (dist - rest) * 0.14
                 forces[a][0] += dx / dist * pull
                 forces[a][1] += dy / dist * pull
                 forces[b][0] -= dx / dist * pull
                 forces[b][1] -= dy / dist * pull
             for node_id in ids:
-                forces[node_id][0] += (0.5 - positions[node_id][0]) * 0.01
-                forces[node_id][1] += (0.5 - positions[node_id][1]) * 0.01
-                positions[node_id][0] = min(0.96, max(0.04, positions[node_id][0] + forces[node_id][0]))
-                positions[node_id][1] = min(0.96, max(0.04, positions[node_id][1] + forces[node_id][1]))
+                forces[node_id][0] += (0.5 - positions[node_id][0]) * 0.022
+                forces[node_id][1] += (0.5 - positions[node_id][1]) * 0.022
+                step_x = min(0.02, max(-0.02, forces[node_id][0]))
+                step_y = min(0.02, max(-0.02, forces[node_id][1]))
+                positions[node_id][0] = min(0.96, max(0.04, positions[node_id][0] + step_x))
+                positions[node_id][1] = min(0.96, max(0.04, positions[node_id][1] + step_y))
         return {node_id: (round(pos[0], 4), round(pos[1], 4)) for node_id, pos in positions.items()}
 
     # -- nodes ------------------------------------------------------------------
