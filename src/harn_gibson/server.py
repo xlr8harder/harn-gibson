@@ -2277,15 +2277,11 @@ function cityBlockAnchorPoint(block, w, h) {
 function drawSceneAnimations(scene, w, h, now) {
   if (!scene?.animations) return;
   syncAnimationClocks(scene, now);
-  const projectionOwnsStage = Boolean(scene?.primitives?.["projection-scene"]);
+  // a projection scene carries its own entity-anchored effect channel; the
+  // legacy animation overlays (stream pulses on the backdrop grid, etc.) are
+  // noise on top of it and stand down entirely
+  if (scene?.primitives?.["projection-scene"]) return;
   for (const animation of Object.values(scene.animations)) {
-    // under a projection scene, an animation whose target primitive does not
-    // exist would render at the screen-center fallback anchor (e.g. the
-    // stream route's scan-grid pulse) -- meaningless circles; skip it
-    if (projectionOwnsStage && animation.targetId !== "stage"
-        && !scene.primitives?.[animation.targetId]) {
-      continue;
-    }
     const progress = animationProgress(animation, now);
     if (!animation.loop && progress >= 1) continue;
     drawSceneAnimation(animation, scene, w, h, now, progress);
