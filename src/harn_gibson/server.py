@@ -7079,7 +7079,12 @@ function drawProjectionNarration(hud, theme, rect, now) {
     projectionNarrationStack.unshift(current);
   } else if (text && text !== current.text) {
     if (text.startsWith(current.text)) {
-      current.text = text;                       // the message grew
+      // the message grew; if its window had fully winked out during a long
+      // quiet gap (thinking between text blocks), re-open it properly
+      if (now - current.lastChangeAt > NARRATION_HOLD_MS + NARRATION_WINK_MS) {
+        current.openedAt = now;
+      }
+      current.text = text;
       current.lines = wrapNarration(text);
       current.lastChangeAt = now;
     } else {
@@ -7133,13 +7138,22 @@ function drawProjectionNarration(hud, theme, rect, now) {
     }
     const quiet = retired ? now - entry.retiredAt : now - entry.lastChangeAt;
     const holdMs = retired ? NARRATION_RETIRED_HOLD_MS : NARRATION_HOLD_MS;
-    if (quiet > holdMs + NARRATION_WINK_MS) continue;
     const openRamp = Math.min(1, (now - entry.openedAt) / 240);
-    const wink = quiet > holdMs ? 1 - (quiet - holdMs) / NARRATION_WINK_MS : 1;
-    const openness = Math.min(openRamp, Math.max(0, wink));
+    const wink = quiet > holdMs ? Math.max(0, 1 - (quiet - holdMs) / NARRATION_WINK_MS) : 1;
+    const openness = quiet > holdMs + NARRATION_WINK_MS ? 0 : Math.min(openRamp, wink);
     const dim = retired ? 0.55 : 1;
 
-    const visibleHeight = Math.max(1.5 * devicePixelRatio, boxHeight * openness);
+    // every slot height is EASED, never snapped: whatever state transition
+    // happens (retire, collapse, re-open after a quiet gap), stacked boxes
+    // move continuously and can never paint over each other
+    const targetHeight = boxHeight * openness;
+    entry.slotH = entry.slotH === undefined
+      ? targetHeight
+      : entry.slotH + (targetHeight - entry.slotH) * Math.min(1, dt * 9);
+    const visibleHeight = entry.slotH;
+    if (visibleHeight < 1.5 * devicePixelRatio) {
+      continue; // fully collapsed: takes no space, draws nothing
+    }
     // top-anchored: the box opens/collapses at its bottom edge, so stacked
     // neighbors below never get overlapped mid-animation
     const boxY = y;
