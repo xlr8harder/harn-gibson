@@ -103,11 +103,21 @@ def test_stream_route_decoration_is_dropped_under_projection() -> None:
     }
     projection_state = build_state_from_env({"HARN_GIBSON_PROJECTION": "1"})
     try:
-        submit_event_to_renderer(dict(stream_event), projection_state)
+        result = submit_event_to_renderer(dict(stream_event), projection_state)
+        # a streamed chunk feeds perception but publishes NOTHING: no scene
+        # snapshot per chunk (flood backpressure), no decoration
+        assert result.updates == ()
         assert projection_state.scene.state.animations == {}
+        assert "assistant-stream" not in projection_state.scene.state.primitives
         assert projection_state.scene.state.primitives["status"].props.get("text") != "stream:assistant-main"
-        # the stream text buffer itself still updates (state, not decoration)
-        assert "assistant-stream" in projection_state.scene.state.primitives
+        # ...but every Nth chunk runs a full resolve as a narration heartbeat
+        for sequence in range(3, 11):
+            beat = dict(stream_event)
+            beat["sequence"] = sequence
+            beat["timestampMs"] = sequence * 100
+            submit_event_to_renderer(beat, projection_state)
+        scene_props = projection_state.scene.state.primitives["projection-scene"].props
+        assert "narrating" in scene_props["hud"]["narration"]
     finally:
         projection_state.pipeline.stop()
 

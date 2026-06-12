@@ -842,20 +842,24 @@ def submit_event_to_renderer(payload: dict[str, Any], state: GibsonServerState) 
     if route.dropped:
         return RenderSubmitResult(mode=state.pipeline.mode, queued=state.pipeline.pending_count())
     if not route.uses_renderer:
-        direct_mutations = route.direct_mutations
-        if isinstance(state.pipeline.renderer, ProjectionSceneRenderer):
-            # the projection owns the stage: direct routes keep their state
-            # updates (stream text buffers) but their decorative output --
-            # backdrop pulse animations, status-chip flicker that fights the
-            # mood readout -- is dropped instead of accumulating in the scene
-            direct_mutations = tuple(
-                mutation for mutation in direct_mutations
-                if mutation.op != "start_animation"
-                and not (mutation.op == "patch" and mutation.target_id == "status")
+        renderer = state.pipeline.renderer
+        if isinstance(renderer, ProjectionSceneRenderer):
+            # the projection owns the stage entirely: streamed chunks feed
+            # perception without publishing (a chunk flood must not drown the
+            # browser in scene snapshots), and every Nth chunk runs a full
+            # resolve as a narration heartbeat so the voice keeps streaming
+            renderer.stream_chunk_count = getattr(renderer, "stream_chunk_count", 0) + 1
+            if renderer.stream_chunk_count % 8 == 0:
+                return state.pipeline.submit(route.request)
+            return state.pipeline.apply_direct(
+                route.request,
+                (),
+                metadata={"route": route.decision.to_dict()},
+                publish_empty=False,
             )
         return state.pipeline.apply_direct(
             route.request,
-            direct_mutations,
+            route.direct_mutations,
             metadata={"route": route.decision.to_dict(), "renderInput": route.batch.to_dict()},
         )
     return state.pipeline.submit(route.request)

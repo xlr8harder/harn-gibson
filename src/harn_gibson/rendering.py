@@ -1649,15 +1649,22 @@ class RenderPipeline:
         mutations: Sequence[SceneMutation],
         *,
         metadata: dict[str, Any] | None = None,
+        publish_empty: bool = True,
     ) -> RenderSubmitResult:
         batch = RenderInputBatch.from_requests((request,), route=request.route)
-        plan = RenderPlan(
-            requests=(request,),
-            steps=(RenderStep(tuple(mutations), event_index=0),),
-            metadata={"renderer": "direct", **dict(metadata or {})},
-        )
         with self._lock:
             self.context_builder.observe_batch(batch)
+            if not mutations and not publish_empty:
+                # the event fed perception but changes nothing visible: do not
+                # publish a full scene snapshot (streamed-chunk floods drown
+                # the browser in payloads and replay turns into dead-air-then-
+                # burst backpressure)
+                return RenderSubmitResult(mode=self.mode, queued=self.pending_count())
+            plan = RenderPlan(
+                requests=(request,),
+                steps=(RenderStep(tuple(mutations), event_index=0),),
+                metadata={"renderer": "direct", **dict(metadata or {})},
+            )
             updates = tuple(self._apply_plan(plan))
         return RenderSubmitResult(mode=self.mode, queued=self.pending_count(), updates=updates)
 
