@@ -1407,7 +1407,7 @@ async function initReplayControl() {
   try {
     const response = await fetch("/replay");
     const payload = await response.json();
-    if (payload && payload.available) replayButton.hidden = false;
+    replayButton.hidden = !(payload && payload.available);
   } catch (error) {
     /* display is not replay-driven */
   }
@@ -1415,9 +1415,15 @@ async function initReplayControl() {
 replayButton.addEventListener("click", async () => {
   replayButton.disabled = true;
   try {
-    await fetch("/replay/restart", {method: "POST"});
+    const response = await fetch("/replay/restart", {method: "POST"});
+    if (response.status === 202) {
+      const payload = await response.json();
+      statusEl.textContent = payload.restarted ? "replay restarting" : "replay already running";
+    } else {
+      statusEl.textContent = "replay unavailable - reload page";
+    }
   } catch (error) {
-    /* server unreachable; re-enable below */
+    statusEl.textContent = "replay failed - server unreachable";
   }
   setTimeout(() => {
     replayButton.disabled = false;
@@ -7748,8 +7754,18 @@ async function refreshHealth() {
 }
 
 const source = new EventSource("/events/stream");
-source.onopen = () => { statusEl.textContent = "listening"; };
-source.onerror = () => { statusEl.textContent = "reconnecting"; };
+let streamWasLost = false;
+source.onopen = () => {
+  statusEl.textContent = "listening";
+  if (streamWasLost) {
+    // a stale tab just reconnected (server restarted): resync the scene and
+    // the replay control instead of showing the previous session's frame
+    streamWasLost = false;
+    fetch("/scene").then((r) => r.json()).then(renderScene).catch(() => {});
+    initReplayControl();
+  }
+};
+source.onerror = () => { streamWasLost = true; statusEl.textContent = "reconnecting"; };
 source.onmessage = (message) => {
   try {
     pushEvent(JSON.parse(message.data));
