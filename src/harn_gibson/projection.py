@@ -451,7 +451,6 @@ class ProjectionEngine:
         focus: str,
         now_ms: int,
     ) -> None:
-        latest_event_seq = max((_int(event.get("seq"), 0) for event in events), default=0)
         for event in events:
             key = (_int(event.get("seq"), 0), str(event.get("kind") or ""), str(event.get("entity") or ""))
             if key in self._seen_events:
@@ -483,8 +482,14 @@ class ProjectionEngine:
                     self._effects.append(instance)
             if key[1] == "check_completed" and str(event.get("status")) == "error":
                 self._check_errors_seen.add(str(event.get("category") or "check"))
-        # the perception event window is bounded, so old keys can never reappear
-        self._seen_events = {key for key in self._seen_events if key[0] >= latest_event_seq - 64}
+        # prune only keys that have scrolled out of the perception event window:
+        # sequences are sparse, so a fixed seq-distance cutoff can forget events
+        # that are STILL in the window and re-fire their effects every resolve
+        if events:
+            min_seq = min(_int(event.get("seq"), 0) for event in events)
+            self._seen_events = {key for key in self._seen_events if key[0] >= min_seq}
+        if len(self._seen_events) > 2048:
+            self._seen_events = set(sorted(self._seen_events)[-1024:])
 
     def _rule_matches(self, rule: Mapping[str, Any], event: Mapping[str, Any]) -> bool:
         when = _dict(rule.get("when"))

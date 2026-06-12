@@ -6870,6 +6870,7 @@ function drawProjectionEffect(effect, theme, rect, pointFor, now, w, h) {
 }
 
 const projectionPeekWindows = new Map();
+const projectionPeekConsumed = new Set(); // effect ids already shown, OUTLIVES windows
 const PEEK_HOLD_MS = 2600;   // window stays open this long after the last new diff
 const PEEK_OPEN_MS = 220;
 const PEEK_WINK_MS = 260;
@@ -6885,13 +6886,18 @@ function drawProjectionPeek(effect, theme, point, now) {
   const newLines = Array.isArray(effect.lines) ? effect.lines : [];
   const key = `peek:${effect.targets[0]}`;
   let win = projectionPeekWindows.get(key);
+  const unseen = !projectionPeekConsumed.has(effect.id);
+  // a closed window stays closed for content it already showed, even though
+  // the effect outlives the window in scene state
+  if (!win && !unseen) return;
   if (!win) {
-    win = {lines: [], seen: new Set(), lastChunk: "", openedAt: now,
+    win = {lines: [], lastChunk: "", openedAt: now,
            lastAppendAt: now, offset: 0, lastNow: now, drawnAt: 0};
     projectionPeekWindows.set(key, win);
   }
-  if (!win.seen.has(effect.id)) {
-    win.seen.add(effect.id);
+  if (unseen) {
+    projectionPeekConsumed.add(effect.id);
+    if (projectionPeekConsumed.size > 600) projectionPeekConsumed.clear();
     const chunk = newLines.join("\\n");
     if (chunk && chunk !== win.lastChunk) {
       win.lastChunk = chunk;

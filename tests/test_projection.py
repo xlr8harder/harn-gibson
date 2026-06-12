@@ -610,6 +610,27 @@ def test_peek_effect_carries_diff_lines_and_skips_diffless_changes() -> None:
     assert peeks[0]["lines"] == ["-        return 2", "+        return 0"]
 
 
+def test_sparse_sequences_do_not_refire_events_still_in_window() -> None:
+    engine = ProjectionEngine()
+    # the event window spans far more than 64 sequence numbers (sparse seqs)
+    early = [{"seq": s, "ts": s * 10, "kind": "file_changed", "entity": "file:src/app.py",
+              "churnFraction": 0.3} for s in (1, 2, 3)]
+    late = early + [{"seq": 400, "ts": 4000, "kind": "file_changed", "entity": "file:src/util.py",
+                     "churnFraction": 0.3}]
+    first = engine.resolve(_perception(events=early), now_ms=100)
+    app_pulse = next(e for e in first["effects"] if e["targets"] == ["file:src/app.py"])
+    second = engine.resolve(_perception(events=late), now_ms=200)
+    refired = next(e for e in second["effects"] if e["targets"] == ["file:src/app.py"])
+    # the early events were NOT re-fired: the live pulse is the original one
+    assert refired["id"] == app_pulse["id"]
+    assert refired["startedAtMs"] == app_pulse["startedAtMs"]
+
+    # pathological key growth still gets a hard cap
+    engine._seen_events |= {(s, "command_completed", f"command:{s}") for s in range(500, 2600)}
+    engine.resolve(_perception(events=late), now_ms=300)
+    assert len(engine._seen_events) <= 1024
+
+
 def test_repeated_beats_refresh_instead_of_stacking() -> None:
     engine = ProjectionEngine()
     burst = [
