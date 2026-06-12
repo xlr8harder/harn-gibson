@@ -26,8 +26,12 @@ RENDERER_SYSTEM_PROMPT = (
     "terminal walls, access matrices, camera-drifting city_block districts, "
     "data rain, and structured svg_layer keyframes, path morphs, filters, or clips when they make the scene "
     "feel cinematic. "
-    "Use context.project.semanticGraph when routing packets, arranging districts, or showing blast radius along "
-    "imports, definitions, packages, and inferred test-to-code edges. "
+    "Use context.project.perceptionModel as the primary world map: project its entities (file/dir/command/check/"
+    "commit/agent) and relations (contains/touched/produced/focused_on) into layouts, derive position from the "
+    "contains tree or another real relation, and drive transient beats from its recent events "
+    "(file_changed/command_completed/check_completed/commit_created). "
+    "If context.project.semanticGraph is present and available, it may add import/test edges, but never make it "
+    "load-bearing. "
     "Use context.project.worldModel entity lifecycle fields to keep current/recent facts bright, let aging/stale "
     "facts fade, and distinguish open work from reconciled command/change/health facts. "
     "When a visual property follows a durable repo or world-model fact, attach props.worldBindings entries using "
@@ -119,6 +123,10 @@ def _context_metadata(context: Mapping[str, Any]) -> dict[str, Any]:
         "attentionFocusCount": len(focus_paths if isinstance(focus_paths, list) else []),
         "semanticGraphNodeCount": _coerce_int(semantic_graph.get("nodeCount"), 0),
         "semanticGraphEdgeCount": _coerce_int(semantic_graph.get("edgeCount"), 0),
+        "perceptionEntityCount": _perception_entity_count(project),
+        "perceptionEventCount": _coerce_int(
+            _mapping(_mapping(project.get("perceptionModel")).get("counts")).get("events"), 0
+        ),
         "eventTypes": event_types,
         "routes": routes,
         "timeline": {
@@ -144,6 +152,11 @@ def _json_block(value: Mapping[str, Any]) -> str:
 
 def _json_text(value: Mapping[str, Any]) -> str:
     return json.dumps(value, indent=2, sort_keys=True, default=str)
+
+
+def _perception_entity_count(project: Mapping[str, Any]) -> int:
+    entities = _mapping(project.get("perceptionModel")).get("entities")
+    return len(entities) if isinstance(entities, list) else 0
 
 
 def _append_unique(items: list[str], item: str) -> None:

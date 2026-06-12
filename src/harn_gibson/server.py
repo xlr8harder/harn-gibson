@@ -29,6 +29,7 @@ from harn_gibson.rendering import (
     RenderTimingMode,
     SceneRenderer,
     coerce_batch_window_ms,
+    coerce_context_flag,
     coerce_context_limit,
     coerce_render_mode,
     coerce_render_timing_mode,
@@ -304,6 +305,10 @@ def renderer_context_config_from_env(source: Mapping[str, str]) -> RendererConte
         max_world_entities=coerce_context_limit(
             source.get("HARN_GIBSON_RENDERER_MAX_WORLD_ENTITIES"),
             defaults.max_world_entities,
+        ),
+        include_semantic_graph=coerce_context_flag(
+            source.get("HARN_GIBSON_RENDERER_SEMANTIC_GRAPH"),
+            defaults.include_semantic_graph,
         ),
         max_semantic_files=coerce_context_limit(
             source.get("HARN_GIBSON_RENDERER_MAX_SEMANTIC_FILES"),

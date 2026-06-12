@@ -15,6 +15,7 @@ from typing import Any, Literal, Protocol
 from harn_gibson.attention import AGENT_ATTENTION_SCHEMA, agent_attention_from_context
 from harn_gibson.catalog import VisualCatalog, default_visual_catalog
 from harn_gibson.events import GibsonEvent
+from harn_gibson.perception import PERCEPTION_MODEL_SCHEMA, PerceptionModel
 from harn_gibson.scene import (
     SceneAnimation,
     SceneEngine,
@@ -305,9 +306,13 @@ class RendererContextConfig:
     max_touched_files: int = 24
     max_touched_path_chars: int = 160
     max_world_entities: int = 24
+    include_semantic_graph: bool = False
     max_semantic_files: int = 96
     max_semantic_edges: int = 192
     max_semantic_symbols: int = 160
+    max_perception_entities: int = 96
+    max_perception_relations: int = 144
+    max_perception_events: int = 24
 
 
 @dataclass(frozen=True, slots=True)
@@ -346,6 +351,10 @@ class RendererContextBuilder:
         self._history: list[dict[str, Any]] = []
         self._last_context_mode: Literal["rolling", "compaction"] | None = None
         self._world_model = WorldModel()
+        self._perception_model = PerceptionModel(
+            project_root=self.config.project_root,
+            max_events=self.config.max_perception_events,
+        )
 
     def build(
         self,
@@ -394,6 +403,7 @@ class RendererContextBuilder:
     def observe_batch(self, batch: RenderInputBatch) -> None:
         touched_files = _touched_files_context(batch, self.config)
         self._observe_world_model(batch, touched_files)
+        self._observe_perception_model(batch, touched_files)
 
     def _should_compact(self) -> bool:
         return self.events_since_compaction == 0 or self.events_since_compaction >= max(
@@ -406,6 +416,7 @@ class RendererContextBuilder:
         semantic_graph = _semantic_repo_graph_context(self.config)
         touched_files = _touched_files_context(batch, self.config)
         world_model = self._world_model_context(batch, touched_files)
+        perception_model = self._perception_model_context(batch, touched_files)
         return {
             "name": self.config.project_name,
             "displayStyle": self.config.display_style,
@@ -416,6 +427,7 @@ class RendererContextBuilder:
                 "rendererContext": "harn-gibson.renderer-context.v1",
                 "renderInput": "harn-gibson.render-input.v1",
                 "renderPlan": "harn-gibson.render-plan.v1",
+                "perceptionModel": PERCEPTION_MODEL_SCHEMA,
                 "repoTopology": "harn-gibson.repo-topology.v1",
                 "scene": "harn-gibson.scene.v1",
                 "semanticGraph": SEMANTIC_REPO_GRAPH_SCHEMA,
@@ -427,6 +439,7 @@ class RendererContextBuilder:
             "semanticGraph": semantic_graph,
             "touchedFiles": touched_files,
             "worldModel": world_model,
+            "perceptionModel": perception_model,
             "agentAttention": agent_attention_from_context(
                 tuple(request.event for request in batch.requests),
                 touched_files,
@@ -440,6 +453,20 @@ class RendererContextBuilder:
 
     def _observe_world_model(self, batch: RenderInputBatch, touched_files: Mapping[str, Any]) -> None:
         self._world_model.apply_batch(tuple(request.event for request in batch.requests), touched_files)
+
+    def _perception_model_context(
+        self, batch: RenderInputBatch, touched_files: Mapping[str, Any]
+    ) -> dict[str, Any]:
+        self._observe_perception_model(batch, touched_files)
+        return self._perception_model.to_dict(
+            max_entities=self.config.max_perception_entities,
+            max_relations=self.config.max_perception_relations,
+        )
+
+    def _observe_perception_model(self, batch: RenderInputBatch, touched_files: Mapping[str, Any]) -> None:
+        self._perception_model.apply_batch(
+            tuple(request.event for request in batch.requests), touched_files
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -2794,6 +2821,16 @@ def _repo_topology_context(config: RendererContextConfig) -> dict[str, Any]:
 
 
 def _semantic_repo_graph_context(config: RendererContextConfig) -> dict[str, Any]:
+    if not config.include_semantic_graph:
+        # Deprecated as default context (docs/decision_point.md): the semantic
+        # graph parses possibly-broken code in the display path and is not
+        # load-bearing now that perceptionModel carries structure + activity.
+        return {
+            "schema": SEMANTIC_REPO_GRAPH_SCHEMA,
+            "available": False,
+            "enabled": False,
+            "reason": "disabled by default; superseded by perceptionModel",
+        }
     return semantic_repo_graph_context(
         SemanticRepoGraphConfig(
             project_root=str(_project_root(config)),
@@ -3208,3 +3245,9 @@ def coerce_context_limit(value: str | None, default: int, *, minimum: int = 0) -
         return max(minimum, int(value))
     except ValueError:
         return default
+
+
+def coerce_context_flag(value: str | None, default: bool) -> bool:
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}

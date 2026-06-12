@@ -858,7 +858,9 @@ def test_gibson1_renderer_returns_coherent_valid_plan(tmp_path: Path) -> None:
         recent_context=("running project tests",),
     )
     batch = RenderInputBatch.from_requests((RenderRequest(context_event),))
-    context = RendererContextBuilder(RendererContextConfig(project_root=str(repo_root))).build(
+    context = RendererContextBuilder(
+        RendererContextConfig(project_root=str(repo_root), include_semantic_graph=True)
+    ).build(
         batch,
         scene.state,
         pipeline_catalog(),
@@ -1353,6 +1355,7 @@ def test_renderer_context_builder_compaction_rolling_and_history(tmp_path: Path)
             display_style="mainframe",
             style_pack={"id": "mainframe", "motifs": ["phosphor-grid"]},
             compaction_interval_events=2,
+            include_semantic_graph=True,
             max_recent_plans=1,
             max_recent_log_entries=1,
             max_prop_preview_chars=8,

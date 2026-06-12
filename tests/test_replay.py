@@ -96,6 +96,10 @@ def gibson1_renderer_state() -> GibsonServerState:
                 ["uv", "run", "python", str(ROOT / "examples" / "renderers" / "gibson1_renderer.py")]
             ),
             "HARN_GIBSON_RENDERER_TIMEOUT_MS": "10000",
+            # gibson1 still dogfoods the semantic graph; it is no longer default
+            # context, so these baselines opt in until gibson1 projects from the
+            # perception model instead.
+            "HARN_GIBSON_RENDERER_SEMANTIC_GRAPH": "1",
         }
     )
 
@@ -108,6 +112,7 @@ def gibson1_mainframe_renderer_state() -> GibsonServerState:
             ),
             "HARN_GIBSON_RENDERER_TIMEOUT_MS": "10000",
             "HARN_GIBSON_STYLE": "mainframe",
+            "HARN_GIBSON_RENDERER_SEMANTIC_GRAPH": "1",
         }
     )
 
