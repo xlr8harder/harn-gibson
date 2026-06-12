@@ -607,6 +607,7 @@ def enqueue_browser_input(payload: dict[str, Any], state: GibsonServerState) -> 
 def health_payload(state: GibsonServerState) -> dict[str, Any]:
     return {
         "ok": True,
+        "projectName": state.project_name,
         "events": len(state.buffer.snapshot()),
         "sceneRevision": state.scene.state.revision,
         "renderMode": state.pipeline.mode,
@@ -900,7 +901,7 @@ HTML = """<!doctype html>
         <canvas id="grid" width="1400" height="780"></canvas>
         <div class="mast">
           <div>
-            <p class="kicker">__HARN_GIBSON_KICKER__</p>
+            <p class="kicker" id="kicker">__HARN_GIBSON_KICKER__</p>
             <h1>GIBSON LINK</h1>
           </div>
           <div class="topbar">
@@ -6633,7 +6634,7 @@ function drawProjectionScene(primitive, w, h, now) {
     drawProjectionEffect(effect, theme, rect, pointFor, now, w, h);
   }
 
-  const showAllLabels = nodes.length <= 26;
+  const showAllLabels = nodes.length <= 40;
   for (const tween of projectionTweens.values()) {
     const node = tween.node;
     if (!node) continue;
@@ -6646,8 +6647,10 @@ function drawProjectionScene(primitive, w, h, now) {
     const radius = (3.5 + tween.size * 11) * devicePixelRatio * (0.4 + 0.6 * bloom);
     const tone = node.tone || "base";
     const isFocus = Boolean(node.focus) && !tween.leaving;
-    const showLabel = !tween.leaving && bloom >= 1
-      && node.label && (showAllLabels || isFocus || tone === "alarm");
+    // labels degrade by importance on crowded scenes instead of vanishing:
+    // directories, the focus, alarms, and busy (large) nodes stay named
+    const showLabel = !tween.leaving && bloom >= 1 && node.label
+      && (showAllLabels || isFocus || tone === "alarm" || node.kind === "dir" || tween.size > 0.55);
     ctx.save();
     ctx.globalAlpha *= Math.max(0.05, tween.opacity) * bloom;
     if (tween.lift > 0.02) {
@@ -7018,9 +7021,9 @@ function drawProjectionPeek(effect, theme, point, now) {
 const projectionNarration = {
   text: "", lines: [], offset: 0, lastChangeAt: 0, openedAt: 0, lastNow: 0,
 };
-const NARRATION_HOLD_MS = 3200;
+const NARRATION_HOLD_MS = 9000; // the narrative is the storyline: hold for reading
 const NARRATION_WINK_MS = 280;
-const NARRATION_VISIBLE_LINES = 6;
+const NARRATION_VISIBLE_LINES = 8;
 const NARRATION_WRAP_CHARS = 56;
 
 function wrapNarration(text) {
@@ -7070,7 +7073,7 @@ function drawProjectionNarration(hud, theme, rect, now) {
   const boxHeight = visibleLines * lineHeight + 14 * devicePixelRatio;
   const boxWidth = 330 * devicePixelRatio;
   const targetOffset = Math.max(0, state.lines.length - visibleLines);
-  state.offset = Math.min(targetOffset, state.offset + dt * 6);
+  state.offset = Math.min(targetOffset, state.offset + dt * 3.2); // reading pace
   if (targetOffset - state.offset > 0.5) {
     state.lastChangeAt = Math.max(state.lastChangeAt, now - NARRATION_HOLD_MS + 400);
   }
@@ -7923,6 +7926,12 @@ async function refreshHealth() {
     const response = await fetch("/health", {cache: "no-store"});
     const payload = await response.json();
     updateBridgeStatus(payload.inputBridge);
+    // the kicker is baked into the page at load; keep it current so a tab
+    // that outlives its original server shows the right project
+    const kickerEl = document.getElementById("kicker");
+    if (kickerEl && payload.projectName && kickerEl.textContent !== payload.projectName.toUpperCase()) {
+      kickerEl.textContent = payload.projectName.toUpperCase();
+    }
   } catch {
     bridgeStatus.textContent = "harn bridge unknown";
   }

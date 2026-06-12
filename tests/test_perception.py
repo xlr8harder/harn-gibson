@@ -563,6 +563,75 @@ def test_check_launch_moves_attention_to_the_project_root(tmp_path: Path) -> Non
     assert [(r["from"], r["to"]) for r in focused] == [("agent", "file:tests/test_app.py")]
 
 
+def test_streamed_argument_prefixes_do_not_become_files(tmp_path: Path) -> None:
+    root = _git_fixture(tmp_path)
+    model = PerceptionModel(project_root=str(root))
+    event = GibsonEvent.from_raw(
+        {"type": "tool_result", "toolName": "bash", "input": {"command": "ls"}, "isError": False},
+        sequence=2,
+        timestamp_ms=200,
+    )
+    touched = {
+        "schema": "harn-gibson.touched-files.v1",
+        "files": [
+            # streamed tool-call argument caught mid-flight: during-phase only
+            {"path": "src/app_p", "operation": "write:during", "firstSequence": 2, "lastSequence": 2,
+             "phases": ["during"], "sources": ["input.path"]},
+            # touch-only prefixes of a real on-disk path (the first briefly
+            # becomes the focus), swept at reconcile
+            {"path": "src/app", "operation": "bash:after", "firstSequence": 2, "lastSequence": 2,
+             "phases": ["after"], "sources": ["input.command"]},
+            {"path": "src/app_pk", "operation": "bash:after", "firstSequence": 2, "lastSequence": 2,
+             "phases": ["after"], "sources": ["input.command"]},
+            {"path": "src/app_pkg/app.py", "operation": "bash:after", "firstSequence": 2, "lastSequence": 2,
+             "phases": ["after"], "sources": ["input.command"]},
+        ],
+        "count": 3,
+        "truncated": False,
+    }
+    model.apply_batch((event,), touched)
+    file_ids = {e["id"] for e in model.to_dict()["entities"] if e["type"] == "file"}
+    assert "file:src/app_pkg/app.py" in file_ids
+    assert "file:src/app_p" not in file_ids  # during-only: never created
+    assert "file:src/app" not in file_ids  # prefix fragment: swept at reconcile
+    # the swept fragment had become the focus; the sweep cleared it
+    assert not any(r["type"] == "focused_on" for r in model.to_dict()["relations"])
+
+
+def test_spoken_text_supersedes_inner_monologue(tmp_path: Path) -> None:
+    root = _git_fixture(tmp_path)
+    model = PerceptionModel(project_root=str(root))
+    empty = {"schema": "harn-gibson.touched-files.v1", "files": [], "count": 0, "truncated": False}
+    thinking = GibsonEvent.from_raw(
+        {"type": "message_update", "assistantMessageEvent": {
+            "contentIndex": 0, "delta": "I shall plot the scheme. ",
+            "partial": {"content": [{"type": "thinking", "thinking": "plotting"}]},
+        }},
+        sequence=1,
+        timestamp_ms=100,
+    )
+    spoken_one = GibsonEvent.from_raw(
+        {"type": "message_update", "assistantMessageEvent": {
+            "contentIndex": 1, "delta": "Behold: ",
+            "partial": {"content": [{"type": "thinking", "thinking": "plotting"}, {"type": "text"}]},
+        }},
+        sequence=2,
+        timestamp_ms=200,
+    )
+    spoken_two = GibsonEvent.from_raw(
+        {"type": "message_update", "assistantMessageEvent": {
+            "contentIndex": 1, "delta": "the scheme.",
+            "partial": {"content": [{"type": "thinking", "thinking": "plotting"}, {"type": "text"}]},
+        }},
+        sequence=3,
+        timestamp_ms=300,
+    )
+    model.apply_batch((thinking, spoken_one, spoken_two), empty)
+    agent = next(e for e in model.to_dict()["entities"] if e["id"] == "agent")
+    # no doubled narrative: the spoken text replaced the monologue
+    assert agent["attrs"]["narration"] == "Behold: the scheme."
+
+
 def test_perception_keeps_primary_focus_for_multi_path_touches(tmp_path: Path) -> None:
     root = _git_fixture(tmp_path)
     model = PerceptionModel(project_root=str(root))
@@ -734,11 +803,14 @@ def test_diff_preview_caps_total_lines_and_skips_malformed_edits() -> None:
 
 
 def test_tool_call_delta_detection_tolerates_malformed_content() -> None:
-    from harn_gibson.perception import _is_tool_call_delta
+    from harn_gibson.perception import _delta_channel, _is_tool_call_delta
 
     assert _is_tool_call_delta({"contentIndex": 0, "partial": {"content": ["not-a-mapping"]}}) is False
     assert _is_tool_call_delta({"contentIndex": 5, "partial": {"content": []}}) is False
     assert _is_tool_call_delta({}) is False
+    # channel detection degrades to "plain" for malformed or exotic entries
+    assert _delta_channel({"contentIndex": 0, "partial": {"content": ["not-a-mapping"]}}) == "plain"
+    assert _delta_channel({"contentIndex": 0, "partial": {"content": [{"type": "refusal"}]}}) == "plain"
 
 
 def test_perception_with_git_disabled_uses_filesystem_basis(tmp_path: Path) -> None:

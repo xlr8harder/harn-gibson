@@ -191,19 +191,38 @@ def capture_git_snapshot(root: Path) -> GitSnapshot:
     )
 
 
-def _message_text(payload: Mapping[str, Any]) -> str:
+def _message_delta(payload: Mapping[str, Any]) -> tuple[str, str]:
+    """Extract a narration delta and its channel: "thinking" (inner
+    monologue), "text" (spoken), or "plain" (untyped legacy payloads).
+    Tool-call argument streams return empty."""
     nested = payload.get("assistantMessageEvent")
     if isinstance(nested, Mapping):
         if _is_tool_call_delta(nested):
-            return ""  # streamed tool-call argument JSON is not narration
-        found = _message_text(nested)
-        if found:
-            return found
+            return "", ""  # streamed tool-call argument JSON is not narration
+        for key in ("text", "delta", "content"):
+            value = nested.get(key)
+            if isinstance(value, str) and value:
+                return value, _delta_channel(nested)
     for key in ("text", "delta", "content"):
         value = payload.get(key)
         if isinstance(value, str) and value:
-            return value
-    return ""
+            return value, "plain"
+    return "", ""
+
+
+def _delta_channel(nested: Mapping[str, Any]) -> str:
+    index = nested.get("contentIndex")
+    partial = nested.get("partial")
+    content = partial.get("content") if isinstance(partial, Mapping) else None
+    if isinstance(content, list) and isinstance(index, int) and 0 <= index < len(content):
+        entry = content[index]
+        if isinstance(entry, Mapping):
+            entry_type = str(entry.get("type") or "")
+            if entry_type == "thinking" or "thinking" in entry:
+                return "thinking"
+            if entry_type == "text":
+                return "text"
+    return "plain"
 
 
 _MAX_DIFF_PREVIEW_LINES = 160
@@ -362,6 +381,7 @@ class PerceptionModel:
         self._narration: str = ""
         self._narration_seq: int = 0
         self._narration_complete: bool = False
+        self._narration_channel: str = ""
         self._focused_path: str | None = None
         self._relations: dict[tuple[str, str, str], dict[str, Any]] = {}
         self._events: list[dict[str, Any]] = []
@@ -416,11 +436,19 @@ class PerceptionModel:
         the assistant's voice a perception fact instead of page chrome."""
         if event.event_type not in {"message_update", "message_end"}:
             return
-        text = _message_text(event.payload)
+        text, channel = _message_delta(event.payload)
         if event.event_type == "message_update" and text:
             if self._narration_complete:
                 self._narration = ""
+                self._narration_channel = ""
                 self._narration_complete = False
+            # a message streams its inner monologue (thinking) and then its
+            # spoken text; showing both reads as the agent repeating itself,
+            # so the spoken text supersedes the monologue when it starts
+            if channel == "text" and self._narration_channel == "thinking":
+                self._narration = ""
+            if channel in {"thinking", "text"}:
+                self._narration_channel = channel
             # keep the HEAD on overflow: the thesis of a message lives at the
             # start; displays scroll forward through it
             self._narration = (self._narration + text)[:_MAX_NARRATION_CHARS]
@@ -430,6 +458,7 @@ class PerceptionModel:
                 self._narration = text[:_MAX_NARRATION_CHARS]
             self._narration_seq = event.sequence
             self._narration_complete = True
+            self._narration_channel = ""
 
     def _observe_command(self, event: GibsonEvent) -> bool:
         """Returns True when this event launches a health check (test/build)."""
@@ -499,6 +528,12 @@ class PerceptionModel:
         for touch in touches:
             path = str(touch.get("path") or "")
             if not path or not _path_visible(path) or not _plausible_touch_path(path):
+                continue
+            # during-phase-only touches are streamed tool-call arguments caught
+            # mid-flight (path prefixes like "src/m", "src/mid", ...): the
+            # completed call re-reports the real path with a before/after phase
+            phases = touch.get("phases")
+            if isinstance(phases, list) and phases and all(p == "during" for p in phases):
                 continue
             state = self._files.get(path)
             if state is None:
@@ -630,6 +665,22 @@ class PerceptionModel:
         for path, state in self._files.items():
             if path not in known and state.basis in {"git", "filesystem"}:
                 state.exists = False
+        # sweep streamed-argument debris: a touch-only entity that never existed
+        # on disk and is a strict prefix of a real path is a caught-mid-flight
+        # fragment, not a file
+        fragments = [
+            path for path, state in self._files.items()
+            if state.basis == "harn-events" and path not in known
+            and any(real != path and real.startswith(path) for real in known)
+        ]
+        for path in fragments:
+            del self._files[path]
+            self._relations = {
+                key: value for key, value in self._relations.items()
+                if key[1] != f"file:{path}" and key[2] != f"file:{path}"
+            }
+            if self._focused_path == path:
+                self._focused_path = None
 
         self._stat_sizes()
         self._detect_commit()
