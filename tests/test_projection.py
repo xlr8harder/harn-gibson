@@ -85,6 +85,14 @@ def test_default_projection_resolves_a_complete_scene() -> None:
     assert {"dir:.", "dir:src", "file:src/app.py", "file:src/util.py", "file:README.md", "agent"} <= set(nodes)
     root = nodes["dir:."]
     assert (root["x"], root["y"]) == (0.5, 0.5)
+    # labels are literal: real casing, root shows the workspace name, and
+    # clipped labels are visibly clipped
+    assert root["label"] == "repo"
+    assert nodes["dir:src"]["label"] == "src"
+    assert nodes["agent"]["label"] == "agent"
+    from harn_gibson.projection import _clip_label
+
+    assert _clip_label("a_very_long_module_name.py") == "a_very_long_modul…"
     # encodings: touched file is bigger and brighter than the dormant one
     assert nodes["file:src/app.py"]["size"] > nodes["file:src/util.py"]["size"]
     assert nodes["file:src/util.py"]["opacity"] == 0.35
@@ -257,6 +265,30 @@ def test_grid_ring_and_force_layouts() -> None:
         {"id": "f", "select": {"types": ["file"]}, "layout": {"kind": "force"}},
     ]})
     assert open_engine.resolve(_perception(), now_ms=1000)["nodes"]
+
+
+def test_force_iterations_scale_with_elapsed_event_time() -> None:
+    spec = {"layers": [
+        {"id": "f", "select": {"types": ["file", "command"]},
+         "layout": {"kind": "force", "relations": ["touched"]}},
+    ]}
+    engine = ProjectionEngine(spec)
+    settled = engine.resolve(_perception(), now_ms=1000)
+    base = {node["id"]: (node["x"], node["y"]) for node in settled["nodes"]}
+
+    # zero elapsed time: the warm solve barely advances (minimum budget)
+    quick = engine.resolve(_perception(), now_ms=1000)
+    for node in quick["nodes"]:
+        bx, by = base[node["id"]]
+        assert abs(node["x"] - bx) < 0.05
+        assert abs(node["y"] - by) < 0.05
+
+    # a long gap grants a full budget without destabilizing a settled layout
+    slow = engine.resolve(_perception(), now_ms=60_000)
+    for node in slow["nodes"]:
+        bx, by = base[node["id"]]
+        assert abs(node["x"] - bx) < 0.08
+        assert abs(node["y"] - by) < 0.08
 
 
 def test_force_layout_buds_new_nodes_beside_connected_neighbors() -> None:

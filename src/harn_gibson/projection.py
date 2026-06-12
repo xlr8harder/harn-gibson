@@ -50,7 +50,11 @@ _EFFECT_TTLS_MS = {
     "banner": 2600,
 }
 _MAX_NODES_PER_LAYER = 150
-_FORCE_ITERATIONS = 60
+_FORCE_COLD_ITERATIONS = 360
+_FORCE_ITERATIONS_PER_SECOND = 25
+_FORCE_MIN_ITERATIONS = 12
+_FORCE_MAX_ITERATIONS = 96
+_FORCE_SETTLED_EPSILON = 1e-4
 _TICKER_LENGTH = 16
 
 DEFAULT_PROJECTION: dict[str, Any] = {
@@ -120,6 +124,8 @@ class ProjectionEngine:
         self._seen_events: set[tuple[int, str, str]] = set()
         self._check_errors_seen: set[str] = set()
         self._attr_max: dict[tuple[str, str], float] = {}
+        self._resolve_now_ms = 0
+        self._last_force_ms: int | None = None
 
     def redirect(self, spec: Mapping[str, Any] | None) -> None:
         """Swap the projection while keeping warm positions, effect lifetimes,
@@ -137,6 +143,7 @@ class ProjectionEngine:
         relations = [item for item in _list(perception.get("relations")) if isinstance(item, Mapping)]
         events = [item for item in _list(perception.get("events")) if isinstance(item, Mapping)]
         latest_seq = _int(perception.get("latestSequence"), 0)
+        self._resolve_now_ms = now_ms
 
         mood = self._mood(entities)
         blast = _blast_targets(entities, relations)
@@ -166,6 +173,11 @@ class ProjectionEngine:
                     node_id, entity, x, y, encode,
                     layer_id=layer_id, blast=blast, focus=focus, mood=mood,
                 )
+        # the abstract root "dir:." reads as the workspace name, not "."
+        if "dir:." in nodes:
+            root_name = str(_dict(perception.get("workspace")).get("rootName") or project_name or ".")
+            nodes["dir:."]["label"] = _clip_label(root_name)
+
         # edges resolve after every layer has placed its nodes, so cross-layer
         # anchors (e.g. flow edges re-rooted on the agent cursor) always exist
         for layer in layers:
@@ -284,7 +296,22 @@ class ProjectionEngine:
         # and large ones spread; per-step displacement is capped so the solve
         # cools instead of slingshotting nodes into the boundary clamps
         rest = max(0.10, min(0.20, 0.55 / math.sqrt(max(1, len(ids)))))
-        for _ in range(_FORCE_ITERATIONS):
+        # clock sync with the browser: a cold start converges fully (the first
+        # scene must not ship overlaps for the client to anchor onto), but
+        # warm resolves advance only as far as the elapsed event time allows,
+        # so the server layout never outruns what the client can animate
+        cold_start = not any(node_id in self._positions for node_id in ids)
+        if cold_start:
+            iterations = _FORCE_COLD_ITERATIONS
+        else:
+            last = self._last_force_ms if self._last_force_ms is not None else self._resolve_now_ms
+            elapsed_ms = max(0, self._resolve_now_ms - last)
+            iterations = min(
+                _FORCE_MAX_ITERATIONS,
+                max(_FORCE_MIN_ITERATIONS, int(elapsed_ms / 1000 * _FORCE_ITERATIONS_PER_SECOND)),
+            )
+        self._last_force_ms = self._resolve_now_ms
+        for _ in range(iterations):
             forces = {node_id: [0.0, 0.0] for node_id in ids}
             for index, a in enumerate(ids):
                 for b in ids[index + 1:]:
@@ -305,6 +332,7 @@ class ProjectionEngine:
                 forces[a][1] += dy / dist * pull
                 forces[b][0] -= dx / dist * pull
                 forces[b][1] -= dy / dist * pull
+            max_step = 0.0
             for node_id in ids:
                 forces[node_id][0] += (0.5 - positions[node_id][0]) * 0.022
                 forces[node_id][1] += (0.5 - positions[node_id][1]) * 0.022
@@ -312,6 +340,9 @@ class ProjectionEngine:
                 step_y = min(0.02, max(-0.02, forces[node_id][1]))
                 positions[node_id][0] = min(0.96, max(0.04, positions[node_id][0] + step_x))
                 positions[node_id][1] = min(0.96, max(0.04, positions[node_id][1] + step_y))
+                max_step = max(max_step, abs(step_x), abs(step_y))
+            if max_step < _FORCE_SETTLED_EPSILON:
+                break
         return {node_id: (round(pos[0], 4), round(pos[1], 4)) for node_id, pos in positions.items()}
 
     # -- nodes ------------------------------------------------------------------
@@ -842,13 +873,17 @@ def _node_label(node_id: str, kind: str, attrs: Mapping[str, Any], label_rule: M
     if label_rule:
         raw = attrs.get(str(label_rule.get("attr") or ""))
         if isinstance(raw, str) and raw:
-            return raw[:18]
+            return _clip_label(raw)
+    # labels are literal: real casing, real underscores -- no restyling that
+    # could make two distinct names render identically
     tail = node_id.rsplit("/", 1)[-1]
     tail = tail.split(":", 1)[-1] if "/" not in node_id else tail
-    label = (tail or node_id)[:18]
-    # file labels are literal -- __init__.py must read as __init__.py, never
-    # re-cased or restyled; directories and bare ids get display caps
-    return label if kind == "file" else label.upper()
+    return _clip_label(tail or node_id)
+
+
+def _clip_label(text: str) -> str:
+    # visible truncation: a clipped label must not impersonate a shorter name
+    return text if len(text) <= 18 else text[:17] + "…"
 
 
 def _default_size(kind: str) -> float:
