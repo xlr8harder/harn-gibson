@@ -48,6 +48,7 @@ _EFFECT_TTLS_MS = {
     "shake": 1200,
     "alarm": 2600,
     "banner": 2600,
+    "peek": 3600,
 }
 _MAX_NODES_PER_LAYER = 150
 _FORCE_COLD_ITERATIONS = 360
@@ -80,7 +81,10 @@ DEFAULT_PROJECTION: dict[str, Any] = {
     ],
     "camera": {"follow": "focused_on"},
     "on": [
-        {"event": "file_changed", "effects": [{"kind": "pulse", "target": "$entity", "magnitude": "$churnFraction"}]},
+        {"event": "file_changed", "effects": [
+            {"kind": "pulse", "target": "$entity", "magnitude": "$churnFraction"},
+            {"kind": "peek", "target": "$entity", "lines": "$diffPreview"},
+        ]},
         {
             "event": "check_completed",
             "when": {"status": "error"},
@@ -465,6 +469,8 @@ class ProjectionEngine:
                         effect_spec, event, rule_index, effect_index,
                         entities, relations, nodes, blast, root_id, focus, now_ms,
                     )
+                    if instance["kind"] == "peek" and not instance.get("lines"):
+                        continue  # nothing to show: not every change has a diff
                     # a fast agent fires the same beat many times per second;
                     # refresh the live instance instead of stacking duplicates
                     shape = (instance["kind"], tuple(instance["targets"]))
@@ -530,7 +536,7 @@ class ProjectionEngine:
         label = spec.get("label")
         if isinstance(label, str) and label.startswith("$"):
             label = str(event.get(label[1:]) or "")
-        return {
+        instance = {
             "id": f"fx-{rule_index}-{effect_index}-{seq}",
             "kind": kind,
             "targets": [t for t in targets if t],
@@ -540,6 +546,12 @@ class ProjectionEngine:
             "startedAtMs": max(now_ms, _int(event.get("ts"), now_ms)),
             "ttlMs": _int(spec.get("ttlMs"), _EFFECT_TTLS_MS.get(kind, 2000)),
         }
+        lines = spec.get("lines")
+        if isinstance(lines, str) and lines.startswith("$"):
+            lines = event.get(lines[1:])
+        if isinstance(lines, list):
+            instance["lines"] = [str(line)[:96] for line in lines[:12] if isinstance(line, str)]
+        return instance
 
     # -- mood / camera / hud --------------------------------------------------------
 
@@ -630,7 +642,7 @@ class ProjectionEngine:
             "mood": str(mood.get("label") or ""),
             "narration": str(agent_attrs.get("narration") or ""),
             "focus": focus[5:] if focus.startswith("file:") else focus,
-            "command": str(command_attrs.get("preview") or "")[:64],
+            "command": _clip_text(str(command_attrs.get("preview") or ""), 96),
             "commandStatus": str(command_attrs.get("status") or ""),
             "checks": check_line,
             "workspace": (
@@ -925,6 +937,10 @@ def _node_label(node_id: str, kind: str, attrs: Mapping[str, Any], label_rule: M
 def _clip_label(text: str) -> str:
     # visible truncation: a clipped label must not impersonate a shorter name
     return text if len(text) <= 18 else text[:17] + "…"
+
+
+def _clip_text(text: str, limit: int) -> str:
+    return text if len(text) <= limit else text[: limit - 1] + "…"
 
 
 def _default_size(kind: str) -> float:

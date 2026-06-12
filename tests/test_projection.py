@@ -596,6 +596,20 @@ def test_root_effects_resolve_under_force_layouts() -> None:
     assert ring["targets"] == ["dir:."]  # force layouts have no intrinsic root
 
 
+def test_peek_effect_carries_diff_lines_and_skips_diffless_changes() -> None:
+    engine = ProjectionEngine()
+    events = [
+        {"seq": 8, "ts": 8000, "kind": "file_changed", "entity": "file:src/app.py",
+         "diffPreview": ["-        return 2", "+        return 0"]},
+        {"seq": 9, "ts": 9000, "kind": "file_changed", "entity": "file:src/util.py"},
+    ]
+    scene = engine.resolve(_perception(events=events), now_ms=9000)
+    peeks = [effect for effect in scene["effects"] if effect["kind"] == "peek"]
+    assert len(peeks) == 1  # the diffless change pulses but does not peek
+    assert peeks[0]["targets"] == ["file:src/app.py"]
+    assert peeks[0]["lines"] == ["-        return 2", "+        return 0"]
+
+
 def test_repeated_beats_refresh_instead_of_stacking() -> None:
     engine = ProjectionEngine()
     burst = [

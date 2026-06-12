@@ -6800,6 +6800,10 @@ function drawProjectionEffect(effect, theme, rect, pointFor, now, w, h) {
     ctx.fillText(String(effect.label || ""), rect.x + rect.width / 2, rect.y + rect.height * 0.16);
     return;
   }
+  if (effect.kind === "peek" && targets.length) {
+    drawProjectionPeek(effect, theme, pointFor(targets[0]), progress, fade);
+    return;
+  }
   if (effect.kind === "beam" && targets.length >= 2) {
     const a = pointFor(targets[0]);
     const b = pointFor(targets[1]);
@@ -6859,6 +6863,54 @@ function drawProjectionEffect(effect, theme, rect, pointFor, now, w, h) {
   }
 }
 
+function drawProjectionPeek(effect, theme, point, progress, fade) {
+  // a little terminal box pops open at the node, scrolls the diff past,
+  // and winks back out like a CRT switching off
+  if (!point) return;
+  const lines = Array.isArray(effect.lines) ? effect.lines : [];
+  if (!lines.length) return;
+  const lineHeight = 11 * devicePixelRatio;
+  const boxWidth = 250 * devicePixelRatio;
+  const boxHeight = Math.min(6, lines.length) * lineHeight + 10 * devicePixelRatio;
+  const popIn = Math.min(1, progress / 0.08);
+  const winkOut = progress > 0.9 ? Math.max(0, 1 - (progress - 0.9) / 0.1) : 1;
+  const openness = Math.min(popIn, winkOut);
+  const x = point.x + 14 * devicePixelRatio;
+  const y = point.y - boxHeight - 10 * devicePixelRatio;
+  ctx.save();
+  ctx.globalAlpha *= Math.max(0, Math.min(1, fade * 3));
+  // vertical openness gives the pop/wink; width stays (CRT collapse)
+  const visibleHeight = Math.max(1.5 * devicePixelRatio, boxHeight * openness);
+  const boxY = y + (boxHeight - visibleHeight) / 2;
+  ctx.fillStyle = "rgba(2,6,10,0.88)";
+  ctx.strokeStyle = projectionTone(theme, effect.tone || "accent", 0.8);
+  ctx.lineWidth = devicePixelRatio;
+  ctx.beginPath();
+  ctx.rect(x, boxY, boxWidth, visibleHeight);
+  ctx.fill();
+  ctx.stroke();
+  if (openness > 0.85) {
+    ctx.beginPath();
+    ctx.rect(x, boxY, boxWidth, visibleHeight);
+    ctx.clip();
+    ctx.font = `${8.5 * devicePixelRatio}px ui-monospace, monospace`;
+    ctx.textAlign = "left";
+    ctx.textBaseline = "top";
+    // the scroll: content drifts upward through the window over the body
+    // of the effect's lifetime
+    const scrollSpan = Math.max(0, lines.length * lineHeight - (visibleHeight - 8 * devicePixelRatio));
+    const scrollPhase = Math.min(1, Math.max(0, (progress - 0.12) / 0.7));
+    const offset = scrollSpan * scrollPhase;
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const tone = line.startsWith("+") ? "good" : line.startsWith("-") ? "alarm" : "ghost";
+      ctx.fillStyle = projectionTone(theme, tone, 0.92);
+      ctx.fillText(line.slice(0, 44), x + 5 * devicePixelRatio, boxY + 5 * devicePixelRatio + i * lineHeight - offset);
+    }
+  }
+  ctx.restore();
+}
+
 const PROJECTION_TICKER_GLYPHS = {
   file_changed: "\\u0394",
   command_completed: "$",
@@ -6883,10 +6935,11 @@ function drawProjectionHud(props, theme, mood, hud, rect, w, h, now) {
   if (commandLine) ctx.fillText(commandLine, rect.x, hudTop + 14 * devicePixelRatio);
   ctx.fillText(workspaceLine, rect.x, hudTop + 28 * devicePixelRatio);
   if (hud.narration) {
-    // the agent's voice, owned by the projection: tail of the current message
+    // the agent's voice, owned by the projection: tail of the current message,
+    // markdown emphasis stripped so it reads as speech rather than source
     ctx.fillStyle = projectionTone(theme, "good", 0.78);
     const maxChars = Math.max(40, Math.floor(rect.width / (6.4 * devicePixelRatio)));
-    const tail = String(hud.narration).replace(/\\s+/g, " ").trim();
+    const tail = String(hud.narration).replace(/[*_`#]+/g, "").replace(/\\s+/g, " ").trim();
     const clipped = tail.length > maxChars ? `\\u2026${tail.slice(-maxChars)}` : tail;
     ctx.fillText(`\\u00BB ${clipped}`, rect.x, hudTop + 44 * devicePixelRatio);
   }

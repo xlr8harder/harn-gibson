@@ -194,6 +194,8 @@ def capture_git_snapshot(root: Path) -> GitSnapshot:
 def _message_text(payload: Mapping[str, Any]) -> str:
     nested = payload.get("assistantMessageEvent")
     if isinstance(nested, Mapping):
+        if _is_tool_call_delta(nested):
+            return ""  # streamed tool-call argument JSON is not narration
         found = _message_text(nested)
         if found:
             return found
@@ -202,6 +204,55 @@ def _message_text(payload: Mapping[str, Any]) -> str:
         if isinstance(value, str) and value:
             return value
     return ""
+
+
+_MAX_DIFF_PREVIEW_LINES = 12
+_MAX_DIFF_LINE_CHARS = 88
+
+
+def _diff_preview_from_payload(payload: Mapping[str, Any]) -> list[str]:
+    """A bounded, display-safe excerpt of what an edit actually changed:
+    -/+ prefixed lines from edit-tool oldText/newText pairs (or the head of
+    written content), clipped per line and capped overall."""
+    tool = payload.get("toolName")
+    inner = payload.get("input")
+    if not isinstance(inner, Mapping):
+        return []
+    lines: list[str] = []
+
+    def take(text: Any, prefix: str, cap: int) -> None:
+        if not isinstance(text, str) or not text:
+            return
+        for raw in text.splitlines()[:cap]:
+            if len(lines) >= _MAX_DIFF_PREVIEW_LINES:
+                return
+            lines.append(f"{prefix}{raw[:_MAX_DIFF_LINE_CHARS]}")
+
+    edits = inner.get("edits")
+    if isinstance(edits, list):
+        for edit in edits[:2]:
+            if isinstance(edit, Mapping):
+                take(edit.get("oldText"), "-", 4)
+                take(edit.get("newText"), "+", 4)
+    elif tool in {"write", "create", "file_write", "write_file"}:
+        take(inner.get("content") or inner.get("text"), "+", 6)
+    return lines
+
+
+def _is_tool_call_delta(nested: Mapping[str, Any]) -> bool:
+    """Message streams interleave thinking/text deltas with tool-call argument
+    deltas (raw JSON); only the former are the agent's voice."""
+    index = nested.get("contentIndex")
+    partial = nested.get("partial")
+    content = partial.get("content") if isinstance(partial, Mapping) else None
+    if isinstance(content, list) and isinstance(index, int) and 0 <= index < len(content):
+        entry = content[index]
+        if isinstance(entry, Mapping):
+            entry_type = str(entry.get("type") or "")
+            if entry_type:
+                return entry_type.lower().startswith("tool")
+            return "thinking" not in entry and ("name" in entry or "arguments" in entry)
+    return False
 
 
 def _strip_prefix(path: str, prefix: str) -> str:
@@ -490,6 +541,7 @@ class PerceptionModel:
         # Event-local change facts from tool payloads (e.g. edit deltas). Sizes
         # are unknown at this point, so churn follows the "observed but
         # unmeasured" rule; git reconciliation supplies measured sizes later.
+        diff_preview = _diff_preview_from_payload(event.payload)
         for change in changes_from_event(event, touches, None):
             if not _path_visible(change.path) or not _plausible_touch_path(change.path):
                 continue
@@ -504,6 +556,8 @@ class PerceptionModel:
             if change.added_lines or change.removed_lines:
                 payload["addedLines"] = change.added_lines
                 payload["removedLines"] = change.removed_lines
+            if diff_preview:
+                payload["diffPreview"] = diff_preview
             self._append_event(payload)
 
     # -- reconciliation --------------------------------------------------------

@@ -297,6 +297,36 @@ def test_perception_tracks_agent_narration(tmp_path: Path) -> None:
     assert agent["attrs"]["narration"] == "x" * 400
     assert agent["attrs"]["narrationComplete"] is True
 
+    # streamed tool-call argument deltas are not the agent's voice
+    tool_delta = GibsonEvent.from_raw(
+        {"type": "message_update", "assistantMessageEvent": {
+            "contentIndex": 1, "delta": '{"command": "uv run',
+            "partial": {"content": [{"thinking": "planning"}, {"type": "toolCall", "name": "bash"}]},
+        }},
+        sequence=6,
+        timestamp_ms=600,
+    )
+    untyped_tool_delta = GibsonEvent.from_raw(
+        {"type": "message_update", "assistantMessageEvent": {
+            "contentIndex": 1, "delta": ' pytest"}',
+            "partial": {"content": [{"thinking": "planning"}, {"name": "bash", "arguments": "{"}]},
+        }},
+        sequence=7,
+        timestamp_ms=700,
+    )
+    thinking_delta = GibsonEvent.from_raw(
+        {"type": "message_update", "assistantMessageEvent": {
+            "contentIndex": 0, "delta": "running the tests now",
+            "partial": {"content": [{"type": "thinking", "thinking": "running"}]},
+        }},
+        sequence=8,
+        timestamp_ms=800,
+    )
+    model.apply_batch((tool_delta, untyped_tool_delta, thinking_delta), empty)
+    agent = next(e for e in model.to_dict()["entities"] if e["id"] == "agent")
+    assert agent["attrs"]["narration"] == "running the tests now"
+    assert '{"command"' not in agent["attrs"]["narration"]
+
 
 def test_perception_is_idempotent_across_repeated_batches(tmp_path: Path) -> None:
     root = _git_fixture(tmp_path)
@@ -572,6 +602,75 @@ def test_perception_emits_payload_change_events_with_line_deltas(tmp_path: Path)
     assert events[0]["removedLines"] == 1
     assert events[0]["churnFraction"] == 1.0
     assert "addedLines" not in events[1]  # change observed, magnitude unknown
+
+
+def test_diff_preview_rides_payload_change_events(tmp_path: Path) -> None:
+    root = _git_fixture(tmp_path)
+    model = PerceptionModel(project_root=str(root))
+    edit = GibsonEvent.from_raw(
+        {
+            "type": "tool_call",
+            "toolName": "edit",
+            "input": {
+                "path": "src/app_pkg/app.py",
+                "edits": [{"oldText": "        return 2\n", "newText": "        return 0\n"}],
+                "addedLines": 1,
+                "removedLines": 1,
+            },
+        },
+        sequence=1,
+        timestamp_ms=100,
+    )
+    touched = _touched("src/app_pkg/app.py", 1)
+    model.apply_batch((edit,), touched)
+    changed = [e for e in model.to_dict()["events"] if e["kind"] == "file_changed"]
+    assert changed
+    assert changed[0]["diffPreview"] == ["-        return 2", "+        return 0"]
+
+    # write tools preview the head of the written content
+    write = GibsonEvent.from_raw(
+        {
+            "type": "tool_call",
+            "toolName": "write",
+            "input": {"path": "src/app_pkg/new.py", "content": "x = 1\ny = 2\n" + "z = 3\n" * 20,
+                      "addedLines": 22, "removedLines": 0},
+        },
+        sequence=2,
+        timestamp_ms=200,
+    )
+    model.apply_batch((write,), _touched("src/app_pkg/new.py", 2))
+    changed = [e for e in model.to_dict()["events"]
+               if e["kind"] == "file_changed" and e["entity"].endswith("new.py")]
+    assert changed[0]["diffPreview"][0] == "+x = 1"
+    assert len(changed[0]["diffPreview"]) <= 12
+
+
+def test_diff_preview_caps_total_lines_and_skips_malformed_edits() -> None:
+    from harn_gibson.perception import _diff_preview_from_payload
+
+    block = "\n".join(f"line {i}" for i in range(6))
+    preview = _diff_preview_from_payload({
+        "toolName": "edit",
+        "input": {"path": "x.py", "edits": [
+            {"oldText": block, "newText": block},
+            {"oldText": block, "newText": block},
+        ]},
+    })
+    assert len(preview) == 12  # hard cap across all edits
+    skipped = _diff_preview_from_payload({
+        "toolName": "edit",
+        "input": {"path": "x.py", "edits": ["not-a-mapping", {"newText": "y = 1\n"}]},
+    })
+    assert skipped == ["+y = 1"]
+    assert _diff_preview_from_payload({"toolName": "edit", "input": "junk"}) == []
+
+
+def test_tool_call_delta_detection_tolerates_malformed_content() -> None:
+    from harn_gibson.perception import _is_tool_call_delta
+
+    assert _is_tool_call_delta({"contentIndex": 0, "partial": {"content": ["not-a-mapping"]}}) is False
+    assert _is_tool_call_delta({"contentIndex": 5, "partial": {"content": []}}) is False
+    assert _is_tool_call_delta({}) is False
 
 
 def test_perception_with_git_disabled_uses_filesystem_basis(tmp_path: Path) -> None:
