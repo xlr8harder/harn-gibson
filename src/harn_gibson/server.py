@@ -7537,15 +7537,21 @@ function pushEvent(event) {
     }
     appendFeedItem(current);
   }
-  for (const mutation of update.mutations || []) {
-    if (mutation.op === "start_animation" && mutation.animation) {
-      const seed = Number(mutation.animation.props?.sequence || current.sequence || Date.now());
-      pulses.push({
-        x: ((seed * 37) % 100) / 100,
-        y: ((seed * 71) % 100) / 100,
-        age: 0,
-        color: colorFor(mutation.animation.props?.phase || current.phase),
-      });
+  // legacy ambient pulses: decorative circles at hash-derived positions for
+  // each animation mutation. A projection scene owns the whole stage and
+  // emits animations every step, so the legacy layer stands down for it.
+  const projectionOwnsStage = Boolean(update.scene?.primitives?.["projection-scene"]);
+  if (!projectionOwnsStage) {
+    for (const mutation of update.mutations || []) {
+      if (mutation.op === "start_animation" && mutation.animation) {
+        const seed = Number(mutation.animation.props?.sequence || current.sequence || Date.now());
+        pulses.push({
+          x: ((seed * 37) % 100) / 100,
+          y: ((seed * 71) % 100) / 100,
+          age: 0,
+          color: colorFor(mutation.animation.props?.phase || current.phase),
+        });
+      }
     }
   }
 }
