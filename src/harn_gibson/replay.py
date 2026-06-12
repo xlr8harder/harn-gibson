@@ -1609,6 +1609,8 @@ _SALIENT_EVENT_TYPES = frozenset({
     "user_bash",
     "runtime_error",
     "input",
+    # a finished message is a beat: the audience gets the pause to read it
+    "message_end",
     "session_start",
     "session_shutdown",
     "agent_start",
