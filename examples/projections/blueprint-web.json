@@ -1,0 +1,29 @@
+{
+  "schema": "harn-gibson.projection.v1",
+  "theme": "blueprint",
+  "title": "WORKBENCH",
+  "layers": [
+    {
+      "id": "web",
+      "select": {"types": ["file", "command", "check"]},
+      "layout": {"kind": "force", "relations": ["touched", "produced"]},
+      "encode": {
+        "size": {"attr": "touchCount", "range": [0.3, 0.9]},
+        "tone": {"attr": "status", "map": {"error": "alarm", "ok": "good", "running": "warn"}},
+        "label": {}
+      },
+      "edges": [
+        {"relation": "touched", "style": "skeleton"},
+        {"relation": "produced", "style": "flow", "tone": "accent"}
+      ]
+    }
+  ],
+  "camera": {"follow": "focused_on"},
+  "on": [
+    {"event": "check_completed", "when": {"status": "error"},
+     "effects": [{"kind": "ring", "target": "$entity", "tone": "alarm", "label": "FAIL"}]},
+    {"event": "check_completed", "when": {"status": "ok"},
+     "effects": [{"kind": "ring", "target": "$entity", "tone": "good", "label": "PASS"}]},
+    {"event": "commit_created", "effects": [{"kind": "banner", "label": "$subject", "tone": "base"}]}
+  ]
+}

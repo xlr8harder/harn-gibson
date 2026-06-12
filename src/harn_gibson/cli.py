@@ -331,6 +331,12 @@ def _add_replay_renderer_arguments(parser: argparse.ArgumentParser) -> None:
         default=None,
         help="prompt-command model renderer to exercise during replay",
     )
+    renderer.add_argument(
+        "--projection",
+        default=None,
+        help="drive the display with the projection engine: '1' for the default projection "
+        "or a path to a harn-gibson.projection.v1 JSON spec",
+    )
     parser.add_argument(
         "--renderer-timeout-ms",
         default=None,
@@ -384,6 +390,9 @@ def _explicit_replay_renderer_env_from_args(args: argparse.Namespace) -> dict[st
             renderer_env["HARN_GIBSON_RENDERER_TIMEOUT_MS"] = str(renderer_timeout_ms)
         if model_timeout_ms is not None:
             renderer_env["HARN_GIBSON_RENDERER_MODEL_TIMEOUT_MS"] = str(model_timeout_ms)
+    projection = getattr(args, "projection", None)
+    if projection:
+        renderer_env["HARN_GIBSON_PROJECTION"] = projection
     return renderer_env
 
 

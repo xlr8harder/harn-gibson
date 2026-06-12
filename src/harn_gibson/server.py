@@ -19,6 +19,7 @@ from harn_gibson.catalog import VisualCatalog, default_visual_catalog
 from harn_gibson.events import GibsonEvent, diagnostic_event
 from harn_gibson.external_renderer import external_renderer_from_env
 from harn_gibson.model_renderer import model_renderer_from_env
+from harn_gibson.projection import ProjectionSceneRenderer, load_projection_spec
 from harn_gibson.rendering import (
     DeterministicSceneRenderer,
     RendererContextBuilder,
@@ -226,18 +227,25 @@ def build_state_from_env(env: dict[str, str] | None = None) -> GibsonServerState
         source.get("HARN_GIBSON_RENDERER_COMMAND"),
         source.get("HARN_GIBSON_RENDERER_TIMEOUT_MS"),
     )
+    projection_renderer = projection_renderer_from_env(source.get("HARN_GIBSON_PROJECTION"))
     return GibsonServerState(
         router=EventRouter(route_rules=route_rules_from_env(source.get("HARN_GIBSON_ROUTE_RULES"))),
         renderer_interest=renderer_interest,
         render_mode=coerce_render_mode(source.get("HARN_GIBSON_RENDER_MODE")),
         render_batch_window_ms=coerce_batch_window_ms(source.get("HARN_GIBSON_RENDER_BATCH_MS")),
         render_timing_mode=coerce_render_timing_mode(source.get("HARN_GIBSON_RENDER_TIMING")),
-        renderer=model_renderer or renderer or DeterministicSceneRenderer(),
+        renderer=projection_renderer or model_renderer or renderer or DeterministicSceneRenderer(),
         style_pack=style_pack_from_name(source.get("HARN_GIBSON_STYLE")),
         project_name=project_name_from_env(source.get("HARN_GIBSON_PROJECT_NAME"), project_root),
         project_root=project_root,
         renderer_context_config=renderer_context_config_from_env(source),
     )
+
+
+def projection_renderer_from_env(value: str | None) -> ProjectionSceneRenderer | None:
+    if value is None or not value.strip():
+        return None
+    return ProjectionSceneRenderer(load_projection_spec(value))
 
 
 def project_root_from_env(value: str | None) -> str | None:
@@ -1652,6 +1660,7 @@ function drawScenePrimitives(scene, w, h, now) {
     "ribbon",
     "trace_route",
     "spatial_map",
+    "projection_scene",
     "node_graph",
     "terminal_wall",
     "glyph_layer",
@@ -1677,6 +1686,7 @@ function drawPrimitive(primitive, w, h, now) {
   if (primitive.kind === "svg_layer") drawSvgLayer(primitive, w, h, now);
   if (primitive.kind === "node_graph") drawNodeGraph(primitive, w, h);
   if (primitive.kind === "spatial_map") drawSpatialMap(primitive, w, h, now);
+  if (primitive.kind === "projection_scene") drawProjectionScene(primitive, w, h, now);
   if (primitive.kind === "trace_route") drawTraceRoute(primitive, w, h, now);
   if (primitive.kind === "ribbon") drawRibbon(primitive, w, h, now);
   if (primitive.kind === "terminal_wall") drawTerminalWall(primitive, w, h, now);
@@ -6131,6 +6141,412 @@ function drawSpatialMap(primitive, w, h, now) {
     rect.height - devicePixelRatio,
   );
   ctx.restore();
+}
+
+// --- projection_scene: themed renderer for resolved perception projections ---
+// The engine (Python) decides WHAT is on screen; this code owns HOW it moves:
+// per-node tweening (object constancy), camera glide, effect animation, theme.
+
+const projectionTweens = new Map();
+const projectionEffectClocks = new Map();
+let projectionCameraState = {x: 0.5, y: 0.5, zoom: 1.0};
+let projectionLastNow = 0;
+
+const PROJECTION_THEMES = {
+  gibson: {
+    palette: {
+      base: "0,229,255", accent: "255,0,170", good: "57,255,20",
+      warn: "255,191,0", alarm: "255,45,85", ghost: "150,170,190",
+    },
+    ink: "235,245,255",
+    paper: null,
+    grid: true,
+    scanlines: true,
+    glow: 16,
+    nodeShape: "diamond",
+  },
+  blueprint: {
+    palette: {
+      base: "52,86,138", accent: "160,40,90", good: "26,122,82",
+      warn: "164,116,28", alarm: "182,52,44", ghost: "148,160,176",
+    },
+    ink: "30,46,72",
+    paper: "226,236,246",
+    grid: true,
+    scanlines: false,
+    glow: 0,
+    nodeShape: "circle",
+  },
+};
+
+function projectionTone(theme, tone, alpha) {
+  const rgb = theme.palette[tone] || theme.palette.base;
+  return `rgba(${rgb},${alpha})`;
+}
+
+function projectionStageRect(w, h) {
+  return {x: w * 0.03, y: h * 0.07, width: w * 0.94, height: h * 0.60};
+}
+
+function projectionNodePoint(rect, tween, camera) {
+  const cx = rect.x + rect.width * 0.5;
+  const cy = rect.y + rect.height * 0.5;
+  const px = rect.x + tween.x * rect.width;
+  const py = rect.y + tween.y * rect.height - tween.lift * rect.height * 0.16;
+  return {
+    x: cx + (px - cx - (camera.x - 0.5) * rect.width * 0.4) * camera.zoom,
+    y: cy + (py - cy - (camera.y - 0.5) * rect.height * 0.4) * camera.zoom,
+  };
+}
+
+function drawProjectionScene(primitive, w, h, now) {
+  const props = primitive.props || {};
+  const theme = PROJECTION_THEMES[String(props.theme || "gibson")] || PROJECTION_THEMES.gibson;
+  const nodes = Array.isArray(props.nodes) ? props.nodes : [];
+  const edges = Array.isArray(props.edges) ? props.edges : [];
+  const effects = Array.isArray(props.effects) ? props.effects : [];
+  const mood = props.mood || {};
+  const hud = props.hud || {};
+  const rect = projectionStageRect(w, h);
+  const dt = projectionLastNow ? Math.min(0.1, (now - projectionLastNow) / 1000) : 0.016;
+  projectionLastNow = now;
+  const ease = 1 - Math.exp(-dt * 5.0);
+
+  // tween node state toward engine targets; the first scene snaps (no birth
+  // animation on initial population), later newcomers grow in from 35%
+  const firstScene = projectionTweens.size === 0;
+  const liveIds = new Set();
+  for (const node of nodes) {
+    liveIds.add(node.id);
+    let tween = projectionTweens.get(node.id);
+    if (!tween) {
+      tween = firstScene
+        ? {x: node.x, y: node.y, size: node.size, opacity: node.opacity ?? 1, lift: node.lift || 0}
+        : {x: node.x, y: node.y, size: node.size * 0.35, opacity: (node.opacity ?? 1) * 0.35, lift: 0};
+      projectionTweens.set(node.id, tween);
+    }
+    tween.x += (node.x - tween.x) * ease;
+    tween.y += (node.y - tween.y) * ease;
+    tween.size += (node.size - tween.size) * ease;
+    tween.opacity += ((node.opacity ?? 1) - tween.opacity) * ease;
+    tween.lift += ((node.lift || 0) - tween.lift) * ease;
+  }
+  for (const id of Array.from(projectionTweens.keys())) {
+    if (!liveIds.has(id)) projectionTweens.delete(id);
+  }
+
+  // effect clocks run on the browser timebase, keyed by effect id
+  const liveEffects = new Set();
+  for (const effect of effects) {
+    liveEffects.add(effect.id);
+    if (!projectionEffectClocks.has(effect.id)) projectionEffectClocks.set(effect.id, now);
+  }
+  for (const id of Array.from(projectionEffectClocks.keys())) {
+    if (!liveEffects.has(id)) projectionEffectClocks.delete(id);
+  }
+
+  // camera glides toward its target node (plus shake displacement)
+  const cameraTarget = props.camera && props.camera.target ? projectionTweens.get(props.camera.target) : null;
+  const wantZoom = cameraTarget ? Number(props.camera.zoom || 1) : 1;
+  let shakeX = 0;
+  let shakeY = 0;
+  for (const effect of effects) {
+    if (effect.kind !== "shake") continue;
+    const progress = projectionEffectProgress(effect, now);
+    if (progress < 1) {
+      const decay = 1 - progress;
+      shakeX += Math.sin(now * 0.09) * 0.012 * decay;
+      shakeY += Math.cos(now * 0.117) * 0.010 * decay;
+    }
+  }
+  projectionCameraState.x += ((cameraTarget ? cameraTarget.x : 0.5) - projectionCameraState.x) * ease * 0.7;
+  projectionCameraState.y += ((cameraTarget ? cameraTarget.y : 0.5) - projectionCameraState.y) * ease * 0.7;
+  projectionCameraState.zoom += (wantZoom - projectionCameraState.zoom) * ease * 0.7;
+  const camera = {
+    x: projectionCameraState.x + shakeX,
+    y: projectionCameraState.y + shakeY,
+    zoom: projectionCameraState.zoom,
+  };
+
+  if (typeof window !== "undefined") {
+    window.__gibsonProjectionState = {
+      theme: String(props.theme || "gibson"),
+      nodeCount: nodes.length,
+      edgeCount: edges.length,
+      effectCount: effects.length,
+      mood: String(mood.name || ""),
+      revision: Number(props.revision || 0),
+    };
+  }
+
+  ctx.save();
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+
+  if (theme.paper) {
+    ctx.fillStyle = `rgba(${theme.paper},0.96)`;
+    ctx.fillRect(rect.x, rect.y, rect.width, rect.height);
+  }
+  if (theme.grid) {
+    ctx.strokeStyle = theme.paper ? `rgba(${theme.ink},0.14)` : projectionTone(theme, "base", 0.07);
+    ctx.lineWidth = 1;
+    const cells = 12;
+    for (let i = 0; i <= cells; i++) {
+      const gx = rect.x + (i / cells) * rect.width;
+      const gy = rect.y + (i / cells) * rect.height;
+      ctx.beginPath();
+      ctx.moveTo(gx, rect.y);
+      ctx.lineTo(gx - rect.width * 0.05, rect.y + rect.height);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(rect.x, gy);
+      ctx.lineTo(rect.x + rect.width, gy - rect.height * 0.05);
+      ctx.stroke();
+    }
+  }
+
+  const pointFor = (id) => {
+    const tween = projectionTweens.get(id);
+    return tween ? projectionNodePoint(rect, tween, camera) : null;
+  };
+
+  for (const edge of edges) {
+    const a = pointFor(edge.from);
+    const b = pointFor(edge.to);
+    if (!a || !b) continue;
+    const tone = edge.tone || "base";
+    if (edge.style === "flow") {
+      ctx.setLineDash([7, 9]);
+      ctx.lineDashOffset = -now * 0.04;
+      ctx.strokeStyle = projectionTone(theme, tone, 0.7);
+      ctx.lineWidth = 1.7 * devicePixelRatio;
+    } else if (edge.style === "beam") {
+      ctx.setLineDash([]);
+      ctx.strokeStyle = projectionTone(theme, tone, 0.35 + 0.2 * Math.sin(now * 0.005));
+      ctx.lineWidth = 2.2 * devicePixelRatio;
+    } else {
+      ctx.setLineDash([]);
+      ctx.strokeStyle = theme.paper
+        ? `rgba(${theme.ink},0.40)`
+        : projectionTone(theme, tone, 0.34);
+      ctx.lineWidth = 1.1 * devicePixelRatio;
+    }
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    const midX = (a.x + b.x) * 0.5;
+    const midY = (a.y + b.y) * 0.5 - rect.height * 0.03;
+    ctx.quadraticCurveTo(midX, midY, b.x, b.y);
+    ctx.stroke();
+  }
+  ctx.setLineDash([]);
+
+  for (const effect of effects) {
+    drawProjectionEffect(effect, theme, rect, pointFor, now, w, h);
+  }
+
+  const showAllLabels = nodes.length <= 26;
+  for (const node of nodes) {
+    const tween = projectionTweens.get(node.id);
+    if (!tween) continue;
+    const point = projectionNodePoint(rect, tween, camera);
+    const radius = (3.5 + tween.size * 11) * devicePixelRatio;
+    const tone = node.tone || "base";
+    ctx.save();
+    ctx.globalAlpha *= Math.max(0.05, tween.opacity);
+    if (tween.lift > 0.02) {
+      ctx.strokeStyle = projectionTone(theme, tone, 0.3);
+      ctx.lineWidth = devicePixelRatio;
+      ctx.beginPath();
+      ctx.moveTo(point.x, point.y + tween.lift * rect.height * 0.16);
+      ctx.lineTo(point.x, point.y);
+      ctx.stroke();
+    }
+    ctx.shadowColor = projectionTone(theme, tone, node.focus ? 0.95 : 0.6);
+    ctx.shadowBlur = theme.glow * (node.focus ? 1.6 : 1) * devicePixelRatio * 0.12 * 8;
+    ctx.fillStyle = projectionTone(theme, tone, node.focus ? 0.7 : 0.42);
+    ctx.strokeStyle = theme.paper
+      ? `rgba(${theme.ink},0.85)`
+      : projectionTone(theme, tone, node.focus ? 1.0 : 0.8);
+    ctx.lineWidth = (node.focus ? 1.9 : 1.1) * devicePixelRatio;
+    ctx.beginPath();
+    if (node.kind === "agent") {
+      const wob = 1 + Math.sin(now * 0.008) * 0.12;
+      ctx.moveTo(point.x, point.y - radius * 1.25 * wob);
+      ctx.lineTo(point.x + radius * 0.9 * wob, point.y + radius * 0.7 * wob);
+      ctx.lineTo(point.x - radius * 0.9 * wob, point.y + radius * 0.7 * wob);
+      ctx.closePath();
+    } else if (node.kind === "dir" || theme.nodeShape === "circle") {
+      ctx.arc(point.x, point.y, radius, 0, Math.PI * 2);
+    } else {
+      ctx.moveTo(point.x, point.y - radius);
+      ctx.lineTo(point.x + radius * 0.85, point.y);
+      ctx.lineTo(point.x, point.y + radius * 0.65);
+      ctx.lineTo(point.x - radius * 0.85, point.y);
+      ctx.closePath();
+    }
+    ctx.fill();
+    ctx.stroke();
+    if (node.focus) {
+      ctx.setLineDash([4, 5]);
+      ctx.beginPath();
+      ctx.arc(point.x, point.y, radius * 1.7, now * 0.002, now * 0.002 + Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    if (node.label && (showAllLabels || node.focus || tone === "alarm")) {
+      ctx.shadowBlur = 3;
+      ctx.font = `${9.5 * devicePixelRatio}px ui-monospace, monospace`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "top";
+      ctx.fillStyle = theme.paper
+        ? `rgba(${theme.ink},${node.focus ? 0.95 : 0.7})`
+        : `rgba(${theme.ink},${node.focus ? 0.95 : 0.62})`;
+      ctx.fillText(String(node.label), point.x, point.y + radius + 4 * devicePixelRatio);
+    }
+    ctx.restore();
+  }
+
+  drawProjectionHud(props, theme, mood, hud, rect, w, h, now);
+
+  if (mood.alert) {
+    const throb = 0.10 + 0.06 * Math.sin(now * 0.004);
+    const vignette = ctx.createRadialGradient(w / 2, h / 2, h * 0.3, w / 2, h / 2, h * 0.85);
+    vignette.addColorStop(0, "rgba(0,0,0,0)");
+    vignette.addColorStop(1, projectionTone(theme, "alarm", throb));
+    ctx.fillStyle = vignette;
+    ctx.fillRect(0, 0, w, h);
+  }
+  if (theme.scanlines) {
+    ctx.fillStyle = "rgba(0,0,0,0.10)";
+    for (let y = rect.y; y < rect.y + rect.height; y += 4 * devicePixelRatio) {
+      ctx.fillRect(rect.x, y, rect.width, devicePixelRatio);
+    }
+  }
+  ctx.restore();
+}
+
+function projectionEffectProgress(effect, now) {
+  const started = projectionEffectClocks.get(effect.id) ?? now;
+  return Math.min(1, (now - started) / Math.max(1, Number(effect.ttlMs || 2000)));
+}
+
+function drawProjectionEffect(effect, theme, rect, pointFor, now, w, h) {
+  const progress = projectionEffectProgress(effect, now);
+  if (progress >= 1) return;
+  const tone = effect.tone || "accent";
+  const fade = 1 - progress;
+  const targets = Array.isArray(effect.targets) ? effect.targets : [];
+  if (effect.kind === "alarm") {
+    ctx.fillStyle = projectionTone(theme, tone, 0.16 * fade * (0.6 + 0.4 * Math.sin(now * 0.02)));
+    ctx.fillRect(rect.x, rect.y, rect.width, rect.height);
+    return;
+  }
+  if (effect.kind === "banner") {
+    ctx.font = `${15 * devicePixelRatio}px ui-monospace, monospace`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = projectionTone(theme, tone, 0.9 * fade);
+    ctx.fillText(String(effect.label || ""), rect.x + rect.width / 2, rect.y + rect.height * 0.16);
+    return;
+  }
+  if (effect.kind === "beam" && targets.length >= 2) {
+    const a = pointFor(targets[0]);
+    const b = pointFor(targets[1]);
+    if (a && b) {
+      ctx.strokeStyle = projectionTone(theme, tone, 0.85 * fade);
+      ctx.lineWidth = 2.6 * devicePixelRatio;
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(a.x + (b.x - a.x) * Math.min(1, progress * 2), a.y + (b.y - a.y) * Math.min(1, progress * 2));
+      ctx.stroke();
+    }
+    return;
+  }
+  for (const targetId of targets) {
+    const point = pointFor(targetId);
+    if (!point) continue;
+    const magnitude = Math.max(0.15, Number(effect.magnitude || 1));
+    if (effect.kind === "breach") {
+      for (let ring = 0; ring < 3; ring++) {
+        const ringProgress = Math.min(1, progress * 1.4 + ring * 0.12);
+        ctx.strokeStyle = projectionTone(theme, tone, (0.8 - ring * 0.22) * fade);
+        ctx.lineWidth = (2.4 - ring * 0.6) * devicePixelRatio;
+        ctx.beginPath();
+        const jag = 10;
+        const baseRadius = (8 + ringProgress * 46 + ring * 7) * devicePixelRatio;
+        for (let k = 0; k <= jag; k++) {
+          const theta = (k / jag) * Math.PI * 2;
+          const wobble = 1 + 0.12 * Math.sin(theta * 5 + now * 0.01 + ring);
+          const px = point.x + Math.cos(theta) * baseRadius * wobble;
+          const py = point.y + Math.sin(theta) * baseRadius * 0.8 * wobble;
+          if (k === 0) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        }
+        ctx.closePath();
+        ctx.stroke();
+      }
+    } else if (effect.kind === "ring") {
+      ctx.strokeStyle = projectionTone(theme, tone, 0.85 * fade);
+      ctx.lineWidth = 2 * devicePixelRatio;
+      ctx.beginPath();
+      ctx.arc(point.x, point.y, (10 + progress * 70) * devicePixelRatio, 0, Math.PI * 2);
+      ctx.stroke();
+      if (effect.label) {
+        ctx.font = `${11 * devicePixelRatio}px ui-monospace, monospace`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "bottom";
+        ctx.fillStyle = projectionTone(theme, tone, 0.95 * fade);
+        ctx.fillText(String(effect.label), point.x, point.y - (14 + progress * 30) * devicePixelRatio);
+      }
+    } else {
+      ctx.strokeStyle = projectionTone(theme, tone, 0.7 * fade);
+      ctx.lineWidth = 1.6 * devicePixelRatio;
+      ctx.beginPath();
+      ctx.arc(point.x, point.y, (4 + progress * 26 * magnitude) * devicePixelRatio, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+  }
+}
+
+const PROJECTION_TICKER_GLYPHS = {
+  file_changed: "\\u0394",
+  command_completed: "$",
+  check_completed: "\\u2713",
+  commit_created: "\\u25C6",
+};
+
+function drawProjectionHud(props, theme, mood, hud, rect, w, h, now) {
+  const inkAlpha = theme.paper ? 0.85 : 0.8;
+  ctx.font = `${13 * devicePixelRatio}px ui-monospace, monospace`;
+  ctx.textAlign = "left";
+  ctx.textBaseline = "top";
+  ctx.shadowColor = projectionTone(theme, "accent", theme.glow ? 0.5 : 0);
+  ctx.shadowBlur = theme.glow ? 6 : 0;
+  ctx.fillStyle = `rgba(${theme.ink},${inkAlpha})`;
+  ctx.fillText(String(props.title || "GIBSON"), rect.x, h * 0.025);
+  ctx.textAlign = "right";
+  ctx.fillStyle = projectionTone(theme, mood.tone || "base", 0.9);
+  ctx.fillText(String(mood.label || ""), rect.x + rect.width, h * 0.025);
+  ctx.shadowBlur = 0;
+
+  const hudTop = h * 0.685;
+  ctx.font = `${10.5 * devicePixelRatio}px ui-monospace, monospace`;
+  ctx.textAlign = "left";
+  ctx.fillStyle = `rgba(${theme.ink},0.72)`;
+  const focusLine = hud.focus ? `FOCUS ${hud.focus}` : "FOCUS \\u2014";
+  const commandLine = hud.command ? `$ ${hud.command} [${hud.commandStatus || "?"}]` : "";
+  ctx.fillText(focusLine, rect.x, hudTop);
+  if (commandLine) ctx.fillText(commandLine, rect.x, hudTop + 14 * devicePixelRatio);
+  ctx.fillText(String(hud.workspace || ""), rect.x, hudTop + 28 * devicePixelRatio);
+  ctx.textAlign = "right";
+  ctx.fillStyle = projectionTone(theme, mood.alert ? "alarm" : "good", 0.85);
+  ctx.fillText(String(hud.checks || ""), rect.x + rect.width, hudTop);
+  const ticker = Array.isArray(hud.ticker) ? hud.ticker : [];
+  if (ticker.length) {
+    ctx.fillStyle = `rgba(${theme.ink},0.6)`;
+    const glyphs = ticker.map((item) => PROJECTION_TICKER_GLYPHS[item.kind] || "\\u00B7").join(" ");
+    ctx.fillText(glyphs, rect.x + rect.width, hudTop + 28 * devicePixelRatio);
+  }
 }
 
 function traceRouteHops(props, w, h) {

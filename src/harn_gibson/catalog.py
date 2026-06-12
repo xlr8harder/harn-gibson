@@ -439,6 +439,23 @@ def default_visual_catalog() -> VisualCatalog:
                 ("generic", "map"),
             ),
             CatalogEntry(
+                "projection_scene",
+                "primitive",
+                "A fully resolved projection of the perception model: themed nodes, relation edges, "
+                "entity-anchored effects, camera, mood, and HUD. Emitted by the projection engine; "
+                "the browser tweens between resolved scenes.",
+                ("theme", "title", "seq", "revision", "mood", "nodes", "edges", "effects", "camera", "hud"),
+                ("generic", "map", "projection", "perception-model"),
+                {
+                    "nodeFields": ("id", "kind", "layer", "label", "x", "y", "size", "lift",
+                                   "opacity", "tone", "focus"),
+                    "edgeFields": ("from", "to", "style", "tone"),
+                    "effectFields": ("id", "kind", "targets", "tone", "label", "magnitude",
+                                     "startedAtMs", "ttlMs"),
+                    "tones": ("base", "accent", "good", "warn", "alarm", "ghost"),
+                },
+            ),
+            CatalogEntry(
                 "spatial_map",
                 "primitive",
                 "Typed world-model objects and edges with stable identity, declarative bindings, and bounded layout.",
