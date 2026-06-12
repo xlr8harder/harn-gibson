@@ -94,6 +94,16 @@ def _path_visible(path: str) -> bool:
     return True
 
 
+def _plausible_touch_path(path: str) -> bool:
+    """Touched-path extraction upstream is over-eager and will surface tool
+    OUTPUT text ('Successfully replaced 1 block(s) in src/x.py.') or commit
+    subjects as paths. A real workspace path has no spaces, is reasonably
+    short, and contains a separator or extension."""
+    if not path or len(path) > 200 or " " in path or "\t" in path:
+        return False
+    return "/" in path or "." in path
+
+
 # --- git reconciliation ---------------------------------------------------------
 
 
@@ -407,7 +417,7 @@ class PerceptionModel:
         primary: str | None = None
         for touch in touches:
             path = str(touch.get("path") or "")
-            if not path or not _path_visible(path):
+            if not path or not _path_visible(path) or not _plausible_touch_path(path):
                 continue
             state = self._files.get(path)
             if state is None:
@@ -481,7 +491,7 @@ class PerceptionModel:
         # are unknown at this point, so churn follows the "observed but
         # unmeasured" rule; git reconciliation supplies measured sizes later.
         for change in changes_from_event(event, touches, None):
-            if not _path_visible(change.path):
+            if not _path_visible(change.path) or not _plausible_touch_path(change.path):
                 continue
             payload: dict[str, Any] = {
                 "seq": event.sequence,

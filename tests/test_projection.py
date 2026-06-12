@@ -193,10 +193,10 @@ def test_effect_target_selectors_and_field_substitution() -> None:
     assert ring["label"] == "ship it"
     assert ring["ttlMs"] == 9000
     pulses = [effect for effect in effects if effect["kind"] == "pulse"]
-    assert pulses[0]["targets"] == ["file:src/app.py"]  # $focus
-    assert pulses[1]["targets"] == ["file:src/app.py"]  # literal id
-    assert pulses[1]["magnitude"] == 0.5
-    assert pulses[2]["targets"] == ["dir:."]  # unknown literal falls back to root
+    # $focus and the literal id resolve to the same node and dedupe into one
+    # live pulse (the later instance wins); the unknown literal falls to root
+    assert [pulse["targets"] for pulse in pulses] == [["file:src/app.py"], ["dir:."]]
+    assert pulses[0]["magnitude"] == 0.5
     banner = next(effect for effect in effects if effect["kind"] == "banner")
     assert banner["targets"] == []
     assert banner["label"] == "MILESTONE"
@@ -584,6 +584,28 @@ def test_blast_and_focus_fall_back_gracefully() -> None:
     scene = engine.resolve(_perception(relations=relations, events=events), now_ms=6000)
     breach = next(effect for effect in scene["effects"] if effect["kind"] == "breach")
     assert breach["targets"] == ["dir:."]  # fell back to root rather than floating free
+
+
+def test_root_effects_resolve_under_force_layouts() -> None:
+    engine = ProjectionEngine({"layers": [
+        {"id": "web", "select": {"types": ["dir", "file"]}, "layout": {"kind": "force"}},
+    ]})
+    events = [{"seq": 9, "ts": 9000, "kind": "commit_created", "entity": "commit:abc", "subject": "ship"}]
+    scene = engine.resolve(_perception(events=events), now_ms=9000)
+    ring = next(effect for effect in scene["effects"] if effect["kind"] == "ring")
+    assert ring["targets"] == ["dir:."]  # force layouts have no intrinsic root
+
+
+def test_repeated_beats_refresh_instead_of_stacking() -> None:
+    engine = ProjectionEngine()
+    burst = [
+        {"seq": seq, "ts": seq * 10, "kind": "file_changed", "entity": "file:src/app.py",
+         "churnFraction": 0.5}
+        for seq in range(1, 9)
+    ]
+    scene = engine.resolve(_perception(events=burst), now_ms=100)
+    pulses = [effect for effect in scene["effects"] if effect["kind"] == "pulse"]
+    assert len(pulses) == 1  # eight rapid edits, one live pulse on the node
 
 
 def test_recovers_rule_does_not_fire_without_prior_error() -> None:

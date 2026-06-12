@@ -173,6 +173,10 @@ class ProjectionEngine:
                     node_id, entity, x, y, encode,
                     layer_id=layer_id, blast=blast, focus=focus, mood=mood,
                 )
+        # layouts without an intrinsic root (force, grid) still need one for
+        # $root effect targets and camera fallback
+        if not root_id and "dir:." in nodes:
+            root_id = "dir:."
         # the abstract root "dir:." reads as the workspace name, not "."
         if "dir:." in nodes:
             root_name = str(_dict(perception.get("workspace")).get("rootName") or project_name or ".")
@@ -457,10 +461,18 @@ class ProjectionEngine:
                 for effect_index, effect_spec in enumerate(_list(rule.get("effects"))):
                     if not isinstance(effect_spec, Mapping):
                         continue
-                    self._effects.append(self._effect_instance(
+                    instance = self._effect_instance(
                         effect_spec, event, rule_index, effect_index,
                         entities, relations, nodes, blast, root_id, focus, now_ms,
-                    ))
+                    )
+                    # a fast agent fires the same beat many times per second;
+                    # refresh the live instance instead of stacking duplicates
+                    shape = (instance["kind"], tuple(instance["targets"]))
+                    self._effects = [
+                        effect for effect in self._effects
+                        if (effect["kind"], tuple(effect["targets"])) != shape
+                    ]
+                    self._effects.append(instance)
             if key[1] == "check_completed" and str(event.get("status")) == "error":
                 self._check_errors_seen.add(str(event.get("category") or "check"))
         # the perception event window is bounded, so old keys can never reappear

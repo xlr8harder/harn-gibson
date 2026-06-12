@@ -470,13 +470,20 @@ def test_perception_ignores_invisible_and_empty_touches(tmp_path: Path) -> None:
              "phases": ["after"], "sources": ["input.command"]},
             {"path": "secrets/topsecret.txt", "operation": "bash:after", "firstSequence": 1, "lastSequence": 1,
              "phases": ["after"], "sources": ["input.command"]},
+            # tool OUTPUT text mis-extracted as a path by the upstream extractor
+            {"path": "Successfully replaced 1 block(s) in src/app.py.", "operation": "edit:after",
+             "firstSequence": 1, "lastSequence": 1, "phases": ["after"], "sources": ["output"]},
+            {"path": "6fae274 seed linkjar: store works", "operation": "bash:after",
+             "firstSequence": 1, "lastSequence": 1, "phases": ["after"], "sources": ["output"]},
         ],
-        "count": 2,
+        "count": 4,
         "truncated": False,
     }
     model.apply_batch((event,), touched)
     payload = model.to_dict()
     assert not any("secret" in entity["id"] for entity in payload["entities"])
+    assert not any("Successfully" in entity["id"] or "seed linkjar" in entity["id"]
+                   for entity in payload["entities"])
     assert not any(r["type"] == "focused_on" for r in payload["relations"])
 
 
