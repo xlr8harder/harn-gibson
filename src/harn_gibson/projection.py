@@ -97,9 +97,9 @@ DEFAULT_PROJECTION: dict[str, Any] = {
             "event": "check_completed",
             "when": {"status": "error"},
             "effects": [
-                {"kind": "alarm"},
-                {"kind": "breach", "target": "$blast"},
-                {"kind": "shake"},
+                {"kind": "alarm", "delayMs": 450},
+                {"kind": "breach", "target": "$blast", "delayMs": 450},
+                {"kind": "shake", "delayMs": 450},
             ],
         },
         {
@@ -549,6 +549,7 @@ class ProjectionEngine:
         label = spec.get("label")
         if isinstance(label, str) and "$" in label:
             label = re.sub(r"\$(\w+)", lambda match: str(event.get(match.group(1)) or ""), label)
+        duration_ms = _int(spec.get("ttlMs"), _EFFECT_TTLS_MS.get(kind, 2000))
         instance = {
             "id": f"fx-{rule_index}-{effect_index}-{seq}",
             "kind": kind,
@@ -557,7 +558,12 @@ class ProjectionEngine:
             "label": str(label or "")[:48],
             "magnitude": round(min(1.0, max(0.0, float(magnitude))), 4),
             "startedAtMs": max(now_ms, _int(event.get("ts"), now_ms)),
-            "ttlMs": _int(spec.get("ttlMs"), _EFFECT_TTLS_MS.get(kind, 2000)),
+            # durationMs paces the browser animation in WALL time; ttlMs only
+            # governs scene retention (event time), kept generous so replay
+            # speed multipliers cannot evict an effect mid-animation
+            "durationMs": duration_ms,
+            "delayMs": max(0, _int(spec.get("delayMs"), 0)),
+            "ttlMs": duration_ms * 5,
         }
         lines = spec.get("lines")
         if isinstance(lines, str) and lines.startswith("$"):

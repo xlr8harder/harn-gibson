@@ -95,14 +95,17 @@
       },
       "effects": [
         {
-          "kind": "alarm"
+          "kind": "alarm",
+          "delayMs": 450
         },
         {
           "kind": "breach",
-          "target": "$blast"
+          "target": "$blast",
+          "delayMs": 450
         },
         {
-          "kind": "shake"
+          "kind": "shake",
+          "delayMs": 450
         }
       ]
     },

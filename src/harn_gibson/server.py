@@ -6415,8 +6415,15 @@ function drawProjectionScene(primitive, w, h, now) {
       tween.reveal = 1;
     }
     if (!(simulate && physicsLayers.has(node.layer))) {
-      tween.x += (node.x - tween.x) * ease;
-      tween.y += (node.y - tween.y) * ease;
+      // spring-damper motion: accelerate toward the target, decelerate on
+      // approach -- a long hop (the agent cursor changing focus) reads as a
+      // swoop instead of a snap; near-stationary nodes are unaffected
+      const stiffness = 26;
+      const dampingFactor = Math.exp(-9 * dt);
+      tween.vx = (tween.vx + (node.x - tween.x) * stiffness * dt) * dampingFactor;
+      tween.vy = (tween.vy + (node.y - tween.y) * stiffness * dt) * dampingFactor;
+      tween.x += tween.vx * dt;
+      tween.y += tween.vy * dt;
     }
     tween.size += (node.size - tween.size) * ease;
     tween.opacity += ((node.opacity ?? 1) - tween.opacity) * ease;
@@ -6479,7 +6486,7 @@ function drawProjectionScene(primitive, w, h, now) {
   for (const effect of effects) {
     if (effect.kind !== "shake") continue;
     const progress = projectionEffectProgress(effect, now);
-    if (progress < 1) {
+    if (progress >= 0 && progress < 1) {
       const decay = 1 - progress;
       shakeX += Math.sin(now * 0.09) * 0.012 * decay;
       shakeY += Math.cos(now * 0.117) * 0.010 * decay;
@@ -6811,8 +6818,9 @@ function stepProjectionPhysics(edges, physicsLayers, dt, now) {
 }
 
 function projectionEffectProgress(effect, now) {
-  const started = projectionEffectClocks.get(effect.id) ?? now;
-  return Math.min(1, (now - started) / Math.max(1, Number(effect.ttlMs || 2000)));
+  const started = (projectionEffectClocks.get(effect.id) ?? now) + Number(effect.delayMs || 0);
+  const duration = Math.max(1, Number(effect.durationMs || effect.ttlMs || 2000));
+  return Math.min(1, (now - started) / duration); // negative while delayed
 }
 
 function drawProjectionEffect(effect, theme, rect, pointFor, now, w, h) {
@@ -6821,8 +6829,17 @@ function drawProjectionEffect(effect, theme, rect, pointFor, now, w, h) {
   const tone = effect.tone || "accent";
   const fade = 1 - progress;
   const targets = Array.isArray(effect.targets) ? effect.targets : [];
+  if (effect.kind === "peek" && targets.length) {
+    drawProjectionPeek(effect, theme, pointFor(targets[0]), now);
+    return;
+  }
+  if (progress < 0) return; // delayMs: holding for its cue
+  // heavy beats ramp in instead of cutting hard over whatever came before
+  const attack = effect.kind === "breach" || effect.kind === "alarm"
+    ? Math.min(1, progress / 0.15)
+    : 1;
   if (effect.kind === "alarm") {
-    ctx.fillStyle = projectionTone(theme, tone, 0.16 * fade * (0.6 + 0.4 * Math.sin(now * 0.02)));
+    ctx.fillStyle = projectionTone(theme, tone, 0.16 * fade * attack * (0.6 + 0.4 * Math.sin(now * 0.02)));
     ctx.fillRect(rect.x, rect.y, rect.width, rect.height);
     return;
   }
@@ -6832,10 +6849,6 @@ function drawProjectionEffect(effect, theme, rect, pointFor, now, w, h) {
     ctx.textBaseline = "middle";
     ctx.fillStyle = projectionTone(theme, tone, 0.9 * fade);
     ctx.fillText(String(effect.label || ""), rect.x + rect.width / 2, rect.y + rect.height * 0.16);
-    return;
-  }
-  if (effect.kind === "peek" && targets.length) {
-    drawProjectionPeek(effect, theme, pointFor(targets[0]), now);
     return;
   }
   if (effect.kind === "beam" && targets.length >= 2) {
@@ -6858,7 +6871,7 @@ function drawProjectionEffect(effect, theme, rect, pointFor, now, w, h) {
     if (effect.kind === "breach") {
       for (let ring = 0; ring < 3; ring++) {
         const ringProgress = Math.min(1, progress * 1.4 + ring * 0.12);
-        ctx.strokeStyle = projectionTone(theme, tone, (0.8 - ring * 0.22) * fade);
+        ctx.strokeStyle = projectionTone(theme, tone, (0.8 - ring * 0.22) * fade * attack);
         ctx.lineWidth = (2.4 - ring * 0.6) * devicePixelRatio;
         ctx.beginPath();
         const jag = 10;

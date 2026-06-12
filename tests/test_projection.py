@@ -147,6 +147,9 @@ def test_event_rules_fire_effects_once_with_blast_and_recovery() -> None:
     by_kind = {effect["kind"]: effect for effect in scene["effects"]}
     assert set(by_kind) == {"alarm", "breach", "shake", "pulse"}
     assert by_kind["breach"]["targets"] == ["file:README.md", "file:src/app.py"]
+    # the failure beat holds for its cue while the scan prelude lands
+    assert by_kind["breach"]["delayMs"] == 450
+    assert by_kind["pulse"]["delayMs"] == 0
     assert by_kind["pulse"]["magnitude"] == 0.4
     assert by_kind["alarm"]["targets"] == []
 
@@ -191,7 +194,8 @@ def test_effect_target_selectors_and_field_substitution() -> None:
     ring = next(effect for effect in effects if effect["kind"] == "ring")
     assert ring["targets"] == ["dir:."]
     assert ring["label"] == "ship it"
-    assert ring["ttlMs"] == 9000
+    assert ring["durationMs"] == 9000  # presentation pace (wall time)
+    assert ring["ttlMs"] == 45000  # scene retention (event time, replay-speed proof)
     pulses = [effect for effect in effects if effect["kind"] == "pulse"]
     # $focus and the literal id resolve to the same node and dedupe into one
     # live pulse (the later instance wins); the unknown literal falls to root
