@@ -7002,6 +7002,12 @@ function drawProjectionPeek(effect, theme, point, now) {
   if (x + boxWidth > canvas.width - 4) x = point.x - boxWidth - 14 * devicePixelRatio;
   let y = point.y - boxHeight - 10 * devicePixelRatio;
   if (y < 4) y = point.y + 14 * devicePixelRatio;
+  // the narration column owns the top-left: diff peeks dodge it (they share
+  // its styling, so a collision reads as narration corruption)
+  const narration = projectionNarrationBounds;
+  if (narration && x < narration.right && y < narration.bottom && y + boxHeight > narration.top) {
+    x = Math.min(narration.right + 8 * devicePixelRatio, canvas.width - boxWidth - 4);
+  }
 
   ctx.save();
   // vertical openness gives the pop/wink; width stays (CRT collapse)
@@ -7036,6 +7042,7 @@ function drawProjectionPeek(effect, theme, point, now) {
 }
 
 const projectionNarrationStack = [];
+let projectionNarrationBounds = null; // exclusion zone other widgets respect
 const NARRATION_HOLD_MS = 9000; // the narrative is the storyline: hold for reading
 const NARRATION_RETIRED_HOLD_MS = 6000; // a superseded message fades on its own time
 const NARRATION_SCROLL_DELAY_MS = 2600; // read the head before the scroll begins
@@ -7196,6 +7203,9 @@ function drawProjectionNarration(hud, theme, rect, now) {
     ctx.restore();
     y += visibleHeight + 6 * devicePixelRatio;
   }
+  projectionNarrationBounds = y > rect.y + 40 * devicePixelRatio
+    ? {x: x, right: x + boxWidth, top: rect.y + 38 * devicePixelRatio, bottom: y}
+    : null;
 }
 
 const PROJECTION_TICKER_GLYPHS = {
