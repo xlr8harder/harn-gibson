@@ -6466,6 +6466,9 @@ function drawProjectionScene(primitive, w, h, now) {
       revision: Number(props.revision || 0),
     };
   }
+  // the projection owns the assistant narration (hud.narration); suppress the
+  // page-chrome stream panel so the voice appears exactly once
+  if (streamPanel && !streamPanel.hidden) streamPanel.hidden = true;
 
   ctx.save();
   ctx.lineCap = "round";
@@ -6816,6 +6819,14 @@ function drawProjectionHud(props, theme, mood, hud, rect, w, h, now) {
   ctx.fillText(focusLine, rect.x, hudTop);
   if (commandLine) ctx.fillText(commandLine, rect.x, hudTop + 14 * devicePixelRatio);
   ctx.fillText(workspaceLine, rect.x, hudTop + 28 * devicePixelRatio);
+  if (hud.narration) {
+    // the agent's voice, owned by the projection: tail of the current message
+    ctx.fillStyle = projectionTone(theme, "good", 0.78);
+    const maxChars = Math.max(40, Math.floor(rect.width / (6.4 * devicePixelRatio)));
+    const tail = String(hud.narration).replace(/\\s+/g, " ").trim();
+    const clipped = tail.length > maxChars ? `\\u2026${tail.slice(-maxChars)}` : tail;
+    ctx.fillText(`\\u00BB ${clipped}`, rect.x, hudTop + 44 * devicePixelRatio);
+  }
   ctx.textAlign = "right";
   ctx.fillStyle = projectionTone(theme, mood.alert ? "alarm" : "good", 0.85);
   ctx.fillText(String(hud.checks || ""), rect.x + rect.width, hudTop);

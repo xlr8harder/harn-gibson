@@ -335,7 +335,7 @@ class ProjectionEngine:
             "id": node_id,
             "kind": kind,
             "layer": layer_id,
-            "label": _node_label(node_id, attrs, _dict(encode.get("label"))),
+            "label": _node_label(node_id, kind, attrs, _dict(encode.get("label"))),
             "x": x,
             "y": y,
             "size": self._channel(encode, "size", layer_id, attrs, default=_default_size(kind)),
@@ -579,8 +579,10 @@ class ProjectionEngine:
             f"{str(_dict(c.get('attrs')).get('status') or '?').upper()}"
             for c in checks[:3]
         )
+        agent_attrs = _dict(_dict(entities.get("agent")).get("attrs"))
         return {
             "mood": str(mood.get("label") or ""),
+            "narration": str(agent_attrs.get("narration") or ""),
             "focus": focus[5:] if focus.startswith("file:") else focus,
             "command": str(command_attrs.get("preview") or "")[:64],
             "commandStatus": str(command_attrs.get("status") or ""),
@@ -836,14 +838,17 @@ def _node_tone(
     return "base"
 
 
-def _node_label(node_id: str, attrs: Mapping[str, Any], label_rule: Mapping[str, Any]) -> str:
+def _node_label(node_id: str, kind: str, attrs: Mapping[str, Any], label_rule: Mapping[str, Any]) -> str:
     if label_rule:
         raw = attrs.get(str(label_rule.get("attr") or ""))
         if isinstance(raw, str) and raw:
-            return raw[:18].upper()
+            return raw[:18]
     tail = node_id.rsplit("/", 1)[-1]
     tail = tail.split(":", 1)[-1] if "/" not in node_id else tail
-    return (tail or node_id)[:18].upper().replace("_", "-")
+    label = (tail or node_id)[:18]
+    # file labels are literal -- __init__.py must read as __init__.py, never
+    # re-cased or restyled; directories and bare ids get display caps
+    return label if kind == "file" else label.upper()
 
 
 def _default_size(kind: str) -> float:

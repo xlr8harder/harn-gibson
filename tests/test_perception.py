@@ -254,6 +254,50 @@ def test_perception_snapshot_is_bounded_with_truncation_metadata(tmp_path: Path)
     assert not any(entity["id"] == "dir:pkg/sub" for entity in payload["entities"])
 
 
+def test_perception_tracks_agent_narration(tmp_path: Path) -> None:
+    root = _git_fixture(tmp_path)
+    model = PerceptionModel(project_root=str(root))
+    chunk_one = GibsonEvent.from_raw(
+        {"type": "message_update", "text": "scanning the cli module "}, sequence=1, timestamp_ms=100
+    )
+    chunk_two = GibsonEvent.from_raw(
+        {"type": "message_update", "assistantMessageEvent": {"delta": "and patching the exit code"}},
+        sequence=2,
+        timestamp_ms=200,
+    )
+    empty = {"schema": "harn-gibson.touched-files.v1", "files": [], "count": 0, "truncated": False}
+    model.apply_batch((chunk_one, chunk_two), empty)
+    agent = next(e for e in model.to_dict()["entities"] if e["id"] == "agent")
+    assert agent["attrs"]["narration"] == "scanning the cli module and patching the exit code"
+    assert agent["attrs"]["narrationComplete"] is False
+    assert agent["attrs"]["narrationSeq"] == 2
+
+    done = GibsonEvent.from_raw(
+        {"type": "message_end", "content": "patched the exit code"}, sequence=3, timestamp_ms=300
+    )
+    model.apply_batch((done,), empty)
+    agent = next(e for e in model.to_dict()["entities"] if e["id"] == "agent")
+    assert agent["attrs"]["narration"] == "patched the exit code"
+    assert agent["attrs"]["narrationComplete"] is True
+
+    # a new message after completion starts fresh instead of appending,
+    # and the buffer keeps only a bounded tail of very long messages
+    flood = GibsonEvent.from_raw(
+        {"type": "message_update", "text": "x" * 1000}, sequence=4, timestamp_ms=400
+    )
+    model.apply_batch((flood,), empty)
+    agent = next(e for e in model.to_dict()["entities"] if e["id"] == "agent")
+    assert agent["attrs"]["narration"] == "x" * 400
+    assert agent["attrs"]["narrationComplete"] is False
+
+    # message_end without text keeps the accumulated narration, sealed
+    silent_end = GibsonEvent.from_raw({"type": "message_end"}, sequence=5, timestamp_ms=500)
+    model.apply_batch((silent_end,), empty)
+    agent = next(e for e in model.to_dict()["entities"] if e["id"] == "agent")
+    assert agent["attrs"]["narration"] == "x" * 400
+    assert agent["attrs"]["narrationComplete"] is True
+
+
 def test_perception_is_idempotent_across_repeated_batches(tmp_path: Path) -> None:
     root = _git_fixture(tmp_path)
     model = PerceptionModel(project_root=str(root))

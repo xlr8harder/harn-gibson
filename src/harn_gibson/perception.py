@@ -53,6 +53,7 @@ _GIT_TIMEOUT_SECONDS = 3.0
 _MAX_GIT_FILES = 4000
 _MAX_UNTRACKED_FILES = 200
 _MAX_COMMAND_PREVIEW_CHARS = 200
+_MAX_NARRATION_CHARS = 400
 
 _EXCLUDED_NAMES = {
     ".coverage",
@@ -180,6 +181,19 @@ def capture_git_snapshot(root: Path) -> GitSnapshot:
     )
 
 
+def _message_text(payload: Mapping[str, Any]) -> str:
+    nested = payload.get("assistantMessageEvent")
+    if isinstance(nested, Mapping):
+        found = _message_text(nested)
+        if found:
+            return found
+    for key in ("text", "delta", "content"):
+        value = payload.get(key)
+        if isinstance(value, str) and value:
+            return value
+    return ""
+
+
 def _strip_prefix(path: str, prefix: str) -> str:
     """Reduce a repo-root-relative path to project-root-relative; paths outside
     the project root are dropped (returned empty)."""
@@ -283,6 +297,9 @@ class PerceptionModel:
         self._commits: dict[str, _CommitState] = {}
         self._pending_commands: dict[tuple[str, str], str] = {}
         self._agent_action: dict[str, Any] = {}
+        self._narration: str = ""
+        self._narration_seq: int = 0
+        self._narration_complete: bool = False
         self._focused_path: str | None = None
         self._relations: dict[tuple[str, str, str], dict[str, Any]] = {}
         self._events: list[dict[str, Any]] = []
@@ -309,6 +326,7 @@ class PerceptionModel:
             if event.phase == "after":
                 saw_after_phase = True
             touches = touched_by_sequence.get(event.sequence, ())
+            self._observe_narration(event)
             self._observe_command(event)
             command_id = self._command_for_sequence(event.sequence)
             self._observe_touches(event, touches, command_id)
@@ -320,6 +338,25 @@ class PerceptionModel:
             self._reconcile()
         if changed:
             self.revision += 1
+
+    def _observe_narration(self, event: GibsonEvent) -> None:
+        """Track what the agent is saying. Streamed chunks accumulate into the
+        current message (bounded to a tail); message_end seals it. This makes
+        the assistant's voice a perception fact instead of page chrome."""
+        if event.event_type not in {"message_update", "message_end"}:
+            return
+        text = _message_text(event.payload)
+        if event.event_type == "message_update" and text:
+            if self._narration_complete:
+                self._narration = ""
+                self._narration_complete = False
+            self._narration = (self._narration + text)[-_MAX_NARRATION_CHARS:]
+            self._narration_seq = event.sequence
+        elif event.event_type == "message_end":
+            if text:
+                self._narration = text[-_MAX_NARRATION_CHARS:]
+            self._narration_seq = event.sequence
+            self._narration_complete = True
 
     def _observe_command(self, event: GibsonEvent) -> None:
         observation = command_from_event(event)
@@ -629,11 +666,16 @@ class PerceptionModel:
     def to_dict(self, *, max_entities: int = 96, max_relations: int = 144) -> dict[str, Any]:
         visible_files, file_truncated = self._visible_files(max_entities)
         dirs = self._dir_aggregates(visible_files)
+        agent_attrs: dict[str, Any] = {k: v for k, v in self._agent_action.items()}
+        if self._narration:
+            agent_attrs["narration"] = self._narration
+            agent_attrs["narrationSeq"] = self._narration_seq
+            agent_attrs["narrationComplete"] = self._narration_complete
         entities: list[dict[str, Any]] = []
         entities.append({
             "id": "agent",
             "type": "agent",
-            "attrs": {k: v for k, v in self._agent_action.items()},
+            "attrs": agent_attrs,
             "provenance": {"source": "inferred", "confidence": 0.7},
         })
         for dir_payload in dirs:

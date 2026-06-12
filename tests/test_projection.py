@@ -114,6 +114,7 @@ def test_default_projection_resolves_a_complete_scene() -> None:
     assert scene["camera"]["targets"] == ["file:README.md", "file:src/app.py"]
     assert scene["camera"]["target"] == "file:README.md"
     assert scene["hud"]["focus"] == "src/app.py"
+    assert scene["hud"]["narration"] == ""
     assert "TEST:ERROR" in scene["hud"]["checks"]
     assert "main @ abc123d" in scene["hud"]["workspace"]
 
@@ -403,7 +404,7 @@ def test_tone_and_label_encode_rules_override_defaults() -> None:
     scene = engine.resolve(_perception(), now_ms=1000)
     node = scene["nodes"][0]
     assert node["tone"] == "alarm"
-    assert node["label"] == "TEST"
+    assert node["label"] == "test"
 
     # unmapped values fall to the rule default; invalid tones fall through to smart defaults
     ok_entities = [{"id": "check:build:2", "type": "check",
@@ -418,6 +419,17 @@ def test_tone_and_label_encode_rules_override_defaults() -> None:
     scene = ProjectionEngine(bad_spec).resolve(_perception(), now_ms=1000)
     nodes = {node["id"]: node for node in scene["nodes"]}
     assert nodes["file:src/util.py"]["tone"] == "ghost"
+
+
+def test_hud_carries_agent_narration() -> None:
+    entities = [entity for entity in _default_entities() if entity["id"] != "agent"]
+    entities.append({
+        "id": "agent", "type": "agent",
+        "attrs": {"narration": "patching the exit code", "narrationSeq": 9, "narrationComplete": False},
+    })
+    engine = ProjectionEngine()
+    scene = engine.resolve(_perception(entities=entities), now_ms=1000)
+    assert scene["hud"]["narration"] == "patching the exit code"
 
 
 def test_mood_progression_idle_work_verify() -> None:
@@ -567,7 +579,7 @@ def test_label_rule_with_non_string_attr_falls_back_and_untyped_ids_keep_their_n
     ]
     scene = engine.resolve(_perception(entities=entities, relations=[]), now_ms=1000)
     nodes = {node["id"]: node for node in scene["nodes"]}
-    assert nodes["file:src/app.py"]["label"] == "APP.PY"
+    assert nodes["file:src/app.py"]["label"] == "app.py"
     assert nodes["beacon"]["kind"] == "beacon"
 
 
