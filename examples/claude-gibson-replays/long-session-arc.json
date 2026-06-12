@@ -1,0 +1,265 @@
+{
+ "schema": "harn-gibson.replay.v1",
+ "name": "claude-gibson long session arc",
+ "metadata": {
+  "purpose": "exercise the cinematic claude-gibson renderer over a bootstrap -> stream -> failure -> recovery arc",
+  "renderer": "examples/renderers/claude_gibson_renderer.py",
+  "projectRoot": "examples/dogfood-workspaces/repo-map",
+  "projectName": "repo-map"
+ },
+ "steps": [
+  {
+   "type": "event",
+   "event": {
+    "schema": "harn-gibson.event.v1",
+    "sequence": 1,
+    "timestampMs": 1000,
+    "source": "harn",
+    "eventType": "input",
+    "phase": "before",
+    "title": "Input",
+    "summary": "user: harden the repo-map CLI and keep the display alive",
+    "payload": {
+     "type": "input",
+     "source": "user",
+     "text": "harden repo-map cli"
+    },
+    "recentContext": [],
+    "visualizationContext": []
+   }
+  },
+  {
+   "type": "event",
+   "event": {
+    "schema": "harn-gibson.event.v1",
+    "sequence": 2,
+    "timestampMs": 3000,
+    "source": "harn",
+    "eventType": "tool_call",
+    "phase": "before",
+    "title": "Tool call",
+    "summary": "bash starting with {command}",
+    "payload": {
+     "type": "tool_call",
+     "toolName": "bash",
+     "input": {
+      "command": "git init && mkdir -p src/repo_map tests docs fixtures scripts"
+     }
+    },
+    "recentContext": [],
+    "visualizationContext": []
+   }
+  },
+  {
+   "type": "event",
+   "event": {
+    "schema": "harn-gibson.event.v1",
+    "sequence": 3,
+    "timestampMs": 6000,
+    "source": "harn",
+    "eventType": "tool_result",
+    "phase": "after",
+    "title": "Tool result",
+    "summary": "bash completed: ok; repo skeleton created",
+    "payload": {
+     "type": "tool_result",
+     "toolName": "bash",
+     "filePath": [
+      "src/repo_map/cli.py",
+      "tests/test_cli.py",
+      "docs/usage.md"
+     ],
+     "input": {
+      "command": "find . -maxdepth 2 -type d"
+     },
+     "content": [
+      {
+       "type": "text",
+       "text": "./src\\n./src/repo_map\\n./tests\\n./docs"
+      }
+     ]
+    },
+    "recentContext": [],
+    "visualizationContext": []
+   }
+  },
+  {
+   "type": "event",
+   "event": {
+    "schema": "harn-gibson.event.v1",
+    "sequence": 4,
+    "timestampMs": 9500,
+    "source": "harn",
+    "eventType": "message_update",
+    "phase": "during",
+    "title": "Message update",
+    "summary": "assistant stream {delta}",
+    "payload": {
+     "type": "message_update",
+     "assistantMessageEvent": {
+      "delta": "writing the cli entrypoint and argument parser"
+     }
+    },
+    "recentContext": [],
+    "visualizationContext": []
+   }
+  },
+  {
+   "type": "event",
+   "event": {
+    "schema": "harn-gibson.event.v1",
+    "sequence": 5,
+    "timestampMs": 12500,
+    "source": "harn",
+    "eventType": "tool_call",
+    "phase": "before",
+    "title": "Tool call",
+    "summary": "bash starting with {command}",
+    "payload": {
+     "type": "tool_call",
+     "toolName": "bash",
+     "input": {
+      "command": "python -m pytest tests/test_cli.py"
+     }
+    },
+    "recentContext": [],
+    "visualizationContext": []
+   }
+  },
+  {
+   "type": "event",
+   "event": {
+    "schema": "harn-gibson.event.v1",
+    "sequence": 6,
+    "timestampMs": 15500,
+    "source": "harn",
+    "eventType": "tool_result",
+    "phase": "after",
+    "title": "Tool result",
+    "summary": "bash completed: error; 1 failed, traceback below",
+    "payload": {
+     "type": "tool_result",
+     "toolName": "bash",
+     "isError": true,
+     "filePath": [
+      "src/repo_map/cli.py",
+      "tests/test_cli.py"
+     ],
+     "input": {
+      "command": "python -m pytest tests/test_cli.py"
+     },
+     "content": [
+      {
+       "type": "text",
+       "text": "E   AssertionError: exit code 2 != 0\\nFAILED tests/test_cli.py::test_main"
+      }
+     ]
+    },
+    "recentContext": [],
+    "visualizationContext": []
+   }
+  },
+  {
+   "type": "event",
+   "event": {
+    "schema": "harn-gibson.event.v1",
+    "sequence": 7,
+    "timestampMs": 18000,
+    "source": "harn",
+    "eventType": "runtime_error",
+    "phase": "after",
+    "title": "Runtime error",
+    "summary": "error: assertion failure in repo_map.cli during test run",
+    "payload": {
+     "type": "runtime_error",
+     "severity": "error",
+     "message": "AssertionError in repo_map.cli.main",
+     "details": "cli.main returned 2; expected 0",
+     "traceback": "Traceback... AssertionError"
+    },
+    "recentContext": [],
+    "visualizationContext": []
+   }
+  },
+  {
+   "type": "event",
+   "event": {
+    "schema": "harn-gibson.event.v1",
+    "sequence": 8,
+    "timestampMs": 21500,
+    "source": "harn",
+    "eventType": "tool_call",
+    "phase": "before",
+    "title": "Tool call",
+    "summary": "bash starting with {command}",
+    "payload": {
+     "type": "tool_call",
+     "toolName": "bash",
+     "input": {
+      "command": "sed -i 's/return 2/return 0/' src/repo_map/cli.py"
+     }
+    },
+    "recentContext": [],
+    "visualizationContext": []
+   }
+  },
+  {
+   "type": "event",
+   "event": {
+    "schema": "harn-gibson.event.v1",
+    "sequence": 9,
+    "timestampMs": 24500,
+    "source": "harn",
+    "eventType": "tool_result",
+    "phase": "after",
+    "title": "Tool result",
+    "summary": "bash completed: ok; patched exit code",
+    "payload": {
+     "type": "tool_result",
+     "toolName": "bash",
+     "filePath": [
+      "src/repo_map/cli.py"
+     ],
+     "input": {
+      "command": "python -m pytest tests/test_cli.py"
+     },
+     "content": [
+      {
+       "type": "text",
+       "text": "1 passed in 0.04s"
+      }
+     ]
+    },
+    "recentContext": [],
+    "visualizationContext": []
+   }
+  },
+  {
+   "type": "event",
+   "event": {
+    "schema": "harn-gibson.event.v1",
+    "sequence": 10,
+    "timestampMs": 27500,
+    "source": "harn",
+    "eventType": "message_end",
+    "phase": "after",
+    "title": "Message end",
+    "summary": "assistant message_end: repo-map CLI hardened; tests green",
+    "payload": {
+     "type": "message_end",
+     "message": {
+      "role": "assistant",
+      "content": [
+       {
+        "type": "text",
+        "text": "repo-map CLI hardened; tests green"
+       }
+      ]
+     }
+    },
+    "recentContext": [],
+    "visualizationContext": []
+   }
+  }
+ ]
+}
