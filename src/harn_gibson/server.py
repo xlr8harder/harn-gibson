@@ -6312,6 +6312,7 @@ function drawSpatialMap(primitive, w, h, now) {
 // per-node tweening (object constancy), camera glide, effect animation, theme.
 
 const projectionTweens = new Map();
+const projectionEdgeTweens = new Map();
 const projectionEffectClocks = new Map();
 let projectionCameraState = {x: 0.5, y: 0.5, zoom: 1.0};
 let projectionLastNow = 0;
@@ -6538,7 +6539,30 @@ function drawProjectionScene(primitive, w, h, now) {
     return tween ? projectionNodePoint(rect, tween, camera) : null;
   };
 
+  // edge object constancy: edges fade in when relations appear and DECAY when
+  // they vanish -- attention beams and causality flows ghost out over a few
+  // seconds (the previous focus lingers, tenuous), structure fades quickly
+  const liveEdgeKeys = new Set();
   for (const edge of edges) {
+    const edgeKey = `${edge.from}|${edge.to}|${edge.style || "skeleton"}`;
+    liveEdgeKeys.add(edgeKey);
+    let edgeTween = projectionEdgeTweens.get(edgeKey);
+    if (!edgeTween) {
+      edgeTween = {edge, alpha: 0};
+      projectionEdgeTweens.set(edgeKey, edgeTween);
+    }
+    edgeTween.edge = edge;
+  }
+  for (const [edgeKey, edgeTween] of Array.from(projectionEdgeTweens.entries())) {
+    const live = liveEdgeKeys.has(edgeKey);
+    const style = edgeTween.edge.style || "skeleton";
+    const rate = live ? 6 : (style === "skeleton" ? 4 : 0.55);
+    edgeTween.alpha += ((live ? 1 : 0) - edgeTween.alpha) * Math.min(1, dt * rate);
+    if (!live && edgeTween.alpha < 0.04) {
+      projectionEdgeTweens.delete(edgeKey);
+      continue;
+    }
+    const edge = edgeTween.edge;
     const a = pointFor(edge.from);
     const b = pointFor(edge.to);
     if (!a || !b) continue;
@@ -6546,6 +6570,8 @@ function drawProjectionScene(primitive, w, h, now) {
     const sourceReveal = projectionTweens.get(edge.from)?.reveal ?? 1;
     const targetReveal = projectionTweens.get(edge.to)?.reveal ?? 1;
     if (sourceReveal <= 0 || targetReveal <= 0) continue;
+    ctx.save();
+    ctx.globalAlpha *= edgeTween.alpha;
     if (targetReveal < 1) {
       // the materialize pulse: the link draws itself toward the unborn node,
       // a bright head riding the wavefront
@@ -6566,6 +6592,7 @@ function drawProjectionScene(primitive, w, h, now) {
       ctx.beginPath();
       ctx.arc(tipX, tipY, 2.4 * devicePixelRatio, 0, Math.PI * 2);
       ctx.fill();
+      ctx.restore();
       ctx.restore();
       continue;
     }
@@ -6591,6 +6618,7 @@ function drawProjectionScene(primitive, w, h, now) {
     const midY = (a.y + b.y) * 0.5 - rect.height * 0.03;
     ctx.quadraticCurveTo(midX, midY, b.x, b.y);
     ctx.stroke();
+    ctx.restore();
   }
   ctx.setLineDash([]);
 
@@ -6874,8 +6902,8 @@ const projectionPeekConsumed = new Set(); // effect ids already shown, OUTLIVES 
 const PEEK_HOLD_MS = 2600;   // window stays open this long after the last new diff
 const PEEK_OPEN_MS = 220;
 const PEEK_WINK_MS = 260;
-const PEEK_VISIBLE_LINES = 8;
-const PEEK_BACKLOG_LINES = 60;
+const PEEK_VISIBLE_LINES = 10;
+const PEEK_BACKLOG_LINES = 400;
 
 function drawProjectionPeek(effect, theme, point, now) {
   // an accruing terminal window per node: diffs append as the agent edits,
@@ -6914,25 +6942,27 @@ function drawProjectionPeek(effect, theme, point, now) {
   win.drawnAt = now;
   if (!win.lines.length) return;
 
-  const quiet = now - win.lastAppendAt;
-  if (quiet > PEEK_HOLD_MS + PEEK_WINK_MS) {
-    projectionPeekWindows.delete(key);
-    return;
-  }
   const dt = Math.min(0.1, (now - win.lastNow) / 1000);
   win.lastNow = now;
-  const openRamp = Math.min(1, (now - win.openedAt) / PEEK_OPEN_MS);
-  const wink = quiet > PEEK_HOLD_MS ? 1 - (quiet - PEEK_HOLD_MS) / PEEK_WINK_MS : 1;
-  const openness = Math.min(openRamp, Math.max(0, wink));
-
   const lineHeight = 11 * devicePixelRatio;
   const visibleLines = Math.min(PEEK_VISIBLE_LINES, win.lines.length);
   const innerHeight = visibleLines * lineHeight;
   const boxHeight = innerHeight + 10 * devicePixelRatio;
   const boxWidth = 260 * devicePixelRatio;
-  // bottom-follow: ease the view toward the newest lines
+  // stream toward the newest lines at a readable, constant rate -- a long
+  // diff visibly flies past instead of snapping to its tail
   const targetOffset = Math.max(0, win.lines.length - visibleLines);
-  win.offset += (targetOffset - win.offset) * Math.min(1, dt * 4);
+  win.offset = Math.min(targetOffset, win.offset + dt * 14);
+  if (targetOffset - win.offset > 0.5) win.lastAppendAt = now; // scrolling counts as activity
+
+  const quiet = now - win.lastAppendAt;
+  if (quiet > PEEK_HOLD_MS + PEEK_WINK_MS) {
+    projectionPeekWindows.delete(key);
+    return;
+  }
+  const openRamp = Math.min(1, (now - win.openedAt) / PEEK_OPEN_MS);
+  const wink = quiet > PEEK_HOLD_MS ? 1 - (quiet - PEEK_HOLD_MS) / PEEK_WINK_MS : 1;
+  const openness = Math.min(openRamp, Math.max(0, wink));
 
   // keep the box on screen: prefer above-right of the node, flip when clipped
   let x = point.x + 14 * devicePixelRatio;

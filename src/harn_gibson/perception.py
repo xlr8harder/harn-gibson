@@ -206,9 +206,9 @@ def _message_text(payload: Mapping[str, Any]) -> str:
     return ""
 
 
-_MAX_DIFF_PREVIEW_LINES = 24
-_MAX_DIFF_LINE_CHARS = 88
-_MAX_DIFF_LINES_PER_SIDE = 8
+_MAX_DIFF_PREVIEW_LINES = 160
+_MAX_DIFF_LINE_CHARS = 100
+_MAX_DIFF_LINES_PER_SIDE = 60
 
 
 def _diff_preview_from_payload(payload: Mapping[str, Any]) -> list[str]:
@@ -231,7 +231,7 @@ def _diff_preview_from_payload(payload: Mapping[str, Any]) -> list[str]:
 
     edits = inner.get("edits")
     if isinstance(edits, list):
-        for edit in edits[:3]:
+        for edit in edits[:6]:
             if isinstance(edit, Mapping):
                 take(edit.get("oldText"), "-", _MAX_DIFF_LINES_PER_SIDE)
                 take(edit.get("newText"), "+", _MAX_DIFF_LINES_PER_SIDE)
@@ -435,6 +435,16 @@ class PerceptionModel:
                 start_seq=event.sequence,
             )
             self._pending_commands[pending_key] = command_id
+            # a check launching is itself a story beat (the analysis prelude)
+            category = health_category_from_command(observation.command)
+            if category is not None:
+                self._append_event({
+                    "seq": event.sequence,
+                    "ts": event.timestamp_ms,
+                    "kind": "check_started",
+                    "entity": command_id,
+                    "category": category,
+                })
         else:
             command_id = self._pending_commands.get(pending_key)
             existing = self._commands.get(command_id) if command_id else None

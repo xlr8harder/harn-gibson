@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import json
 import math
+import re
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
@@ -87,6 +88,11 @@ DEFAULT_PROJECTION: dict[str, Any] = {
             {"kind": "pulse", "target": "$entity", "magnitude": "$churnFraction"},
             {"kind": "peek", "target": "$entity", "lines": "$diffPreview"},
         ]},
+        {
+            "event": "check_started",
+            "effects": [{"kind": "ring", "target": "$root", "tone": "warn",
+                         "label": "scanning :: $category suite"}],
+        },
         {
             "event": "check_completed",
             "when": {"status": "error"},
@@ -541,8 +547,8 @@ class ProjectionEngine:
         elif not isinstance(magnitude, (int, float)):
             magnitude = 1.0
         label = spec.get("label")
-        if isinstance(label, str) and label.startswith("$"):
-            label = str(event.get(label[1:]) or "")
+        if isinstance(label, str) and "$" in label:
+            label = re.sub(r"\$(\w+)", lambda match: str(event.get(match.group(1)) or ""), label)
         instance = {
             "id": f"fx-{rule_index}-{effect_index}-{seq}",
             "kind": kind,
@@ -557,7 +563,7 @@ class ProjectionEngine:
         if isinstance(lines, str) and lines.startswith("$"):
             lines = event.get(lines[1:])
         if isinstance(lines, list):
-            instance["lines"] = [str(line)[:96] for line in lines[:24] if isinstance(line, str)]
+            instance["lines"] = [str(line)[:104] for line in lines[:160] if isinstance(line, str)]
         return instance
 
     # -- mood / camera / hud --------------------------------------------------------

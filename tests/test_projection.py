@@ -596,6 +596,16 @@ def test_root_effects_resolve_under_force_layouts() -> None:
     assert ring["targets"] == ["dir:."]  # force layouts have no intrinsic root
 
 
+def test_check_started_rule_rings_the_root_with_templated_label() -> None:
+    engine = ProjectionEngine()
+    events = [{"seq": 5, "ts": 5000, "kind": "check_started", "entity": "command:5", "category": "test"}]
+    scene = engine.resolve(_perception(events=events), now_ms=5000)
+    ring = next(effect for effect in scene["effects"] if effect["kind"] == "ring")
+    assert ring["targets"] == ["dir:."]
+    assert ring["label"] == "scanning :: test suite"
+    assert ring["tone"] == "warn"
+
+
 def test_peek_effect_carries_diff_lines_and_skips_diffless_changes() -> None:
     engine = ProjectionEngine()
     events = [

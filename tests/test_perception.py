@@ -254,6 +254,21 @@ def test_perception_snapshot_is_bounded_with_truncation_metadata(tmp_path: Path)
     assert not any(entity["id"] == "dir:pkg/sub" for entity in payload["entities"])
 
 
+def test_check_started_event_fires_when_a_health_command_launches(tmp_path: Path) -> None:
+    root = _git_fixture(tmp_path)
+    model = PerceptionModel(project_root=str(root))
+    call, result, touched = _command_pair("uv run pytest tests", start_seq=1, path="tests/test_app.py")
+    model.apply_batch((call, result), touched)
+    events = model.to_dict()["events"]
+    started = [e for e in events if e["kind"] == "check_started"]
+    assert len(started) == 1
+    assert started[0]["category"] == "test"
+    assert started[0]["entity"] == "command:1"
+    # the prelude precedes the completion in the timeline
+    kinds = [e["kind"] for e in events]
+    assert kinds.index("check_started") < kinds.index("check_completed")
+
+
 def test_perception_tracks_agent_narration(tmp_path: Path) -> None:
     root = _git_fixture(tmp_path)
     model = PerceptionModel(project_root=str(root))
@@ -642,7 +657,7 @@ def test_diff_preview_rides_payload_change_events(tmp_path: Path) -> None:
     changed = [e for e in model.to_dict()["events"]
                if e["kind"] == "file_changed" and e["entity"].endswith("new.py")]
     assert changed[0]["diffPreview"][0] == "+x = 1"
-    assert len(changed[0]["diffPreview"]) <= 24
+    assert len(changed[0]["diffPreview"]) <= 160
 
     # the tool_result repeats the tool_call input; no duplicate preview
     result = GibsonEvent.from_raw(
@@ -668,16 +683,17 @@ def test_diff_preview_rides_payload_change_events(tmp_path: Path) -> None:
 def test_diff_preview_caps_total_lines_and_skips_malformed_edits() -> None:
     from harn_gibson.perception import _diff_preview_from_payload
 
-    block = "\n".join(f"line {i}" for i in range(10))
+    block = "\n".join(f"line {i}" for i in range(70))
     preview = _diff_preview_from_payload({
         "toolName": "edit",
         "input": {"path": "x.py", "edits": [
             {"oldText": block, "newText": block},
             {"oldText": block, "newText": block},
-            {"oldText": block, "newText": block},
         ]},
     })
-    assert len(preview) == 24  # hard cap across all edits, 8 per side
+    assert len(preview) == 160  # hard cap across all edits, 60 per side
+    assert preview[0] == "-line 0"
+    assert preview[60] == "+line 0"
     skipped = _diff_preview_from_payload({
         "toolName": "edit",
         "input": {"path": "x.py", "edits": ["not-a-mapping", {"newText": "y = 1\n"}]},
