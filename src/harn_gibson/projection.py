@@ -18,7 +18,7 @@ Engine-owned guarantees (the chronic renderer failures, fixed structurally):
 * layouts warm-start from previous positions, so reflow settles instead of
   jumping (object constancy lives here and in the browser tween).
 
-Every spec field is optional; missing pieces take the smart defaults below.
+Every spec field is optional; missing pieces take the packaged organic default.
 ``ProjectionSceneRenderer`` adapts the engine to the existing renderer
 protocol, so the pipeline, replay, and review tooling work unchanged. Enable
 with ``HARN_GIBSON_RENDERER=default`` or
@@ -31,6 +31,7 @@ import json
 import math
 import re
 from collections.abc import Mapping, Sequence
+from importlib import resources
 from pathlib import Path
 from typing import Any
 
@@ -61,58 +62,15 @@ _FORCE_MAX_ITERATIONS = 96
 _FORCE_SETTLED_EPSILON = 1e-4
 _TICKER_LENGTH = 16
 
-DEFAULT_PROJECTION: dict[str, Any] = {
-    "schema": PROJECTION_SCHEMA,
-    "theme": "gibson",
-    "title": "ORGANIC SWEEP",
-    "layers": [
-        {
-            "id": "world",
-            "select": {"types": ["dir", "file"]},
-            "layout": {"kind": "force", "relations": ["contains"]},
-            "encode": {
-                "size": {"attr": "touchCount", "range": [0.25, 1.0]},
-                "opacity": {"attr": "touchCount", "zero": 0.4},
-            },
-            "edges": [
-                {"relation": "contains", "style": "skeleton"},
-                {"relation": "touched", "recent": True, "style": "flow"},
-                {"relation": "focused_on", "style": "beam"},
-            ],
-        },
-        {"id": "cursor", "select": {"ids": ["agent"]}, "place": {"near": "$focus"}},
-    ],
-    "camera": {"follow": "focused_on"},
-    "on": [
-        {"event": "file_changed", "effects": [
-            {"kind": "pulse", "target": "$entity", "magnitude": "$churnFraction"},
-            {"kind": "peek", "target": "$entity", "lines": "$diffPreview"},
-        ]},
-        {
-            "event": "check_started",
-            "effects": [{"kind": "ring", "target": "$root", "tone": "warn",
-                         "label": "scanning :: $category suite"}],
-        },
-        {
-            "event": "check_completed",
-            "when": {"status": "error"},
-            "effects": [
-                {"kind": "alarm", "delayMs": 450},
-                {"kind": "breach", "target": "$blast", "delayMs": 450},
-                {"kind": "shake", "delayMs": 450},
-            ],
-        },
-        {
-            "event": "check_completed",
-            "when": {"status": "ok", "recovers": True},
-            "effects": [{"kind": "ring", "target": "$blast", "label": "LOCK RELEASED", "tone": "good"}],
-        },
-        {
-            "event": "commit_created",
-            "effects": [{"kind": "ring", "target": "$root", "label": "$subject", "tone": "warn"}],
-        },
-    ],
-}
+_DEFAULT_PROJECTION_RESOURCE = "projections/gibson-organic.json"
+
+
+def _load_packaged_projection(path: str) -> dict[str, Any]:
+    text = resources.files("harn_gibson").joinpath(path).read_text(encoding="utf-8")
+    return json.loads(text)
+
+
+DEFAULT_PROJECTION: dict[str, Any] = _load_packaged_projection(_DEFAULT_PROJECTION_RESOURCE)
 
 
 def load_projection_spec(value: str) -> dict[str, Any]:

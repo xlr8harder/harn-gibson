@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from importlib import resources
 from pathlib import Path
 
 from harn_gibson.catalog import default_visual_catalog
@@ -628,8 +629,10 @@ def test_spec_merge_keeps_defaults_for_missing_fields() -> None:
     assert ProjectionEngine(None).spec["theme"] == "gibson"
 
 
-def test_organic_projection_example_matches_builtin_default() -> None:
-    organic = json.loads(Path("examples/projections/gibson-organic.json").read_text(encoding="utf-8"))
+def test_builtin_default_projection_loads_from_packaged_json() -> None:
+    organic = json.loads(
+        resources.files("harn_gibson").joinpath("projections/gibson-organic.json").read_text(encoding="utf-8")
+    )
     assert organic == DEFAULT_PROJECTION
 
 

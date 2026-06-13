@@ -150,13 +150,13 @@ enable with `HARN_GIBSON_RENDERER=<path.json|default>` (`default` = built-in pro
 
 ## Build order
 
-1. `src/harn_gibson/projection.py` — spec defaults + `ProjectionEngine`
+1. `src/harn_gibson/projection.py` + packaged default JSON —
+   spec defaults + `ProjectionEngine`
    (layouts, encodings, effect rules, mood, HUD) + `ProjectionSceneRenderer`.
 2. Catalog entry + browser `projection_scene` theme renderer (tween cache,
    gibson theme).
-3. Example projections in `examples/projections/` — `gibson.json` and a
-   deliberately different `board.json` (grid-by-recency + ticker) to prove
-   divergent displays from the same spec language.
+3. Example projections in `examples/projections/`, such as `blueprint-web.json`,
+   to prove divergent displays from the same spec language.
 4. Replay/watch-replay demo on the long-session arc.
 
 Later: a second polished theme, treemap/timeline layouts, the director op
