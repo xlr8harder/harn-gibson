@@ -34,7 +34,7 @@ This starts the display server, opens the browser, and launches harn with the ex
 
 For the full show-floor experience, `scripts/million_dollar_demo.py` boots the display idle, waits for a directive typed into the page composer, then launches harn against a scratch workspace with theatrical TDD house rules (failing tests first, dramatic commits, a closing soliloquy), captures the event log, and converts it into a replay fixture under `examples/claude-gibson-replays/` when the session ends.
 
-Manual wiring (display and harn in separate terminals): start `HARN_GIBSON_PROJECTION=... uv run harn-gibson serve`, then run harn with the gibson extension loaded and `HARN_GIBSON_ENDPOINT=http://127.0.0.1:8765/events` in its environment. A running session can also be re-projected live: `POST /projection` swaps the active projection spec, `GET /projection` introspects it.
+Manual wiring (display and harn in separate terminals): start `HARN_GIBSON_PROJECTION=... uv run harn-gibson serve`, then run harn with the gibson extension loaded and `HARN_GIBSON_ENDPOINT=http://127.0.0.1:8765/events` in its environment. A running session can also be re-projected live: `POST /projection` swaps the active projection spec, `GET /projection` introspects it. The intended attach/primary/batch/replay launch modes are described in [docs/launch-modes.md](docs/launch-modes.md).
 
 The remainder of this README documents the earlier deterministic renderer / scene-primitive channels, which still work and still pass the full test suite; the perception + projection pipeline above is where current work happens.
 
@@ -115,7 +115,7 @@ Delivery modes:
 
 The raw event details, event feed, render intents, tracebacks, and hook decisions are in the debug drawer. Use `DEBUG` to open it and `CLOSE` inside the drawer to collapse it. Dogfood launcher failures and extension delivery exceptions are published into the same feed. If harn exits with an error while the browser is open, the display stays up until Ctrl-C so the failure remains visible.
 
-Project-local harn settings in `.harn/settings.json` select the `openai-codex` provider, `gpt-5.5`, and this extension. The Codex auth import is a temporary workaround for harn's current Codex `/login` callback issue.
+Project-local harn settings in `.harn/settings.json` select the `openai-codex` provider, `gpt-5.5`, and this extension. The package-level harn extension entry point is `extensions/gibson.py`; the `.harn/extensions/gibson.py` file is only the project-local dogfood shim. The Codex auth import is a temporary workaround for harn's current Codex `/login` callback issue.
 
 Render mode is configurable:
 

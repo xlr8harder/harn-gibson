@@ -4,6 +4,7 @@ import importlib.util
 import json
 import re
 import subprocess
+import tomllib
 from pathlib import Path
 from typing import Any
 
@@ -49,6 +50,33 @@ def test_project_extension_shim_exports_harn_default_entrypoint() -> None:
     root = Path(__file__).resolve().parents[1]
     path = root / ".harn/extensions/gibson.py"
     spec = importlib.util.spec_from_file_location("harn_gibson_project_extension", path)
+
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    assert module.default.__name__ == "extension_factory"
+
+
+def test_harn_package_manifests_point_to_package_extension_shim() -> None:
+    root = Path(__file__).resolve().parents[1]
+    pyproject = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
+    package_json = json.loads((root / "package.json").read_text(encoding="utf-8"))
+    extension_paths = ["extensions/gibson.py"]
+
+    assert pyproject["tool"]["harn"]["extensions"] == extension_paths
+    assert package_json["harn"]["extensions"] == extension_paths
+    assert "harn-package" in pyproject["project"]["keywords"]
+    assert "harn-package" in package_json["keywords"]
+    assert (root / extension_paths[0]).exists()
+    assert find_sensitive_keys(package_json) == []
+
+
+def test_package_extension_shim_exports_harn_default_entrypoint() -> None:
+    root = Path(__file__).resolve().parents[1]
+    path = root / "extensions/gibson.py"
+    spec = importlib.util.spec_from_file_location("harn_gibson_package_extension", path)
 
     assert spec is not None
     assert spec.loader is not None

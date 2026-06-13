@@ -87,11 +87,9 @@ class GibsonRelay:
 
 
 class BrowserInputPoller:
-    # Deliberately NOT a dataclass: harn's extension loader executes this file
-    # as a module that is never registered in sys.modules, and dataclass
-    # machinery resolves annotations via sys.modules[cls.__module__].__dict__,
-    # which crashes extension loading ("'NoneType' object has no attribute
-    # '__dict__'"). A plain __init__ keeps the entry file loader-safe.
+    # Deliberately NOT a dataclass: released harn versions execute extension
+    # files without registering them in sys.modules, and dataclass machinery can
+    # crash while resolving string annotations. Keep this entry path loader-safe.
     def __init__(
         self,
         harn: Any,

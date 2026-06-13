@@ -6,7 +6,7 @@ description = "Graphical display and hook fixtures for dramatized harn sessions"
 readme = "README.md"
 license = {text = "MIT"}
 authors = [{name = "harn-gibson contributors"}]
-keywords = ["harn", "agent", "display", "visualization"]
+keywords = ["harn", "harn-package", "agent", "display", "visualization"]
 dependencies = []
 
 [project.scripts]
@@ -27,6 +27,9 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/harn_gibson"]
+
+[tool.harn]
+extensions = ["extensions/gibson.py"]
 
 [tool.ruff]
 line-length = 120

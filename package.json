@@ -1,0 +1,10 @@
+{
+  "name": "harn-gibson",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Graphical display and hook fixtures for dramatized harn sessions",
+  "keywords": ["harn-package", "harn", "agent", "display", "visualization"],
+  "harn": {
+    "extensions": ["extensions/gibson.py"]
+  }
+}
