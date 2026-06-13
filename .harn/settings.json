@@ -1,7 +1,4 @@
 {
-  "defaultProvider": "openai-codex",
-  "defaultModel": "gpt-5.5",
-  "defaultThinkingLevel": "high",
   "extensions": [
     "extensions/gibson.py"
   ],

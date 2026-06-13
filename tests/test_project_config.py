@@ -33,14 +33,11 @@ KEY_LIKE_PATTERNS = (
 )
 
 
-def test_project_harn_settings_select_codex_and_extension() -> None:
+def test_project_harn_settings_select_extension() -> None:
     root = Path(__file__).resolve().parents[1]
     settings = json.loads((root / ".harn/settings.json").read_text(encoding="utf-8"))
     extension_paths = settings["extensions"]
 
-    assert settings["defaultProvider"] == "openai-codex"
-    assert settings["defaultModel"] == "gpt-5.5"
-    assert settings["defaultThinkingLevel"] == "high"
     assert extension_paths == ["extensions/gibson.py"]
     assert (root / ".harn" / extension_paths[0]).exists()
     assert find_sensitive_keys(settings) == []

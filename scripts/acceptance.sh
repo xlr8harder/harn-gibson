@@ -56,7 +56,7 @@ DOGFOOD_RENDERER_COMMAND="uv run python examples/renderers/gibson_dogfood_render
 
 run uv run ruff check .
 run uv run pytest
-run uv run harn-gibson run --harn-bin true --no-browser --no-codex-auth-import --no-hold-on-error
+run uv run harn-gibson run --harn-bin true --no-browser --no-hold-on-error
 run uv run harn-gibson replay-dir examples/replays \
   --output-result "$ARTIFACT_DIR/replay-suite.json" \
   --baseline-dir examples/baselines/replays \

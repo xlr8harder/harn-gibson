@@ -95,7 +95,6 @@ def main() -> int:
         "HARN_GIBSON_EVENT_LOG": str(event_log),
     })
 
-    from harn_gibson.auth import import_codex_auth
     from harn_gibson.cli import _harn_args_with_project_defaults
     from harn_gibson.server import build_state_from_env, create_server, publish_diagnostic_event
 
@@ -106,9 +105,6 @@ def main() -> int:
     display_url = f"http://{args.host}:{args.port}"
     print(f"lobby open: {display_url}", file=sys.stderr)
     print("type your directive into the composer and hit SEND", file=sys.stderr)
-
-    auth = import_codex_auth(environ=env)
-    print(auth.message, file=sys.stderr)
 
     publish_diagnostic_event(
         state, 1,

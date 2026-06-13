@@ -36,7 +36,6 @@ _AFTER_EVENTS = {
     "turn_end",
 }
 _TITLE_OVERRIDES = {
-    "auth_import": "Auth import",
     "before_agent_start": "Agent preflight",
     "harn_exit": "Harn exit",
     "input": "Input intercept",
@@ -158,7 +157,7 @@ def title_for_event(event_type: str) -> str:
 
 
 def summarize_event(event_type: str, payload: Mapping[str, Any]) -> str:
-    if event_type in {"auth_import", "harn_exit", "launcher_diagnostic", "runtime_error"}:
+    if event_type in {"harn_exit", "launcher_diagnostic", "runtime_error"}:
         severity = str(payload.get("severity") or "info")
         message = str(payload.get("message") or payload.get("error") or "")
         return f"{severity}: {_clip(message, 160)}"

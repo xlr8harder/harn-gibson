@@ -10,7 +10,7 @@ For launcher-based runs, run one command from the repo root:
 uv run harn-gibson run
 ```
 
-This starts the graphical display server with the `default` visualization, opens the browser, imports existing Codex CLI OAuth credentials into harn's user auth store, and launches `harn` with the display endpoint wired into the extension environment.
+This starts the graphical display server with the `default` visualization, opens the browser, and launches `harn` with the display endpoint wired into the extension environment.
 
 `run` chooses a free local port by default, so it can run even if a manual display server is already using `8765`. Pass `--port 8765` if you want a fixed port.
 
@@ -20,7 +20,7 @@ Forward arguments to harn after `--`:
 uv run harn-gibson run -- -p "summarize this repo"
 ```
 
-Run harn in a separate project directory while keeping this repo's Gibson extension and Codex model defaults:
+Run harn in a separate project directory while keeping this repo's Gibson extension wired in:
 
 ```bash
 mkdir -p test-artifacts/dogfood-workspaces/tiny-project
@@ -34,14 +34,6 @@ Use a specific harn executable with `--harn-bin`:
 ```bash
 uv run harn-gibson run --harn-bin /path/to/harn
 ```
-
-If you want to import Codex auth without launching harn:
-
-```bash
-uv run harn-gibson import-codex-auth
-```
-
-This copies the OAuth token shape from `~/.codex/auth.json` to `~/.harn/agent/auth.json` under the `openai-codex` provider key. The target file is outside the repo and is written with user-only permissions. Pass `--no-codex-auth-import` to `run` if you want to manage harn auth yourself.
 
 ## Manual Server
 
@@ -102,7 +94,7 @@ credential credentials id_token password private_key refresh_token secret
 set_cookie token tokens
 ```
 
-String values are also scanned for common token shapes, including environment assignments like `OPENAI_API_KEY=...`, `Bearer ...`, `sk-...`, `sk-proj-...`, `github_pat_...`, and `ghp_...` / `gho_...` / `ghs_...` / `ghu_...`.
+String values are also scanned for common token shapes, including API-key environment assignments, `Bearer ...`, `sk-...`, `sk-proj-...`, `github_pat_...`, and `ghp_...` / `gho_...` / `ghs_...` / `ghu_...`.
 
 This is a heuristic safety net, not a privacy boundary. It does not generally redact arbitrary prompts, file paths, usernames, tracebacks, proprietary output, local project names, or uncommon secret formats. Raw captures should stay under ignored paths, and promoted fixtures should be reviewed manually.
 
@@ -200,6 +192,26 @@ Noisy event types can also be sampled before routing:
 ```bash
 HARN_GIBSON_ROUTE_RULES='[{"eventType":"session_tree","route":"renderer_agent","sampleEvery":4,"fallbackRoute":"debug_only"}]'
 ```
+
+## Hook Modules
+
+Hook modules are an optional harn-gibson extension point for local policy, diagnostics, and interdict experiments. They are not the event source for the viewer; harn events come from the Gibson harn extension itself.
+
+Hook modules are Python files listed in `HARN_GIBSON_HOOKS`, separated by `:`. Each module exports `register_gibson_hooks(dispatcher)`.
+
+```python
+from harn_gibson import HookDecision
+
+
+def register_gibson_hooks(dispatcher):
+    @dispatcher.on("tool_call", "before")
+    def block_rm(event):
+        command = event.payload.get("input", {}).get("command", "")
+        if "rm -rf" in command:
+            return HookDecision(block=True, reason="Blocked by harn-gibson hook")
+```
+
+Supported interdict points include `input`, `tool_call`, `tool_result`, `message_end`, `before_agent_start`, and session-before events. All harn lifecycle/display events are still emitted even when they do not support mutation.
 
 ## Acceptance
 

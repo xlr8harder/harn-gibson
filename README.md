@@ -72,7 +72,7 @@ If you want Gibson to own the whole local process tree for a demo or test run, u
 uv run harn-gibson run -- -p "summarize this repo"
 ```
 
-This starts the viewer, opens the browser, imports existing Codex CLI OAuth credentials into harn's user auth store, and launches harn with the extension wired in. `run` uses the same `default` visualization as `/gibson-view`.
+This starts the viewer, opens the browser, and launches harn with the extension wired in. `run` uses the same `default` visualization as `/gibson-view` and otherwise relies on your normal harn configuration.
 
 ## Capture And Replay
 
@@ -149,21 +149,3 @@ uv run pytest
 ```
 
 Browser screenshots are written to `test-artifacts/screenshots/`.
-
-## Hook Modules
-
-Hook modules are Python files listed in `HARN_GIBSON_HOOKS`, separated by `:`. Each module exports `register_gibson_hooks(dispatcher)`.
-
-```python
-from harn_gibson import HookDecision
-
-
-def register_gibson_hooks(dispatcher):
-    @dispatcher.on("tool_call", "before")
-    def block_rm(event):
-        command = event.payload.get("input", {}).get("command", "")
-        if "rm -rf" in command:
-            return HookDecision(block=True, reason="Blocked by harn-gibson hook")
-```
-
-Supported interdict points include `input`, `tool_call`, `tool_result`, `message_end`, `before_agent_start`, and session-before events. All harn lifecycle/display events are still emitted even when they do not support mutation.

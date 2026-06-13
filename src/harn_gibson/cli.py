@@ -18,16 +18,12 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from harn_gibson import __version__
-from harn_gibson.auth import import_codex_auth
 from harn_gibson.extension import extension_path
 from harn_gibson.renderers import DEFAULT_RENDERER, direct_renderer_command, normalize_renderer
 from harn_gibson.styles import style_pack_from_name, style_pack_ids
 
 DEFAULT_RENDERER_TIMEOUT_MS = "10000"
 DOGFOOD_CAPTURE_TRAJECTORY_SPLIT_EVERY = 200
-PROJECT_HARN_PROVIDER = "openai-codex"
-PROJECT_HARN_MODEL = "gpt-5.5"
-PROJECT_HARN_THINKING = "high"
 REPLAY_STATE_ENV_PASSTHROUGH = (
     "HARN_GIBSON_STYLE",
     "HARN_GIBSON_PROJECT_ROOT",
@@ -97,7 +93,6 @@ def build_parser() -> argparse.ArgumentParser:
     dogfood.add_argument("--harn-bin", default="harn", help="harn executable to launch")
     dogfood.add_argument("--cwd", default=None, help="working directory for the launched harn process")
     dogfood.add_argument("--browser", action=argparse.BooleanOptionalAction, default=True)
-    dogfood.add_argument("--codex-auth-import", action=argparse.BooleanOptionalAction, default=True)
     dogfood.add_argument("--hold-on-error", action=argparse.BooleanOptionalAction, default=True)
     dogfood.add_argument("--style", choices=style_pack_ids(), default=None, help="display style pack")
     dogfood.add_argument(
@@ -126,7 +121,6 @@ def build_parser() -> argparse.ArgumentParser:
     capture.add_argument("--harn-bin", default="harn", help="harn executable to launch")
     capture.add_argument("--cwd", default=None, help="working directory for the launched harn process")
     capture.add_argument("--browser", action=argparse.BooleanOptionalAction, default=True)
-    capture.add_argument("--codex-auth-import", action=argparse.BooleanOptionalAction, default=True)
     capture.add_argument("--hold-on-error", action=argparse.BooleanOptionalAction, default=True)
     capture.add_argument("--style", choices=style_pack_ids(), default=None, help="display style pack")
     capture.add_argument(
@@ -167,10 +161,6 @@ def build_parser() -> argparse.ArgumentParser:
         help="apply a built-in long capture trajectory preset",
     )
     capture.add_argument("harn_args", nargs=argparse.REMAINDER, help="arguments forwarded to harn after --")
-
-    auth = subcommands.add_parser("import-codex-auth", help="copy Codex OAuth tokens into harn auth storage")
-    auth.add_argument("--codex-auth", default=None, help="path to Codex auth.json")
-    auth.add_argument("--harn-auth", default=None, help="path to harn auth.json")
 
     subcommands.add_parser("backend-contract", help="print the display backend contract JSON")
     catalog = subcommands.add_parser("catalog", help="print the visual primitive/effect catalog JSON")
@@ -480,12 +470,6 @@ def _coerce_harn_cwd(cwd: str | None) -> Path | None:
 def _harn_args_with_project_defaults(args: Sequence[str]) -> list[str]:
     forwarded = list(args)
     defaults: list[str] = []
-    if not _argv_has_option(forwarded, "--provider"):
-        defaults.extend(["--provider", PROJECT_HARN_PROVIDER])
-    if not _argv_has_option(forwarded, "--model"):
-        defaults.extend(["--model", PROJECT_HARN_MODEL])
-    if not _argv_has_option(forwarded, "--thinking"):
-        defaults.extend(["--thinking", PROJECT_HARN_THINKING])
     if not _argv_has_option(forwarded, "--no-extensions", "-ne"):
         defaults.append("--no-extensions")
     extension = extension_path()
@@ -522,7 +506,6 @@ def run_dogfood(
     harn_bin: str = "harn",
     harn_args: Sequence[str] = (),
     launch_browser: bool = True,
-    codex_auth_import: bool = True,
     hold_on_error: bool = True,
     style: str | None = None,
     env_overrides: Mapping[str, str] | None = None,
@@ -601,15 +584,6 @@ def run_dogfood(
 
     print(f"harn-gibson display: {display_url}", file=sys.stderr)
     try:
-        if codex_auth_import:
-            auth_result = import_codex_auth(environ=env)
-            print(auth_result.message, file=sys.stderr)
-            publish_launcher_diagnostic(
-                message=auth_result.message,
-                event_type="auth_import",
-                severity="info" if auth_result.available else "error",
-                title="Codex auth ready" if auth_result.available else "Codex auth unavailable",
-            )
         if harn_cwd is None:
             exit_code = subprocess.call(command, env=env)
         else:
@@ -638,7 +612,6 @@ def run_dogfood_capture(
     harn_bin: str = "harn",
     harn_args: Sequence[str] = (),
     launch_browser: bool = True,
-    codex_auth_import: bool = True,
     hold_on_error: bool = True,
     style: str | None = None,
     event_log: str | None = None,
@@ -687,7 +660,6 @@ def run_dogfood_capture(
         harn_bin=harn_bin,
         harn_args=capture_harn_args,
         launch_browser=launch_browser,
-        codex_auth_import=codex_auth_import,
         hold_on_error=hold_on_error,
         style=style,
         env_overrides=env_overrides,
@@ -1041,10 +1013,6 @@ def run(argv: Sequence[str] | None = None) -> int:
     if args.command == "extension-path":
         print(extension_path())
         return 0
-    if args.command == "import-codex-auth":
-        result = import_codex_auth(args.codex_auth, args.harn_auth)
-        print(result.message)
-        return 0 if result.available else 1
     if args.command == "backend-contract":
         from harn_gibson.server import GibsonServerState, backend_contract_payload
 
@@ -1381,7 +1349,6 @@ def run(argv: Sequence[str] | None = None) -> int:
             harn_bin=args.harn_bin,
             harn_args=args.harn_args,
             launch_browser=args.browser,
-            codex_auth_import=args.codex_auth_import,
             hold_on_error=args.hold_on_error,
             style=args.style,
             cwd=args.cwd,
@@ -1399,7 +1366,6 @@ def run(argv: Sequence[str] | None = None) -> int:
             harn_bin=args.harn_bin,
             harn_args=args.harn_args,
             launch_browser=args.browser,
-            codex_auth_import=args.codex_auth_import,
             hold_on_error=args.hold_on_error,
             style=args.style,
             event_log=args.event_log,
