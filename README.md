@@ -36,6 +36,8 @@ For the full show-floor experience, `scripts/million_dollar_demo.py` boots the d
 
 Manual wiring (display and harn in separate terminals): start `HARN_GIBSON_PROJECTION=... uv run harn-gibson serve`, then run harn with the gibson extension loaded and `HARN_GIBSON_ENDPOINT=http://127.0.0.1:8765/events` in its environment. A running session can also be re-projected live: `POST /projection` swaps the active projection spec, `GET /projection` introspects it. The intended attach/primary/batch/replay launch modes are described in [docs/launch-modes.md](docs/launch-modes.md).
 
+From an interactive harn session with the extension loaded, `/gibson-view` starts or reuses a local browser viewer and flushes a bounded recent-event buffer into it. Use `/gibson-view --port 8765` for a fixed port or `/gibson-view --no-browser` to start the server without opening a browser.
+
 The remainder of this README documents the earlier deterministic renderer / scene-primitive channels, which still work and still pass the full test suite; the perception + projection pipeline above is where current work happens.
 
 `harn` is included as a development dependency so `uv run harn-gibson dogfood` works from this checkout; `harn-gibson` itself has no runtime dependency on harn. The integration uses harn's stock extension API -- no harn modifications -- and harn sessions run headless here (`-p` prompts; the TUI is never involved, though harn's own pip metadata currently pulls `harn-tui` in as an install-time dependency). The display server and extension modules do not import `harn` or `harn-tui`; the dogfood launcher is the only place that shells out to the harn CLI.

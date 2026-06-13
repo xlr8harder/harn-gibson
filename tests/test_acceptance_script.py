@@ -27,7 +27,11 @@ def test_acceptance_script_dry_run_lists_release_gates() -> None:
     assert "+ uv run harn-gibson replay-dir examples/replays" in output
     assert "+ uv run harn-gibson replay examples/claude-gibson-replays/long-session-arc.json" in output
     assert "--projection examples/projections/gibson-organic.json" in output
-    assert "+ uv run harn-gibson replay-dir examples/gibson1-replays" in output
+    assert (
+        "+ env HARN_GIBSON_RENDERER_SEMANTIC_GRAPH=1 uv run harn-gibson replay-dir examples/gibson1-replays"
+        in output
+    )
+    assert "--project-root examples/dogfood-workspaces/repo-map" in output
     assert "--style mainframe" in output
     assert "examples/baselines/gibson1-mainframe-replays" in output
     assert "+ uv run harn-gibson replay-dir examples/dogfood-replays" in output

@@ -28,6 +28,28 @@ DOGFOOD_RENDERER_PRESETS = ("gibson1", "dogfood", "none")
 PROJECT_HARN_PROVIDER = "openai-codex"
 PROJECT_HARN_MODEL = "gpt-5.5"
 PROJECT_HARN_THINKING = "high"
+REPLAY_STATE_ENV_PASSTHROUGH = (
+    "HARN_GIBSON_STYLE",
+    "HARN_GIBSON_PROJECT_ROOT",
+    "HARN_GIBSON_PROJECT_NAME",
+    "HARN_GIBSON_RENDERER_COMPACTION_EVENTS",
+    "HARN_GIBSON_RENDERER_MAX_RECENT_PLANS",
+    "HARN_GIBSON_RENDERER_MAX_RECENT_LOG_ENTRIES",
+    "HARN_GIBSON_RENDERER_MAX_PROP_PREVIEW_CHARS",
+    "HARN_GIBSON_RENDERER_MAX_VISUAL_ANCHORS",
+    "HARN_GIBSON_RENDERER_MAX_VISUAL_OBJECTS_PER_ANCHOR",
+    "HARN_GIBSON_RENDERER_MAX_VISUAL_RECENT_ITEMS",
+    "HARN_GIBSON_RENDERER_MAX_REPO_ENTRIES",
+    "HARN_GIBSON_RENDERER_MAX_REPO_CHILDREN",
+    "HARN_GIBSON_RENDERER_MAX_TOUCHED_FILES",
+    "HARN_GIBSON_RENDERER_MAX_TOUCHED_PATH_CHARS",
+    "HARN_GIBSON_RENDERER_MAX_WORLD_ENTITIES",
+    "HARN_GIBSON_PERCEPTION_DISCOVERY",
+    "HARN_GIBSON_RENDERER_SEMANTIC_GRAPH",
+    "HARN_GIBSON_RENDERER_MAX_SEMANTIC_FILES",
+    "HARN_GIBSON_RENDERER_MAX_SEMANTIC_EDGES",
+    "HARN_GIBSON_RENDERER_MAX_SEMANTIC_SYMBOLS",
+)
 
 
 @dataclass(frozen=True)
@@ -393,7 +415,8 @@ def _replay_state_from_args(args: argparse.Namespace):
 
 
 def _explicit_replay_state_env_from_args(args: argparse.Namespace) -> dict[str, str]:
-    state_env = _explicit_replay_renderer_env_from_args(args)
+    state_env = _replay_state_env_from_process()
+    state_env.update(_explicit_replay_renderer_env_from_args(args))
     if getattr(args, "style", None) is not None:
         state_env["HARN_GIBSON_STYLE"] = args.style
     if getattr(args, "project_root", None) is not None:
@@ -401,6 +424,10 @@ def _explicit_replay_state_env_from_args(args: argparse.Namespace) -> dict[str, 
     if getattr(args, "project_name", None) is not None:
         state_env["HARN_GIBSON_PROJECT_NAME"] = args.project_name
     return state_env
+
+
+def _replay_state_env_from_process() -> dict[str, str]:
+    return {key: value for key in REPLAY_STATE_ENV_PASSTHROUGH if (value := os.environ.get(key)) is not None}
 
 
 def _explicit_replay_renderer_env_from_args(args: argparse.Namespace) -> dict[str, str]:
@@ -491,7 +518,8 @@ def run_dogfood(
     renderer_command: str | None = None,
     renderer_timeout_ms: str = DOGFOOD_CAPTURE_RENDERER_TIMEOUT_MS,
 ) -> int:
-    from harn_gibson.server import build_state_from_env, create_server, publish_diagnostic_event
+    from harn_gibson.server import build_state_from_env, publish_diagnostic_event
+    from harn_gibson.viewer import start_viewer
 
     try:
         harn_cwd = _coerce_harn_cwd(cwd)
@@ -516,13 +544,10 @@ def run_dogfood(
         env["HARN_GIBSON_STYLE"] = style
     state_needs_env = style is not None or env_overrides or harn_cwd is not None or renderer_env_added
     state = build_state_from_env(env) if state_needs_env else build_state_from_env()
-    server = create_server(host, port, state)
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
-    thread.start()
-    actual_host, actual_port = server.server_address
-    display_url = f"http://{actual_host}:{actual_port}"
-    endpoint = f"{display_url}/events"
-    input_endpoint = f"{display_url}/input/next"
+    viewer = start_viewer(host, port, state=state, launch_browser=launch_browser, browser_open=webbrowser.open)
+    display_url = viewer.display_url
+    endpoint = viewer.endpoint
+    input_endpoint = viewer.input_endpoint
     forwarded_args = list(harn_args)
     if forwarded_args[:1] == ["--"]:
         forwarded_args = forwarded_args[1:]
@@ -555,8 +580,6 @@ def run_dogfood(
         )
 
     print(f"harn-gibson display: {display_url}", file=sys.stderr)
-    if launch_browser:
-        webbrowser.open(display_url)
     try:
         if codex_auth_import:
             auth_result = import_codex_auth(environ=env)
@@ -585,9 +608,7 @@ def run_dogfood(
             _hold_display_on_error(display_url)
         return 127
     finally:
-        state.pipeline.stop()
-        server.shutdown()
-        server.server_close()
+        viewer.close()
 
 
 def run_dogfood_capture(

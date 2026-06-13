@@ -14,16 +14,31 @@ Target UX:
 /gibson-view
 ```
 
-The harn extension should own this mode. The command should start or reuse a local Gibson display server, open the browser, publish a bootstrap event from the extension's recent-event buffer, and then stream future events to the display endpoint. Harn remains the primary input surface, while the browser composer can still enqueue small follow-up or steering messages.
+The harn extension owns this mode. The command starts or reuses a local Gibson display server, opens the browser, publishes a bootstrap batch from the extension's recent-event buffer, and then streams future events to the display endpoint. Harn remains the primary input surface, while the browser composer can still enqueue small follow-up or steering messages.
 
 Current support:
+
+```text
+/gibson-view
+/gibson-view --port 8765
+/gibson-view --no-browser
+```
+
+Environment defaults:
+
+```bash
+HARN_GIBSON_VIEW_HOST=127.0.0.1
+HARN_GIBSON_VIEW_PORT=0
+HARN_GIBSON_VIEW_BROWSER=1
+HARN_GIBSON_RECENT_EVENTS=100
+```
+
+Manual wiring is still available when you want separate process ownership:
 
 ```bash
 uv run harn-gibson serve --host 127.0.0.1 --port 8765
 HARN_GIBSON_ENDPOINT=http://127.0.0.1:8765/events harn -e /path/to/harn-gibson
 ```
-
-The `/gibson-view` command is not implemented yet. It should be added after the embedded server lifecycle is small enough to expose safely from the extension.
 
 ### Browser as Primary Interface
 
@@ -88,7 +103,6 @@ The extension should be fail-open for harn progress. If no display server is run
 
 ## Future Work
 
-- Add `/gibson-view` or `/gibson view` once harn command naming and argument parsing are confirmed.
-- Keep a bounded in-extension event buffer so late viewer attach can show recent context.
-- Factor embedded display-server startup out of the CLI so the extension command and CLI launchers share one implementation.
+- Promote `/gibson-view` from a bounded recent-event attach to fuller historical session bootstrap when harn exposes enough session history cheaply.
+- Add richer command arguments if users need projection/style switching at attach time.
 - Add a harn upstream follow-up if pyproject-only harn package manifests remain documented but unsupported in current discovery code.

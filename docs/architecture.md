@@ -17,7 +17,7 @@ The graphical server does not own the harn session. It displays normalized event
 
 The repository includes harn as a development dependency for one-command dogfooding, but the display server and extension modules are intentionally independent of harn's TUI implementation. A later package split can expose a web-only relay package and keep the harn CLI launcher as an optional integration layer.
 
-Launch ownership is mode-specific. Existing interactive harn sessions should eventually attach a second viewer from a harn command such as `/gibson-view`; primary-browser and non-interactive visualized sessions should remain Gibson CLI launchers because they own server, browser, harn process, auth import, and error-hold lifecycle; replay remains harn-free. See [Launch Modes](launch-modes.md).
+Launch ownership is mode-specific. Existing interactive harn sessions can attach a second viewer with `/gibson-view`; primary-browser and non-interactive visualized sessions remain Gibson CLI launchers because they own server, browser, harn process, auth import, and error-hold lifecycle; replay remains harn-free. See [Launch Modes](launch-modes.md).
 
 ## Integration Layers
 

@@ -520,12 +520,12 @@
             {
               "d": 0.066,
               "dirs": 1,
-              "files": 6,
-              "h": 0.71,
+              "files": 7,
+              "h": 0.72,
               "id": "repo-city-docs",
               "kind": "dir",
               "label": "docs",
-              "lines": 1096,
+              "lines": 976,
               "path": "docs",
               "tone": "green",
               "touched": 0,
@@ -599,13 +599,13 @@
             },
             {
               "d": 0.066,
-              "dirs": 7,
+              "dirs": 8,
               "files": 0,
-              "h": 0.71,
+              "h": 0.72,
               "id": "repo-city-examples",
               "kind": "dir",
               "label": "examples",
-              "lines": 1266,
+              "lines": 1323,
               "path": "examples",
               "tone": "green",
               "touched": 0,
@@ -633,6 +633,22 @@
               "d": 0.03,
               "dirs": 1,
               "files": 3,
+              "h": 0.295,
+              "id": "repo-city-examples-claude-gibson-replays",
+              "kind": "dir",
+              "label": "claude-gibson-repl",
+              "lines": 416,
+              "path": "examples/claude-gibson-replays",
+              "tone": "green",
+              "touched": 0,
+              "w": 0.024,
+              "x": 0.205,
+              "y": 0.715
+            },
+            {
+              "d": 0.03,
+              "dirs": 1,
+              "files": 3,
               "h": 0.283,
               "id": "repo-city-examples-dogfood-replays",
               "kind": "dir",
@@ -642,8 +658,8 @@
               "tone": "green",
               "touched": 0,
               "w": 0.024,
-              "x": 0.205,
-              "y": 0.715
+              "x": 0.174,
+              "y": 0.743
             },
             {
               "d": 0.03,
@@ -658,22 +674,6 @@
               "tone": "green",
               "touched": 0,
               "w": 0.024,
-              "x": 0.174,
-              "y": 0.743
-            },
-            {
-              "d": 0.03,
-              "dirs": 1,
-              "files": 1,
-              "h": 0.283,
-              "id": "repo-city-examples-gibson1-replays",
-              "kind": "dir",
-              "label": "gibson1-replays",
-              "lines": 359,
-              "path": "examples/gibson1-replays",
-              "tone": "green",
-              "touched": 0,
-              "w": 0.024,
               "x": 0.205,
               "y": 0.743
             },
@@ -681,12 +681,12 @@
               "d": 0.066,
               "dirs": 1,
               "files": 1,
-              "h": 0.46,
-              "id": "repo-city-scripts",
+              "h": 0.31,
+              "id": "repo-city-extensions",
               "kind": "dir",
-              "label": "scripts",
-              "lines": 105,
-              "path": "scripts",
+              "label": "extensions",
+              "lines": 15,
+              "path": "extensions",
               "tone": "green",
               "touched": 0,
               "w": 0.058,
@@ -697,16 +697,64 @@
               "d": 0.03,
               "dirs": 0,
               "files": 1,
-              "h": 0.277,
-              "id": "repo-city-scripts-acceptance-sh",
+              "h": 0.19,
+              "id": "repo-city-extensions-gibson-py",
               "kind": "file",
-              "label": "acceptance.sh",
-              "lines": 105,
-              "path": "scripts/acceptance.sh",
+              "label": "gibson.py",
+              "lines": 15,
+              "path": "extensions/gibson.py",
               "tone": "cyan",
               "touched": 0,
               "w": 0.024,
               "x": 0.256,
+              "y": 0.715
+            },
+            {
+              "d": 0.066,
+              "dirs": 1,
+              "files": 2,
+              "h": 0.51,
+              "id": "repo-city-scripts",
+              "kind": "dir",
+              "label": "scripts",
+              "lines": 297,
+              "path": "scripts",
+              "tone": "green",
+              "touched": 0,
+              "w": 0.058,
+              "x": 0.326,
+              "y": 0.68
+            },
+            {
+              "d": 0.03,
+              "dirs": 0,
+              "files": 1,
+              "h": 0.277,
+              "id": "repo-city-scripts-acceptance-sh",
+              "kind": "file",
+              "label": "acceptance.sh",
+              "lines": 116,
+              "path": "scripts/acceptance.sh",
+              "tone": "cyan",
+              "touched": 0,
+              "w": 0.024,
+              "x": 0.338,
+              "y": 0.715
+            },
+            {
+              "d": 0.03,
+              "dirs": 0,
+              "files": 1,
+              "h": 0.295,
+              "id": "repo-city-scripts-million_dollar_demo-py",
+              "kind": "file",
+              "label": "million_dollar_dem",
+              "lines": 181,
+              "path": "scripts/million_dollar_demo.py",
+              "tone": "cyan",
+              "touched": 0,
+              "w": 0.024,
+              "x": 0.369,
               "y": 0.715
             },
             {
@@ -717,12 +765,12 @@
               "id": "repo-city-src",
               "kind": "dir",
               "label": "src",
-              "lines": 3399,
+              "lines": 3792,
               "path": "src",
               "tone": "green",
               "touched": 0,
               "w": 0.058,
-              "x": 0.326,
+              "x": 0.408,
               "y": 0.68
             },
             {
@@ -733,12 +781,12 @@
               "id": "repo-city-src-harn_gibson",
               "kind": "dir",
               "label": "harn_gibson",
-              "lines": 3399,
+              "lines": 3792,
               "path": "src/harn_gibson",
               "tone": "green",
               "touched": 0,
               "w": 0.024,
-              "x": 0.338,
+              "x": 0.42,
               "y": 0.715
             },
             {
@@ -749,13 +797,13 @@
               "id": "repo-city-tests",
               "kind": "dir",
               "label": "tests",
-              "lines": 2120,
+              "lines": 2359,
               "path": "tests",
               "tone": "green",
               "touched": 0,
               "w": 0.058,
-              "x": 0.408,
-              "y": 0.68
+              "x": 0.08,
+              "y": 0.58
             },
             {
               "d": 0.03,
@@ -765,13 +813,13 @@
               "id": "repo-city-tests-test_acceptance_script-py",
               "kind": "file",
               "label": "test_acceptance_sc",
-              "lines": 48,
+              "lines": 54,
               "path": "tests/test_acceptance_script.py",
               "tone": "cyan",
               "touched": 0,
               "w": 0.024,
-              "x": 0.42,
-              "y": 0.715
+              "x": 0.092,
+              "y": 0.615
             },
             {
               "d": 0.03,
@@ -786,8 +834,8 @@
               "tone": "cyan",
               "touched": 0,
               "w": 0.024,
-              "x": 0.451,
-              "y": 0.715
+              "x": 0.123,
+              "y": 0.615
             },
             {
               "d": 0.03,
@@ -802,8 +850,8 @@
               "tone": "cyan",
               "touched": 0,
               "w": 0.024,
-              "x": 0.42,
-              "y": 0.743
+              "x": 0.092,
+              "y": 0.643
             },
             {
               "d": 0.03,
@@ -818,35 +866,19 @@
               "tone": "cyan",
               "touched": 0,
               "w": 0.024,
-              "x": 0.451,
-              "y": 0.743
+              "x": 0.123,
+              "y": 0.643
             },
             {
               "d": 0.066,
               "dirs": 0,
               "files": 1,
-              "h": 0.308,
+              "h": 0.212,
               "id": "repo-city-gitignore",
               "kind": "file",
               "label": ".gitignore",
-              "lines": 23,
+              "lines": 7,
               "path": ".gitignore",
-              "tone": "cyan",
-              "touched": 0,
-              "w": 0.058,
-              "x": 0.08,
-              "y": 0.58
-            },
-            {
-              "d": 0.066,
-              "dirs": 0,
-              "files": 1,
-              "h": 0.41,
-              "id": "repo-city-pyproject-toml",
-              "kind": "file",
-              "label": "pyproject.toml",
-              "lines": 59,
-              "path": "pyproject.toml",
               "tone": "cyan",
               "touched": 0,
               "w": 0.058,
@@ -857,12 +889,12 @@
               "d": 0.066,
               "dirs": 0,
               "files": 1,
-              "h": 0.41,
-              "id": "repo-city-README-md",
+              "h": 0.23,
+              "id": "repo-city-package-json",
               "kind": "file",
-              "label": "README.md",
-              "lines": 359,
-              "path": "README.md",
+              "label": "package.json",
+              "lines": 10,
+              "path": "package.json",
               "tone": "cyan",
               "touched": 0,
               "w": 0.058,
@@ -989,7 +1021,7 @@
               "targetProp": "blocks[7].h"
             },
             {
-              "entityId": "repo:examples/dogfood-replays",
+              "entityId": "repo:examples/claude-gibson-replays",
               "entityKind": "repoEntry",
               "fieldPath": "entries[].visibleLineCount",
               "intent": "building height follows line, file, directory, and touched-file summaries",
@@ -999,7 +1031,7 @@
               "targetProp": "blocks[8].h"
             },
             {
-              "entityId": "repo:examples/dogfood-workspaces",
+              "entityId": "repo:examples/dogfood-replays",
               "entityKind": "repoEntry",
               "fieldPath": "entries[].visibleLineCount",
               "intent": "building height follows line, file, directory, and touched-file summaries",
@@ -1009,7 +1041,7 @@
               "targetProp": "blocks[9].h"
             },
             {
-              "entityId": "repo:examples/gibson1-replays",
+              "entityId": "repo:examples/dogfood-workspaces",
               "entityKind": "repoEntry",
               "fieldPath": "entries[].visibleLineCount",
               "intent": "building height follows line, file, directory, and touched-file summaries",
@@ -1019,7 +1051,7 @@
               "targetProp": "blocks[10].h"
             },
             {
-              "entityId": "repo:scripts",
+              "entityId": "repo:extensions",
               "entityKind": "repoEntry",
               "fieldPath": "entries[].visibleLineCount",
               "intent": "building height follows line, file, directory, and touched-file summaries",
@@ -1051,6 +1083,11 @@
             {
               "label": "dir",
               "source": "repo-root",
+              "target": "repo:extensions"
+            },
+            {
+              "label": "dir",
+              "source": "repo-root",
               "target": "repo:scripts"
             },
             {
@@ -1071,12 +1108,7 @@
             {
               "label": "file",
               "source": "repo-root",
-              "target": "repo:pyproject.toml"
-            },
-            {
-              "label": "file",
-              "source": "repo-root",
-              "target": "repo:README.md"
+              "target": "repo:package.json"
             }
           ],
           "eventSequence": 1,
@@ -1109,43 +1141,43 @@
               "y": 0.28
             },
             {
+              "id": "repo:extensions",
+              "label": "extensions",
+              "tone": "green",
+              "x": 0.37,
+              "y": 0.28
+            },
+            {
               "id": "repo:scripts",
               "label": "scripts",
               "tone": "green",
-              "x": 0.37,
+              "x": 0.465,
               "y": 0.28
             },
             {
               "id": "repo:src",
               "label": "src",
               "tone": "green",
-              "x": 0.465,
-              "y": 0.28
+              "x": 0.18,
+              "y": 0.42
             },
             {
               "id": "repo:tests",
               "label": "tests",
               "tone": "green",
-              "x": 0.18,
+              "x": 0.275,
               "y": 0.42
             },
             {
               "id": "repo:.gitignore",
               "label": ".gitignore",
               "tone": "cyan",
-              "x": 0.275,
-              "y": 0.42
-            },
-            {
-              "id": "repo:pyproject.toml",
-              "label": "pyproject.toml",
-              "tone": "cyan",
               "x": 0.37,
               "y": 0.42
             },
             {
-              "id": "repo:README.md",
-              "label": "README.md",
+              "id": "repo:package.json",
+              "label": "package.json",
               "tone": "cyan",
               "x": 0.465,
               "y": 0.42
@@ -1185,7 +1217,7 @@
               "targetProp": "nodes[2].label"
             },
             {
-              "entityId": "repo:scripts",
+              "entityId": "repo:extensions",
               "entityKind": "repoEntry",
               "fieldPath": "entries[].path",
               "intent": "graph node label follows sampled repo entry",
@@ -1195,7 +1227,7 @@
               "targetProp": "nodes[3].label"
             },
             {
-              "entityId": "repo:src",
+              "entityId": "repo:scripts",
               "entityKind": "repoEntry",
               "fieldPath": "entries[].path",
               "intent": "graph node label follows sampled repo entry",
@@ -1205,7 +1237,7 @@
               "targetProp": "nodes[4].label"
             },
             {
-              "entityId": "repo:tests",
+              "entityId": "repo:src",
               "entityKind": "repoEntry",
               "fieldPath": "entries[].path",
               "intent": "graph node label follows sampled repo entry",
@@ -1215,7 +1247,7 @@
               "targetProp": "nodes[5].label"
             },
             {
-              "entityId": "repo:.gitignore",
+              "entityId": "repo:tests",
               "entityKind": "repoEntry",
               "fieldPath": "entries[].path",
               "intent": "graph node label follows sampled repo entry",
@@ -1225,7 +1257,7 @@
               "targetProp": "nodes[6].label"
             },
             {
-              "entityId": "repo:pyproject.toml",
+              "entityId": "repo:.gitignore",
               "entityKind": "repoEntry",
               "fieldPath": "entries[].path",
               "intent": "graph node label follows sampled repo entry",
@@ -1235,7 +1267,7 @@
               "targetProp": "nodes[7].label"
             },
             {
-              "entityId": "repo:README.md",
+              "entityId": "repo:package.json",
               "entityKind": "repoEntry",
               "fieldPath": "entries[].path",
               "intent": "graph node label follows sampled repo entry",

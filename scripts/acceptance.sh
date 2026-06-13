@@ -68,16 +68,20 @@ run uv run harn-gibson replay examples/claude-gibson-replays/long-session-arc.js
   --project-name repo-map \
   --output-scene "$ARTIFACT_DIR/projection-long-session-scene.json" \
   --screenshot "$ARTIFACT_DIR/projection-long-session.png"
-run uv run harn-gibson replay-dir examples/gibson1-replays \
+run env HARN_GIBSON_RENDERER_SEMANTIC_GRAPH=1 uv run harn-gibson replay-dir examples/gibson1-replays \
   --renderer-command "$GIBSON1_RENDERER_COMMAND" \
   --renderer-timeout-ms 10000 \
+  --project-root examples/dogfood-workspaces/repo-map \
+  --project-name repo-map \
   --baseline-dir examples/baselines/gibson1-replays \
   --screenshot-dir "$ARTIFACT_DIR/gibson1-screenshots" \
   --output-result "$ARTIFACT_DIR/gibson1-suite.json"
-run uv run harn-gibson replay-dir examples/gibson1-replays \
+run env HARN_GIBSON_RENDERER_SEMANTIC_GRAPH=1 uv run harn-gibson replay-dir examples/gibson1-replays \
   --style mainframe \
   --renderer-command "$GIBSON1_RENDERER_COMMAND" \
   --renderer-timeout-ms 10000 \
+  --project-root examples/dogfood-workspaces/repo-map \
+  --project-name repo-map \
   --baseline-dir examples/baselines/gibson1-mainframe-replays \
   --screenshot-dir "$ARTIFACT_DIR/gibson1-mainframe-screenshots" \
   --output-result "$ARTIFACT_DIR/gibson1-mainframe-suite.json"

@@ -1385,7 +1385,10 @@ def test_cli_watch_replay_error_paths(monkeypatch: Any, capsys: Any) -> None:
 
 def test_cli_replay_renderer_env_helpers(monkeypatch: Any) -> None:
     parser = cli.build_parser()
+    for key in cli.REPLAY_STATE_ENV_PASSTHROUGH:
+        monkeypatch.delenv(key, raising=False)
     monkeypatch.setenv("HARN_GIBSON_RENDERER_COMMAND", "python ambient-renderer.py")
+    monkeypatch.setenv("HARN_GIBSON_RENDERER_SEMANTIC_GRAPH", "1")
     deterministic = parser.parse_args(["replay", "fixture.json"])
     project_only = parser.parse_args(
         ["replay", "fixture.json", "--project-root", "/tmp/workspace", "--project-name", "fixture workspace"]
@@ -1410,6 +1413,7 @@ def test_cli_replay_renderer_env_helpers(monkeypatch: Any) -> None:
     default_state = cli._replay_state_from_args(deterministic)
     try:
         assert isinstance(default_state.renderer, DeterministicSceneRenderer)
+        assert default_state.pipeline.context_builder.config.include_semantic_graph is True
     finally:
         default_state.pipeline.stop()
     project_state = cli._replay_state_from_args(project_only)
@@ -1442,6 +1446,7 @@ def test_cli_replay_renderer_env_helpers(monkeypatch: Any) -> None:
         "HARN_GIBSON_RENDERER_MODEL_TIMEOUT_MS": "3500",
     }
     assert cli._explicit_replay_state_env_from_args(project_only) == {
+        "HARN_GIBSON_RENDERER_SEMANTIC_GRAPH": "1",
         "HARN_GIBSON_PROJECT_ROOT": "/tmp/workspace",
         "HARN_GIBSON_PROJECT_NAME": "fixture workspace",
     }

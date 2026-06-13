@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import urllib.error
 from pathlib import Path
 from typing import Any
@@ -12,7 +13,13 @@ from harn_gibson.extension import (
     HARN_EVENTS,
     BrowserInputPoller,
     GibsonRelay,
+    GibsonViewController,
+    _append_harn_entry,
+    _notify_command_context,
+    _parse_view_command_args,
     _poll_interval_from_env,
+    _recent_event_limit_from_env,
+    _register_view_command,
     build_dispatcher_from_env,
     build_input_endpoint_from_env,
     default,
@@ -34,10 +41,18 @@ class FakeSink:
 class FakeHarn:
     def __init__(self) -> None:
         self.handlers: dict[str, object] = {}
+        self.commands: dict[str, dict[str, object]] = {}
         self.sent: list[tuple[str, dict[str, str]]] = []
+        self.entries: list[tuple[str, object]] = []
 
     def on(self, event_type: str, handler: object) -> None:
         self.handlers[event_type] = handler
+
+    def registerCommand(self, name: str, options: dict[str, object]) -> None:
+        self.commands[name] = options
+
+    def appendEntry(self, custom_type: str, data: object = None) -> None:
+        self.entries.append((custom_type, data))
 
     def sendUserMessage(self, message: str, options: dict[str, str]) -> None:
         self.sent.append((message, options))
@@ -79,6 +94,18 @@ class NoMethodUi:
     pass
 
 
+class CommandUi:
+    def __init__(self) -> None:
+        self.notifications: list[tuple[str, str]] = []
+        self.statuses: list[tuple[str, str | None]] = []
+
+    def notify(self, message: str, level: str) -> None:
+        self.notifications.append((message, level))
+
+    def setStatus(self, key: str, text: str | None) -> None:
+        self.statuses.append((key, text))
+
+
 def test_relay_publishes_and_returns_hook_result() -> None:
     sink = FakeSink()
     relay = GibsonRelay(sink)
@@ -106,6 +133,40 @@ def test_relay_publishes_hook_exceptions_as_runtime_errors() -> None:
     assert sink.published[0][0].event_type == "runtime_error"  # type: ignore[attr-defined]
     assert "hook failed" in sink.published[0][0].payload["traceback"]  # type: ignore[attr-defined]
     assert sink.published[1][0].event_type == "tool_call"  # type: ignore[attr-defined]
+
+
+def test_relay_buffers_recent_events_and_flushes_to_sink() -> None:
+    sink = FakeSink()
+    relay = GibsonRelay(sink, max_recent_events=2)
+    flush_sink = FakeSink()
+
+    asyncio.run(relay.handle({"type": "input", "text": "one"}))
+    asyncio.run(relay.handle({"type": "tool_call", "toolName": "bash"}))
+    asyncio.run(relay.handle({"type": "tool_result", "toolName": "bash"}))
+    asyncio.run(relay.flush_recent(flush_sink))
+
+    assert [event.sequence for event, _decisions in relay.recent_events] == [2, 3]
+    assert [event.sequence for event, _decisions in flush_sink.published] == [2, 3]  # type: ignore[attr-defined]
+    relay.max_recent_events = 0
+    asyncio.run(relay.handle({"type": "turn_end"}))
+    assert [event.sequence for event, _decisions in relay.recent_events] == [2, 3]
+
+
+def test_relay_attaches_http_endpoint_without_event_log(monkeypatch: Any) -> None:
+    class FakeHttpSink:
+        def __init__(self, endpoint: str) -> None:
+            self.endpoint = endpoint
+
+        async def publish(self, _event: object, _decisions: list[object] | None = None) -> None:
+            return None
+
+    relay = GibsonRelay(FakeSink())
+    monkeypatch.setattr("harn_gibson.extension.HttpEventSink", FakeHttpSink)
+
+    sink = relay.attach_http_endpoint("http://viewer/events", {})
+
+    assert sink is relay.sink
+    assert sink.endpoint == "http://viewer/events"  # type: ignore[attr-defined]
 
 
 def test_relay_updates_camel_and_snake_ui() -> None:
@@ -146,6 +207,7 @@ def test_extension_factory_registers_every_event(monkeypatch: Any) -> None:
     extension_factory(harn)
 
     assert set(harn.handlers) == set(HARN_EVENTS)
+    assert sorted(harn.commands) == ["gibson-view"]
     assert default is extension_factory
     handler = harn.handlers["input"]
     result = asyncio.run(handler({"type": "input", "text": "hi", "source": "interactive"}, FakeCtx(None)))  # type: ignore[operator]
@@ -177,6 +239,161 @@ def test_input_endpoint_from_env() -> None:
     assert build_input_endpoint_from_env({"HARN_GIBSON_ENDPOINT": "none"}) is None
     assert build_input_endpoint_from_env({"HARN_GIBSON_ENDPOINT": "http://x/events"}) == "http://x/input/next"
     assert build_input_endpoint_from_env({"HARN_GIBSON_ENDPOINT": "http://x/base/"}) == "http://x/base/input/next"
+
+
+def test_view_command_arg_parsing_and_recent_limit() -> None:
+    assert _parse_view_command_args(
+        "--host 0.0.0.0 --port 777 --no-browser",
+        {
+            "HARN_GIBSON_VIEW_HOST": "localhost",
+            "HARN_GIBSON_VIEW_PORT": "8888",
+            "HARN_GIBSON_VIEW_BROWSER": "true",
+        },
+    ) == {"host": "0.0.0.0", "port": 777, "browser": False}
+    assert _parse_view_command_args(
+        "--host=::1 --port=bad --browser",
+        {
+            "HARN_GIBSON_VIEW_PORT": "1234",
+            "HARN_GIBSON_VIEW_BROWSER": "0",
+        },
+    ) == {"host": "::1", "port": 1234, "browser": True}
+    assert _parse_view_command_args("--port -5", {})["port"] == 0
+    assert _parse_view_command_args("--port", {"HARN_GIBSON_VIEW_PORT": "bad"}) == {
+        "host": "127.0.0.1",
+        "port": 0,
+        "browser": True,
+    }
+    assert _parse_view_command_args("--unknown", {"HARN_GIBSON_VIEW_BROWSER": "no"})["browser"] is False
+    assert _recent_event_limit_from_env({"HARN_GIBSON_RECENT_EVENTS": "2"}) == 2
+    assert _recent_event_limit_from_env({"HARN_GIBSON_RECENT_EVENTS": "-1"}) == 0
+    assert _recent_event_limit_from_env({"HARN_GIBSON_RECENT_EVENTS": "bad"}) == 100
+
+
+def test_gibson_view_controller_attaches_viewer_and_reuses_it(tmp_path: Path, monkeypatch: Any) -> None:
+    class FakeHttpSink:
+        instances: list[FakeHttpSink] = []
+
+        def __init__(self, endpoint: str) -> None:
+            self.endpoint = endpoint
+            self.published: list[tuple[object, list[object]]] = []
+            self.instances.append(self)
+
+        async def publish(self, event: object, decisions: list[object] | None = None) -> None:
+            self.published.append((event, list(decisions or [])))
+
+    class FakeViewer:
+        display_url = "http://127.0.0.1:9900"
+        endpoint = "http://127.0.0.1:9900/events"
+        input_endpoint = "http://127.0.0.1:9900/input/next"
+        closed = False
+
+        def __init__(self) -> None:
+            self.opened = 0
+            self.closed_count = 0
+
+        def open_browser(self) -> None:
+            self.opened += 1
+
+        def close(self) -> None:
+            self.closed = True
+            self.closed_count += 1
+
+    created: list[tuple[str, int, dict[str, str], bool]] = []
+    viewer = FakeViewer()
+
+    def fake_viewer_factory(host: str, port: int, *, env: dict[str, str], launch_browser: bool) -> FakeViewer:
+        created.append((host, port, env, launch_browser))
+        return viewer
+
+    monkeypatch.setattr("harn_gibson.extension.HttpEventSink", FakeHttpSink)
+    event_log = tmp_path / "events.jsonl"
+    harn = FakeHarn()
+    relay = GibsonRelay(FakeSink())
+    asyncio.run(relay.handle({"type": "input", "text": "before attach"}))
+    poller = BrowserInputPoller(harn, None)
+    ui = CommandUi()
+    controller = GibsonViewController(
+        harn,
+        relay,
+        poller,
+        environ={"HARN_GIBSON_EVENT_LOG": str(event_log)},
+        viewer_factory=fake_viewer_factory,
+    )
+
+    asyncio.run(controller.handle("--host 127.0.0.2 --port 9900 --no-browser", FakeCtx(ui)))
+    asyncio.run(controller.handle("--browser", FakeCtx(ui)))
+    controller.stop()
+    controller.stop()
+
+    assert created == [("127.0.0.2", 9900, {"HARN_GIBSON_EVENT_LOG": str(event_log)}, False)]
+    assert viewer.opened == 1
+    assert viewer.closed_count == 1
+    assert poller.endpoint == "http://127.0.0.1:9900/input/next"
+    assert harn.entries[0][0] == "gibson_view"
+    assert "Gibson viewer attached" in ui.notifications[0][0]
+    assert [event.event_type for event, _decisions in FakeHttpSink.instances[0].published] == [  # type: ignore[attr-defined]
+        "input",
+        "viewer_attach",
+    ]
+    assert [event.event_type for event, _decisions in FakeHttpSink.instances[1].published][-1] == "viewer_attach"  # type: ignore[attr-defined]
+    assert "viewer_attach" in event_log.read_text(encoding="utf-8")
+
+
+def test_gibson_view_controller_reports_startup_errors(monkeypatch: Any) -> None:
+    def broken_viewer_factory(*_args: object, **_kwargs: object) -> object:
+        raise RuntimeError("viewer boom")
+
+    harn = FakeHarn()
+    sink = FakeSink()
+    relay = GibsonRelay(sink)
+    poller = BrowserInputPoller(harn, None)
+    ui = CommandUi()
+    controller = GibsonViewController(harn, relay, poller, viewer_factory=broken_viewer_factory)
+
+    asyncio.run(controller.handle("", FakeCtx(ui)))
+
+    assert ui.notifications == [("Gibson viewer failed: viewer boom", "error")]
+    assert sink.published[0][0].event_type == "runtime_error"  # type: ignore[attr-defined]
+    assert "viewer boom" in sink.published[0][0].payload["message"]  # type: ignore[attr-defined]
+
+
+def test_gibson_view_controller_default_factory_and_stop_without_close(monkeypatch: Any) -> None:
+    class FakeViewer:
+        display_url = "http://viewer"
+        endpoint = "http://viewer/events"
+        input_endpoint = "http://viewer/input/next"
+        closed = False
+
+    calls: list[tuple[str, int, dict[str, str], bool]] = []
+
+    def fake_start_viewer(host: str, port: int, *, env: dict[str, str], launch_browser: bool) -> FakeViewer:
+        calls.append((host, port, env, launch_browser))
+        return FakeViewer()
+
+    monkeypatch.setattr("harn_gibson.viewer.start_viewer", fake_start_viewer)
+    controller = GibsonViewController(FakeHarn(), GibsonRelay(FakeSink()), BrowserInputPoller(FakeHarn(), None))
+    viewer = controller._start_or_reuse_viewer({"host": "127.0.0.9", "port": 9999, "browser": False})
+    reused = controller._start_or_reuse_viewer({"host": "127.0.0.8", "port": 8888, "browser": True})
+    reused_without_browser = controller._start_or_reuse_viewer({"host": "127.0.0.7", "port": 7777, "browser": False})
+    controller.viewer = object()
+    controller.stop()
+
+    assert viewer.display_url == "http://viewer"
+    assert reused is viewer
+    assert reused_without_browser is viewer
+    assert calls == [("127.0.0.9", 9999, dict(os.environ), False)]
+
+
+def test_optional_harn_command_helpers_handle_missing_capabilities() -> None:
+    ui = SnakeUi()
+    controller = GibsonViewController(object(), GibsonRelay(FakeSink()), BrowserInputPoller(object(), None))
+
+    _register_view_command(object(), controller)
+    _notify_command_context(FakeCtx(None), "hidden")
+    _notify_command_context(FakeCtx(ui), "visible")
+    _append_harn_entry(object(), "attached", {"url": "http://viewer"})
+
+    assert ("set_status", ("gibson", "visible")) in ui.calls
 
 
 def test_browser_input_poller_poll_once(monkeypatch: Any) -> None:

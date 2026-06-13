@@ -5,16 +5,24 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import shlex
 import traceback
 import urllib.error
 import urllib.request
-from collections.abc import Mapping
+from collections.abc import Callable, Iterable, Mapping
 from pathlib import Path
 from typing import Any
 
 from harn_gibson.events import GibsonEvent, diagnostic_event
 from harn_gibson.hooks import HookDispatcher, load_hook_module, result_for_harn
-from harn_gibson.sinks import DEFAULT_ENDPOINT, EventSink, build_sink_from_env
+from harn_gibson.sinks import (
+    DEFAULT_ENDPOINT,
+    CompositeSink,
+    EventSink,
+    HttpEventSink,
+    JsonlEventSink,
+    build_sink_from_env,
+)
 
 HARN_EVENTS = (
     "resources_discover",
@@ -50,10 +58,18 @@ HARN_EVENTS = (
 
 
 class GibsonRelay:
-    def __init__(self, sink: EventSink, dispatcher: HookDispatcher | None = None) -> None:
+    def __init__(
+        self,
+        sink: EventSink,
+        dispatcher: HookDispatcher | None = None,
+        *,
+        max_recent_events: int = 100,
+    ) -> None:
         self.sink = sink
         self.dispatcher = dispatcher or HookDispatcher()
         self.sequence = 0
+        self.max_recent_events = max_recent_events
+        self.recent_events: list[tuple[GibsonEvent, list[Any]]] = []
 
     async def handle(self, raw_event: Any, ctx: Any = None) -> Any:
         self.sequence += 1
@@ -68,8 +84,34 @@ class GibsonRelay:
             )
             decisions = []
         _update_harn_ui(ctx, event)
-        await self.sink.publish(event, decisions)
+        await self.publish(event, decisions)
         return result_for_harn(event.event_type, decisions)
+
+    async def publish(self, event: GibsonEvent, decisions: Iterable[Any] = ()) -> None:
+        cached = list(decisions)
+        self._remember(event, cached)
+        await self.sink.publish(event, cached)
+
+    async def publish_diagnostic(
+        self,
+        *,
+        event_type: str,
+        severity: str,
+        title: str,
+        message: str,
+        details: str | None = None,
+    ) -> None:
+        self.sequence += 1
+        event = diagnostic_event(
+            self.sequence,
+            event_type=event_type,
+            source="harn-gibson",
+            severity=severity,
+            title=title,
+            message=message,
+            details=details,
+        )
+        await self.publish(event, ())
 
     async def publish_exception(self, error: BaseException, message: str, *, details: str | None = None) -> None:
         self.sequence += 1
@@ -83,7 +125,28 @@ class GibsonRelay:
             details=details,
             traceback_text="".join(traceback.format_exception(error)),
         )
-        await self.sink.publish(event, ())
+        await self.publish(event, ())
+
+    def attach_http_endpoint(self, endpoint: str, environ: Mapping[str, str] | None = None) -> EventSink:
+        env = os.environ if environ is None else environ
+        http_sink = HttpEventSink(endpoint)
+        sinks: list[EventSink] = [http_sink]
+        event_log = env.get("HARN_GIBSON_EVENT_LOG")
+        if event_log:
+            sinks.append(JsonlEventSink(Path(event_log)))
+        self.sink = sinks[0] if len(sinks) == 1 else CompositeSink(sinks)
+        return http_sink
+
+    async def flush_recent(self, sink: EventSink) -> None:
+        for event, decisions in list(self.recent_events):
+            await sink.publish(event, decisions)
+
+    def _remember(self, event: GibsonEvent, decisions: list[Any]) -> None:
+        if self.max_recent_events <= 0:
+            return
+        self.recent_events.append((event, list(decisions)))
+        if len(self.recent_events) > self.max_recent_events:
+            del self.recent_events[: len(self.recent_events) - self.max_recent_events]
 
 
 class BrowserInputPoller:
@@ -117,6 +180,9 @@ class BrowserInputPoller:
             self.task.cancel()
         self.task = None
 
+    def set_endpoint(self, endpoint: str | None) -> None:
+        self.endpoint = endpoint
+
     async def poll_once(self) -> bool:
         if self.endpoint is None:
             return False
@@ -149,16 +215,93 @@ class BrowserInputPoller:
             await asyncio.sleep(self.poll_interval)
 
 
+class GibsonViewController:
+    def __init__(
+        self,
+        harn: Any,
+        relay: GibsonRelay,
+        poller: BrowserInputPoller,
+        *,
+        environ: Mapping[str, str] | None = None,
+        viewer_factory: Callable[..., Any] | None = None,
+    ) -> None:
+        self.harn = harn
+        self.relay = relay
+        self.poller = poller
+        self.environ = os.environ if environ is None else environ
+        self.viewer_factory = viewer_factory
+        self.viewer: Any | None = None
+
+    async def handle(self, raw_args: str = "", ctx: Any = None) -> None:
+        try:
+            options = _parse_view_command_args(raw_args, self.environ)
+            viewer = self._start_or_reuse_viewer(options)
+            http_sink = self.relay.attach_http_endpoint(viewer.endpoint, self.environ)
+            self.poller.set_endpoint(viewer.input_endpoint)
+            self.poller.start()
+            await self.relay.flush_recent(http_sink)
+            message = f"Gibson viewer attached at {viewer.display_url}"
+            _notify_command_context(ctx, message)
+            _append_harn_entry(self.harn, message, {"url": viewer.display_url})
+            await self.relay.publish_diagnostic(
+                event_type="viewer_attach",
+                severity="info",
+                title="Gibson viewer",
+                message=message,
+                details=f"endpoint={viewer.endpoint}",
+            )
+        except Exception as error:  # noqa: BLE001
+            _notify_command_context(ctx, f"Gibson viewer failed: {error}", level="error")
+            await self.relay.publish_exception(error, "Gibson viewer failed", details=f"args={raw_args!r}")
+
+    def stop(self) -> None:
+        viewer = self.viewer
+        self.viewer = None
+        if viewer is None:
+            return
+        close = getattr(viewer, "close", None)
+        if callable(close):
+            close()
+
+    def _start_or_reuse_viewer(self, options: Mapping[str, Any]) -> Any:
+        viewer = self.viewer
+        if viewer is not None and not getattr(viewer, "closed", False):
+            if options["browser"]:
+                open_browser = getattr(viewer, "open_browser", None)
+                if callable(open_browser):
+                    open_browser()
+            return viewer
+        factory = self.viewer_factory
+        if factory is None:
+            from harn_gibson.viewer import start_viewer
+
+            factory = start_viewer
+        viewer = factory(
+            options["host"],
+            options["port"],
+            env=dict(self.environ),
+            launch_browser=options["browser"],
+        )
+        self.viewer = viewer
+        return viewer
+
+
 def extension_factory(harn: Any) -> None:
-    relay = GibsonRelay(build_sink_from_env(), build_dispatcher_from_env())
+    relay = GibsonRelay(
+        build_sink_from_env(),
+        build_dispatcher_from_env(),
+        max_recent_events=_recent_event_limit_from_env(),
+    )
     poller = BrowserInputPoller(
         harn=harn,
         endpoint=build_input_endpoint_from_env(),
         diagnostic_relay=relay,
         poll_interval=_poll_interval_from_env(),
     )
+    view_controller = GibsonViewController(harn, relay, poller)
+    _register_view_command(harn, view_controller)
     for event_type in HARN_EVENTS:
-        harn.on(event_type, _handler_for(relay, poller))
+        harn.on(event_type, _handler_for(relay, poller, view_controller))
 
 
 default = extension_factory
@@ -195,7 +338,7 @@ def build_input_endpoint_from_env(environ: Mapping[str, str] | None = None) -> s
     return _event_endpoint_to_input_endpoint(endpoint)
 
 
-def _handler_for(relay: GibsonRelay, poller: BrowserInputPoller) -> Any:
+def _handler_for(relay: GibsonRelay, poller: BrowserInputPoller, view_controller: GibsonViewController) -> Any:
     async def handler(event: Any, ctx: Any = None) -> Any:
         result = await relay.handle(event, ctx)
         event_type = event.get("type") if isinstance(event, Mapping) else getattr(event, "type", None)
@@ -203,6 +346,7 @@ def _handler_for(relay: GibsonRelay, poller: BrowserInputPoller) -> Any:
             poller.start()
         elif event_type == "session_shutdown":
             poller.stop()
+            view_controller.stop()
         return result
 
     return handler
@@ -239,8 +383,82 @@ def _poll_interval_from_env(environ: Mapping[str, str] | None = None) -> float:
     return milliseconds / 1000
 
 
+def _recent_event_limit_from_env(environ: Mapping[str, str] | None = None) -> int:
+    env = os.environ if environ is None else environ
+    raw_value = env.get("HARN_GIBSON_RECENT_EVENTS", "100")
+    try:
+        return max(0, int(raw_value))
+    except ValueError:
+        return 100
+
+
+def _parse_view_command_args(raw_args: str, environ: Mapping[str, str] | None = None) -> dict[str, Any]:
+    env = os.environ if environ is None else environ
+    host = env.get("HARN_GIBSON_VIEW_HOST", "127.0.0.1")
+    port = _coerce_port(env.get("HARN_GIBSON_VIEW_PORT"), default=0)
+    browser = env.get("HARN_GIBSON_VIEW_BROWSER", "1").lower() not in {"0", "false", "no", "off"}
+    tokens = shlex.split(raw_args)
+    index = 0
+    while index < len(tokens):
+        token = tokens[index]
+        if token == "--no-browser":
+            browser = False
+        elif token == "--browser":
+            browser = True
+        elif token == "--host" and index + 1 < len(tokens):
+            index += 1
+            host = tokens[index]
+        elif token.startswith("--host="):
+            host = token.split("=", 1)[1]
+        elif token == "--port" and index + 1 < len(tokens):
+            index += 1
+            port = _coerce_port(tokens[index], default=port)
+        elif token.startswith("--port="):
+            port = _coerce_port(token.split("=", 1)[1], default=port)
+        index += 1
+    return {"host": host, "port": port, "browser": browser}
+
+
+def _coerce_port(value: str | None, *, default: int) -> int:
+    if value is None:
+        return default
+    try:
+        return max(0, int(value))
+    except ValueError:
+        return default
+
+
 def _split_paths(value: str) -> list[str]:
     return [part for part in value.split(os.pathsep) if part]
+
+
+def _register_view_command(harn: Any, view_controller: GibsonViewController) -> None:
+    register_command = getattr(harn, "registerCommand", None)
+    if not callable(register_command):
+        return
+    register_command(
+        "gibson-view",
+        {
+            "description": "Open the Gibson visualizer",
+            "handler": view_controller.handle,
+        },
+    )
+
+
+def _notify_command_context(ctx: Any, message: str, *, level: str = "info") -> None:
+    ui = getattr(ctx, "ui", None)
+    if ui is None:
+        return
+    notify = getattr(ui, "notify", None)
+    if callable(notify):
+        notify(message, level)
+    _call_first(ui, ("setStatus", "set_status"), "gibson", message)
+
+
+def _append_harn_entry(harn: Any, message: str, data: Mapping[str, Any]) -> None:
+    append_entry = getattr(harn, "appendEntry", None)
+    if callable(append_entry):
+        append_entry("gibson_view", {"message": message, **dict(data)})
 
 
 def _update_harn_ui(ctx: Any, event: GibsonEvent) -> None:
