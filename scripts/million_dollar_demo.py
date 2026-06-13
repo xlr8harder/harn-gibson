@@ -71,7 +71,7 @@ def main() -> int:
     parser.add_argument("--thinking", default="high")
     parser.add_argument(
         "--renderer",
-        default=str(REPO_ROOT / "examples" / "projections" / "gibson-organic.json"),
+        default="default",
     )
     args = parser.parse_args()
 

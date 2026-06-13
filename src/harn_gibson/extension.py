@@ -518,11 +518,7 @@ def _viewer_env_for_options(environ: Mapping[str, str], options: Mapping[str, An
     elif isinstance(renderer, str):
         env.pop("HARN_GIBSON_RENDERER_MODEL_COMMAND", None)
         renderer_command_value = direct_renderer_command(renderer)
-        if renderer == "none":
-            env["HARN_GIBSON_RENDERER"] = "none"
-            env.pop("HARN_GIBSON_RENDERER_COMMAND", None)
-            env.pop("HARN_GIBSON_RENDERER_TIMEOUT_MS", None)
-        elif renderer_command_value is None:
+        if renderer_command_value is None:
             env["HARN_GIBSON_RENDERER"] = renderer
             env.pop("HARN_GIBSON_RENDERER_COMMAND", None)
             env.pop("HARN_GIBSON_RENDERER_TIMEOUT_MS", None)
@@ -570,7 +566,7 @@ def _register_renderer_command(harn: Any, view_controller: GibsonViewController)
     register_command(
         "gibson-renderers",
         {
-            "description": "List Gibson viewer renderers",
+            "description": "List Gibson visualizations",
             "handler": handle_renderers,
         },
     )

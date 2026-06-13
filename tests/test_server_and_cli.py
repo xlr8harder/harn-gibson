@@ -894,7 +894,7 @@ def test_cli_parser_and_run(monkeypatch: Any, capsys: Any) -> None:
     assert parsed_dogfood.browser is False
     assert parsed_dogfood.style == "neon-noir"
     assert parsed_dogfood.cwd == "work"
-    assert parsed_dogfood.renderer == "gibson1"
+    assert parsed_dogfood.renderer == "default"
     assert parsed_dogfood.renderer_command is None
     assert parsed_dogfood.renderer_timeout_ms == cli.DEFAULT_RENDERER_TIMEOUT_MS
     assert parsed_dogfood.harn_args == ["--", "-p", "hello"]
@@ -927,7 +927,7 @@ def test_cli_parser_and_run(monkeypatch: Any, capsys: Any) -> None:
     assert parsed_capture.style == "mainframe"
     assert parsed_capture.cwd == "capture-work"
     assert parsed_capture.event_log == "events.jsonl"
-    assert parsed_capture.renderer == "dogfood"
+    assert parsed_capture.renderer == "stress"
     assert parsed_capture.renderer_command == "python renderer.py"
     assert parsed_capture.renderer_timeout_ms == "1234"
     assert parsed_capture.split_every == 200
@@ -1412,10 +1412,10 @@ def test_cli_replay_renderer_env_helpers(monkeypatch: Any) -> None:
         ]
     )
     renderer_timeout = parser.parse_args(
-        ["watch-replay", "fixture.json", "--renderer", "dogfood", "--renderer-timeout-ms", "4500"]
+        ["watch-replay", "fixture.json", "--renderer", "stress", "--renderer-timeout-ms", "4500"]
     )
-    renderer_no_timeout = parser.parse_args(["replay", "fixture.json", "--renderer", "gibson1"])
-    renderer_none = parser.parse_args(["watch-replay", "fixture.json", "--renderer", "none"])
+    renderer_no_timeout = parser.parse_args(["replay", "fixture.json", "--renderer", "classic"])
+    renderer_default = parser.parse_args(["watch-replay", "fixture.json", "--renderer", "default"])
     renderer_spec = parser.parse_args(
         ["replay", "fixture.json", "--renderer", "examples/projections/gibson-sector.json"]
     )
@@ -1460,7 +1460,7 @@ def test_cli_replay_renderer_env_helpers(monkeypatch: Any) -> None:
     renderer_no_timeout_env = cli._explicit_replay_renderer_env_from_args(renderer_no_timeout)
     assert "gibson1_renderer.py" in renderer_no_timeout_env["HARN_GIBSON_RENDERER_COMMAND"]
     assert "HARN_GIBSON_RENDERER_TIMEOUT_MS" not in renderer_no_timeout_env
-    assert cli._explicit_replay_renderer_env_from_args(renderer_none) == {"HARN_GIBSON_RENDERER": "none"}
+    assert cli._explicit_replay_renderer_env_from_args(renderer_default) == {"HARN_GIBSON_RENDERER": "default"}
     assert cli._explicit_replay_renderer_env_from_args(renderer_spec) == {
         "HARN_GIBSON_RENDERER": "examples/projections/gibson-sector.json"
     }
@@ -2772,7 +2772,8 @@ def test_cli_dogfood_reports_missing_harn(monkeypatch: Any, capsys: Any) -> None
 
     def fake_call(_command: list[str], env: dict[str, str]) -> int:
         assert env["HARN_GIBSON_ENDPOINT"] == "http://127.0.0.1:9877/events"
-        assert "gibson1_renderer.py" in env["HARN_GIBSON_RENDERER_COMMAND"]
+        assert env["HARN_GIBSON_RENDERER"] == "default"
+        assert "HARN_GIBSON_RENDERER_COMMAND" not in env
         raise FileNotFoundError
 
     opened: list[str] = []
@@ -3294,7 +3295,7 @@ def test_cli_run_renderer_env_helpers() -> None:
     assert (
         cli._apply_run_renderer_env(
             env,
-            renderer="gibson1",
+            renderer="classic",
             renderer_command=None,
             renderer_timeout_ms="1234",
         )
@@ -3307,7 +3308,7 @@ def test_cli_run_renderer_env_helpers() -> None:
     assert (
         cli._apply_run_renderer_env(
             preserved,
-            renderer="gibson1",
+            renderer="classic",
             renderer_command=None,
             renderer_timeout_ms="5678",
             preserve_existing=True,
@@ -3319,26 +3320,26 @@ def test_cli_run_renderer_env_helpers() -> None:
         "HARN_GIBSON_RENDERER_TIMEOUT_MS": "5678",
     }
 
-    disabled = {
+    default_renderer = {
         "HARN_GIBSON_RENDERER_COMMAND": "ambient renderer",
         "HARN_GIBSON_RENDERER_TIMEOUT_MS": "50",
     }
     assert (
         cli._apply_run_renderer_env(
-            disabled,
-            renderer="none",
+            default_renderer,
+            renderer="default",
             renderer_command=None,
             renderer_timeout_ms="9999",
         )
         is True
     )
-    assert disabled["HARN_GIBSON_RENDERER"] == "none"
-    assert "HARN_GIBSON_RENDERER_COMMAND" not in disabled
-    assert "HARN_GIBSON_RENDERER_TIMEOUT_MS" not in disabled
+    assert default_renderer["HARN_GIBSON_RENDERER"] == "default"
+    assert "HARN_GIBSON_RENDERER_COMMAND" not in default_renderer
+    assert "HARN_GIBSON_RENDERER_TIMEOUT_MS" not in default_renderer
     assert (
         cli._apply_run_renderer_env(
             {},
-            renderer="none",
+            renderer="default",
             renderer_command=None,
             renderer_timeout_ms="9999",
         )
@@ -3349,7 +3350,7 @@ def test_cli_run_renderer_env_helpers() -> None:
     assert (
         cli._apply_run_renderer_env(
             custom,
-            renderer="dogfood",
+            renderer="stress",
             renderer_command="python renderer.py",
             renderer_timeout_ms="4321",
         )
@@ -3363,7 +3364,7 @@ def test_cli_run_renderer_env_helpers() -> None:
     assert (
         cli._apply_run_renderer_env(
             stress,
-            renderer="dogfood",
+            renderer="stress",
             renderer_command=None,
             renderer_timeout_ms="2222",
         )
@@ -3372,17 +3373,17 @@ def test_cli_run_renderer_env_helpers() -> None:
     assert "gibson_dogfood_renderer.py" in stress["HARN_GIBSON_RENDERER_COMMAND"]
     assert stress["HARN_GIBSON_RENDERER_TIMEOUT_MS"] == "2222"
 
-    perception = {}
+    spec = {}
     assert (
         cli._apply_run_renderer_env(
-            perception,
+            spec,
             renderer="examples/renderers/perception.json",
             renderer_command=None,
             renderer_timeout_ms="1",
         )
         is True
     )
-    assert perception == {"HARN_GIBSON_RENDERER": "examples/renderers/perception.json"}
+    assert spec == {"HARN_GIBSON_RENDERER": "examples/renderers/perception.json"}
 
 
 def test_cli_import_codex_auth_command(monkeypatch: Any, capsys: Any) -> None:

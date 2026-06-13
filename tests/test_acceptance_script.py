@@ -26,7 +26,7 @@ def test_acceptance_script_dry_run_lists_release_gates() -> None:
     assert "+ uv run harn-gibson run --harn-bin true" in output
     assert "+ uv run harn-gibson replay-dir examples/replays" in output
     assert "+ uv run harn-gibson replay examples/claude-gibson-replays/long-session-arc.json" in output
-    assert "--renderer examples/projections/gibson-organic.json" in output
+    assert "--renderer default" in output
     assert (
         "+ env HARN_GIBSON_RENDERER_SEMANTIC_GRAPH=1 uv run harn-gibson replay-dir examples/gibson1-replays"
         in output

@@ -256,10 +256,10 @@ def test_view_command_arg_parsing_and_recent_limit() -> None:
         "host": "0.0.0.0",
         "port": 777,
         "browser": False,
-        "renderer": "gibson1",
+        "renderer": "default",
     }
     parsed = _parse_view_command_args(
-        "--host=::1 --port=bad --browser --renderer dogfood --style mainframe --renderer-timeout-ms 1234",
+        "--host=::1 --port=bad --browser --renderer stress --style mainframe --renderer-timeout-ms 1234",
         {
             "HARN_GIBSON_VIEW_PORT": "1234",
             "HARN_GIBSON_VIEW_BROWSER": "0",
@@ -269,7 +269,7 @@ def test_view_command_arg_parsing_and_recent_limit() -> None:
         "host": "::1",
         "port": 1234,
         "browser": True,
-        "renderer": "dogfood",
+        "renderer": "stress",
         "renderer_command": None,
         "style": "mainframe",
         "renderer_timeout_ms": "1234",
@@ -281,14 +281,14 @@ def test_view_command_arg_parsing_and_recent_limit() -> None:
         "host": "127.0.0.1",
         "port": 0,
         "browser": True,
-        "renderer": "gibson1",
+        "renderer": "default",
     }
     assert _parse_view_command_args("--unknown", {"HARN_GIBSON_VIEW_BROWSER": "no"})["browser"] is False
     assert _parse_view_command_args(
-        "--renderer=bad --renderer none --renderer-command='python renderer.py'",
+        "--renderer=bad --renderer classic --renderer-command='python renderer.py'",
         {},
     )["renderer"] == "command"
-    assert _parse_view_command_args("--renderer=perception --list-renderers", {})["list_renderers"] is True
+    assert _parse_view_command_args("--renderer=default --list-renderers", {})["list_renderers"] is True
     parsed = _parse_view_command_args(
         "--renderer-command python-custom --renderer examples/renderer.json "
         "--style=neon-noir --renderer-timeout-ms=333",
@@ -314,22 +314,22 @@ def test_viewer_env_for_renderer_options() -> None:
         "HARN_GIBSON_RENDERER": "old",
     }
 
-    preset_env = _viewer_env_for_options(
+    classic_env = _viewer_env_for_options(
         base_env,
-        {"renderer": "gibson1", "renderer_command": None, "style": "mainframe"},
+        {"renderer": "classic", "renderer_command": None, "style": "mainframe"},
     )
-    assert "gibson1_renderer.py" in preset_env["HARN_GIBSON_RENDERER_COMMAND"]
-    assert preset_env["HARN_GIBSON_STYLE"] == "mainframe"
-    assert "HARN_GIBSON_RENDERER_MODEL_COMMAND" not in preset_env
-    assert "HARN_GIBSON_RENDERER" not in preset_env
+    assert "gibson1_renderer.py" in classic_env["HARN_GIBSON_RENDERER_COMMAND"]
+    assert classic_env["HARN_GIBSON_STYLE"] == "mainframe"
+    assert "HARN_GIBSON_RENDERER_MODEL_COMMAND" not in classic_env
+    assert "HARN_GIBSON_RENDERER" not in classic_env
 
-    none_env = _viewer_env_for_options(
+    default_env = _viewer_env_for_options(
         base_env,
-        {"renderer": "none", "renderer_command": None, "renderer_timeout_ms": "500"},
+        {"renderer": "default", "renderer_command": None, "renderer_timeout_ms": "500"},
     )
-    assert none_env["HARN_GIBSON_RENDERER"] == "none"
-    assert "HARN_GIBSON_RENDERER_COMMAND" not in none_env
-    assert "HARN_GIBSON_RENDERER_TIMEOUT_MS" not in none_env
+    assert default_env["HARN_GIBSON_RENDERER"] == "default"
+    assert "HARN_GIBSON_RENDERER_COMMAND" not in default_env
+    assert "HARN_GIBSON_RENDERER_TIMEOUT_MS" not in default_env
 
     command_env = _viewer_env_for_options(
         base_env,
@@ -338,12 +338,12 @@ def test_viewer_env_for_renderer_options() -> None:
     assert command_env["HARN_GIBSON_RENDERER_COMMAND"] == "python custom.py"
     assert "HARN_GIBSON_RENDERER" not in command_env
 
-    perception_env = _viewer_env_for_options(
+    spec_env = _viewer_env_for_options(
         base_env,
         {"renderer": "examples/renderer.json", "renderer_command": None},
     )
-    assert perception_env["HARN_GIBSON_RENDERER"] == "examples/renderer.json"
-    assert "HARN_GIBSON_RENDERER_COMMAND" not in perception_env
+    assert spec_env["HARN_GIBSON_RENDERER"] == "examples/renderer.json"
+    assert "HARN_GIBSON_RENDERER_COMMAND" not in spec_env
 
 
 def test_gibson_view_controller_attaches_viewer_and_reuses_it(tmp_path: Path, monkeypatch: Any) -> None:
@@ -405,7 +405,8 @@ def test_gibson_view_controller_attaches_viewer_and_reuses_it(tmp_path: Path, mo
     assert created[0][0:2] == ("127.0.0.2", 9900)
     assert created[0][3] is False
     assert created[0][2]["HARN_GIBSON_EVENT_LOG"] == str(event_log)
-    assert "gibson1_renderer.py" in created[0][2]["HARN_GIBSON_RENDERER_COMMAND"]
+    assert created[0][2]["HARN_GIBSON_RENDERER"] == "default"
+    assert "HARN_GIBSON_RENDERER_COMMAND" not in created[0][2]
     assert viewer.opened == 1
     assert viewer.closed_count == 1
     assert poller.endpoint == "http://127.0.0.1:9900/input/next"
@@ -430,7 +431,7 @@ def test_gibson_renderer_list_command_reports_renderers() -> None:
     handler = harn.commands["gibson-renderers"]["handler"]
     asyncio.run(handler("", FakeCtx(ui)))  # type: ignore[operator]
 
-    assert "gibson1" in ui.notifications[0][0]
+    assert "default" in ui.notifications[0][0]
     assert harn.entries[0][0] == "gibson_view"
     assert relay.recent_events[0][0].event_type == "viewer_renderers"
 

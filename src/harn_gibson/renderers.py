@@ -1,4 +1,4 @@
-"""Built-in renderer selectors."""
+"""Built-in visualization selectors."""
 
 from __future__ import annotations
 
@@ -6,14 +6,13 @@ import json
 import sys
 from pathlib import Path
 
-DIRECT_RENDERERS = ("gibson1", "dogfood")
-RENDERERS = ("gibson1", "dogfood", "perception", "none")
-DEFAULT_RENDERER = "gibson1"
+DIRECT_RENDERERS = ("classic", "stress")
+RENDERERS = ("default", "classic", "stress")
+DEFAULT_RENDERER = "default"
 RENDERER_DESCRIPTIONS = {
-    "gibson1": "default coherent renderer for everyday interactive sessions",
-    "dogfood": "showcase/stress renderer with the full cinematic primitive set",
-    "perception": "declarative renderer driven by the perception model",
-    "none": "use the built-in deterministic renderer without an external renderer process",
+    "default": "built-in organic force-layout visualization driven by the perception model",
+    "classic": "older coherent hard-coded visualization for everyday sessions",
+    "stress": "showcase/stress visualization with the full cinematic primitive set",
 }
 
 
@@ -31,19 +30,19 @@ def normalize_renderer(value: str | None, *, default: str | None = DEFAULT_RENDE
 
 def direct_renderer_command(renderer: str) -> str | None:
     normalized = normalize_renderer(renderer, default=None)
-    if normalized == "gibson1":
+    if normalized == "classic":
         return _example_renderer_command("gibson1_renderer.py")
-    if normalized == "dogfood":
+    if normalized == "stress":
         return _example_renderer_command("gibson_dogfood_renderer.py")
     return None
 
 
 def renderer_listing() -> str:
-    lines = ["available Gibson renderers:"]
+    lines = ["available Gibson visualizations:"]
     for renderer in RENDERERS:
         marker = " (default)" if renderer == DEFAULT_RENDERER else ""
         lines.append(f"  {renderer:<10} {RENDERER_DESCRIPTIONS[renderer]}{marker}")
-    lines.append("  <path.json> perception renderer spec file")
+    lines.append("  <path.json> custom perception visualization spec file")
     return "\n".join(lines)
 
 

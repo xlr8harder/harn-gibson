@@ -27,9 +27,9 @@ Two layers, replacing the renderer-in-the-hot-path design:
    layers, materializes new nodes as a wavefront from the root, frames the
    camera on points of interest, and themes everything (gibson, blueprint).
    Effects are entity-anchored: pulse, ring, breach, beam, shake, alarm,
-   banner, peek (diff scroll box). A renderer is a JSON file
+   banner, peek (diff scroll box). Custom projections can be JSON files
    (`examples/projections/`); no spec at all is a complete display
-   (`--renderer perception`). `POST /projection` redirects a live session (the
+   (`--renderer default`). `POST /projection` redirects a live session (the
    director hook); `GET /projection` introspects.
 
 Supporting: browser replay button (`POST /replay/restart` + session reset),
@@ -52,7 +52,7 @@ Demo command:
 ```bash
 uv run harn-gibson watch-replay examples/claude-gibson-replays/linkjar-live-session.json \
   --port 8765 --browser --hold --playback-timing real-time --speed 4 --max-step-delay-ms 4000 \
-  --renderer examples/projections/gibson-organic.json \
+  --renderer default \
   --project-root /home/user/git/gibson-demo-task --project-name linkjar
 ```
 

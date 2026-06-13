@@ -54,8 +54,8 @@ def assert_canvas_nonblank(page: Any) -> None:
     sample = page.locator("#grid").evaluate(
         """canvas => {
           const context = canvas.getContext("2d");
-          const width = Math.min(canvas.width, 96);
-          const height = Math.min(canvas.height, 96);
+          const width = canvas.width;
+          const height = canvas.height;
           const data = context.getImageData(0, 0, width, height).data;
           let total = 0;
           for (let index = 0; index < data.length; index += 4) {

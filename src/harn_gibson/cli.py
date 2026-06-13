@@ -103,7 +103,7 @@ def build_parser() -> argparse.ArgumentParser:
     dogfood.add_argument(
         "--renderer",
         default=DEFAULT_RENDERER,
-        help="renderer name, 'perception', 'none', or perception renderer spec JSON path",
+        help="visualization name or custom perception visualization spec JSON path",
     )
     dogfood.add_argument(
         "--renderer-command",
@@ -136,8 +136,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     capture.add_argument(
         "--renderer",
-        default="dogfood",
-        help="renderer name, 'perception', 'none', or perception renderer spec JSON path",
+        default="stress",
+        help="visualization name or custom perception visualization spec JSON path",
     )
     capture.add_argument(
         "--renderer-command",
@@ -384,7 +384,7 @@ def _add_replay_renderer_arguments(parser: argparse.ArgumentParser) -> None:
     renderer.add_argument(
         "--renderer",
         default=None,
-        help="renderer name, 'perception', 'none', or perception renderer spec JSON path to exercise during replay",
+        help="visualization name or custom perception visualization spec JSON path to exercise during replay",
     )
     parser.add_argument(
         "--discovery",
@@ -642,7 +642,7 @@ def run_dogfood_capture(
     hold_on_error: bool = True,
     style: str | None = None,
     event_log: str | None = None,
-    renderer: str = "dogfood",
+    renderer: str = "stress",
     renderer_command: str | None = None,
     renderer_timeout_ms: str = DEFAULT_RENDERER_TIMEOUT_MS,
     split_every: int | None = None,
@@ -785,12 +785,6 @@ def _apply_run_renderer_env(
         env.pop("HARN_GIBSON_RENDERER_MODEL_COMMAND", None)
         return True
     normalized_renderer = normalize_renderer(renderer, default=DEFAULT_RENDERER)
-    if normalized_renderer == "none":
-        env["HARN_GIBSON_RENDERER"] = "none"
-        env.pop("HARN_GIBSON_RENDERER_COMMAND", None)
-        env.pop("HARN_GIBSON_RENDERER_MODEL_COMMAND", None)
-        env.pop("HARN_GIBSON_RENDERER_TIMEOUT_MS", None)
-        return True
     if preserve_existing:
         env.setdefault("HARN_GIBSON_RENDERER_TIMEOUT_MS", str(renderer_timeout_ms))
         return True

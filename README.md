@@ -48,14 +48,14 @@ Useful variants:
 
 ```text
 /gibson-renderers
-/gibson-view --renderer gibson1
-/gibson-view --renderer dogfood
-/gibson-view --renderer none
+/gibson-view --renderer default
+/gibson-view --renderer classic
+/gibson-view --renderer stress
 /gibson-view --port 8765
 /gibson-view --no-browser
 ```
 
-`/gibson-view` uses the default `gibson1` renderer when no renderer is specified. `/gibson-renderers` lists the built-in renderer selectors. `gibson1` is the calmer default visualizer, `dogfood` is the busy showcase/stress renderer, `perception` uses the built-in perception renderer, and `none` uses the local deterministic renderer without launching an external renderer subprocess. A custom command can be supplied with `/gibson-view --renderer-command 'python my_renderer.py'`; a perception renderer spec can be supplied with `/gibson-view --renderer examples/projections/gibson-organic.json`.
+`/gibson-view` uses the `default` visualization when no renderer is specified. `/gibson-renderers` lists the built-in visualization names. `default` is the built-in organic force-layout visualization driven by the perception model, `classic` is the older hard-coded coherent visualizer, and `stress` is the busy showcase/stress visualizer. A custom command can be supplied with `/gibson-view --renderer-command 'python my_renderer.py'`; a custom perception visualization spec can be supplied with `/gibson-view --renderer examples/projections/gibson-organic.json`.
 
 `--port 8765` uses a predictable browser URL, `http://127.0.0.1:8765`. `--no-browser` starts the server without opening a browser, which is useful over SSH or when another tool will open the page.
 
@@ -97,7 +97,7 @@ uv run harn-gibson run -- -p "summarize this repo"
 
 This starts the viewer, opens the browser, imports existing Codex CLI OAuth credentials into harn's user auth store, and launches harn with the extension wired in.
 
-`run` uses the same default `gibson1` renderer as `/gibson-view`.
+`run` uses the same `default` visualization as `/gibson-view`.
 
 ## Capture And Replay
 
@@ -130,7 +130,7 @@ uv run harn-gibson watch-replay test-artifacts/replays/manual.json --playback-ti
 Replay can also opt into a hard-coded renderer:
 
 ```bash
-uv run harn-gibson watch-replay test-artifacts/replays/manual.json --renderer gibson1
+uv run harn-gibson watch-replay test-artifacts/replays/manual.json --renderer classic
 ```
 
 ## Watch A Recorded Session
@@ -141,7 +141,7 @@ Replay does not need harn. It feeds captured events through the same scene pipel
 uv run harn-gibson watch-replay examples/dogfood-replays/repo-map-trajectory.json
 ```
 
-Then open the printed URL if the browser does not open automatically. The browser replay button re-runs the same file. Add `--playback-timing real-time` to use captured source timestamps, or `--renderer gibson1` / `--renderer dogfood` to call a hard-coded renderer live while replaying event steps.
+Then open the printed URL if the browser does not open automatically. The browser replay button re-runs the same file. Add `--playback-timing real-time` to use captured source timestamps, or `--renderer classic` / `--renderer stress` to call a hard-coded visualization live while replaying event steps.
 
 ## How It Works
 
@@ -170,7 +170,7 @@ For launcher-based runs, run one command from the repo root:
 uv run harn-gibson run
 ```
 
-This starts the graphical display server with the calmer `gibson1` renderer, opens the browser, imports existing Codex CLI OAuth credentials into harn's user auth store, and launches `harn` with the display endpoint wired into the extension environment. Project-local `.harn/settings.json` selects the Codex provider/model and points harn at `.harn/extensions/gibson.py`; that shim adds `src/` to `sys.path` and loads the real `harn_gibson.extension` module.
+This starts the graphical display server with the `default` visualization, opens the browser, imports existing Codex CLI OAuth credentials into harn's user auth store, and launches `harn` with the display endpoint wired into the extension environment. Project-local `.harn/settings.json` selects the Codex provider/model and points harn at `.harn/extensions/gibson.py`; that shim adds `src/` to `sys.path` and loads the real `harn_gibson.extension` module.
 
 `run` chooses a free local port by default, so it can run even if a manual display server is already using `8765`. Pass `--port 8765` if you want a fixed port.
 
@@ -270,7 +270,7 @@ Noisy event types can also be sampled before routing. This keeps one matching ev
 HARN_GIBSON_ROUTE_RULES='[{"eventType":"session_tree","route":"renderer_agent","sampleEvery":4,"fallbackRoute":"debug_only"}]'
 ```
 
-To dogfood the renderer-agent process boundary without a live model call, select a built-in renderer or point the server at an external renderer command. The command receives `harn-gibson.external-renderer-request.v1` JSON on stdin and returns a render plan with `steps` on stdout. `examples/renderers/gibson1_renderer.py` is the default calmer hard-coded visualizer: it keeps status, a terminal board, depth-2 repo city, repo wire terrain, world-model spatial map, signal scope, route trace, and low-opacity data rain coherent enough for everyday use while still reacting to event phase, touched files, repo topology, world-model facts/lifecycle, coalesced timing, and the active style pack:
+To dogfood the renderer-agent process boundary without a live model call, select a built-in visualization or point the server at an external renderer command. The command receives `harn-gibson.external-renderer-request.v1` JSON on stdin and returns a render plan with `steps` on stdout. The default visualization is the built-in organic force-layout display:
 
 ```bash
 uv run harn-gibson run
@@ -278,13 +278,13 @@ uv run harn-gibson run
 
 There are three integration levels. A renderer decides how events become scene mutations. A primitive/effect expands the visual vocabulary that renderers can target; `spatial_map` is the first lower-level world-binding primitive for typed objects, edges, stable entity ids, and object-addressable camera targets. A display backend consumes scene state and implements that vocabulary in a runtime; the current backend is browser/canvas, but a terminal, native, game-engine, or OpenGL backend can work if it implements the catalog or an advertised subset. `GET /backend-contract` and `uv run harn-gibson backend-contract` expose the endpoint paths, scene/update schema names, core primitive kinds, catalog primitive kinds, effect kinds, mutation ops, input delivery modes, render timing modes, supported style packs, active style pack, and current backend capability profile for that use case. `GET /catalog` and `uv run harn-gibson catalog --tag gibson --compact` expose the full or filtered primitive/effect vocabulary. A custom primitive layer can either translate the advertised Gibson catalog to backend-native drawing calls or pair a custom catalog with a renderer that targets it.
 
-`examples/renderers/gibson_dogfood_renderer.py` remains the dogfood showcase and stress renderer for live harn sessions; it reacts to event phase, event type, coalesced timing, touched files, repo topology, and the active style pack with a staged scene using the current cinematic primitive/effect set, including a project hologram, data vault, black-ICE barrier, control graph, opcode glyph layer, Hollywood terminal wall, access matrix, orbital uplink map, ICE mesh, command ribbon, touched-file spark field, data tunnel, wire terrain, signal scope, route trace, signal interference overlay, repo city, vector sigil, data rain, and persistent effects. Non-default styles alter the emitted renderer tones and intent metadata, so `--style mainframe`, `--style neon-noir`, or `--style satellite-uplink` changes the showcase plan as well as the browser shell:
+`examples/renderers/gibson_dogfood_renderer.py` remains the stress showcase for live harn sessions; it reacts to event phase, event type, coalesced timing, touched files, repo topology, and the active style pack with a staged scene using the current cinematic primitive/effect set, including a project hologram, data vault, black-ICE barrier, control graph, opcode glyph layer, Hollywood terminal wall, access matrix, orbital uplink map, ICE mesh, command ribbon, touched-file spark field, data tunnel, wire terrain, signal scope, route trace, signal interference overlay, repo city, vector sigil, data rain, and persistent effects. Non-default styles alter the emitted renderer tones and intent metadata, so `--style mainframe`, `--style neon-noir`, or `--style satellite-uplink` changes the showcase plan as well as the browser shell:
 
 ```bash
-uv run harn-gibson run --renderer dogfood
+uv run harn-gibson run --renderer stress
 ```
 
-For longer capture sessions, use the capture wrapper. It launches dogfood with the showcase renderer, writes normalized JSONL to an ignored `test-artifacts/captures/` path by default, and prints the exact replay-review command to run afterward:
+For longer capture sessions, use the capture wrapper. It launches the stress visualization, writes normalized JSONL to an ignored `test-artifacts/captures/` path by default, and prints the exact replay-review command to run afterward:
 
 ```bash
 uv run harn-gibson capture -- -p "bootstrap a tiny project here"
@@ -419,7 +419,7 @@ Run the full local acceptance gate before a release checkpoint:
 bash scripts/acceptance.sh
 ```
 
-Use `bash scripts/acceptance.sh --dry-run` to inspect the exact commands without running the heavyweight browser/replay gates. The script runs lint, the full covered test suite, a dynamic-port launcher smoke, generic replay screenshots, the default and mainframe-styled `gibson1` replay screenshots, the dogfood stress-renderer screenshots, whitespace checks, and runtime/secret hygiene scans.
+Use `bash scripts/acceptance.sh --dry-run` to inspect the exact commands without running the heavyweight browser/replay gates. The script runs lint, the full covered test suite, a dynamic-port launcher smoke, generic replay screenshots, the classic replay screenshots, the mainframe-styled classic replay screenshots, the stress-renderer screenshots, whitespace checks, and runtime/secret hygiene scans.
 
 Run the checked-in replay fixture suite:
 
@@ -430,7 +430,7 @@ uv run harn-gibson replay-dir examples/replays \
   --screenshot-dir test-artifacts/replays/screenshots
 ```
 
-Run the calmer default `gibson1` renderer against its checked-in visual fixture:
+Run the `classic` renderer against its checked-in visual fixture:
 
 ```bash
 uv run harn-gibson replay-dir examples/gibson1-replays \
@@ -440,7 +440,7 @@ uv run harn-gibson replay-dir examples/gibson1-replays \
   --screenshot-dir test-artifacts/replays/gibson1-screenshots
 ```
 
-Run the same `gibson1` fixture under a non-default style pack:
+Run the same classic fixture under a non-default style pack:
 
 ```bash
 uv run harn-gibson replay-dir examples/gibson1-replays \
@@ -451,7 +451,7 @@ uv run harn-gibson replay-dir examples/gibson1-replays \
   --screenshot-dir test-artifacts/replays/gibson1-mainframe-screenshots
 ```
 
-Run the hard-coded dogfood renderer against the checked-in dogfood trajectory fixtures:
+Run the hard-coded stress renderer against the checked-in dogfood trajectory fixtures:
 
 ```bash
 uv run harn-gibson replay-dir examples/dogfood-replays \

@@ -77,14 +77,14 @@ def test_default_projection_resolves_a_complete_scene() -> None:
 
     assert scene["schema"] == PROJECTION_SCENE_SCHEMA
     assert scene["theme"] == "gibson"
-    assert scene["title"] == "repo"
+    assert scene["title"] == "ORGANIC SWEEP"
     assert scene["mood"]["name"] == "alert"
+    assert scene["physics"] == {"layers": ["world"]}
 
     nodes = {node["id"]: node for node in scene["nodes"]}
     # files, dirs, and the agent cursor are all placed
     assert {"dir:.", "dir:src", "file:src/app.py", "file:src/util.py", "file:README.md", "agent"} <= set(nodes)
     root = nodes["dir:."]
-    assert (root["x"], root["y"]) == (0.5, 0.5)
     # tree annotations drive the materialize wavefront: parent + depth
     assert root["depth"] == 0
     assert "parent" not in root
@@ -103,7 +103,7 @@ def test_default_projection_resolves_a_complete_scene() -> None:
     assert _clip_label("a_very_long_module_name.py") == "a_very_long_modul…"
     # encodings: touched file is bigger and brighter than the dormant one
     assert nodes["file:src/app.py"]["size"] > nodes["file:src/util.py"]["size"]
-    assert nodes["file:src/util.py"]["opacity"] == 0.35
+    assert nodes["file:src/util.py"]["opacity"] == 0.4
     assert nodes["file:src/util.py"]["tone"] == "ghost"
     # blast membership under alert turns the implicated file alarm-toned
     assert nodes["file:src/app.py"]["tone"] == "alarm"
@@ -368,7 +368,13 @@ def test_physics_block_marks_force_layers_for_live_simulation() -> None:
     scene = force_engine.resolve(_perception(), now_ms=1000)
     assert scene["physics"] == {"layers": ["web"]}
 
-    static_engine = ProjectionEngine()  # default radial-tree projection
+    default_engine = ProjectionEngine()
+    assert default_engine.resolve(_perception(), now_ms=1000)["physics"] == {"layers": ["world"]}
+
+    static_engine = ProjectionEngine({"layers": [
+        {"id": "tree", "select": {"types": ["dir", "file"]},
+         "layout": {"kind": "radial-tree", "relation": "contains", "root": "dir:."}},
+    ]})
     assert static_engine.resolve(_perception(), now_ms=1000)["physics"] == {"layers": []}
 
 
@@ -624,17 +630,15 @@ def test_spec_merge_keeps_defaults_for_missing_fields() -> None:
 
 def test_server_env_enables_projection_renderer() -> None:
     from harn_gibson.external_renderer import ExternalRenderer
-    from harn_gibson.rendering import DeterministicSceneRenderer
     from harn_gibson.server import selected_renderer_from_env
 
     assert selected_renderer_from_env(None) is None
     assert selected_renderer_from_env("  ") is None
-    assert isinstance(selected_renderer_from_env("none"), DeterministicSceneRenderer)
-    built_in_renderer = selected_renderer_from_env("dogfood", "250")
+    renderer = selected_renderer_from_env("default")
+    assert isinstance(renderer, ProjectionSceneRenderer)
+    built_in_renderer = selected_renderer_from_env("stress", "250")
     assert isinstance(built_in_renderer, ExternalRenderer)
     assert built_in_renderer.timeout_seconds == 0.25
-    renderer = selected_renderer_from_env("perception")
-    assert isinstance(renderer, ProjectionSceneRenderer)
     spec_renderer = selected_renderer_from_env("examples/projections/gibson-sector.json")
     assert isinstance(spec_renderer, ProjectionSceneRenderer)
 
@@ -839,7 +843,7 @@ def test_projection_http_endpoints_redirect_live_sessions() -> None:
 
     from harn_gibson.server import build_state_from_env, create_server
 
-    state = build_state_from_env({"HARN_GIBSON_RENDERER": "perception"})
+    state = build_state_from_env({"HARN_GIBSON_RENDERER": "default"})
     server = create_server("127.0.0.1", 0, state)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()

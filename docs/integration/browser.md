@@ -47,5 +47,5 @@ The integration test verifies:
 - the debug drawer toggles;
 - the browser input composer enqueues a message and `/input/next` drains it.
 - a non-default style pack reaches scene metadata, CSS variables, browser runtime state, and backdrop motif overlays.
-- the checked-in agent-side, default `gibson1`, dogfood stress-renderer, and renderer-side replay fixtures render through the browser screenshot path with nonblank canvas metrics and fixture-level screenshot metric expectations.
+- the checked-in agent-side, classic, stress-renderer, and renderer-side replay fixtures render through the browser screenshot path with nonblank canvas metrics and fixture-level screenshot metric expectations.
 - the generated replay frame review page can switch active frames in headless Chromium.

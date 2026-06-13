@@ -306,13 +306,11 @@ def selected_renderer_from_env(value: str | None, timeout_ms: str | None = None)
     renderer = normalize_renderer(value, default=None)
     if renderer is None:
         return None
-    if renderer == "none":
-        return DeterministicSceneRenderer()
+    if renderer == "default":
+        return ProjectionSceneRenderer({})
     command = direct_renderer_command(renderer)
     if command is not None:
         return external_renderer_from_env(command, timeout_ms)
-    if renderer == "perception":
-        return ProjectionSceneRenderer({})
     return ProjectionSceneRenderer(load_projection_spec(renderer))
 
 
@@ -514,7 +512,7 @@ def make_handler(state: GibsonServerState) -> type[BaseHTTPRequestHandler]:
             if not isinstance(renderer, ProjectionSceneRenderer):
                 self._json(
                     HTTPStatus.CONFLICT,
-                    {"error": "active renderer is not projection-driven; start with HARN_GIBSON_RENDERER=perception"},
+                    {"error": "active renderer is not projection-driven; start with HARN_GIBSON_RENDERER=default"},
                 )
                 return
             renderer.redirect(spec)

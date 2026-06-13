@@ -98,7 +98,7 @@ To watch a replay move through the live display, use `watch-replay`:
 uv run harn-gibson watch-replay examples/dogfood-replays/repo-map-trajectory.json
 ```
 
-`watch-replay` starts the browser server, opens the display, applies each replay step through the same pipeline as `replay`, and keeps the server open after playback by default. It accepts the same explicit renderer, style, and project metadata flags as offline replay. Fixed playback is the default and uses `--step-delay-ms`; real-time playback uses event and renderer-plan `timestampMs` gaps, scaled by `--speed`, with `--max-step-delay-ms` available for long idle periods. Add `--renderer gibson1` or `--renderer dogfood` to call a built-in renderer live while replaying event steps. Use `--start-step N --end-step M` to inspect a 1-based inclusive step range from a long capture. Full playback checks fixture expectations by default; partial playback skips them unless `--check-expectations` is supplied, because a slice usually cannot satisfy final-scene expectations. Use `--no-hold --no-browser --step-delay-ms 1 --start-delay-ms 0` for a fast command-line smoke run.
+`watch-replay` starts the browser server, opens the display, applies each replay step through the same pipeline as `replay`, and keeps the server open after playback by default. It accepts the same explicit renderer, style, and project metadata flags as offline replay. Fixed playback is the default and uses `--step-delay-ms`; real-time playback uses event and renderer-plan `timestampMs` gaps, scaled by `--speed`, with `--max-step-delay-ms` available for long idle periods. Add `--renderer classic` or `--renderer stress` to call a built-in visualization live while replaying event steps. Use `--start-step N --end-step M` to inspect a 1-based inclusive step range from a long capture. Full playback checks fixture expectations by default; partial playback skips them unless `--check-expectations` is supplied, because a slice usually cannot satisfy final-scene expectations. Use `--no-hold --no-browser --step-delay-ms 1 --start-delay-ms 0` for a fast command-line smoke run.
 
 ## Expectations
 
@@ -131,7 +131,7 @@ The command exits with status `1` if any fixture fails to load, replay, satisfy 
 
 Use `--style gibson`, `--style neon-noir`, `--style mainframe`, or `--style satellite-uplink` to render replay scenes through a specific style pack. Styled runs put the style pack in scene metadata and browser screenshots, so use a matching baseline directory if the style affects expected final scene state.
 
-Replay does not use ambient `HARN_GIBSON_RENDERER_COMMAND` or `HARN_GIBSON_RENDERER_MODEL_COMMAND` values by default. That keeps baseline verification deterministic even when a dogfood shell has renderer environment configured. To intentionally exercise renderer adapters offline, pass explicit flags to `replay` or `replay-dir`:
+Replay does not use ambient `HARN_GIBSON_RENDERER_COMMAND` or `HARN_GIBSON_RENDERER_MODEL_COMMAND` values by default. That keeps baseline verification deterministic even when an interactive shell has renderer environment configured. To intentionally exercise renderer adapters offline, pass explicit flags to `replay` or `replay-dir`:
 
 ```bash
 uv run harn-gibson replay examples/replays/stream-and-diagnostic.json \
@@ -149,7 +149,7 @@ uv run harn-gibson replay-dir examples/replays \
 
 The model command receives `harn-gibson.model-renderer-request.v1`; the external command receives `harn-gibson.external-renderer-request.v1`. Returned plans still go through the same validation, diagnostics, fail-open fallback, and final-scene expectation checks as live dogfood rendering.
 
-The hard-coded `gibson1_renderer.py` is the default calmer visualizer for normal watching. It uses the same renderer contract as every external renderer, but limits itself to a coherent status board, terminal wall, semantic repo city with compact child blocks, repo wire terrain, signal scope, trace route, data-rain backdrop, style-aware tones, and TTL-bounded timeline/route animations. When `context.project.semanticGraph` is available, it tags city/terrain blocks with package/role/degree metadata, adds missing code-file blocks from AST metadata, and draws import/test links through the trace-route surface. Use it when the goal is to inspect an agent session without the full stress-test scene:
+The `classic` visualization is backed by `gibson1_renderer.py`. It uses the same renderer contract as every external renderer, but limits itself to a coherent status board, terminal wall, semantic repo city with compact child blocks, repo wire terrain, signal scope, trace route, data-rain backdrop, style-aware tones, and TTL-bounded timeline/route animations. When `context.project.semanticGraph` is available, it tags city/terrain blocks with package/role/degree metadata, adds missing code-file blocks from AST metadata, and draws import/test links through the trace-route surface. Use it when the goal is to inspect an agent session without the full stress-test scene:
 
 ```bash
 uv run harn-gibson watch-replay examples/dogfood-replays/repo-map-trajectory.json \
@@ -178,7 +178,7 @@ uv run harn-gibson replay-dir examples/gibson1-replays \
   --screenshot-dir test-artifacts/replays/gibson1-mainframe-screenshots
 ```
 
-The hard-coded `gibson_dogfood_renderer.py` remains the showcase and stress renderer for live harn use before the renderer-agent backend is good enough. The checked-in `examples/dogfood-replays/` fixtures exercise that renderer against fixture workspaces under `examples/dogfood-workspaces/`, giving the showcase renderer committed trajectories for project bootstrapping, runtime diagnostics, failed tests, browser steering input, repo-topology, touched-file signals, active style packs, and the project hologram/data-vault/black-ICE/data-tunnel/wire-terrain/terminal-wall/access-matrix/orbital-map/ICE-mesh/control-graph/glyph-layer/ribbon/repo-city/spark-field/route-trace/signal-interference scene. A useful future fixture workflow is to run `uv run harn-gibson capture --trajectory tiny-project` for a general bootstrap capture and `uv run harn-gibson capture --trajectory repo-map` for a topology-heavy capture, then convert those event trajectories into split replay directories and browser screenshots. Several such trajectories should become regression inputs for event coalescing, renderer timing, touched-file visualization, route-trace timing, wire-terrain mapping, style-pack rendering, and visual continuity.
+The `stress` visualization is backed by `gibson_dogfood_renderer.py` for live harn use before the renderer-agent backend is good enough. The checked-in `examples/dogfood-replays/` fixtures exercise that renderer against fixture workspaces under `examples/dogfood-workspaces/`, giving the showcase renderer committed trajectories for project bootstrapping, runtime diagnostics, failed tests, browser steering input, repo-topology, touched-file signals, active style packs, and the project hologram/data-vault/black-ICE/data-tunnel/wire-terrain/terminal-wall/access-matrix/orbital-map/ICE-mesh/control-graph/glyph-layer/ribbon/repo-city/spark-field/route-trace/signal-interference scene. A useful future fixture workflow is to run `uv run harn-gibson capture --trajectory tiny-project` for a general bootstrap capture and `uv run harn-gibson capture --trajectory repo-map` for a topology-heavy capture, then convert those event trajectories into split replay directories and browser screenshots. Several such trajectories should become regression inputs for event coalescing, renderer timing, touched-file visualization, route-trace timing, wire-terrain mapping, style-pack rendering, and visual continuity.
 
 ## Baseline Review
 
@@ -201,7 +201,7 @@ uv run harn-gibson replay-dir examples/replays \
   --baseline-dir examples/baselines/replays
 ```
 
-Check the hard-coded dogfood renderer trajectory against its committed baseline and browser screenshot expectations:
+Check the hard-coded stress renderer trajectory against its committed baseline and browser screenshot expectations:
 
 ```bash
 uv run harn-gibson replay-dir examples/dogfood-replays \

@@ -21,7 +21,7 @@ Engine-owned guarantees (the chronic renderer failures, fixed structurally):
 Every spec field is optional; missing pieces take the smart defaults below.
 ``ProjectionSceneRenderer`` adapts the engine to the existing renderer
 protocol, so the pipeline, replay, and review tooling work unchanged. Enable
-with ``HARN_GIBSON_RENDERER=perception`` or
+with ``HARN_GIBSON_RENDERER=default`` or
 ``HARN_GIBSON_RENDERER=<path.json>``.
 """
 
@@ -64,15 +64,15 @@ _TICKER_LENGTH = 16
 DEFAULT_PROJECTION: dict[str, Any] = {
     "schema": PROJECTION_SCHEMA,
     "theme": "gibson",
+    "title": "ORGANIC SWEEP",
     "layers": [
         {
             "id": "world",
             "select": {"types": ["dir", "file"]},
-            "layout": {"kind": "radial-tree", "relation": "contains", "root": "dir:."},
+            "layout": {"kind": "force", "relations": ["contains"]},
             "encode": {
                 "size": {"attr": "touchCount", "range": [0.25, 1.0]},
-                "lift": {"attr": "touchCount", "range": [0.0, 0.5]},
-                "opacity": {"attr": "touchCount", "zero": 0.35},
+                "opacity": {"attr": "touchCount", "zero": 0.4},
             },
             "edges": [
                 {"relation": "contains", "style": "skeleton"},

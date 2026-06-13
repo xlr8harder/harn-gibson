@@ -65,12 +65,11 @@ projection itself carries a session unattended.
     {
       "id": "world",
       "select": {"types": ["dir", "file"]},
-      "layout": {"kind": "radial-tree", "relation": "contains", "root": "dir:."},
+      "layout": {"kind": "force", "relations": ["contains"]},
       "encode": {
         "size":    {"attr": "touchCount", "range": [0.25, 1.0]},
         "tone":    {"attr": "status", "map": {"error": "alarm", "ok": "good"}},
-        "lift":    {"attr": "churn"},
-        "opacity": {"attr": "touchCount", "zero": 0.35},
+        "opacity": {"attr": "touchCount", "zero": 0.4},
         "label":   {"attr": "name"}
       },
       "edges": [
@@ -92,8 +91,8 @@ projection itself carries a session unattended.
 }
 ```
 
-Every field is optional; omitted fields take the defaults above (which are the
-default projection, give or take). The pieces:
+Every field is optional; omitted fields take the organic force-layout defaults
+above. The pieces:
 
 - **`select`** — which entities a layer shows (`types`, `ids`).
 - **`layout`** — engine-owned placement: `radial-tree` (over a relation),
@@ -135,7 +134,7 @@ only *how beautifully* it gets there.
 
 `ProjectionSceneRenderer` implements the existing `SceneRenderer` protocol, so
 the pipeline, replay, review tooling, and server need no structural change:
-enable with `HARN_GIBSON_RENDERER=<path.json|perception>` (`perception` = default projection).
+enable with `HARN_GIBSON_RENDERER=<path.json|default>` (`default` = built-in projection).
 
 ## What this should feel like (UX commitments)
 

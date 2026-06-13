@@ -62,7 +62,7 @@ run uv run harn-gibson replay-dir examples/replays \
   --baseline-dir examples/baselines/replays \
   --screenshot-dir "$ARTIFACT_DIR/replay-screenshots"
 run uv run harn-gibson replay examples/claude-gibson-replays/long-session-arc.json \
-  --renderer examples/projections/gibson-organic.json \
+  --renderer default \
   --discovery stream \
   --project-root examples/dogfood-workspaces/repo-map \
   --project-name repo-map \

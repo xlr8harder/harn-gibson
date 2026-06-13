@@ -21,9 +21,9 @@ Current support:
 ```text
 /gibson-renderers
 /gibson-view
-/gibson-view --renderer gibson1
-/gibson-view --renderer dogfood
-/gibson-view --renderer none
+/gibson-view --renderer default
+/gibson-view --renderer classic
+/gibson-view --renderer stress
 /gibson-view --port 8765
 /gibson-view --no-browser
 ```
@@ -34,7 +34,7 @@ Environment defaults:
 HARN_GIBSON_VIEW_HOST=127.0.0.1
 HARN_GIBSON_VIEW_PORT=0
 HARN_GIBSON_VIEW_BROWSER=1
-HARN_GIBSON_VIEW_RENDERER=gibson1
+HARN_GIBSON_VIEW_RENDERER=default
 HARN_GIBSON_RECENT_EVENTS=100
 ```
 
@@ -81,13 +81,13 @@ Current support:
 uv run harn-gibson watch-replay examples/dogfood-replays/repo-map-trajectory.json
 ```
 
-Add `--playback-timing real-time` to use source timestamp deltas, or `--renderer gibson1` / `--renderer dogfood` to call a built-in renderer live during event replay.
+Add `--playback-timing real-time` to use source timestamp deltas, or `--renderer classic` / `--renderer stress` to call a built-in visualization live during event replay.
 
 For deterministic checks:
 
 ```bash
 uv run harn-gibson replay examples/claude-gibson-replays/linkjar-live-session.json \
-  --renderer examples/projections/gibson-organic.json \
+  --renderer default \
   --screenshot test-artifacts/replay.png
 ```
 
