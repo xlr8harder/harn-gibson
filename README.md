@@ -1,50 +1,90 @@
 # harn-gibson
 
-`harn-gibson` turns a live [secemp9/harn](https://github.com/secemp9/harn) agent session into a cinematic, 90s-Hackers-style visualization in the browser -- and records sessions so they can be replayed later with theatrical pacing, or re-projected into entirely different visuals.
+`harn-gibson` adds a cinematic browser viewer to a live [secemp9/harn](https://github.com/secemp9/harn) agent session. The normal setup has only two moving pieces:
 
-The current architecture is a four-stage pipeline:
+- a harn session with the Gibson extension loaded;
+- a local browser viewer started from that harn session with `/gibson-view`.
 
-1. **Instrumentation** -- a harn extension hooks before/during/after core agent events and streams normalized, sequenced `GibsonEvent`s: tool calls, file edits, test runs, commits, and every chunk of the model's own thinking and spoken text. Sessions can be captured to JSONL event logs (`HARN_GIBSON_EVENT_LOG`), which is what makes replays possible.
-2. **Perception model** (`harn-gibson.perception-model.v1`, `src/harn_gibson/perception.py`) -- folds the event stream into a temporal entity-relation graph: files, directories, commands, checks, commits, and the agent itself, connected by `contains` / `touched` / `produced` / `focused_on` relations, reconciled against git. The agent's narration and attention are first-class facts. This layer answers "what is true and what just happened" and is deliberately presentation-free.
-3. **Projection engine** (`harn-gibson.projection.v1`, `src/harn_gibson/projection.py`) -- resolves the perception graph plus a declarative JSON *projection spec* (see `examples/projections/`) into a scene: layout (radial tree, force, grid, ring), visual encodings, mood, camera, HUD, and event-to-effect dramaturgy (a failing check becomes a breach + alarm + shake; an edit becomes a pulse + scrolling diff peek). Because the spec is data, many visualizations project from the same perceived world.
-4. **Presentation** -- the browser page receives scenes over SSE and owns everything needing a smooth clock: spring-damper node motion, edge fades, the materialize wavefront, scrolling diff windows, and the narration stack.
+The viewer is a display layer. Harn remains the primary agent interface, and the browser can also queue small follow-up or steering messages back into harn.
 
-## Quick Start: Watch A Recorded Session
+## Quick Start: Interactive Viewer
+
+From this checkout:
 
 ```bash
 uv sync
+uv run harn
+```
+
+Inside harn, start the viewer:
+
+```text
+/gibson-view
+```
+
+That command starts a local Gibson display server, opens the browser, flushes recent harn events into the scene, and streams future events as the agent works.
+
+If harn cannot find Codex auth, run `uv run harn-gibson import-codex-auth` once from this checkout, or log into a harn provider directly.
+
+Useful variants:
+
+```text
+/gibson-view --port 8765
+/gibson-view --no-browser
+```
+
+The first uses a predictable browser URL, `http://127.0.0.1:8765`. The second starts the server without opening a browser, which is useful over SSH or when another tool will open the page.
+
+## Use It From Another Project
+
+Run harn in your target project and point it at this checkout as a harn package:
+
+```bash
+cd /path/to/your/project
+harn -e /path/to/harn-gibson
+```
+
+Then use `/gibson-view` inside harn. The package entry point is `extensions/gibson.py`, and both `pyproject.toml` and `package.json` declare it for harn discovery.
+
+## Browser Input
+
+The browser page includes a small composer. Submitted text is queued on the Gibson server and delivered into harn by the extension.
+
+Delivery modes:
+
+- `queue`: default. Runs immediately if harn is idle, or queues as a follow-up if harn is streaming.
+- `steer`: queues steering input for the active agent run.
+
+Runtime diagnostics, tracebacks, raw events, render intents, and hook decisions are available in the browser debug drawer.
+
+## One-Command Dogfood
+
+If you want Gibson to own the whole local process tree for a demo or test run, use the launcher:
+
+```bash
+uv run harn-gibson dogfood -- -p "summarize this repo"
+```
+
+This starts the viewer, opens the browser, imports existing Codex CLI OAuth credentials into harn's user auth store, and launches harn with the extension wired in.
+
+## Watch A Recorded Session
+
+Replay does not need harn. It feeds captured events through the same scene pipeline and browser backend:
+
+```bash
 uv run harn-gibson watch-replay examples/claude-gibson-replays/linkjar-live-session.json \
   --port 8765 --projection examples/projections/gibson-organic.json \
   --discovery stream --playback-timing real-time --speed 8 \
   --max-step-delay-ms 4000 --quiet-step-delay-ms 250 --min-step-delay-ms 2200
 ```
 
-Then open `http://127.0.0.1:8765`. The pacing flags are the tuned "demo cut": low-salience stretches (streamed reasoning, admin events) fast-forward under a 250ms cap while salient beats (tool runs, verdicts, commits) get at least 2.2s of breathing room. `--discovery stream` makes files materialize as the agent first touches them instead of showing the finished tree at boot. Add `--wait-for-input` to hold the display idle until a directive is typed into the page's composer -- a screen recording can open on the prompt being typed, with the session appearing to launch from it. The browser replay button re-runs the same file.
+Then open `http://127.0.0.1:8765`. The browser replay button re-runs the same file.
 
-## Live Sessions
+## How It Works
 
-The projection display attaches to a live harn run three ways. The display server reads `HARN_GIBSON_PROJECTION` from the environment, so the simplest is dogfood with the env var set:
+The harn extension subscribes to harn events and normalizes them into sequenced `GibsonEvent`s. The display server receives those events, routes them through the renderer/projection pipeline, and streams scene updates to the browser over SSE. The browser owns smooth presentation details such as animation clocks, scrolling panels, and canvas rendering.
 
-```bash
-HARN_GIBSON_PROJECTION=examples/projections/gibson-organic.json \
-uv run harn-gibson dogfood -- -p "your task here"
-```
-
-This starts the display server, opens the browser, and launches harn with the extension wired in; the projection engine owns the stage instead of the legacy renderer. `HARN_GIBSON_PERCEPTION_DISCOVERY=stream` makes files materialize as they are touched.
-
-For the full show-floor experience, `scripts/million_dollar_demo.py` boots the display idle, waits for a directive typed into the page composer, then launches harn against a scratch workspace with theatrical TDD house rules (failing tests first, dramatic commits, a closing soliloquy), captures the event log, and converts it into a replay fixture under `examples/claude-gibson-replays/` when the session ends.
-
-Manual wiring (display and harn in separate terminals): start `HARN_GIBSON_PROJECTION=... uv run harn-gibson serve`, then run harn with the gibson extension loaded and `HARN_GIBSON_ENDPOINT=http://127.0.0.1:8765/events` in its environment. A running session can also be re-projected live: `POST /projection` swaps the active projection spec, `GET /projection` introspects it. The intended attach/primary/batch/replay launch modes are described in [docs/launch-modes.md](docs/launch-modes.md).
-
-From an interactive harn session with the extension loaded, `/gibson-view` starts or reuses a local browser viewer and flushes a bounded recent-event buffer into it. Use `/gibson-view --port 8765` for a fixed port or `/gibson-view --no-browser` to start the server without opening a browser.
-
-The remainder of this README documents the earlier deterministic renderer / scene-primitive channels, which still work and still pass the full test suite; the perception + projection pipeline above is where current work happens.
-
-`harn` is included as a development dependency so `uv run harn-gibson dogfood` works from this checkout; `harn-gibson` itself has no runtime dependency on harn. The integration uses harn's stock extension API -- no harn modifications -- and harn sessions run headless here (`-p` prompts; the TUI is never involved, though harn's own pip metadata currently pulls `harn-tui` in as an install-time dependency). The display server and extension modules do not import `harn` or `harn-tui`; the dogfood launcher is the only place that shells out to the harn CLI.
-
-The deterministic renderer remains the default. Events pass through a routing layer before rendering: normal events become renderer requests, streaming assistant deltas update a local `text_stream` primitive, and debug-only events can bypass renderer execution. The deterministic fallback emits browser-rendered `city_block`, `node_graph`, `ribbon`, `glyph_layer`, and `particle_field` primitives, including a bounded repo map when renderer context includes topology or touched-file data. Repo city building height uses numeric line-count metadata plus visible file/directory counts, without sending file contents to the renderer. The browser renderer also supports low-level `mesh`, world-bound `spatial_map` object maps, cinematic `hologram` projections, animated `signal_scope` radar/oscilloscope instruments, animated `tunnel_grid` data corridors, animated `wire_landscape` terrain/filesystem planes, `terminal_wall` banks for command/output/file panels, `access_matrix` lock/security grids, spinning `orbital_map` uplink globes, rotating `data_vault` cores, faceted `black_ice` barriers, animated `trace_route` paths, camera-drifting `city_block` filesystem districts, constrained `svg_layer` vector primitives with transform keyframes, path morph frames, and safe filter/clip presets, `data_rain` glyph curtains, and persistent scene animations for pulses, packet bursts, timeline cues, route traces, scans, glitches, signal interference overlays, breach waves, camera jolts, scene camera paths, flythrough rays, extrusion frames, and hold brackets. Dogfood runs can opt into either an external render-plan command or a prompt-command model adapter; unsafe external/model plans are rejected before scene application and recorded as diagnostics. The display server exposes `/catalog`, and `uv run harn-gibson catalog` prints the same visual primitive/effect catalog for offline renderer prompts and display-backend experiments.
-
-Renderer implementations can stay simple with `render(requests, scene)`, or opt into `render_with_context(requests, scene, context)` to receive compact project metadata, the framework-owned world model, scene state, catalog entries, recent agent context, visual-continuity anchors, and recent visualization history. The world model includes observed file/command/change facts, inferred test/build health checkpoints whose status is tied to observed command outcomes, and lifecycle metadata for current/recent/aging/stale plus open/reconciled facts. See [docs/renderer-agent.md](docs/renderer-agent.md) for the context and compaction contract.
+Sessions can also be captured to JSONL with `HARN_GIBSON_EVENT_LOG`, converted into replay fixtures, and re-rendered later with different projections or hard-coded renderers. See [docs/launch-modes.md](docs/launch-modes.md), [docs/architecture.md](docs/architecture.md), and [docs/renderer-agent.md](docs/renderer-agent.md) for the deeper architecture and renderer contracts.
 
 ## Development
 
@@ -57,11 +97,11 @@ Coverage is enforced at 100% for the Python package.
 
 The 1.0 release boundary is defined in [docs/1.0-feature-set.md](docs/1.0-feature-set.md).
 
-Install `harn` separately when you want to run against a live agent.
+The dev environment includes harn for local dogfooding. Install harn separately when using Gibson outside this checkout.
 
-## Run The Display
+## Advanced Launching
 
-For normal dogfooding, run one command from the repo root:
+For launcher-based dogfooding, run one command from the repo root:
 
 ```bash
 uv run harn-gibson dogfood
