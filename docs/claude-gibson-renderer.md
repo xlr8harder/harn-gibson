@@ -14,7 +14,7 @@ Live, against a real harn session:
 
 ```bash
 HARN_GIBSON_RENDERER_COMMAND='uv run python examples/renderers/claude_gibson_renderer.py' \
-  uv run harn-gibson dogfood
+  uv run harn-gibson run
 ```
 
 Against the bundled long-session arc fixture, with per-step review frames:

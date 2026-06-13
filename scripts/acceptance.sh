@@ -14,7 +14,7 @@ for arg in "$@"; do
       cat <<'USAGE'
 Usage: bash scripts/acceptance.sh [--dry-run]
 
-Run the local 1.0 acceptance gates: lint, full tests, dogfood smoke, replay
+Run the local 1.0 acceptance gates: lint, full tests, run smoke, replay
 baseline/screenshot suites, whitespace checks, and runtime/secret hygiene scans.
 USAGE
       exit 0
@@ -56,7 +56,7 @@ DOGFOOD_RENDERER_COMMAND="uv run python examples/renderers/gibson_dogfood_render
 
 run uv run ruff check .
 run uv run pytest
-run uv run harn-gibson dogfood --harn-bin true --no-browser --no-codex-auth-import --no-hold-on-error
+run uv run harn-gibson run --harn-bin true --no-browser --no-codex-auth-import --no-hold-on-error
 run uv run harn-gibson replay-dir examples/replays \
   --output-result "$ARTIFACT_DIR/replay-suite.json" \
   --baseline-dir examples/baselines/replays \

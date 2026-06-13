@@ -19,7 +19,11 @@ The harn extension owns this mode. The command starts or reuses a local Gibson d
 Current support:
 
 ```text
+/gibson-renderers
 /gibson-view
+/gibson-view --renderer gibson1
+/gibson-view --renderer dogfood
+/gibson-view --renderer none
 /gibson-view --port 8765
 /gibson-view --no-browser
 ```
@@ -30,8 +34,11 @@ Environment defaults:
 HARN_GIBSON_VIEW_HOST=127.0.0.1
 HARN_GIBSON_VIEW_PORT=0
 HARN_GIBSON_VIEW_BROWSER=1
+HARN_GIBSON_VIEW_RENDERER=gibson1
 HARN_GIBSON_RECENT_EVENTS=100
 ```
+
+If `HARN_GIBSON_RENDERER_COMMAND`, `HARN_GIBSON_RENDERER_MODEL_COMMAND`, or `HARN_GIBSON_PROJECTION` is already set, `/gibson-view` preserves that environment unless `HARN_GIBSON_VIEW_RENDERER` or an explicit command option overrides it.
 
 Manual wiring is still available when you want separate process ownership:
 
@@ -49,7 +56,7 @@ This should remain a Gibson CLI launcher because the browser must exist before t
 Current support:
 
 ```bash
-uv run harn-gibson dogfood
+uv run harn-gibson run
 ```
 
 ### Non-Interactive harn, Visualized
@@ -61,7 +68,7 @@ This should also remain a Gibson CLI launcher. The launcher wires `HARN_GIBSON_E
 Current support:
 
 ```bash
-uv run harn-gibson dogfood -- -p "summarize this repo"
+uv run harn-gibson run -- -p "summarize this repo"
 ```
 
 ### Direct Replay and Review
@@ -71,10 +78,10 @@ Replay does not need harn. It feeds captured events, saved render plans, or scen
 Current support:
 
 ```bash
-uv run harn-gibson watch-replay examples/claude-gibson-replays/linkjar-live-session.json \
-  --projection examples/projections/gibson-organic.json \
-  --playback-timing real-time
+uv run harn-gibson watch-replay examples/dogfood-replays/repo-map-trajectory.json
 ```
+
+Add `--playback-timing real-time` to use source timestamp deltas, or `--renderer-preset gibson1` / `--renderer-preset dogfood` to call a built-in renderer live during event replay.
 
 For deterministic checks:
 
@@ -104,5 +111,4 @@ The extension should be fail-open for harn progress. If no display server is run
 ## Future Work
 
 - Promote `/gibson-view` from a bounded recent-event attach to fuller historical session bootstrap when harn exposes enough session history cheaply.
-- Add richer command arguments if users need projection/style switching at attach time.
 - Add a harn upstream follow-up if pyproject-only harn package manifests remain documented but unsupported in current discovery code.

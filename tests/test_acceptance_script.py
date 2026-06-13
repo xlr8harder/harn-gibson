@@ -23,7 +23,7 @@ def test_acceptance_script_dry_run_lists_release_gates() -> None:
 
     assert "+ uv run ruff check ." in output
     assert "+ uv run pytest" in output
-    assert "+ uv run harn-gibson dogfood --harn-bin true" in output
+    assert "+ uv run harn-gibson run --harn-bin true" in output
     assert "+ uv run harn-gibson replay-dir examples/replays" in output
     assert "+ uv run harn-gibson replay examples/claude-gibson-replays/long-session-arc.json" in output
     assert "--projection examples/projections/gibson-organic.json" in output

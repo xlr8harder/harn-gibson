@@ -35,19 +35,19 @@ Replay fixtures use `harn-gibson.replay.v1`. They can replay either side of the 
 
 ## Captured Event Logs
 
-For live trajectory capture, use the dogfood capture wrapper:
+For live trajectory capture, use the capture wrapper:
 
 ```bash
-uv run harn-gibson dogfood-capture --list-trajectories
-uv run harn-gibson dogfood-capture --trajectory tiny-project
-uv run harn-gibson dogfood-capture --trajectory repo-map
+uv run harn-gibson capture --list-trajectories
+uv run harn-gibson capture --trajectory tiny-project
+uv run harn-gibson capture --trajectory repo-map
 ```
 
 Built-in trajectories create ignored bare workspaces under `test-artifacts/dogfood-workspaces/`, inject long capture prompts from `examples/prompts/`, write ignored capture logs under `test-artifacts/captures/`, default to split fixture conversion, and print the exact review command when harn exits. `tiny-project` is the general bootstrap path; `repo-map` creates a broader depth-2 layout so repo-city, wire-landscape, terminal-wall, and touched-file visuals can be checked against varied directories, line counts, command/output snippets, and touched-file batches. These live trajectories are the preferred source for hard-coded renderer regression material: keep the raw capture ignored, review the split browser frames, and promote only redacted replay JSON plus baselines. For a custom workspace or edited prompt, use the manual form:
 
 ```bash
 mkdir -p test-artifacts/dogfood-workspaces/custom-tiny-project
-uv run harn-gibson dogfood-capture \
+uv run harn-gibson capture \
   --cwd test-artifacts/dogfood-workspaces/custom-tiny-project \
   --split-every 200 \
   -- -p "$(cat examples/prompts/dogfood-tiny-project.md)"
@@ -95,14 +95,10 @@ uv run harn-gibson replay-dir test-artifacts/replays/captured-session-split \
 To watch a replay move through the live display, use `watch-replay`:
 
 ```bash
-uv run harn-gibson watch-replay examples/dogfood-replays/repo-map-trajectory.json \
-  --renderer-command 'uv run python examples/renderers/gibson_dogfood_renderer.py' \
-  --renderer-timeout-ms 10000 \
-  --playback-timing real-time \
-  --speed 1
+uv run harn-gibson watch-replay examples/dogfood-replays/repo-map-trajectory.json
 ```
 
-`watch-replay` starts the browser server, opens the display, applies each replay step through the same pipeline as `replay`, and keeps the server open after playback by default. It accepts the same explicit renderer, style, and project metadata flags as offline replay. Fixed playback uses `--step-delay-ms`; real-time playback uses event and renderer-plan `timestampMs` gaps, scaled by `--speed`, with `--max-step-delay-ms` available for long idle periods. Use `--start-step N --end-step M` to inspect a 1-based inclusive step range from a long capture. Full playback checks fixture expectations by default; partial playback skips them unless `--check-expectations` is supplied, because a slice usually cannot satisfy final-scene expectations. Use `--no-hold --no-browser --step-delay-ms 1 --start-delay-ms 0` for a fast command-line smoke run.
+`watch-replay` starts the browser server, opens the display, applies each replay step through the same pipeline as `replay`, and keeps the server open after playback by default. It accepts the same explicit renderer, style, and project metadata flags as offline replay. Fixed playback is the default and uses `--step-delay-ms`; real-time playback uses event and renderer-plan `timestampMs` gaps, scaled by `--speed`, with `--max-step-delay-ms` available for long idle periods. Add `--renderer-preset gibson1` or `--renderer-preset dogfood` to call a built-in renderer live while replaying event steps. Use `--start-step N --end-step M` to inspect a 1-based inclusive step range from a long capture. Full playback checks fixture expectations by default; partial playback skips them unless `--check-expectations` is supplied, because a slice usually cannot satisfy final-scene expectations. Use `--no-hold --no-browser --step-delay-ms 1 --start-delay-ms 0` for a fast command-line smoke run.
 
 ## Expectations
 
@@ -182,7 +178,7 @@ uv run harn-gibson replay-dir examples/gibson1-replays \
   --screenshot-dir test-artifacts/replays/gibson1-mainframe-screenshots
 ```
 
-The hard-coded `gibson_dogfood_renderer.py` remains the showcase and stress renderer for live harn use before the renderer-agent backend is good enough. The checked-in `examples/dogfood-replays/` fixtures exercise that renderer against fixture workspaces under `examples/dogfood-workspaces/`, giving the showcase renderer committed trajectories for project bootstrapping, runtime diagnostics, failed tests, browser steering input, repo-topology, touched-file signals, active style packs, and the project hologram/data-vault/black-ICE/data-tunnel/wire-terrain/terminal-wall/access-matrix/orbital-map/ICE-mesh/control-graph/glyph-layer/ribbon/repo-city/spark-field/route-trace/signal-interference scene. A useful future fixture workflow is to run `uv run harn-gibson dogfood-capture --trajectory tiny-project` for a general bootstrap capture and `uv run harn-gibson dogfood-capture --trajectory repo-map` for a topology-heavy capture, then convert those event trajectories into split replay directories and browser screenshots. Several such trajectories should become regression inputs for event coalescing, renderer timing, touched-file visualization, route-trace timing, wire-terrain mapping, style-pack rendering, and visual continuity.
+The hard-coded `gibson_dogfood_renderer.py` remains the showcase and stress renderer for live harn use before the renderer-agent backend is good enough. The checked-in `examples/dogfood-replays/` fixtures exercise that renderer against fixture workspaces under `examples/dogfood-workspaces/`, giving the showcase renderer committed trajectories for project bootstrapping, runtime diagnostics, failed tests, browser steering input, repo-topology, touched-file signals, active style packs, and the project hologram/data-vault/black-ICE/data-tunnel/wire-terrain/terminal-wall/access-matrix/orbital-map/ICE-mesh/control-graph/glyph-layer/ribbon/repo-city/spark-field/route-trace/signal-interference scene. A useful future fixture workflow is to run `uv run harn-gibson capture --trajectory tiny-project` for a general bootstrap capture and `uv run harn-gibson capture --trajectory repo-map` for a topology-heavy capture, then convert those event trajectories into split replay directories and browser screenshots. Several such trajectories should become regression inputs for event coalescing, renderer timing, touched-file visualization, route-trace timing, wire-terrain mapping, style-pack rendering, and visual continuity.
 
 ## Baseline Review
 

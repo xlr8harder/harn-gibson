@@ -86,15 +86,15 @@ Set `HARN_GIBSON_RENDERER_COMMAND` to run a renderer as a subprocess. The comman
 ```bash
 HARN_GIBSON_RENDERER_COMMAND='uv run python examples/renderers/gibson_dogfood_renderer.py' \
 HARN_GIBSON_RENDERER_TIMEOUT_MS=10000 \
-uv run harn-gibson dogfood --style satellite-uplink
+uv run harn-gibson run --style satellite-uplink
 ```
 
 For longer live sessions that should become replay fixtures, prefer the capture wrapper:
 
 ```bash
-uv run harn-gibson dogfood-capture --list-trajectories
-uv run harn-gibson dogfood-capture --trajectory tiny-project --style satellite-uplink
-uv run harn-gibson dogfood-capture --trajectory repo-map --style satellite-uplink
+uv run harn-gibson capture --list-trajectories
+uv run harn-gibson capture --trajectory tiny-project --style satellite-uplink
+uv run harn-gibson capture --trajectory repo-map --style satellite-uplink
 ```
 
 Built-in trajectories create ignored bare workspaces, inject long prompts, set the showcase renderer, record normalized JSONL under ignored artifacts by default, and print the matching split `event-log-to-replay --review-dir ... --output-result ...` command when harn exits, including the captured workspace's `--project-root` and `--project-name`. `tiny-project` is the general bootstrap path; `repo-map` is aimed at depth-2 repo topology, line-count variation, and touched-file batches for repo-city renderer work. For hard-coded renderer regression work, prefer recording real harn trajectories first, then promote only redacted replay chunks and browser baselines after reviewing the generated frames. For custom prompts or workspace reuse, pass `--cwd PATH --split-every N -- -p "$(cat your-prompt.md)"` instead.
@@ -163,7 +163,7 @@ The command writes the model response text to stdout. The adapter accepts a raw 
 ```bash
 HARN_GIBSON_RENDERER_MODEL_COMMAND='uv run python examples/renderers/gibson_prompt_echo_renderer.py' \
 HARN_GIBSON_RENDERER_MODEL_TIMEOUT_MS=10000 \
-uv run harn-gibson dogfood
+uv run harn-gibson run
 ```
 
 If both `HARN_GIBSON_RENDERER_MODEL_COMMAND` and `HARN_GIBSON_RENDERER_COMMAND` are set, the model command wins. Command failures, invalid model output, and unsafe model plans are fail-open: harn-gibson applies deterministic fallback mutations and patches the failure into trace/debug scene state.
@@ -290,7 +290,7 @@ Use `harn-gibson replay --output-render-intents intents.json --render-intent-rev
 
 Streaming deltas need special handling before a remote renderer agent is added. `message_update` and similar stream events should update local stream buffers or named text primitives with throttled display refreshes. The renderer agent should receive coarse stream milestones or compact summaries, not every streaming delta as a separate model turn.
 
-Repo topology follows the same rule. The current context includes a bounded top-level directory/file sample from `HARN_GIBSON_PROJECT_ROOT`, a bounded semantic graph from local Python AST metadata, and a coalesced `touchedFiles` list extracted from path-like event payload fields and command strings. `context.project.worldModel` accumulates touched-file activity, command/change facts, health checkpoints, and outcomes across renderer batches, while `touchedFiles` remains the bounded current batch. `dogfood --cwd PATH` sets that project root to the harn target workspace automatically, and `HARN_GIBSON_PROJECT_NAME` can override the display name. Runtime/auth-looking paths, virtualenvs, env files, caches, symlinks, and test artifacts are omitted. The deterministic renderer already turns this context into a `repo-map` `node_graph`, a `repo-city` `city_block` mapped from the visible depth-2 repo sample, and, when files are touched, `repo-touch-field` particles plus repo-city extrusion; the hard-coded dogfood renderer also maps the same sample into a `wire_landscape` terrain plane with touched peaks, a `terminal_wall` file panel, an `access_matrix`, and an `orbital_map` uplink. City district and terrain peak height are based on bounded line-count metadata plus visible file/directory counts, while touched paths select and recolor the matching district, child block, peak, panel, access cell, or uplink node. The line counts and semantic graph are metadata only; file contents are not included in renderer context. `city_block.cameraPath` accepts bounded transform keyframes so the browser can add slow camera drift over filesystem districts without changing the underlying scene. A future renderer can use the same context to create package-clustered cities, dependency routes, edited-file pulses, health beacons, terrain flyovers, terminal panel banks, uplink maps, or flythrough paths without receiving file contents or a full repository listing every turn.
+Repo topology follows the same rule. The current context includes a bounded top-level directory/file sample from `HARN_GIBSON_PROJECT_ROOT`, a bounded semantic graph from local Python AST metadata, and a coalesced `touchedFiles` list extracted from path-like event payload fields and command strings. `context.project.worldModel` accumulates touched-file activity, command/change facts, health checkpoints, and outcomes across renderer batches, while `touchedFiles` remains the bounded current batch. `run --cwd PATH` sets that project root to the harn target workspace automatically, and `HARN_GIBSON_PROJECT_NAME` can override the display name. Runtime/auth-looking paths, virtualenvs, env files, caches, symlinks, and test artifacts are omitted. The deterministic renderer already turns this context into a `repo-map` `node_graph`, a `repo-city` `city_block` mapped from the visible depth-2 repo sample, and, when files are touched, `repo-touch-field` particles plus repo-city extrusion; the hard-coded dogfood renderer also maps the same sample into a `wire_landscape` terrain plane with touched peaks, a `terminal_wall` file panel, an `access_matrix`, and an `orbital_map` uplink. City district and terrain peak height are based on bounded line-count metadata plus visible file/directory counts, while touched paths select and recolor the matching district, child block, peak, panel, access cell, or uplink node. The line counts and semantic graph are metadata only; file contents are not included in renderer context. `city_block.cameraPath` accepts bounded transform keyframes so the browser can add slow camera drift over filesystem districts without changing the underlying scene. A future renderer can use the same context to create package-clustered cities, dependency routes, edited-file pulses, health beacons, terrain flyovers, terminal panel banks, uplink maps, or flythrough paths without receiving file contents or a full repository listing every turn.
 
 Scene primitives can declare how visuals are bound to durable facts without making the browser interpret those facts directly:
 

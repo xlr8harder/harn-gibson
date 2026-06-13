@@ -19,7 +19,9 @@ from harn_gibson.extension import (
     _parse_view_command_args,
     _poll_interval_from_env,
     _recent_event_limit_from_env,
+    _register_renderer_command,
     _register_view_command,
+    _viewer_env_for_options,
     build_dispatcher_from_env,
     build_input_endpoint_from_env,
     default,
@@ -207,7 +209,7 @@ def test_extension_factory_registers_every_event(monkeypatch: Any) -> None:
     extension_factory(harn)
 
     assert set(harn.handlers) == set(HARN_EVENTS)
-    assert sorted(harn.commands) == ["gibson-view"]
+    assert sorted(harn.commands) == ["gibson-renderers", "gibson-view"]
     assert default is extension_factory
     handler = harn.handlers["input"]
     result = asyncio.run(handler({"type": "input", "text": "hi", "source": "interactive"}, FakeCtx(None)))  # type: ignore[operator]
@@ -242,31 +244,107 @@ def test_input_endpoint_from_env() -> None:
 
 
 def test_view_command_arg_parsing_and_recent_limit() -> None:
-    assert _parse_view_command_args(
+    parsed = _parse_view_command_args(
         "--host 0.0.0.0 --port 777 --no-browser",
         {
             "HARN_GIBSON_VIEW_HOST": "localhost",
             "HARN_GIBSON_VIEW_PORT": "8888",
             "HARN_GIBSON_VIEW_BROWSER": "true",
         },
-    ) == {"host": "0.0.0.0", "port": 777, "browser": False}
-    assert _parse_view_command_args(
-        "--host=::1 --port=bad --browser",
+    )
+    assert {key: parsed[key] for key in ("host", "port", "browser", "renderer")} == {
+        "host": "0.0.0.0",
+        "port": 777,
+        "browser": False,
+        "renderer": "gibson1",
+    }
+    parsed = _parse_view_command_args(
+        "--host=::1 --port=bad --browser --renderer dogfood --style mainframe --renderer-timeout-ms 1234",
         {
             "HARN_GIBSON_VIEW_PORT": "1234",
             "HARN_GIBSON_VIEW_BROWSER": "0",
         },
-    ) == {"host": "::1", "port": 1234, "browser": True}
+    )
+    assert parsed == {
+        "host": "::1",
+        "port": 1234,
+        "browser": True,
+        "renderer": "dogfood",
+        "renderer_command": None,
+        "projection": None,
+        "style": "mainframe",
+        "renderer_timeout_ms": "1234",
+        "list_renderers": False,
+    }
     assert _parse_view_command_args("--port -5", {})["port"] == 0
-    assert _parse_view_command_args("--port", {"HARN_GIBSON_VIEW_PORT": "bad"}) == {
+    parsed = _parse_view_command_args("--port", {"HARN_GIBSON_VIEW_PORT": "bad"})
+    assert {key: parsed[key] for key in ("host", "port", "browser", "renderer")} == {
         "host": "127.0.0.1",
         "port": 0,
         "browser": True,
+        "renderer": "gibson1",
     }
     assert _parse_view_command_args("--unknown", {"HARN_GIBSON_VIEW_BROWSER": "no"})["browser"] is False
+    assert _parse_view_command_args(
+        "--renderer=bad --renderer-preset=none --renderer-command='python renderer.py'",
+        {},
+    )["renderer"] == "command"
+    assert _parse_view_command_args("--projection=1 --list-renderers", {})["list_renderers"] is True
+    parsed = _parse_view_command_args(
+        "--renderer-command python-custom --projection projection.json --style=neon-noir --renderer-timeout-ms=333",
+        {},
+    )
+    assert parsed["renderer"] == "projection"
+    assert parsed["renderer_command"] == "python-custom"
+    assert parsed["projection"] == "projection.json"
+    assert parsed["style"] == "neon-noir"
+    assert parsed["renderer_timeout_ms"] == "333"
+    assert _parse_view_command_args("--renderer env", {})["renderer"] is None
+    assert _parse_view_command_args(
+        "",
+        {"HARN_GIBSON_RENDERER_COMMAND": "python renderer.py"},
+    )["renderer"] is None
     assert _recent_event_limit_from_env({"HARN_GIBSON_RECENT_EVENTS": "2"}) == 2
     assert _recent_event_limit_from_env({"HARN_GIBSON_RECENT_EVENTS": "-1"}) == 0
     assert _recent_event_limit_from_env({"HARN_GIBSON_RECENT_EVENTS": "bad"}) == 100
+
+
+def test_viewer_env_for_renderer_options() -> None:
+    base_env = {
+        "HARN_GIBSON_RENDERER_COMMAND": "python old.py",
+        "HARN_GIBSON_RENDERER_MODEL_COMMAND": "python model.py",
+        "HARN_GIBSON_PROJECTION": "old",
+    }
+
+    preset_env = _viewer_env_for_options(
+        base_env,
+        {"renderer": "gibson1", "renderer_command": None, "projection": None, "style": "mainframe"},
+    )
+    assert "gibson1_renderer.py" in preset_env["HARN_GIBSON_RENDERER_COMMAND"]
+    assert preset_env["HARN_GIBSON_STYLE"] == "mainframe"
+    assert "HARN_GIBSON_RENDERER_MODEL_COMMAND" not in preset_env
+    assert "HARN_GIBSON_PROJECTION" not in preset_env
+
+    none_env = _viewer_env_for_options(
+        base_env,
+        {"renderer": "none", "renderer_command": None, "projection": None, "renderer_timeout_ms": "500"},
+    )
+    assert "HARN_GIBSON_RENDERER_COMMAND" not in none_env
+    assert "HARN_GIBSON_RENDERER_TIMEOUT_MS" not in none_env
+
+    command_env = _viewer_env_for_options(
+        base_env,
+        {"renderer": "command", "renderer_command": "python custom.py", "projection": None},
+    )
+    assert command_env["HARN_GIBSON_RENDERER_COMMAND"] == "python custom.py"
+    assert "HARN_GIBSON_PROJECTION" not in command_env
+
+    projection_env = _viewer_env_for_options(
+        base_env,
+        {"renderer": "projection", "renderer_command": None, "projection": "examples/projection.json"},
+    )
+    assert projection_env["HARN_GIBSON_PROJECTION"] == "examples/projection.json"
+    assert "HARN_GIBSON_RENDERER_COMMAND" not in projection_env
 
 
 def test_gibson_view_controller_attaches_viewer_and_reuses_it(tmp_path: Path, monkeypatch: Any) -> None:
@@ -325,7 +403,10 @@ def test_gibson_view_controller_attaches_viewer_and_reuses_it(tmp_path: Path, mo
     controller.stop()
     controller.stop()
 
-    assert created == [("127.0.0.2", 9900, {"HARN_GIBSON_EVENT_LOG": str(event_log)}, False)]
+    assert created[0][0:2] == ("127.0.0.2", 9900)
+    assert created[0][3] is False
+    assert created[0][2]["HARN_GIBSON_EVENT_LOG"] == str(event_log)
+    assert "gibson1_renderer.py" in created[0][2]["HARN_GIBSON_RENDERER_COMMAND"]
     assert viewer.opened == 1
     assert viewer.closed_count == 1
     assert poller.endpoint == "http://127.0.0.1:9900/input/next"
@@ -337,6 +418,22 @@ def test_gibson_view_controller_attaches_viewer_and_reuses_it(tmp_path: Path, mo
     ]
     assert [event.event_type for event, _decisions in FakeHttpSink.instances[1].published][-1] == "viewer_attach"  # type: ignore[attr-defined]
     assert "viewer_attach" in event_log.read_text(encoding="utf-8")
+
+
+def test_gibson_renderer_list_command_reports_presets() -> None:
+    harn = FakeHarn()
+    relay = GibsonRelay(FakeSink())
+    poller = BrowserInputPoller(harn, None)
+    controller = GibsonViewController(harn, relay, poller)
+    ui = CommandUi()
+
+    _register_renderer_command(harn, controller)
+    handler = harn.commands["gibson-renderers"]["handler"]
+    asyncio.run(handler("", FakeCtx(ui)))  # type: ignore[operator]
+
+    assert "gibson1" in ui.notifications[0][0]
+    assert harn.entries[0][0] == "gibson_view"
+    assert relay.recent_events[0][0].event_type == "viewer_renderers"
 
 
 def test_gibson_view_controller_reports_startup_errors(monkeypatch: Any) -> None:
@@ -372,9 +469,12 @@ def test_gibson_view_controller_default_factory_and_stop_without_close(monkeypat
 
     monkeypatch.setattr("harn_gibson.viewer.start_viewer", fake_start_viewer)
     controller = GibsonViewController(FakeHarn(), GibsonRelay(FakeSink()), BrowserInputPoller(FakeHarn(), None))
-    viewer = controller._start_or_reuse_viewer({"host": "127.0.0.9", "port": 9999, "browser": False})
-    reused = controller._start_or_reuse_viewer({"host": "127.0.0.8", "port": 8888, "browser": True})
-    reused_without_browser = controller._start_or_reuse_viewer({"host": "127.0.0.7", "port": 7777, "browser": False})
+    options = {"host": "127.0.0.9", "port": 9999, "browser": False, "renderer": None}
+    viewer = controller._start_or_reuse_viewer(options)
+    reused = controller._start_or_reuse_viewer({"host": "127.0.0.8", "port": 8888, "browser": True, "renderer": None})
+    reused_without_browser = controller._start_or_reuse_viewer(
+        {"host": "127.0.0.7", "port": 7777, "browser": False, "renderer": None}
+    )
     controller.viewer = object()
     controller.stop()
 
@@ -389,6 +489,7 @@ def test_optional_harn_command_helpers_handle_missing_capabilities() -> None:
     controller = GibsonViewController(object(), GibsonRelay(FakeSink()), BrowserInputPoller(object(), None))
 
     _register_view_command(object(), controller)
+    _register_renderer_command(object(), controller)
     _notify_command_context(FakeCtx(None), "hidden")
     _notify_command_context(FakeCtx(ui), "visible")
     _append_harn_entry(object(), "attached", {"url": "http://viewer"})

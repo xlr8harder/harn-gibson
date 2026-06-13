@@ -888,9 +888,9 @@ def test_cli_parser_and_run(monkeypatch: Any, capsys: Any) -> None:
     assert __version__ == project_metadata["project"]["version"]
     assert parser.parse_args(["extension-path"]).command == "extension-path"
     parsed_dogfood = parser.parse_args(
-        ["dogfood", "--no-browser", "--style", "neon-noir", "--cwd", "work", "--", "-p", "hello"]
+        ["run", "--no-browser", "--style", "neon-noir", "--cwd", "work", "--", "-p", "hello"]
     )
-    assert parsed_dogfood.command == "dogfood"
+    assert parsed_dogfood.command == "run"
     assert parsed_dogfood.browser is False
     assert parsed_dogfood.style == "neon-noir"
     assert parsed_dogfood.cwd == "work"
@@ -898,9 +898,11 @@ def test_cli_parser_and_run(monkeypatch: Any, capsys: Any) -> None:
     assert parsed_dogfood.renderer_command is None
     assert parsed_dogfood.renderer_timeout_ms == cli.DOGFOOD_CAPTURE_RENDERER_TIMEOUT_MS
     assert parsed_dogfood.harn_args == ["--", "-p", "hello"]
+    parsed_legacy_dogfood = parser.parse_args(["dogfood", "--no-browser"])
+    assert parsed_legacy_dogfood.command == "dogfood"
     parsed_capture = parser.parse_args(
         [
-            "dogfood-capture",
+            "capture",
             "--no-browser",
             "--style",
             "mainframe",
@@ -922,7 +924,7 @@ def test_cli_parser_and_run(monkeypatch: Any, capsys: Any) -> None:
             "capture",
         ]
     )
-    assert parsed_capture.command == "dogfood-capture"
+    assert parsed_capture.command == "capture"
     assert parsed_capture.browser is False
     assert parsed_capture.style == "mainframe"
     assert parsed_capture.cwd == "capture-work"
@@ -1410,6 +1412,11 @@ def test_cli_replay_renderer_env_helpers(monkeypatch: Any) -> None:
             "3500",
         ]
     )
+    preset_timeout = parser.parse_args(
+        ["watch-replay", "fixture.json", "--renderer-preset", "dogfood", "--renderer-timeout-ms", "4500"]
+    )
+    preset_no_timeout = parser.parse_args(["replay", "fixture.json", "--renderer-preset", "gibson1"])
+    preset_none = parser.parse_args(["watch-replay", "fixture.json", "--renderer-preset", "none"])
     default_state = cli._replay_state_from_args(deterministic)
     try:
         assert isinstance(default_state.renderer, DeterministicSceneRenderer)
@@ -1445,6 +1452,13 @@ def test_cli_replay_renderer_env_helpers(monkeypatch: Any) -> None:
         "HARN_GIBSON_RENDERER_MODEL_COMMAND": "python model.py",
         "HARN_GIBSON_RENDERER_MODEL_TIMEOUT_MS": "3500",
     }
+    preset_env = cli._explicit_replay_renderer_env_from_args(preset_timeout)
+    assert "gibson_dogfood_renderer.py" in preset_env["HARN_GIBSON_RENDERER_COMMAND"]
+    assert preset_env["HARN_GIBSON_RENDERER_TIMEOUT_MS"] == "4500"
+    preset_no_timeout_env = cli._explicit_replay_renderer_env_from_args(preset_no_timeout)
+    assert "gibson1_renderer.py" in preset_no_timeout_env["HARN_GIBSON_RENDERER_COMMAND"]
+    assert "HARN_GIBSON_RENDERER_TIMEOUT_MS" not in preset_no_timeout_env
+    assert cli._explicit_replay_renderer_env_from_args(preset_none) == {}
     assert cli._explicit_replay_state_env_from_args(project_only) == {
         "HARN_GIBSON_RENDERER_SEMANTIC_GRAPH": "1",
         "HARN_GIBSON_PROJECT_ROOT": "/tmp/workspace",

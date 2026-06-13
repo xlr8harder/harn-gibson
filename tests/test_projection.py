@@ -640,6 +640,7 @@ def test_cli_projection_flag_maps_to_env() -> None:
 
     args = argparse.Namespace(
         renderer_command=None, renderer_model_command=None,
+        renderer_preset=None,
         renderer_timeout_ms=None, renderer_model_timeout_ms=None,
         projection="examples/projections/gibson-sector.json",
         discovery="stream",

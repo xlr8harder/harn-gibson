@@ -15,6 +15,12 @@ from typing import Any
 
 from harn_gibson.events import GibsonEvent, diagnostic_event
 from harn_gibson.hooks import HookDispatcher, load_hook_module, result_for_harn
+from harn_gibson.renderer_presets import (
+    DEFAULT_RENDERER_PRESET,
+    RENDERER_PRESETS,
+    renderer_preset_command,
+    renderer_preset_listing,
+)
 from harn_gibson.sinks import (
     DEFAULT_ENDPOINT,
     CompositeSink,
@@ -235,6 +241,17 @@ class GibsonViewController:
     async def handle(self, raw_args: str = "", ctx: Any = None) -> None:
         try:
             options = _parse_view_command_args(raw_args, self.environ)
+            if options["list_renderers"]:
+                message = renderer_preset_listing()
+                _notify_command_context(ctx, message)
+                _append_harn_entry(self.harn, message, {"renderers": list(RENDERER_PRESETS)})
+                await self.relay.publish_diagnostic(
+                    event_type="viewer_renderers",
+                    severity="info",
+                    title="Gibson renderers",
+                    message=message,
+                )
+                return
             viewer = self._start_or_reuse_viewer(options)
             http_sink = self.relay.attach_http_endpoint(viewer.endpoint, self.environ)
             self.poller.set_endpoint(viewer.input_endpoint)
@@ -242,13 +259,21 @@ class GibsonViewController:
             await self.relay.flush_recent(http_sink)
             message = f"Gibson viewer attached at {viewer.display_url}"
             _notify_command_context(ctx, message)
-            _append_harn_entry(self.harn, message, {"url": viewer.display_url})
+            _append_harn_entry(
+                self.harn,
+                message,
+                {
+                    "url": viewer.display_url,
+                    "renderer": options["renderer"],
+                    "projection": options["projection"],
+                },
+            )
             await self.relay.publish_diagnostic(
                 event_type="viewer_attach",
                 severity="info",
                 title="Gibson viewer",
                 message=message,
-                details=f"endpoint={viewer.endpoint}",
+                details=f"endpoint={viewer.endpoint} renderer={options['renderer']}",
             )
         except Exception as error:  # noqa: BLE001
             _notify_command_context(ctx, f"Gibson viewer failed: {error}", level="error")
@@ -276,10 +301,11 @@ class GibsonViewController:
             from harn_gibson.viewer import start_viewer
 
             factory = start_viewer
+        viewer_env = _viewer_env_for_options(self.environ, options)
         viewer = factory(
             options["host"],
             options["port"],
-            env=dict(self.environ),
+            env=viewer_env,
             launch_browser=options["browser"],
         )
         self.viewer = viewer
@@ -300,6 +326,7 @@ def extension_factory(harn: Any) -> None:
     )
     view_controller = GibsonViewController(harn, relay, poller)
     _register_view_command(harn, view_controller)
+    _register_renderer_command(harn, view_controller)
     for event_type in HARN_EVENTS:
         harn.on(event_type, _handler_for(relay, poller, view_controller))
 
@@ -397,6 +424,12 @@ def _parse_view_command_args(raw_args: str, environ: Mapping[str, str] | None = 
     host = env.get("HARN_GIBSON_VIEW_HOST", "127.0.0.1")
     port = _coerce_port(env.get("HARN_GIBSON_VIEW_PORT"), default=0)
     browser = env.get("HARN_GIBSON_VIEW_BROWSER", "1").lower() not in {"0", "false", "no", "off"}
+    renderer = _default_view_renderer(env)
+    renderer_command: str | None = None
+    projection: str | None = None
+    style: str | None = None
+    renderer_timeout_ms: str | None = None
+    list_renderers = False
     tokens = shlex.split(raw_args)
     index = 0
     while index < len(tokens):
@@ -405,6 +438,8 @@ def _parse_view_command_args(raw_args: str, environ: Mapping[str, str] | None = 
             browser = False
         elif token == "--browser":
             browser = True
+        elif token in {"--list-renderers", "--renderers"}:
+            list_renderers = True
         elif token == "--host" and index + 1 < len(tokens):
             index += 1
             host = tokens[index]
@@ -415,8 +450,103 @@ def _parse_view_command_args(raw_args: str, environ: Mapping[str, str] | None = 
             port = _coerce_port(tokens[index], default=port)
         elif token.startswith("--port="):
             port = _coerce_port(token.split("=", 1)[1], default=port)
+        elif token in {"--renderer", "--renderer-preset"} and index + 1 < len(tokens):
+            index += 1
+            renderer = _coerce_view_renderer(tokens[index], default=renderer)
+        elif token.startswith("--renderer="):
+            renderer = _coerce_view_renderer(token.split("=", 1)[1], default=renderer)
+        elif token.startswith("--renderer-preset="):
+            renderer = _coerce_view_renderer(token.split("=", 1)[1], default=renderer)
+        elif token == "--renderer-command" and index + 1 < len(tokens):
+            index += 1
+            renderer_command = tokens[index]
+            renderer = "command"
+        elif token.startswith("--renderer-command="):
+            renderer_command = token.split("=", 1)[1]
+            renderer = "command"
+        elif token == "--projection" and index + 1 < len(tokens):
+            index += 1
+            projection = tokens[index]
+            renderer = "projection"
+        elif token.startswith("--projection="):
+            projection = token.split("=", 1)[1]
+            renderer = "projection"
+        elif token == "--style" and index + 1 < len(tokens):
+            index += 1
+            style = tokens[index]
+        elif token.startswith("--style="):
+            style = token.split("=", 1)[1]
+        elif token == "--renderer-timeout-ms" and index + 1 < len(tokens):
+            index += 1
+            renderer_timeout_ms = tokens[index]
+        elif token.startswith("--renderer-timeout-ms="):
+            renderer_timeout_ms = token.split("=", 1)[1]
         index += 1
-    return {"host": host, "port": port, "browser": browser}
+    return {
+        "host": host,
+        "port": port,
+        "browser": browser,
+        "renderer": renderer,
+        "renderer_command": renderer_command,
+        "projection": projection,
+        "style": style,
+        "renderer_timeout_ms": renderer_timeout_ms,
+        "list_renderers": list_renderers,
+    }
+
+
+def _default_view_renderer(env: Mapping[str, str]) -> str | None:
+    configured = (
+        env.get("HARN_GIBSON_RENDERER_COMMAND")
+        or env.get("HARN_GIBSON_RENDERER_MODEL_COMMAND")
+        or env.get("HARN_GIBSON_PROJECTION")
+    )
+    if configured and not env.get("HARN_GIBSON_VIEW_RENDERER"):
+        return None
+    return _coerce_view_renderer(env.get("HARN_GIBSON_VIEW_RENDERER"), default=DEFAULT_RENDERER_PRESET)
+
+
+def _coerce_view_renderer(value: str | None, *, default: str | None) -> str | None:
+    if value is None:
+        return default
+    normalized = value.strip().lower()
+    if normalized in RENDERER_PRESETS:
+        return normalized
+    if normalized in {"", "env", "existing"}:
+        return None
+    return default
+
+
+def _viewer_env_for_options(environ: Mapping[str, str], options: Mapping[str, Any]) -> dict[str, str]:
+    env = dict(environ)
+    style = options.get("style")
+    if style:
+        env["HARN_GIBSON_STYLE"] = str(style)
+    renderer_timeout_ms = options.get("renderer_timeout_ms")
+    if renderer_timeout_ms:
+        env["HARN_GIBSON_RENDERER_TIMEOUT_MS"] = str(renderer_timeout_ms)
+    renderer = options.get("renderer")
+    projection = options.get("projection")
+    renderer_command = options.get("renderer_command")
+    if projection:
+        env["HARN_GIBSON_PROJECTION"] = str(projection)
+        env.pop("HARN_GIBSON_RENDERER_COMMAND", None)
+        env.pop("HARN_GIBSON_RENDERER_MODEL_COMMAND", None)
+    elif renderer_command:
+        env["HARN_GIBSON_RENDERER_COMMAND"] = str(renderer_command)
+        env.pop("HARN_GIBSON_PROJECTION", None)
+        env.pop("HARN_GIBSON_RENDERER_MODEL_COMMAND", None)
+    elif isinstance(renderer, str):
+        env.pop("HARN_GIBSON_PROJECTION", None)
+        env.pop("HARN_GIBSON_RENDERER_MODEL_COMMAND", None)
+        preset_command = renderer_preset_command(renderer)
+        if preset_command is None:
+            env.pop("HARN_GIBSON_RENDERER_COMMAND", None)
+            env.pop("HARN_GIBSON_RENDERER_TIMEOUT_MS", None)
+        else:
+            env["HARN_GIBSON_RENDERER_COMMAND"] = preset_command
+            env.setdefault("HARN_GIBSON_RENDERER_TIMEOUT_MS", "10000")
+    return env
 
 
 def _coerce_port(value: str | None, *, default: int) -> int:
@@ -441,6 +571,23 @@ def _register_view_command(harn: Any, view_controller: GibsonViewController) -> 
         {
             "description": "Open the Gibson visualizer",
             "handler": view_controller.handle,
+        },
+    )
+
+
+def _register_renderer_command(harn: Any, view_controller: GibsonViewController) -> None:
+    register_command = getattr(harn, "registerCommand", None)
+    if not callable(register_command):
+        return
+
+    async def handle_renderers(_raw_args: str = "", ctx: Any = None) -> None:
+        await view_controller.handle("--list-renderers", ctx)
+
+    register_command(
+        "gibson-renderers",
+        {
+            "description": "List Gibson viewer renderer presets",
+            "handler": handle_renderers,
         },
     )
 

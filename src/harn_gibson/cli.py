@@ -20,11 +20,12 @@ from pathlib import Path
 from harn_gibson import __version__
 from harn_gibson.auth import import_codex_auth
 from harn_gibson.extension import extension_path
+from harn_gibson.renderer_presets import RENDERER_PRESETS, renderer_preset_command
 from harn_gibson.styles import style_pack_from_name, style_pack_ids
 
 DOGFOOD_CAPTURE_RENDERER_TIMEOUT_MS = "10000"
 DOGFOOD_CAPTURE_TRAJECTORY_SPLIT_EVERY = 200
-DOGFOOD_RENDERER_PRESETS = ("gibson1", "dogfood", "none")
+DOGFOOD_RENDERER_PRESETS = RENDERER_PRESETS
 PROJECT_HARN_PROVIDER = "openai-codex"
 PROJECT_HARN_MODEL = "gpt-5.5"
 PROJECT_HARN_THINKING = "high"
@@ -88,7 +89,11 @@ def build_parser() -> argparse.ArgumentParser:
     serve.add_argument("--port", type=int, default=8765)
     serve.add_argument("--style", choices=style_pack_ids(), default=None, help="display style pack")
 
-    dogfood = subcommands.add_parser("dogfood", help="run the display, open a browser, and launch harn")
+    dogfood = subcommands.add_parser(
+        "run",
+        aliases=["dogfood"],
+        help="run the display, open a browser, and launch harn",
+    )
     dogfood.add_argument("--host", default="127.0.0.1")
     dogfood.add_argument("--port", type=int, default=0)
     dogfood.add_argument("--harn-bin", default="harn", help="harn executable to launch")
@@ -106,7 +111,7 @@ def build_parser() -> argparse.ArgumentParser:
     dogfood.add_argument(
         "--renderer-command",
         default=None,
-        help="external renderer command for dogfood; overrides --renderer-preset",
+        help="external renderer command for run; overrides --renderer-preset",
     )
     dogfood.add_argument(
         "--renderer-timeout-ms",
@@ -116,8 +121,9 @@ def build_parser() -> argparse.ArgumentParser:
     dogfood.add_argument("harn_args", nargs=argparse.REMAINDER, help="arguments forwarded to harn after --")
 
     capture = subcommands.add_parser(
-        "dogfood-capture",
-        help="run dogfood with event logging and the hard-coded showcase renderer",
+        "capture",
+        aliases=["dogfood-capture"],
+        help="run harn-gibson with event logging and the hard-coded showcase renderer",
     )
     capture.add_argument("--host", default="127.0.0.1")
     capture.add_argument("--port", type=int, default=0)
@@ -375,6 +381,12 @@ def _add_replay_renderer_arguments(parser: argparse.ArgumentParser) -> None:
         help="prompt-command model renderer to exercise during replay",
     )
     renderer.add_argument(
+        "--renderer-preset",
+        choices=RENDERER_PRESETS,
+        default=None,
+        help="built-in renderer command to exercise during replay",
+    )
+    renderer.add_argument(
         "--projection",
         default=None,
         help="drive the display with the projection engine: '1' for the default projection "
@@ -434,6 +446,7 @@ def _explicit_replay_renderer_env_from_args(args: argparse.Namespace) -> dict[st
     renderer_env: dict[str, str] = {}
     renderer_command = getattr(args, "renderer_command", None)
     model_command = getattr(args, "renderer_model_command", None)
+    renderer_preset = getattr(args, "renderer_preset", None)
     renderer_timeout_ms = getattr(args, "renderer_timeout_ms", None)
     model_timeout_ms = getattr(args, "renderer_model_timeout_ms", None)
     if renderer_command:
@@ -446,6 +459,12 @@ def _explicit_replay_renderer_env_from_args(args: argparse.Namespace) -> dict[st
             renderer_env["HARN_GIBSON_RENDERER_TIMEOUT_MS"] = str(renderer_timeout_ms)
         if model_timeout_ms is not None:
             renderer_env["HARN_GIBSON_RENDERER_MODEL_TIMEOUT_MS"] = str(model_timeout_ms)
+    if renderer_preset:
+        preset_command = renderer_preset_command(renderer_preset)
+        if preset_command is not None:
+            renderer_env["HARN_GIBSON_RENDERER_COMMAND"] = preset_command
+            if renderer_timeout_ms is not None:
+                renderer_env["HARN_GIBSON_RENDERER_TIMEOUT_MS"] = str(renderer_timeout_ms)
     projection = getattr(args, "projection", None)
     if projection:
         renderer_env["HARN_GIBSON_PROJECTION"] = projection
@@ -746,17 +765,9 @@ def _default_capture_event_log_path(*, prefix: str = "dogfood") -> Path:
 
 
 def _default_dogfood_renderer_command() -> str:
-    renderer_path = _example_renderer_path("gibson_dogfood_renderer.py")
-    return json.dumps([sys.executable, str(renderer_path)])
-
-
-def _default_gibson1_renderer_command() -> str:
-    renderer_path = _example_renderer_path("gibson1_renderer.py")
-    return json.dumps([sys.executable, str(renderer_path)])
-
-
-def _example_renderer_path(filename: str) -> Path:
-    return Path(__file__).resolve().parents[2] / "examples" / "renderers" / filename
+    command = renderer_preset_command("dogfood")
+    assert command is not None
+    return command
 
 
 def _apply_dogfood_renderer_env(
@@ -778,12 +789,9 @@ def _apply_dogfood_renderer_env(
     if preserve_existing:
         env.setdefault("HARN_GIBSON_RENDERER_TIMEOUT_MS", str(renderer_timeout_ms))
         return True
-    if renderer_preset == "gibson1":
-        env["HARN_GIBSON_RENDERER_COMMAND"] = _default_gibson1_renderer_command()
-    elif renderer_preset == "dogfood":
-        env["HARN_GIBSON_RENDERER_COMMAND"] = _default_dogfood_renderer_command()
-    else:
-        raise ValueError(f"unknown renderer preset: {renderer_preset}")
+    preset_command = renderer_preset_command(renderer_preset)
+    assert preset_command is not None
+    env["HARN_GIBSON_RENDERER_COMMAND"] = preset_command
     env["HARN_GIBSON_RENDERER_TIMEOUT_MS"] = str(renderer_timeout_ms)
     return True
 
@@ -1359,7 +1367,7 @@ def run(argv: Sequence[str] | None = None) -> int:
             write_replay_result(args.output_result, replay_result)
             print(f"wrote event-log replay result: {args.output_result}")
         return 0
-    if args.command == "dogfood":
+    if args.command in {"run", "dogfood"}:
         return run_dogfood(
             host=args.host,
             port=args.port,
@@ -1374,7 +1382,7 @@ def run(argv: Sequence[str] | None = None) -> int:
             renderer_command=args.renderer_command,
             renderer_timeout_ms=args.renderer_timeout_ms,
         )
-    if args.command == "dogfood-capture":
+    if args.command in {"capture", "dogfood-capture"}:
         if args.list_trajectories:
             print(_dogfood_capture_trajectory_listing())
             return 0

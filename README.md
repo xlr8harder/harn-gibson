@@ -47,11 +47,17 @@ harn list
 Useful variants:
 
 ```text
+/gibson-renderers
+/gibson-view --renderer gibson1
+/gibson-view --renderer dogfood
+/gibson-view --renderer none
 /gibson-view --port 8765
 /gibson-view --no-browser
 ```
 
-The first uses a predictable browser URL, `http://127.0.0.1:8765`. The second starts the server without opening a browser, which is useful over SSH or when another tool will open the page.
+`/gibson-view` uses the default `gibson1` renderer when no renderer is specified. `/gibson-renderers` lists the built-in renderer presets. `gibson1` is the calmer default visualizer, `dogfood` is the busy showcase/stress renderer, and `none` uses the local deterministic renderer without launching an external renderer subprocess. A custom command can be supplied with `/gibson-view --renderer-command 'python my_renderer.py'`; a projection can be supplied with `/gibson-view --projection examples/projections/gibson-organic.json`.
+
+`--port 8765` uses a predictable browser URL, `http://127.0.0.1:8765`. `--no-browser` starts the server without opening a browser, which is useful over SSH or when another tool will open the page.
 
 ## Development Checkout
 
@@ -81,28 +87,61 @@ Delivery modes:
 
 Runtime diagnostics, tracebacks, raw events, render intents, and hook decisions are available in the browser debug drawer.
 
-## One-Command Dogfood
+## One-Command Run
 
 If you want Gibson to own the whole local process tree for a demo or test run, use the launcher:
 
 ```bash
-uv run harn-gibson dogfood -- -p "summarize this repo"
+uv run harn-gibson run -- -p "summarize this repo"
 ```
 
 This starts the viewer, opens the browser, imports existing Codex CLI OAuth credentials into harn's user auth store, and launches harn with the extension wired in.
+
+`run` uses the same default `gibson1` renderer as `/gibson-view`. The old `dogfood` command name is still accepted as a compatibility alias.
+
+## Capture And Replay
+
+Capture a live harn/Gibson session:
+
+```bash
+uv run harn-gibson capture --event-log test-artifacts/captures/manual.jsonl -- -p "summarize this repo"
+```
+
+Convert the captured JSONL into a redacted replay fixture:
+
+```bash
+uv run harn-gibson event-log-to-replay test-artifacts/captures/manual.jsonl \
+  --output test-artifacts/replays/manual.json \
+  --visual-fixture
+```
+
+Watch the replay with the default fixed pacing:
+
+```bash
+uv run harn-gibson watch-replay test-artifacts/replays/manual.json
+```
+
+Use source timestamps when you want the captured event timing:
+
+```bash
+uv run harn-gibson watch-replay test-artifacts/replays/manual.json --playback-timing real-time
+```
+
+Replay can also opt into a hard-coded renderer:
+
+```bash
+uv run harn-gibson watch-replay test-artifacts/replays/manual.json --renderer-preset gibson1
+```
 
 ## Watch A Recorded Session
 
 Replay does not need harn. It feeds captured events through the same scene pipeline and browser backend:
 
 ```bash
-uv run harn-gibson watch-replay examples/claude-gibson-replays/linkjar-live-session.json \
-  --port 8765 --projection examples/projections/gibson-organic.json \
-  --discovery stream --playback-timing real-time --speed 8 \
-  --max-step-delay-ms 4000 --quiet-step-delay-ms 250 --min-step-delay-ms 2200
+uv run harn-gibson watch-replay examples/dogfood-replays/repo-map-trajectory.json
 ```
 
-Then open `http://127.0.0.1:8765`. The browser replay button re-runs the same file.
+Then open the printed URL if the browser does not open automatically. The browser replay button re-runs the same file. Add `--playback-timing real-time` to use captured source timestamps, or `--renderer-preset gibson1` / `--renderer-preset dogfood` to call a hard-coded renderer live while replaying event steps.
 
 ## How It Works
 
@@ -125,15 +164,15 @@ The dev environment includes harn for local dogfooding. Install harn separately 
 
 ## Advanced Launching
 
-For launcher-based dogfooding, run one command from the repo root:
+For launcher-based runs, run one command from the repo root:
 
 ```bash
-uv run harn-gibson dogfood
+uv run harn-gibson run
 ```
 
 This starts the graphical display server with the calmer `gibson1` renderer preset, opens the browser, imports existing Codex CLI OAuth credentials into harn's user auth store, and launches `harn` with the display endpoint wired into the extension environment. Project-local `.harn/settings.json` selects the Codex provider/model and points harn at `.harn/extensions/gibson.py`; that shim adds `src/` to `sys.path` and loads the real `harn_gibson.extension` module.
 
-`dogfood` chooses a free local port by default, so it can run even if a manual display server is already using `8765`. Pass `--port 8765` if you want a fixed port.
+`run` chooses a free local port by default, so it can run even if a manual display server is already using `8765`. Pass `--port 8765` if you want a fixed port. `dogfood` remains a compatibility alias for `run`.
 
 If you want to import Codex auth without launching harn:
 
@@ -141,19 +180,19 @@ If you want to import Codex auth without launching harn:
 uv run harn-gibson import-codex-auth
 ```
 
-This copies the OAuth token shape from `~/.codex/auth.json` to `~/.harn/agent/auth.json` under the `openai-codex` provider key. The target file is outside the repo and is written with user-only permissions. Pass `--no-codex-auth-import` to `dogfood` if you want to manage harn auth yourself.
+This copies the OAuth token shape from `~/.codex/auth.json` to `~/.harn/agent/auth.json` under the `openai-codex` provider key. The target file is outside the repo and is written with user-only permissions. Pass `--no-codex-auth-import` to `run` if you want to manage harn auth yourself.
 
 Forward arguments to harn after `--`:
 
 ```bash
-uv run harn-gibson dogfood -- -p "summarize this repo"
+uv run harn-gibson run -- -p "summarize this repo"
 ```
 
 Run harn in a separate project directory while keeping this repo's Gibson extension and Codex model defaults:
 
 ```bash
 mkdir -p test-artifacts/dogfood-workspaces/tiny-project
-uv run harn-gibson dogfood --cwd test-artifacts/dogfood-workspaces/tiny-project -- -p "bootstrap a tiny project here"
+uv run harn-gibson run --cwd test-artifacts/dogfood-workspaces/tiny-project -- -p "bootstrap a tiny project here"
 ```
 
 With `--cwd`, renderer context, repo topology, touched-file summaries, and repo-city visuals use the target project directory instead of the `harn-gibson` checkout.
@@ -161,7 +200,7 @@ With `--cwd`, renderer context, repo topology, touched-file summaries, and repo-
 Use a specific harn executable with `--harn-bin`:
 
 ```bash
-uv run harn-gibson dogfood --harn-bin /path/to/harn
+uv run harn-gibson run --harn-bin /path/to/harn
 ```
 
 Lower-level manual mode is still available. Start the graphical display server:
@@ -234,7 +273,7 @@ HARN_GIBSON_ROUTE_RULES='[{"eventType":"session_tree","route":"renderer_agent","
 To dogfood the renderer-agent process boundary without a live model call, use one of the launcher presets or point the server at an external renderer command. The command receives `harn-gibson.external-renderer-request.v1` JSON on stdin and returns a render plan with `steps` on stdout. `examples/renderers/gibson1_renderer.py` is the default calmer hard-coded visualizer: it keeps status, a terminal board, depth-2 repo city, repo wire terrain, world-model spatial map, signal scope, route trace, and low-opacity data rain coherent enough for everyday use while still reacting to event phase, touched files, repo topology, world-model facts/lifecycle, coalesced timing, and the active style pack:
 
 ```bash
-uv run harn-gibson dogfood
+uv run harn-gibson run
 ```
 
 There are three integration levels. A renderer decides how events become scene mutations. A primitive/effect expands the visual vocabulary that renderers can target; `spatial_map` is the first lower-level world-binding primitive for typed objects, edges, stable entity ids, and object-addressable camera targets. A display backend consumes scene state and implements that vocabulary in a runtime; the current backend is browser/canvas, but a terminal, native, game-engine, or OpenGL backend can work if it implements the catalog or an advertised subset. `GET /backend-contract` and `uv run harn-gibson backend-contract` expose the endpoint paths, scene/update schema names, core primitive kinds, catalog primitive kinds, effect kinds, mutation ops, input delivery modes, render timing modes, supported style packs, active style pack, and current backend capability profile for that use case. `GET /catalog` and `uv run harn-gibson catalog --tag gibson --compact` expose the full or filtered primitive/effect vocabulary. A custom primitive layer can either translate the advertised Gibson catalog to backend-native drawing calls or pair a custom catalog with a renderer that targets it.
@@ -242,28 +281,28 @@ There are three integration levels. A renderer decides how events become scene m
 `examples/renderers/gibson_dogfood_renderer.py` remains the dogfood showcase and stress renderer for live harn sessions; it reacts to event phase, event type, coalesced timing, touched files, repo topology, and the active style pack with a staged scene using the current cinematic primitive/effect set, including a project hologram, data vault, black-ICE barrier, control graph, opcode glyph layer, Hollywood terminal wall, access matrix, orbital uplink map, ICE mesh, command ribbon, touched-file spark field, data tunnel, wire terrain, signal scope, route trace, signal interference overlay, repo city, vector sigil, data rain, and persistent effects. Non-default styles alter the emitted renderer tones and intent metadata, so `--style mainframe`, `--style neon-noir`, or `--style satellite-uplink` changes the showcase plan as well as the browser shell:
 
 ```bash
-uv run harn-gibson dogfood --renderer-preset dogfood
+uv run harn-gibson run --renderer-preset dogfood
 ```
 
 For longer capture sessions, use the capture wrapper. It launches dogfood with the showcase renderer, writes normalized JSONL to an ignored `test-artifacts/captures/` path by default, and prints the exact replay-review command to run afterward:
 
 ```bash
-uv run harn-gibson dogfood-capture -- -p "bootstrap a tiny project here"
+uv run harn-gibson capture -- -p "bootstrap a tiny project here"
 ```
 
 For 15-20 minute captures, ask the wrapper to print the split-review follow-up directly:
 
 ```bash
-uv run harn-gibson dogfood-capture --list-trajectories
-uv run harn-gibson dogfood-capture --trajectory tiny-project
-uv run harn-gibson dogfood-capture --trajectory repo-map
+uv run harn-gibson capture --list-trajectories
+uv run harn-gibson capture --trajectory tiny-project
+uv run harn-gibson capture --trajectory repo-map
 ```
 
 Built-in presets create ignored bare workspaces under `test-artifacts/dogfood-workspaces/`, inject prompt templates from `examples/prompts/`, capture to `test-artifacts/captures/`, default the follow-up review to split fixtures, and leave raw JSONL out of git. `tiny-project` is the general bootstrap trajectory; `repo-map` is aimed at depth-2 repo topology, varied line counts, and touched-file animation coverage. Treat these live harn runs as the source material for hard-coded renderer tests: capture every normalized event, review the split browser frames, then promote only redacted replay fixtures and baselines. To customize the workspace or prompt while keeping the same capture path:
 
 ```bash
 mkdir -p test-artifacts/dogfood-workspaces/custom-tiny-project
-uv run harn-gibson dogfood-capture \
+uv run harn-gibson capture \
   --cwd test-artifacts/dogfood-workspaces/custom-tiny-project \
   --split-every 200 \
   -- -p "$(cat examples/prompts/dogfood-tiny-project.md)"
@@ -280,7 +319,7 @@ To dogfood the model-prompt boundary without binding to a provider SDK, use a pr
 ```bash
 HARN_GIBSON_RENDERER_MODEL_COMMAND='uv run python examples/renderers/gibson_prompt_echo_renderer.py' \
 HARN_GIBSON_RENDERER_MODEL_TIMEOUT_MS=10000 \
-uv run harn-gibson dogfood
+uv run harn-gibson run
 ```
 
 `HARN_GIBSON_RENDERER_MODEL_COMMAND` takes precedence over `HARN_GIBSON_RENDERER_COMMAND`. Model-command failures and unsafe model plans use the same fail-open deterministic fallback and trace/debug reporting as external render-plan commands.
@@ -312,14 +351,14 @@ Captured `event` and `raw_event` replay steps call the configured renderer live,
 
 For captured sessions from a separate workspace, add `--project-root PATH` and optionally `--project-name NAME` so renderer context and repo-city visuals sample the preserved target project instead of this checkout.
 
-For offline inspection without the dogfood launcher, write normalized events to JSONL:
+For offline inspection without the launcher, write normalized events to JSONL:
 
 ```bash
 HARN_GIBSON_EVENT_LOG=.harn-gibson.jsonl \
 harn --no-extensions -e .harn/extensions/gibson.py
 ```
 
-A useful capture workflow is to run `uv run harn-gibson dogfood-capture --trajectory tiny-project` or `--trajectory repo-map`. The presets ask harn to initialize git, create project files, run tests, make commits, introduce and fix a failure, and summarize status. `repo-map` adds a deliberate depth-2 directory spread so renderer-regression fixtures can exercise repo-city height, area, and touched-file effects. Those 15-20 minute captured trajectories should become the basis for future renderer-regression fixtures and screenshot reviews; raw JSONL remains ignored, and committed fixtures should be redacted replay JSON plus baselines.
+A useful capture workflow is to run `uv run harn-gibson capture --trajectory tiny-project` or `--trajectory repo-map`. The presets ask harn to initialize git, create project files, run tests, make commits, introduce and fix a failure, and summarize status. `repo-map` adds a deliberate depth-2 directory spread so renderer-regression fixtures can exercise repo-city height, area, and touched-file effects. Those 15-20 minute captured trajectories should become the basis for future renderer-regression fixtures and screenshot reviews; raw JSONL remains ignored, and committed fixtures should be redacted replay JSON plus baselines.
 
 Convert a captured event log into a replay fixture:
 
@@ -380,7 +419,7 @@ Run the full local acceptance gate before a release checkpoint:
 bash scripts/acceptance.sh
 ```
 
-Use `bash scripts/acceptance.sh --dry-run` to inspect the exact commands without running the heavyweight browser/replay gates. The script runs lint, the full covered test suite, a dynamic-port dogfood smoke, generic replay screenshots, the default and mainframe-styled `gibson1` replay screenshots, the dogfood stress-renderer screenshots, whitespace checks, and runtime/secret hygiene scans.
+Use `bash scripts/acceptance.sh --dry-run` to inspect the exact commands without running the heavyweight browser/replay gates. The script runs lint, the full covered test suite, a dynamic-port launcher smoke, generic replay screenshots, the default and mainframe-styled `gibson1` replay screenshots, the dogfood stress-renderer screenshots, whitespace checks, and runtime/secret hygiene scans.
 
 Run the checked-in replay fixture suite:
 
