@@ -19,8 +19,13 @@ from harn_gibson.catalog import VisualCatalog, default_visual_catalog
 from harn_gibson.events import GibsonEvent, diagnostic_event
 from harn_gibson.external_renderer import external_renderer_from_env
 from harn_gibson.model_renderer import model_renderer_from_env
-from harn_gibson.projection import PROJECTION_SCHEMA, ProjectionSceneRenderer, load_projection_spec
-from harn_gibson.renderers import direct_renderer_command, normalize_renderer
+from harn_gibson.projection import (
+    PROJECTION_SCHEMA,
+    ProjectionSceneRenderer,
+    load_packaged_projection,
+    load_projection_spec,
+)
+from harn_gibson.renderers import direct_renderer_command, normalize_renderer, projection_renderer_resource
 from harn_gibson.rendering import (
     DeterministicSceneRenderer,
     RendererContextBuilder,
@@ -307,6 +312,9 @@ def selected_renderer_from_env(value: str | None, timeout_ms: str | None = None)
         return None
     if renderer == "default":
         return ProjectionSceneRenderer({})
+    resource = projection_renderer_resource(renderer)
+    if resource is not None:
+        return ProjectionSceneRenderer(load_packaged_projection(resource))
     command = direct_renderer_command(renderer)
     if command is not None:
         return external_renderer_from_env(command, timeout_ms)
@@ -6371,6 +6379,165 @@ function projectionNodePoint(rect, tween, camera) {
   };
 }
 
+function drawProjectionEpochGrid(grid, theme, rect, now) {
+  const columns = Array.isArray(grid.columns) ? grid.columns : [];
+  const epochs = Array.isArray(grid.epochs) ? grid.epochs : [];
+  const cells = Array.isArray(grid.cells) ? grid.cells : [];
+  const pending = Array.isArray(grid.pending) ? grid.pending : [];
+  const summary = grid.summary || {};
+  const presentation = grid.presentation || {};
+  const primary = presentation.stage === "primary";
+  if (!columns.length) return;
+
+  const lanes = epochs.concat([{id: "pending", label: "LIVE", tone: "accent", pending: true}]);
+  const rowCount = Math.max(1, lanes.length);
+  const top = rect.y + rect.height * (primary ? 0.145 : 0.15);
+  const left = rect.x + rect.width * (primary ? 0.13 : 0.08);
+  const width = rect.width * (primary ? 0.81 : 0.78);
+  const height = rect.height * (primary ? 0.64 : 0.52);
+  const colStep = width / Math.max(1, columns.length);
+  const rowStep = height / rowCount;
+  const originX = left;
+  const originY = top;
+  const skew = Math.min(rowStep * 0.24, rect.width * 0.12 / rowCount);
+  const cellWidth = Math.max(3 * devicePixelRatio, colStep * 0.62);
+  const cellPad = Math.max(1, Math.min(3 * devicePixelRatio, colStep * 0.08));
+  const byKey = new Map();
+  for (const cell of cells.concat(pending)) {
+    byKey.set(`${cell.epoch}|${cell.entity}`, cell);
+  }
+  const shortLabel = (value, length = 28) => {
+    const text = String(value || "");
+    return text.length <= length ? text : `...${text.slice(-(length - 3))}`;
+  };
+
+  ctx.save();
+  ctx.font = `${9 * devicePixelRatio}px ui-monospace, monospace`;
+  ctx.textBaseline = "middle";
+  ctx.lineWidth = devicePixelRatio;
+  ctx.fillStyle = projectionTone(theme, "base", primary ? 0.035 : 0.02);
+  ctx.fillRect(originX - 24 * devicePixelRatio, originY - 28 * devicePixelRatio,
+    width + rowCount * skew + 42 * devicePixelRatio, height + 54 * devicePixelRatio);
+  ctx.strokeStyle = projectionTone(theme, "base", primary ? 0.28 : 0.16);
+  ctx.strokeRect(originX - 24 * devicePixelRatio, originY - 28 * devicePixelRatio,
+    width + rowCount * skew + 42 * devicePixelRatio, height + 54 * devicePixelRatio);
+
+  ctx.textAlign = "left";
+  ctx.fillStyle = projectionTone(theme, "accent", 0.9);
+  ctx.font = `${10 * devicePixelRatio}px ui-monospace, monospace`;
+  ctx.fillText("FILE ACTIVITY ROLL", originX - 18 * devicePixelRatio, originY - 16 * devicePixelRatio);
+  ctx.textAlign = "right";
+  ctx.fillStyle = projectionTone(theme, "base", 0.76);
+  const summaryText = [
+    `${Number(summary.columnCount || columns.length)} FILES`,
+    `${Number(summary.epochCount || epochs.length)} EPOCHS`,
+    `${Number(summary.activeColumnCount || 0)} HOT`,
+  ].join("  //  ");
+  ctx.fillText(summaryText, originX + width + rowCount * skew + 12 * devicePixelRatio,
+    originY - 16 * devicePixelRatio);
+
+  for (let row = 0; row < lanes.length; row++) {
+    const lane = lanes[row];
+    const y = originY + row * rowStep;
+    const x0 = originX + row * skew;
+    const x1 = x0 + columns.length * colStep;
+    const tone = lane.tone || "base";
+    ctx.fillStyle = projectionTone(theme, tone, lane.pending ? 0.055 + 0.025 * Math.sin(now * 0.007) : 0.022);
+    ctx.fillRect(x0, y + rowStep * 0.10, Math.max(1, x1 - x0), Math.max(1, rowStep * 0.78));
+    ctx.strokeStyle = projectionTone(theme, lane.tone || "base", lane.pending ? 0.32 : 0.16);
+    ctx.beginPath();
+    ctx.moveTo(x0, y + rowStep * 0.68);
+    ctx.lineTo(x1, y + rowStep * 0.68);
+    ctx.stroke();
+    ctx.textAlign = "right";
+    ctx.fillStyle = projectionTone(theme, tone, lane.pending ? 0.86 : 0.58);
+    ctx.fillText(shortLabel(lane.label || lane.kind || lane.seq || "", 15), x0 - 8 * devicePixelRatio,
+      y + rowStep * 0.52);
+  }
+
+  const labelEvery = Math.max(1, Math.ceil(columns.length / 18));
+  let lastGroup = "";
+  for (let col = 0; col < columns.length; col++) {
+    const column = columns[col];
+    const x = originX + col * colStep;
+    const bottomY = originY + rowCount * rowStep + rect.height * 0.025;
+    ctx.strokeStyle = projectionTone(theme, column.focus ? "warn" : "base", column.focus ? 0.45 : 0.12);
+    ctx.beginPath();
+    ctx.moveTo(x + cellWidth * 0.5, originY + rowStep * 0.2);
+    ctx.lineTo(x + rowCount * skew + cellWidth * 0.5, originY + rowCount * rowStep);
+    ctx.stroke();
+    if (column.group && column.group !== lastGroup) {
+      lastGroup = column.group;
+      ctx.textAlign = "left";
+      ctx.fillStyle = projectionTone(theme, "warn", 0.55);
+      ctx.fillText(shortLabel(column.group, 16), x, originY - 4 * devicePixelRatio);
+    }
+    if (col % labelEvery === 0 || column.focus) {
+      ctx.save();
+      ctx.translate(x + rowCount * skew + cellWidth * 0.5, bottomY);
+      ctx.rotate(-Math.PI / 5);
+      ctx.textAlign = "right";
+      ctx.fillStyle = projectionTone(theme, column.focus ? "warn" : "base", column.focus ? 0.9 : 0.55);
+      ctx.fillText(shortLabel(column.label || column.id || "", 24), 0, 0);
+      ctx.restore();
+    }
+  }
+
+  for (let row = 0; row < lanes.length; row++) {
+    const lane = lanes[row];
+    for (let col = 0; col < columns.length; col++) {
+      const column = columns[col];
+      const cell = byKey.get(`${lane.id}|${column.id}`);
+      if (!cell) continue;
+      const height = Math.max(0.08, Math.min(1, Number(cell.height || 0.08)));
+      const x = originX + col * colStep + row * skew + cellPad;
+      const baseY = originY + row * rowStep + rowStep * 0.70;
+      const towerH = Math.max(2 * devicePixelRatio, height * rowStep * 1.15);
+      const tone = cell.tone && cell.tone !== "base" ? cell.tone : (lane.tone || "base");
+      const pulse = cell.pending ? 0.2 + 0.18 * Math.sin(now * 0.008) : 0;
+      const towerW = Math.max(2 * devicePixelRatio, cellWidth - cellPad * 2);
+      const depth = Math.min(5 * devicePixelRatio, Math.max(1, towerH * 0.28));
+      ctx.save();
+      ctx.shadowColor = projectionTone(theme, tone, 0.8);
+      ctx.shadowBlur = theme.glow * devicePixelRatio * (0.2 + height + pulse);
+      ctx.fillStyle = projectionTone(theme, tone, 0.30 + height * 0.42 + pulse);
+      ctx.strokeStyle = projectionTone(theme, tone, 0.72 + pulse);
+      ctx.beginPath();
+      ctx.moveTo(x + towerW, baseY - towerH);
+      ctx.lineTo(x + towerW + depth, baseY - towerH - depth);
+      ctx.lineTo(x + towerW + depth, baseY - depth);
+      ctx.lineTo(x + towerW, baseY);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.rect(x, baseY - towerH, towerW, towerH);
+      ctx.fill();
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(x, baseY - towerH);
+      ctx.lineTo(x + depth, baseY - towerH - depth);
+      ctx.lineTo(x + towerW + depth, baseY - towerH - depth);
+      ctx.lineTo(x + towerW, baseY - towerH);
+      ctx.closePath();
+      ctx.fillStyle = projectionTone(theme, tone, 0.46 + height * 0.34 + pulse);
+      ctx.fill();
+      ctx.stroke();
+      if (Number(cell.churn || 0) > 0) {
+        ctx.fillStyle = projectionTone(theme, "accent", Math.min(0.75, 0.18 + Number(cell.churn) * 0.65));
+        ctx.fillRect(x, baseY - towerH, Math.max(1, towerW), Math.max(1, towerH * 0.18));
+      }
+      ctx.restore();
+    }
+  }
+  ctx.textAlign = "left";
+  ctx.font = `${8.5 * devicePixelRatio}px ui-monospace, monospace`;
+  ctx.fillStyle = projectionTone(theme, "ghost", 0.68);
+  ctx.fillText("height = accumulated attention  //  magenta caps = edit churn  //  green/red rows = verification",
+    originX - 18 * devicePixelRatio, originY + height + 38 * devicePixelRatio);
+  ctx.restore();
+}
+
 function drawProjectionScene(primitive, w, h, now) {
   const props = primitive.props || {};
   // a session reset rebuilds the engine and its revision counter restarts:
@@ -6389,6 +6556,11 @@ function drawProjectionScene(primitive, w, h, now) {
   const nodes = Array.isArray(props.nodes) ? props.nodes : [];
   const edges = Array.isArray(props.edges) ? props.edges : [];
   const effects = Array.isArray(props.effects) ? props.effects : [];
+  const epochGrid = props.grid && props.grid.kind === "epoch-grid" ? props.grid : null;
+  const gridPresentation = epochGrid && epochGrid.presentation ? epochGrid.presentation : {};
+  const gridPrimary = Boolean(epochGrid && gridPresentation.stage === "primary");
+  const drawSpatialProjection = !gridPrimary || gridPresentation.spatial === true;
+  const drawHudNarration = !gridPrimary || gridPresentation.narration === true;
   const mood = props.mood || {};
   const hud = props.hud || {};
   const rect = projectionStageRect(w, h);
@@ -6526,6 +6698,11 @@ function drawProjectionScene(primitive, w, h, now) {
       nodeCount: nodes.length,
       edgeCount: edges.length,
       effectCount: effects.length,
+      gridCellCount: epochGrid && Array.isArray(epochGrid.cells) ? epochGrid.cells.length : 0,
+      gridColumnCount: epochGrid && Array.isArray(epochGrid.columns) ? epochGrid.columns.length : 0,
+      gridEpochCount: epochGrid && Array.isArray(epochGrid.epochs) ? epochGrid.epochs.length : 0,
+      gridPendingCount: epochGrid && Array.isArray(epochGrid.pending) ? epochGrid.pending.length : 0,
+      gridSummary: epochGrid ? (epochGrid.summary || {}) : {},
       mood: String(mood.name || ""),
       revision: Number(props.revision || 0),
     };
@@ -6559,12 +6736,14 @@ function drawProjectionScene(primitive, w, h, now) {
       ctx.stroke();
     }
   }
+  if (epochGrid) drawProjectionEpochGrid(epochGrid, theme, rect, now);
 
   const pointFor = (id) => {
     const tween = projectionTweens.get(id);
     return tween ? projectionNodePoint(rect, tween, camera) : null;
   };
 
+  if (drawSpatialProjection) {
   // edge object constancy: edges fade in when relations appear and DECAY when
   // they vanish -- attention beams and causality flows ghost out over a few
   // seconds (the previous focus lingers, tenuous), structure fades quickly
@@ -6724,8 +6903,12 @@ function drawProjectionScene(primitive, w, h, now) {
     }
     ctx.restore();
   }
+  } else {
+    projectionPeekWindows.clear();
+    projectionPeekConsumed.clear();
+  }
 
-  drawProjectionHud(props, theme, mood, hud, rect, w, h, now);
+  drawProjectionHud(props, theme, mood, hud, rect, w, h, now, {narration: drawHudNarration});
 
   if (mood.alert) {
     const throb = 0.10 + 0.06 * Math.sin(now * 0.004);
@@ -7247,7 +7430,7 @@ const PROJECTION_TICKER_GLYPHS = {
   commit_created: "\\u25C6",
 };
 
-function drawProjectionHud(props, theme, mood, hud, rect, w, h, now) {
+function drawProjectionHud(props, theme, mood, hud, rect, w, h, now, options = {}) {
   // top of the stage belongs to the page mast and status chip (the chip
   // already shows the mood text); the canvas HUD draws only the bottom strip
   ctx.textBaseline = "top";
@@ -7263,7 +7446,11 @@ function drawProjectionHud(props, theme, mood, hud, rect, w, h, now) {
   ctx.fillText(focusLine, rect.x, hudTop);
   if (commandLine) ctx.fillText(commandLine, rect.x, hudTop + 14 * devicePixelRatio);
   ctx.fillText(workspaceLine, rect.x, hudTop + 28 * devicePixelRatio);
-  drawProjectionNarration(hud, theme, rect, now);
+  if (options.narration !== false) {
+    drawProjectionNarration(hud, theme, rect, now);
+  } else {
+    projectionNarrationBounds = null;
+  }
   ctx.textAlign = "right";
   ctx.fillStyle = projectionTone(theme, mood.alert ? "alarm" : "good", 0.85);
   ctx.fillText(String(hud.checks || ""), rect.x + rect.width, hudTop);

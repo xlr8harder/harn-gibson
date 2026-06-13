@@ -65,12 +65,13 @@ _TICKER_LENGTH = 16
 _DEFAULT_PROJECTION_RESOURCE = "projections/gibson-organic.json"
 
 
-def _load_packaged_projection(path: str) -> dict[str, Any]:
+def load_packaged_projection(path: str) -> dict[str, Any]:
+    """Load a projection spec bundled in the harn_gibson package."""
     text = resources.files("harn_gibson").joinpath(path).read_text(encoding="utf-8")
     return json.loads(text)
 
 
-DEFAULT_PROJECTION: dict[str, Any] = _load_packaged_projection(_DEFAULT_PROJECTION_RESOURCE)
+DEFAULT_PROJECTION: dict[str, Any] = load_packaged_projection(_DEFAULT_PROJECTION_RESOURCE)
 
 
 def load_projection_spec(value: str) -> dict[str, Any]:
@@ -89,6 +90,9 @@ class ProjectionEngine:
         self._effects: list[dict[str, Any]] = []
         self._seen_events: set[tuple[int, str, str, str]] = set()
         self._check_errors_seen: set[str] = set()
+        self._grid_seen_events: set[tuple[int, str, str, str]] = set()
+        self._grid_pending: dict[str, dict[str, float | str]] = {}
+        self._grid_epochs: list[dict[str, Any]] = []
         self._attr_max: dict[tuple[str, str], float] = {}
         self._resolve_now_ms = 0
         self._last_force_ms: int | None = None
@@ -164,7 +168,7 @@ class ProjectionEngine:
         self._positions.update({node_id: (node["x"], node["y"]) for node_id, node in nodes.items()})
         self.revision += 1
 
-        return {
+        resolved = {
             "schema": PROJECTION_SCENE_SCHEMA,
             "theme": str(self.spec.get("theme") or "gibson"),
             "title": str(self.spec.get("title") or project_name or "GIBSON"),
@@ -181,6 +185,10 @@ class ProjectionEngine:
             # the engine's deterministic positions
             "physics": {"layers": physics_layers},
         }
+        grid = self._epoch_grid(_dict(self.spec.get("view")), entities, relations, events, focus, latest_seq)
+        if grid is not None:
+            resolved["grid"] = grid
+        return resolved
 
     # -- layout -----------------------------------------------------------------
 
@@ -541,6 +549,140 @@ class ProjectionEngine:
             instance["lines"] = [str(line)[:244] for line in lines[:2000] if isinstance(line, str)]
         return instance
 
+    # -- epoch grid ---------------------------------------------------------------
+
+    def _epoch_grid(
+        self,
+        view: Mapping[str, Any],
+        entities: Mapping[str, Mapping[str, Any]],
+        relations: list[Mapping[str, Any]],
+        events: list[Mapping[str, Any]],
+        focus: str,
+        latest_seq: int,
+    ) -> dict[str, Any] | None:
+        if str(view.get("kind") or "") != "epoch-grid":
+            return None
+        entity_spec = _dict(view.get("entities"))
+        limit = max(1, _int(entity_spec.get("limit"), 48))
+        file_ids = sorted(
+            entity_id for entity_id, entity in entities.items()
+            if str(entity.get("type")) == "file"
+        )[:limit]
+        file_set = set(file_ids)
+        boundaries = {
+            str(item) for item in _list(view.get("boundaryEvents"))
+        } or {"command_completed", "check_completed", "commit_created", "turn_end"}
+        for event in events:
+            key = self._event_seen_key(event)
+            if key in self._grid_seen_events:
+                continue
+            self._grid_seen_events.add(key)
+            self._accumulate_grid_event(event, relations, file_set)
+            if str(event.get("kind") or "") in boundaries:
+                self._close_grid_epoch(event)
+        if events:
+            min_seq = min(_int(event.get("seq"), 0) for event in events)
+            self._grid_seen_events = {key for key in self._grid_seen_events if key[0] >= min_seq}
+        window = max(1, _int(view.get("window"), 32))
+        visible_epochs = self._grid_epochs[-window:]
+        visible_epoch_ids = {str(epoch["id"]) for epoch in visible_epochs}
+        columns = [
+            {
+                "id": file_id,
+                "label": file_id.removeprefix("file:"),
+                "group": _file_group(file_id),
+                "focus": file_id == focus,
+            }
+            for file_id in file_ids
+        ]
+        cells = [
+            dict(cell)
+            for epoch in visible_epochs
+            for cell in _list(epoch.get("cells"))
+            if str(cell.get("entity") or "") in file_set and str(cell.get("epoch") or "") in visible_epoch_ids
+        ]
+        pending = [
+            _grid_cell("pending", entity_id, metrics, pending=True)
+            for entity_id, metrics in sorted(self._grid_pending.items())
+            if entity_id in file_set
+        ]
+        archived = max(window, _int(view.get("archiveWindow"), window * 2))
+        self._grid_epochs = self._grid_epochs[-archived:]
+        summary = _grid_summary(visible_epochs, pending, columns)
+        return {
+            "kind": "epoch-grid",
+            "seq": latest_seq,
+            "presentation": {
+                "stage": str(view.get("stage") or "primary"),
+                "narration": bool(view.get("narration", False)),
+                "spatial": bool(view.get("spatial", False)),
+            },
+            "columns": columns,
+            "epochs": visible_epochs,
+            "cells": cells,
+            "pending": pending,
+            "summary": summary,
+        }
+
+    def _accumulate_grid_event(
+        self,
+        event: Mapping[str, Any],
+        relations: list[Mapping[str, Any]],
+        file_set: set[str],
+    ) -> None:
+        kind = str(event.get("kind") or "")
+        entity_id = str(event.get("entity") or "")
+        targets: set[str] = set()
+        if entity_id.startswith("file:"):
+            targets.add(entity_id)
+        if entity_id.startswith("command:"):
+            targets.update(_touched_files_for_command(entity_id, relations))
+        if kind == "check_completed":
+            targets.update(_blast_for_check(entity_id, relations))
+        for target in sorted(targets & file_set):
+            metrics = self._grid_pending.setdefault(target, _blank_grid_metrics())
+            metrics["activity"] = float(metrics["activity"]) + 1.0
+            if kind == "file_changed":
+                churn = event.get("churnFraction")
+                metrics["churn"] = float(metrics["churn"]) + (
+                    float(churn) if isinstance(churn, (int, float)) and not isinstance(churn, bool) else 0.25
+                )
+                metrics["edits"] = float(metrics["edits"]) + 1.0
+            elif entity_id.startswith("command:"):
+                metrics["commands"] = float(metrics["commands"]) + 1.0
+                metrics["status"] = str(event.get("status") or metrics["status"])
+            elif kind == "check_completed":
+                metrics["checks"] = float(metrics["checks"]) + 1.0
+                metrics["status"] = str(event.get("status") or "")
+
+    def _close_grid_epoch(self, event: Mapping[str, Any]) -> None:
+        if not self._grid_pending:
+            return
+        seq = _int(event.get("seq"), len(self._grid_epochs) + 1)
+        kind = str(event.get("kind") or "epoch")
+        status = str(event.get("status") or "")
+        epoch_id = f"epoch:{seq}:{len(self._grid_epochs) + 1}"
+        cells = [
+            _grid_cell(epoch_id, entity_id, metrics)
+            for entity_id, metrics in sorted(self._grid_pending.items())
+        ]
+        totals = _grid_totals(cells)
+        self._grid_epochs.append({
+            "id": epoch_id,
+            "seq": seq,
+            "kind": kind,
+            "label": _epoch_label(event),
+            "tone": _status_tone(status, kind),
+            "status": status,
+            "cells": cells,
+            "activity": totals["activity"],
+            "churn": totals["churn"],
+            "edits": totals["edits"],
+            "commands": totals["commands"],
+            "checks": totals["checks"],
+        })
+        self._grid_pending = {}
+
     # -- mood / camera / hud --------------------------------------------------------
 
     def _mood(self, entities: Mapping[str, Mapping[str, Any]]) -> dict[str, Any]:
@@ -875,6 +1017,125 @@ def _blast_for_check(check_id: str, relations: list[Mapping[str, Any]]) -> set[s
     }
 
 
+def _touched_files_for_command(command_id: str, relations: list[Mapping[str, Any]]) -> set[str]:
+    return {
+        str(r.get("to"))
+        for r in relations
+        if str(r.get("type")) == "touched"
+        and str(r.get("from")) == command_id
+        and str(r.get("to")).startswith("file:")
+    }
+
+
+def _blank_grid_metrics() -> dict[str, float | str]:
+    return {
+        "activity": 0.0,
+        "churn": 0.0,
+        "edits": 0.0,
+        "commands": 0.0,
+        "checks": 0.0,
+        "status": "",
+    }
+
+
+def _grid_cell(epoch_id: str, entity_id: str, metrics: Mapping[str, Any], *, pending: bool = False) -> dict[str, Any]:
+    activity = max(0.0, float(metrics.get("activity") or 0.0))
+    churn = max(0.0, float(metrics.get("churn") or 0.0))
+    commands = max(0.0, float(metrics.get("commands") or 0.0))
+    checks = max(0.0, float(metrics.get("checks") or 0.0))
+    status = str(metrics.get("status") or "")
+    return {
+        "epoch": epoch_id,
+        "entity": entity_id,
+        "activity": round(activity, 4),
+        "churn": round(churn, 4),
+        "edits": round(max(0.0, float(metrics.get("edits") or 0.0)), 4),
+        "commands": round(commands, 4),
+        "checks": round(checks, 4),
+        "height": round(min(1.0, max(activity / 4.0, churn, commands / 2.0, checks / 2.0, 0.08)), 4),
+        "tone": _status_tone(status, "pending" if pending else ""),
+        "pending": pending,
+    }
+
+
+def _grid_totals(cells: Sequence[Mapping[str, Any]]) -> dict[str, float]:
+    totals = {
+        "activity": 0.0,
+        "churn": 0.0,
+        "edits": 0.0,
+        "commands": 0.0,
+        "checks": 0.0,
+    }
+    for cell in cells:
+        for key in totals:
+            value = cell.get(key)
+            if isinstance(value, (int, float)) and not isinstance(value, bool):
+                totals[key] += float(value)
+    return {key: round(value, 4) for key, value in totals.items()}
+
+
+def _grid_summary(
+    epochs: Sequence[Mapping[str, Any]],
+    pending: Sequence[Mapping[str, Any]],
+    columns: Sequence[Mapping[str, Any]],
+) -> dict[str, Any]:
+    closed_cells = [
+        cell
+        for epoch in epochs
+        for cell in _list(epoch.get("cells"))
+        if isinstance(cell, Mapping)
+    ]
+    closed_totals = _grid_totals(closed_cells)
+    pending_totals = _grid_totals(pending)
+    active_entities = {
+        str(cell.get("entity") or "")
+        for cell in [*closed_cells, *pending]
+        if isinstance(cell, Mapping) and cell.get("entity")
+    }
+    return {
+        "columnCount": len(columns),
+        "epochCount": len(epochs),
+        "cellCount": len(closed_cells),
+        "pendingCellCount": len(pending),
+        "activeColumnCount": len(active_entities),
+        "activity": round(closed_totals["activity"] + pending_totals["activity"], 4),
+        "churn": round(closed_totals["churn"] + pending_totals["churn"], 4),
+        "edits": round(closed_totals["edits"] + pending_totals["edits"], 4),
+        "commands": round(closed_totals["commands"] + pending_totals["commands"], 4),
+        "checks": round(closed_totals["checks"] + pending_totals["checks"], 4),
+    }
+
+
+def _file_group(file_id: str) -> str:
+    path = file_id.removeprefix("file:")
+    return path.split("/", 1)[0] if "/" in path else "."
+
+
+def _epoch_label(event: Mapping[str, Any]) -> str:
+    kind = str(event.get("kind") or "epoch").replace("_", " ")
+    category = str(event.get("category") or "")
+    status = str(event.get("status") or "")
+    subject = str(event.get("subject") or "")
+    if kind == "command completed":
+        return "cmd " + status if status else "cmd"
+    if kind == "turn end":
+        return "turn"
+    label = subject or category or kind
+    return _clip_label(label)
+
+
+def _status_tone(status: str, kind: str) -> str:
+    if status == "error":
+        return "alarm"
+    if status == "ok":
+        return "good"
+    if kind == "commit_created":
+        return "warn"
+    if kind == "pending":
+        return "accent"
+    return "base"
+
+
 # --- node channel helpers ------------------------------------------------------------
 
 
@@ -1085,5 +1346,6 @@ __all__ = [
     "PROJECTION_SCHEMA",
     "ProjectionEngine",
     "ProjectionSceneRenderer",
+    "load_packaged_projection",
     "load_projection_spec",
 ]

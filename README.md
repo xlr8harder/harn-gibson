@@ -47,13 +47,14 @@ Useful variants:
 ```text
 /gibson-renderers
 /gibson-view --renderer default
+/gibson-view --renderer activity-roll
 /gibson-view --renderer classic
 /gibson-view --renderer stress
 /gibson-view --port 8765
 /gibson-view --no-browser
 ```
 
-`/gibson-view` uses the `default` visualization when no renderer is specified. `/gibson-renderers` lists the built-in visualization names. `default` is the built-in organic force-layout visualization driven by the perception model, `classic` is the older hard-coded coherent visualizer, and `stress` is the busy showcase/stress visualizer.
+`/gibson-view` uses the `default` visualization when no renderer is specified. `/gibson-renderers` lists the built-in visualization names. `default` is the built-in organic force-layout visualization driven by the perception model, `activity-roll` is a temporal file-activity piano roll, `classic` is the older hard-coded coherent visualizer, and `stress` is the busy showcase/stress visualizer.
 
 ## Browser Input
 
@@ -107,6 +108,12 @@ uv run harn-gibson watch-replay test-artifacts/replays/manual.json --playback-ti
 ```
 
 Replay does not need harn. It feeds captured events through the same scene pipeline and browser backend.
+
+Try the temporal activity view on a replay:
+
+```bash
+uv run harn-gibson watch-replay test-artifacts/replays/manual.json --renderer activity-roll
+```
 
 ## How It Works
 

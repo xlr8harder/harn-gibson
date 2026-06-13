@@ -223,6 +223,7 @@ def test_view_command_arg_parsing_and_recent_limit() -> None:
         "browser": False,
         "renderer": "default",
     }
+    assert _parse_view_command_args("--renderer activity-roll", {})["renderer"] == "activity-roll"
     parsed = _parse_view_command_args(
         "--host=::1 --port=bad --browser --renderer stress --style mainframe --renderer-timeout-ms 1234",
         {

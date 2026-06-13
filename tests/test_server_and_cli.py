@@ -1399,6 +1399,7 @@ def test_cli_replay_renderer_env_helpers(monkeypatch: Any) -> None:
     )
     renderer_no_timeout = parser.parse_args(["replay", "fixture.json", "--renderer", "classic"])
     renderer_default = parser.parse_args(["watch-replay", "fixture.json", "--renderer", "default"])
+    renderer_activity_roll = parser.parse_args(["watch-replay", "fixture.json", "--renderer", "activity-roll"])
     renderer_spec = parser.parse_args(
         ["replay", "fixture.json", "--renderer", "examples/projections/blueprint-web.json"]
     )
@@ -1444,6 +1445,9 @@ def test_cli_replay_renderer_env_helpers(monkeypatch: Any) -> None:
     assert "gibson1_renderer.py" in renderer_no_timeout_env["HARN_GIBSON_RENDERER_COMMAND"]
     assert "HARN_GIBSON_RENDERER_TIMEOUT_MS" not in renderer_no_timeout_env
     assert cli._explicit_replay_renderer_env_from_args(renderer_default) == {"HARN_GIBSON_RENDERER": "default"}
+    assert cli._explicit_replay_renderer_env_from_args(renderer_activity_roll) == {
+        "HARN_GIBSON_RENDERER": "activity-roll"
+    }
     assert cli._explicit_replay_renderer_env_from_args(renderer_spec) == {
         "HARN_GIBSON_RENDERER": "examples/projections/blueprint-web.json"
     }
@@ -3310,6 +3314,18 @@ def test_cli_run_renderer_env_helpers() -> None:
         )
         is True
     )
+
+    activity_roll = {}
+    assert (
+        cli._apply_run_renderer_env(
+            activity_roll,
+            renderer="activity-roll",
+            renderer_command=None,
+            renderer_timeout_ms="1111",
+        )
+        is True
+    )
+    assert activity_roll == {"HARN_GIBSON_RENDERER": "activity-roll"}
 
     custom = {}
     assert (

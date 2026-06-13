@@ -1,0 +1,25 @@
+{
+  "schema": "harn-gibson.projection.v1",
+  "theme": "gibson",
+  "title": "ACTIVITY ROLL",
+  "layers": [],
+  "camera": {},
+  "on": [],
+  "view": {
+    "kind": "epoch-grid",
+    "stage": "primary",
+    "spatial": false,
+    "narration": false,
+    "window": 36,
+    "archiveWindow": 72,
+    "boundaryEvents": [
+      "command_completed",
+      "check_completed",
+      "commit_created",
+      "turn_end"
+    ],
+    "entities": {
+      "limit": 48
+    }
+  }
+}

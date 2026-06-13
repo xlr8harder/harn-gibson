@@ -7,10 +7,12 @@ import sys
 from pathlib import Path
 
 DIRECT_RENDERERS = ("classic", "stress")
-RENDERERS = ("default", "classic", "stress")
+PROJECTION_RENDERER_RESOURCES = {"activity-roll": "projections/activity-roll.json"}
+RENDERERS = ("default", "activity-roll", "classic", "stress")
 DEFAULT_RENDERER = "default"
 RENDERER_DESCRIPTIONS = {
     "default": "built-in organic force-layout visualization driven by the perception model",
+    "activity-roll": "temporal file activity piano-roll visualization driven by the perception model",
     "classic": "older coherent hard-coded visualization for everyday sessions",
     "stress": "showcase/stress visualization with the full cinematic primitive set",
 }
@@ -35,6 +37,13 @@ def direct_renderer_command(renderer: str) -> str | None:
     if normalized == "stress":
         return _example_renderer_command("gibson_dogfood_renderer.py")
     return None
+
+
+def projection_renderer_resource(renderer: str) -> str | None:
+    normalized = normalize_renderer(renderer, default=None)
+    if normalized is None:
+        return None
+    return PROJECTION_RENDERER_RESOURCES.get(normalized)
 
 
 def renderer_listing() -> str:

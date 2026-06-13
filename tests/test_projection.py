@@ -14,6 +14,7 @@ from harn_gibson.projection import (
     PROJECTION_SCENE_SCHEMA,
     ProjectionEngine,
     ProjectionSceneRenderer,
+    load_packaged_projection,
     load_projection_spec,
 )
 from harn_gibson.rendering import RenderRequest, validate_render_plan
@@ -134,6 +135,142 @@ def test_default_projection_resolves_a_complete_scene() -> None:
     assert scene["hud"]["narration"] == ""
     assert "TEST:ERROR" in scene["hud"]["checks"]
     assert "main @ abc123d" in scene["hud"]["workspace"]
+    assert "grid" not in scene
+
+
+def test_epoch_grid_accumulates_pending_file_activity() -> None:
+    engine = ProjectionEngine({
+        "layers": [],
+        "on": [],
+        "view": {"kind": "epoch-grid", "window": 4, "entities": {"limit": 4}},
+    })
+    scene = engine.resolve(
+        _perception(events=[
+            {"seq": 9, "ts": 9000, "kind": "file_changed", "entity": "file:src/app.py", "churnFraction": 0.4},
+            {"seq": 10, "ts": 10000, "kind": "file_seen", "entity": "file:src/app.py"},
+        ]),
+        now_ms=9000,
+    )
+
+    assert scene["nodes"] == []
+    grid = scene["grid"]
+    assert grid["kind"] == "epoch-grid"
+    assert grid["presentation"] == {"stage": "primary", "narration": False, "spatial": False}
+    assert [column["id"] for column in grid["columns"]] == [
+        "file:README.md",
+        "file:src/app.py",
+        "file:src/util.py",
+    ]
+    assert grid["epochs"] == []
+    assert grid["pending"] == [{
+        "epoch": "pending",
+        "entity": "file:src/app.py",
+        "activity": 2.0,
+        "churn": 0.4,
+        "edits": 1.0,
+        "commands": 0.0,
+        "checks": 0.0,
+        "height": 0.5,
+        "tone": "accent",
+        "pending": True,
+    }]
+    assert grid["summary"] == {
+        "columnCount": 3,
+        "epochCount": 0,
+        "cellCount": 0,
+        "pendingCellCount": 1,
+        "activeColumnCount": 1,
+        "activity": 2.0,
+        "churn": 0.4,
+        "edits": 1.0,
+        "commands": 0.0,
+        "checks": 0.0,
+    }
+
+    no_event_scene = ProjectionEngine({"layers": [], "on": [], "view": {"kind": "epoch-grid"}}).resolve(
+        _perception(events=[], latest_seq=12),
+        now_ms=12000,
+    )
+    assert no_event_scene["grid"]["summary"]["epochCount"] == 0
+
+
+def test_epoch_grid_closes_on_boundaries_and_suppresses_empty_epochs() -> None:
+    engine = ProjectionEngine({
+        "layers": [],
+        "on": [],
+        "view": {"kind": "epoch-grid", "window": 4, "boundaryEvents": ["check_completed"]},
+    })
+    events = [
+        {"seq": 9, "ts": 9000, "kind": "file_changed", "entity": "file:src/app.py", "churnFraction": 0.4},
+        {"seq": 10, "ts": 10000, "kind": "check_completed", "entity": "check:test:6",
+         "category": "test", "status": "error"},
+    ]
+
+    scene = engine.resolve(_perception(events=events, latest_seq=10), now_ms=10000)
+    grid = scene["grid"]
+    assert grid["pending"] == []
+    assert [epoch["label"] for epoch in grid["epochs"]] == ["test"]
+    assert grid["epochs"][0]["tone"] == "alarm"
+    assert grid["epochs"][0]["activity"] == 3.0
+    assert grid["epochs"][0]["checks"] == 2.0
+    cells = {(cell["entity"], cell["tone"]): cell for cell in grid["cells"]}
+    assert cells[("file:src/app.py", "alarm")]["activity"] == 2.0
+    assert cells[("file:src/app.py", "alarm")]["churn"] == 0.4
+    assert cells[("file:README.md", "alarm")]["checks"] == 1.0
+
+    scene = engine.resolve(_perception(events=events, latest_seq=10), now_ms=11000)
+    assert len(scene["grid"]["epochs"]) == 1
+
+    empty_engine = ProjectionEngine({"layers": [], "on": [], "view": {"kind": "epoch-grid"}})
+    scene = empty_engine.resolve(
+        _perception(events=[{"seq": 12, "ts": 12000, "kind": "commit_created", "subject": "empty"}], latest_seq=12),
+        now_ms=12000,
+    )
+    assert scene["grid"]["epochs"] == []
+
+    turn_engine = ProjectionEngine({"layers": [], "on": [], "view": {"kind": "epoch-grid"}})
+    scene = turn_engine.resolve(
+        _perception(events=[
+            {"seq": 12, "ts": 12000, "kind": "file_changed", "entity": "file:src/app.py"},
+            {"seq": 13, "ts": 13000, "kind": "turn_end"},
+        ], latest_seq=13),
+        now_ms=13000,
+    )
+    assert scene["grid"]["epochs"][0]["label"] == "turn"
+
+    from harn_gibson.projection import _grid_totals
+
+    assert _grid_totals([{"activity": True, "churn": "bad", "edits": 2}]) == {
+        "activity": 0.0,
+        "churn": 0.0,
+        "edits": 2.0,
+        "commands": 0.0,
+        "checks": 0.0,
+    }
+
+
+def test_epoch_grid_records_command_commit_ok_and_windows_history() -> None:
+    engine = ProjectionEngine({"layers": [], "on": [], "view": {"kind": "epoch-grid", "window": 2}})
+    events = [
+        {"seq": 9, "ts": 9000, "kind": "file_changed", "entity": "file:src/app.py"},
+        {"seq": 10, "ts": 10000, "kind": "command_completed", "entity": "command:5", "status": "ok"},
+        {"seq": 11, "ts": 11000, "kind": "file_changed", "entity": "file:README.md", "churnFraction": 0.7},
+        {"seq": 12, "ts": 12000, "kind": "check_completed", "entity": "check:test:6",
+         "category": "test", "status": "ok"},
+        {"seq": 13, "ts": 13000, "kind": "file_changed", "entity": "file:src/util.py", "churnFraction": 0.2},
+        {"seq": 14, "ts": 14000, "kind": "commit_created", "subject": "ship it"},
+    ]
+
+    scene = engine.resolve(_perception(events=events, latest_seq=14), now_ms=14000)
+    epochs = scene["grid"]["epochs"]
+    assert [epoch["label"] for epoch in epochs] == ["test", "ship it"]
+    assert [epoch["tone"] for epoch in epochs] == ["good", "warn"]
+    assert all(cell["epoch"] in {epoch["id"] for epoch in epochs} for cell in scene["grid"]["cells"])
+    assert scene["grid"]["summary"]["epochCount"] == 2
+    assert scene["grid"]["summary"]["activeColumnCount"] == 3
+    util_cell = next(cell for cell in scene["grid"]["cells"] if cell["entity"] == "file:src/util.py")
+    assert util_cell["tone"] == "base"
+    assert util_cell["height"] == 0.25
 
 
 def test_event_rules_fire_effects_once_with_blast_and_recovery() -> None:
@@ -634,6 +771,9 @@ def test_builtin_default_projection_loads_from_packaged_json() -> None:
         resources.files("harn_gibson").joinpath("projections/gibson-organic.json").read_text(encoding="utf-8")
     )
     assert organic == DEFAULT_PROJECTION
+    activity_roll = load_packaged_projection("projections/activity-roll.json")
+    assert activity_roll["title"] == "ACTIVITY ROLL"
+    assert activity_roll["view"]["kind"] == "epoch-grid"
 
 
 def test_server_env_enables_projection_renderer() -> None:
@@ -644,6 +784,10 @@ def test_server_env_enables_projection_renderer() -> None:
     assert selected_renderer_from_env("  ") is None
     renderer = selected_renderer_from_env("default")
     assert isinstance(renderer, ProjectionSceneRenderer)
+    activity_roll = selected_renderer_from_env("activity-roll")
+    assert isinstance(activity_roll, ProjectionSceneRenderer)
+    assert activity_roll.engine.spec["title"] == "ACTIVITY ROLL"
+    assert activity_roll.engine.spec["view"]["kind"] == "epoch-grid"
     built_in_renderer = selected_renderer_from_env("stress", "250")
     assert isinstance(built_in_renderer, ExternalRenderer)
     assert built_in_renderer.timeout_seconds == 0.25
@@ -926,4 +1070,5 @@ def test_example_projection_specs_parse_and_resolve() -> None:
         engine = ProjectionEngine(spec)
         scene = engine.resolve(_perception(), now_ms=1000)
         assert scene["schema"] == PROJECTION_SCENE_SCHEMA, spec_path.name
-        assert scene["nodes"], spec_path.name
+        grid = scene.get("grid")
+        assert scene["nodes"] or (isinstance(grid, dict) and grid.get("kind") == "epoch-grid"), spec_path.name
