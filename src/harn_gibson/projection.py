@@ -133,7 +133,7 @@ class ProjectionEngine:
         self.revision = 0
         self._positions: dict[str, tuple[float, float]] = {}
         self._effects: list[dict[str, Any]] = []
-        self._seen_events: set[tuple[int, str, str]] = set()
+        self._seen_events: set[tuple[int, str, str, str]] = set()
         self._check_errors_seen: set[str] = set()
         self._attr_max: dict[tuple[str, str], float] = {}
         self._resolve_now_ms = 0
@@ -458,7 +458,7 @@ class ProjectionEngine:
         now_ms: int,
     ) -> None:
         for event in events:
-            key = (_int(event.get("seq"), 0), str(event.get("kind") or ""), str(event.get("entity") or ""))
+            key = self._event_seen_key(event)
             if key in self._seen_events:
                 continue
             self._seen_events.add(key)
@@ -503,6 +503,14 @@ class ProjectionEngine:
             self._seen_events = {key for key in self._seen_events if key[0] >= min_seq}
         if len(self._seen_events) > 2048:
             self._seen_events = set(sorted(self._seen_events)[-1024:])
+
+    def _event_seen_key(self, event: Mapping[str, Any]) -> tuple[int, str, str, str]:
+        return (
+            _int(event.get("seq"), 0),
+            str(event.get("kind") or ""),
+            str(event.get("entity") or ""),
+            json.dumps(event, sort_keys=True, separators=(",", ":"), default=str),
+        )
 
     def _rule_matches(self, rule: Mapping[str, Any], event: Mapping[str, Any]) -> bool:
         when = _dict(rule.get("when"))

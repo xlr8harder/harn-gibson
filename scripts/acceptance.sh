@@ -61,6 +61,13 @@ run uv run harn-gibson replay-dir examples/replays \
   --output-result "$ARTIFACT_DIR/replay-suite.json" \
   --baseline-dir examples/baselines/replays \
   --screenshot-dir "$ARTIFACT_DIR/replay-screenshots"
+run uv run harn-gibson replay examples/claude-gibson-replays/long-session-arc.json \
+  --projection examples/projections/gibson-organic.json \
+  --discovery stream \
+  --project-root examples/dogfood-workspaces/repo-map \
+  --project-name repo-map \
+  --output-scene "$ARTIFACT_DIR/projection-long-session-scene.json" \
+  --screenshot "$ARTIFACT_DIR/projection-long-session.png"
 run uv run harn-gibson replay-dir examples/gibson1-replays \
   --renderer-command "$GIBSON1_RENDERER_COMMAND" \
   --renderer-timeout-ms 10000 \

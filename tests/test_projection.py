@@ -176,6 +176,42 @@ def test_event_rules_fire_effects_once_with_blast_and_recovery() -> None:
     assert scene["mood"]["name"] == "recovery"
 
 
+def test_event_dedupe_distinguishes_distinct_same_sequence_facts() -> None:
+    engine = ProjectionEngine()
+    events = [
+        {
+            "seq": 9,
+            "ts": 9000,
+            "kind": "file_changed",
+            "entity": "file:src/app.py",
+            "churnFraction": 1.0,
+            "basis": "harn-payload",
+        },
+        {
+            "seq": 9,
+            "ts": 9000,
+            "kind": "file_changed",
+            "entity": "file:src/app.py",
+            "sizeBefore": 100,
+            "sizeAfter": 105,
+            "churnFraction": 0.05,
+            "basis": "git",
+        },
+    ]
+
+    scene = engine.resolve(_perception(events=events), now_ms=9000)
+    pulses = [effect for effect in scene["effects"] if effect["kind"] == "pulse"]
+
+    assert len(pulses) == 1
+    assert pulses[0]["targets"] == ["file:src/app.py"]
+    assert pulses[0]["magnitude"] == 0.05
+
+    # The exact same facts remain suppressed on later resolves; once the live
+    # effect expires, it does not re-fire from the still-visible event window.
+    scene = engine.resolve(_perception(events=events), now_ms=30000)
+    assert scene["effects"] == []
+
+
 def test_effect_target_selectors_and_field_substitution() -> None:
     spec = {
         "on": [
