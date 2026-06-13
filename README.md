@@ -1,22 +1,34 @@
 # harn-gibson
 
-`harn-gibson` adds a cinematic browser viewer to a live [secemp9/harn](https://github.com/secemp9/harn) agent session. The normal setup has only two moving pieces:
+`harn-gibson` adds a cinematic browser viewer to a live [secemp9/harn](https://github.com/secemp9/harn) agent session. The normal setup has three steps:
 
-- a harn session with the Gibson extension loaded;
-- a local browser viewer started from that harn session with `/gibson-view`.
+1. install harn;
+2. install the Gibson harn package into your configured harn;
+3. start the browser viewer from harn with `/gibson-view`.
 
 The viewer is a display layer. Harn remains the primary agent interface, and the browser can also queue small follow-up or steering messages back into harn.
 
 ## Quick Start: Interactive Viewer
 
-From this checkout:
+Install harn, then add Gibson as a harn package:
 
 ```bash
-uv sync
-uv run harn
+harn install git:github.com/xlr8harder/harn-gibson
 ```
 
-Inside harn, start the viewer:
+For a team/project-local install, write the package to `.harn/settings.json` instead:
+
+```bash
+harn install git:github.com/xlr8harder/harn-gibson -l
+```
+
+Then launch harn normally from your project:
+
+```bash
+harn
+```
+
+Inside harn, open the viewer:
 
 ```text
 /gibson-view
@@ -24,7 +36,13 @@ Inside harn, start the viewer:
 
 That command starts a local Gibson display server, opens the browser, flushes recent harn events into the scene, and streams future events as the agent works.
 
-If harn cannot find Codex auth, run `uv run harn-gibson import-codex-auth` once from this checkout, or log into a harn provider directly.
+Gibson does not require separate model credentials. Use your existing harn provider/auth configuration.
+
+To confirm harn has the package configured:
+
+```bash
+harn list
+```
 
 Useful variants:
 
@@ -35,16 +53,22 @@ Useful variants:
 
 The first uses a predictable browser URL, `http://127.0.0.1:8765`. The second starts the server without opening a browser, which is useful over SSH or when another tool will open the page.
 
-## Use It From Another Project
+## Development Checkout
 
-Run harn in your target project and point it at this checkout as a harn package:
+When working from a local checkout, install dependencies and run harn with the package loaded transiently:
 
 ```bash
-cd /path/to/your/project
-harn -e /path/to/harn-gibson
+uv sync
+uv run harn -e .
 ```
 
-Then use `/gibson-view` inside harn. The package entry point is `extensions/gibson.py`, and both `pyproject.toml` and `package.json` declare it for harn discovery.
+Or install the checkout into your harn settings:
+
+```bash
+harn install /path/to/harn-gibson
+```
+
+The package entry point is `extensions/gibson.py`, and both `pyproject.toml` and `package.json` declare it for harn discovery.
 
 ## Browser Input
 
