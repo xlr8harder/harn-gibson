@@ -193,26 +193,6 @@ Noisy event types can also be sampled before routing:
 HARN_GIBSON_ROUTE_RULES='[{"eventType":"session_tree","route":"renderer_agent","sampleEvery":4,"fallbackRoute":"debug_only"}]'
 ```
 
-## Hook Modules
-
-Hook modules are an optional harn-gibson extension point for local policy, diagnostics, and interdict experiments. They are not the event source for the viewer; harn events come from the Gibson harn extension itself.
-
-Hook modules are Python files listed in `HARN_GIBSON_HOOKS`, separated by `:`. Each module exports `register_gibson_hooks(dispatcher)`.
-
-```python
-from harn_gibson import HookDecision
-
-
-def register_gibson_hooks(dispatcher):
-    @dispatcher.on("tool_call", "before")
-    def block_rm(event):
-        command = event.payload.get("input", {}).get("command", "")
-        if "rm -rf" in command:
-            return HookDecision(block=True, reason="Blocked by harn-gibson hook")
-```
-
-Supported interdict points include `input`, `tool_call`, `tool_result`, `message_end`, `before_agent_start`, and session-before events. All harn lifecycle/display events are still emitted even when they do not support mutation.
-
 ## Acceptance
 
 Run the full local acceptance gate before a release checkpoint:

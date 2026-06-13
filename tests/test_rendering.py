@@ -33,7 +33,6 @@ from harn_gibson.rendering import (
     coerce_context_limit,
     coerce_render_mode,
     coerce_render_timing_mode,
-    decisions_from_payload,
     render_accept_payload,
     render_intent_from_plan,
     render_plan_diagnostics_payload,
@@ -118,7 +117,7 @@ def test_touched_files_context_skips_sed_and_perl_program_fragments() -> None:
 
 
 def test_render_request_step_and_plan_helpers() -> None:
-    request = RenderRequest(event(1), ({"block": False},))
+    request = RenderRequest(event(1))
     empty_request = RenderRequest(
         event(2),
         route="stream_buffer",
@@ -130,7 +129,6 @@ def test_render_request_step_and_plan_helpers() -> None:
     no_index = RenderStep(())
     plan = RenderPlan((request, empty_request), (step, no_index), {"agent": "test"})
 
-    assert request.to_dict()["decisions"] == [{"block": False}]
     assert "decisions" not in empty_request.to_dict()
     assert empty_request.to_dict()["route"] == "stream_buffer"
     assert empty_request.to_dict()["timelineOffsetMs"] == 25
@@ -152,7 +150,7 @@ def test_render_request_step_and_plan_helpers() -> None:
 
 
 def test_deterministic_renderer_creates_one_step_per_request() -> None:
-    requests = (RenderRequest(event(1), ({"reason": "x"},)), RenderRequest(event(2, "tool_result")))
+    requests = (RenderRequest(event(1)), RenderRequest(event(2, "tool_result")))
     plan = DeterministicSceneRenderer().render(requests, SceneEngine().state)
 
     assert plan.metadata == {"renderer": "deterministic"}
@@ -2184,7 +2182,7 @@ def test_blocking_pipeline_applies_and_publishes_updates() -> None:
     buffer = EventBuffer()
     pipeline = RenderPipeline(scene=SceneEngine(), buffer=buffer, mode="blocking")
     pipeline.start()
-    result = pipeline.submit(RenderRequest(event(1), ({"block": True},)))
+    result = pipeline.submit(RenderRequest(event(1)))
 
     assert pipeline._worker is None
     assert result.mode == "blocking"
@@ -2192,7 +2190,6 @@ def test_blocking_pipeline_applies_and_publishes_updates() -> None:
     assert result.scene_revision == 1
     assert len(result.updates) == 1
     update = result.updates[0]
-    assert update["decisions"] == [{"block": True}]
     assert update["renderPlan"]["batchSize"] == 1
     assert update["renderPlan"]["intent"]["renderer"] == "deterministic"
     assert update["renderIntent"] == update["renderPlan"]["intent"]
@@ -2573,4 +2570,3 @@ def test_render_update_and_coercion_helpers() -> None:
     assert coerce_context_limit("-3", 7) == 0
     assert coerce_context_limit("0", 7, minimum=1) == 1
     assert coerce_context_limit("bad", 7) == 7
-    assert decisions_from_payload({"decisions": [{"a": 1}, "bad", {"b": 2}]}) == ({"a": 1}, {"b": 2})

@@ -254,12 +254,11 @@ def initial_scene(style_pack: Mapping[str, Any] | None = None) -> SceneState:
             kind="viewport",
             region="root",
             props={"theme": style_id, "title": "GIBSON LINK"},
-            children=("status", "event-feed", "trace-log", "decision-log", "scan-grid"),
+            children=("status", "event-feed", "trace-log", "scan-grid"),
         ),
         ScenePrimitive(id="status", kind="status", region="mast", props={"text": "awaiting signal", "phase": "idle"}),
         ScenePrimitive(id="event-feed", kind="feed", region="side", props={"maxItems": 80}),
         ScenePrimitive(id="trace-log", kind="code", region="side", props={"language": "text", "text": []}),
-        ScenePrimitive(id="decision-log", kind="code", region="side", props={"language": "json", "text": "[]"}),
         ScenePrimitive(id="scan-grid", kind="grid", region="stage", props={"intensity": 0.2}),
     ):
         state.primitives[primitive.id] = primitive
@@ -334,8 +333,7 @@ def scene_state_from_mapping(value: Mapping[str, Any]) -> SceneState:
     )
 
 
-def default_mutations_for_event(event: GibsonEvent, decisions: Iterable[Mapping[str, Any]] = ()) -> list[SceneMutation]:
-    rendered_decisions = list(decisions)
+def default_mutations_for_event(event: GibsonEvent) -> list[SceneMutation]:
     tone = _tone_for_phase(event.phase)
     mutations = [
         SceneMutation(
@@ -352,11 +350,6 @@ def default_mutations_for_event(event: GibsonEvent, decisions: Iterable[Mapping[
                 "title": event.title,
                 "summary": event.summary,
             },
-        ),
-        SceneMutation(
-            op="patch",
-            target_id="decision-log",
-            props={"text": rendered_decisions},
         ),
         SceneMutation(
             op="upsert",

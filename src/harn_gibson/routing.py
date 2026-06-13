@@ -230,19 +230,19 @@ class EventRouter:
         self.stream_buffers: dict[str, StreamBuffer] = {}
         self._sample_counts: dict[str, int] = {}
 
-    def route(self, event: GibsonEvent, decisions: Sequence[dict[str, Any]] = ()) -> RouteResult:
+    def route(self, event: GibsonEvent) -> RouteResult:
         rule = self.route_rules.get(event.event_type)
         if rule is not None:
-            return self._rule_result(event, decisions, rule)
+            return self._rule_result(event, rule)
         binding = self.stream_bindings.get(event.event_type)
         if binding is not None:
             text = stream_text_for_event(event)
             if text:
-                return self._stream_result(event, decisions, binding, text)
-            return self._debug_result(event, decisions, "stream update without text")
+                return self._stream_result(event, binding, text)
+            return self._debug_result(event, "stream update without text")
         if self.renderer_interest is not None and not self.renderer_interest.wants(event):
-            return self._interest_fallback_result(event, decisions, self.renderer_interest)
-        return self._renderer_result(event, decisions, "default renderer route")
+            return self._interest_fallback_result(event, self.renderer_interest)
+        return self._renderer_result(event, "default renderer route")
 
     def stream_snapshot(self) -> dict[str, Any]:
         return {
@@ -253,28 +253,25 @@ class EventRouter:
     def _renderer_result(
         self,
         event: GibsonEvent,
-        decisions: Sequence[dict[str, Any]],
         reason: str,
         metadata: dict[str, Any] | None = None,
     ) -> RouteResult:
         decision = RouteDecision(route="renderer_agent", reason=reason, metadata=dict(metadata or {}))
-        request = RenderRequest(event, tuple(decisions), metadata={"route": decision.to_dict()})
+        request = RenderRequest(event, metadata={"route": decision.to_dict()})
         batch = RenderInputBatch.from_requests((request,), metadata={"route": decision.to_dict()})
         return RouteResult(decision, batch.requests[0], batch)
 
     def _rule_result(
         self,
         event: GibsonEvent,
-        decisions: Sequence[dict[str, Any]],
         rule: EventRouteRule,
     ) -> RouteResult:
         if rule.sample_every != 1:
-            return self._sampled_rule_result(event, decisions, rule)
+            return self._sampled_rule_result(event, rule)
         if rule.route == "renderer_agent":
-            return self._renderer_result(event, decisions, rule.reason, {"rule": rule.to_dict()})
+            return self._renderer_result(event, rule.reason, {"rule": rule.to_dict()})
         return self._local_route_result(
             event,
-            decisions,
             route=rule.route,
             reason=rule.reason,
             metadata={"rule": rule.to_dict()},
@@ -283,7 +280,6 @@ class EventRouter:
     def _sampled_rule_result(
         self,
         event: GibsonEvent,
-        decisions: Sequence[dict[str, Any]],
         rule: EventRouteRule,
     ) -> RouteResult:
         index = self._sample_counts.get(rule.event_type, 0)
@@ -302,16 +298,14 @@ class EventRouter:
         if not sampled:
             return self._local_route_result(
                 event,
-                decisions,
                 route=rule.sample_fallback_route,
                 reason=f"{rule.reason} sample skipped",
                 metadata=sample_metadata,
             )
         if rule.route == "renderer_agent":
-            return self._renderer_result(event, decisions, rule.reason, sample_metadata)
+            return self._renderer_result(event, rule.reason, sample_metadata)
         return self._local_route_result(
             event,
-            decisions,
             route=rule.route,
             reason=rule.reason,
             metadata=sample_metadata,
@@ -320,12 +314,10 @@ class EventRouter:
     def _interest_fallback_result(
         self,
         event: GibsonEvent,
-        decisions: Sequence[dict[str, Any]],
         interest: RendererEventInterest,
     ) -> RouteResult:
         return self._local_route_result(
             event,
-            decisions,
             route=interest.fallback_route,
             reason=interest.reason,
             metadata={"rendererInterest": interest.to_dict()},
@@ -334,7 +326,6 @@ class EventRouter:
     def _local_route_result(
         self,
         event: GibsonEvent,
-        decisions: Sequence[dict[str, Any]],
         *,
         route: RendererFallbackRoute,
         reason: str,
@@ -343,19 +334,17 @@ class EventRouter:
         if route == "direct_scene":
             return self._direct_result(
                 event,
-                decisions,
                 RouteDecision(
                     route="direct_scene",
                     reason=reason,
                     renderer_visible=False,
                     metadata=metadata,
                 ),
-                tuple(default_mutations_for_event(event, decisions)),
+                tuple(default_mutations_for_event(event)),
             )
         if route == "debug_only":
             return self._direct_result(
                 event,
-                decisions,
                 RouteDecision(
                     route="debug_only",
                     reason=reason,
@@ -366,7 +355,6 @@ class EventRouter:
             )
         return self._direct_result(
             event,
-            decisions,
             RouteDecision(
                 route="drop",
                 reason=reason,
@@ -379,29 +367,26 @@ class EventRouter:
     def _direct_result(
         self,
         event: GibsonEvent,
-        decisions: Sequence[dict[str, Any]],
         decision: RouteDecision,
         mutations: tuple[SceneMutation, ...],
     ) -> RouteResult:
-        request = RenderRequest(event, tuple(decisions), route=decision.route, metadata={"route": decision.to_dict()})
+        request = RenderRequest(event, route=decision.route, metadata={"route": decision.to_dict()})
         batch = RenderInputBatch.from_requests((request,), route=decision.route, metadata={"route": decision.to_dict()})
         return RouteResult(decision, batch.requests[0], batch, mutations)
 
     def _debug_result(
         self,
         event: GibsonEvent,
-        decisions: Sequence[dict[str, Any]],
         reason: str,
     ) -> RouteResult:
         decision = RouteDecision(route="debug_only", reason=reason, renderer_visible=False)
-        request = RenderRequest(event, tuple(decisions), route="debug_only", metadata={"route": decision.to_dict()})
+        request = RenderRequest(event, route="debug_only", metadata={"route": decision.to_dict()})
         batch = RenderInputBatch.from_requests((request,), route="debug_only", metadata={"route": decision.to_dict()})
         return RouteResult(decision, batch.requests[0], batch, ())
 
     def _stream_result(
         self,
         event: GibsonEvent,
-        decisions: Sequence[dict[str, Any]],
         binding: StreamBinding,
         text: str,
     ) -> RouteResult:
@@ -417,7 +402,6 @@ class EventRouter:
         )
         request = RenderRequest(
             event,
-            tuple(decisions),
             route="stream_buffer",
             metadata={"route": decision.to_dict(), "stream": buffer.to_dict()},
         )

@@ -8,24 +8,23 @@ import os
 import queue
 import threading
 import urllib.request
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Protocol
 
 from harn_gibson.events import GibsonEvent
-from harn_gibson.hooks import HookDecision
 
 DEFAULT_ENDPOINT = "http://127.0.0.1:8765/events"
 
 
 class EventSink(Protocol):
-    async def publish(self, event: GibsonEvent, decisions: Iterable[HookDecision] = ()) -> None: ...
+    async def publish(self, event: GibsonEvent) -> None: ...
 
 
 @dataclass(slots=True)
 class NoopSink:
-    async def publish(self, _event: GibsonEvent, _decisions: Iterable[HookDecision] = ()) -> None:
+    async def publish(self, _event: GibsonEvent) -> None:
         return None
 
 
@@ -33,10 +32,9 @@ class NoopSink:
 class CompositeSink:
     sinks: list[EventSink]
 
-    async def publish(self, event: GibsonEvent, decisions: Iterable[HookDecision] = ()) -> None:
-        cached = list(decisions)
+    async def publish(self, event: GibsonEvent) -> None:
         for sink in self.sinks:
-            await sink.publish(event, cached)
+            await sink.publish(event)
 
 
 @dataclass(slots=True)
@@ -44,8 +42,8 @@ class JsonlEventSink:
     path: Path
     _lock: threading.Lock = field(default_factory=threading.Lock)
 
-    async def publish(self, event: GibsonEvent, decisions: Iterable[HookDecision] = ()) -> None:
-        payload = event_payload(event, decisions)
+    async def publish(self, event: GibsonEvent) -> None:
+        payload = event_payload(event)
         line = json.dumps(payload, separators=(",", ":"), sort_keys=True) + "\n"
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with self._lock:
@@ -59,8 +57,8 @@ class HttpEventSink:
     timeout: float = 0.15
     last_error: str | None = None
 
-    async def publish(self, event: GibsonEvent, decisions: Iterable[HookDecision] = ()) -> None:
-        payload = event_payload(event, decisions)
+    async def publish(self, event: GibsonEvent) -> None:
+        payload = event_payload(event)
         try:
             await asyncio.to_thread(self._post, payload)
         except OSError as error:
@@ -113,12 +111,8 @@ class EventBuffer:
 
         return subscriber, unsubscribe
 
-def event_payload(event: GibsonEvent, decisions: Iterable[HookDecision] = ()) -> dict[str, Any]:
-    payload = event.to_dict()
-    rendered_decisions = [decision.to_dict() for decision in decisions]
-    if rendered_decisions:
-        payload["decisions"] = rendered_decisions
-    return payload
+def event_payload(event: GibsonEvent) -> dict[str, Any]:
+    return event.to_dict()
 
 
 def build_sink_from_env(environ: Mapping[str, str] | None = None) -> EventSink:

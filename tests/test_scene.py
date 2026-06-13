@@ -306,8 +306,7 @@ def test_default_mutations_and_scene_update_payload() -> None:
         4,
         timestamp_ms=100,
     )
-    decisions = [{"block": False, "metadata": {"reviewed": True}}]
-    mutations = default_mutations_for_event(event, decisions)
+    mutations = default_mutations_for_event(event)
     engine = SceneEngine()
     scene = engine.apply(mutations)
     payload = scene_update_payload(event, mutations, scene)
@@ -315,7 +314,6 @@ def test_default_mutations_and_scene_update_payload() -> None:
     assert [mutation.op for mutation in mutations] == [
         "patch",
         "append_log",
-        "patch",
         "upsert",
         "upsert",
         "upsert",
@@ -324,7 +322,6 @@ def test_default_mutations_and_scene_update_payload() -> None:
         "start_animation",
     ]
     assert scene.primitives["status"].props["text"] == "after:tool_result"
-    assert scene.primitives["decision-log"].props["text"] == decisions
     assert scene.primitives["trace-log"].props["text"] == []
     assert scene.primitives["gibson-city"].kind == "city_block"
     assert len(scene.primitives["gibson-city"].props["blocks"]) == 7
@@ -340,9 +337,9 @@ def test_default_mutations_and_scene_update_payload() -> None:
     assert scene.primitives["packet-field"].props["count"] == 22
     assert scene.animations["pulse-4"].props["tone"] == "magenta"
     assert payload["event"]["eventType"] == "tool_result"
-    assert payload["mutations"][8]["animation"]["targetId"] == "scan-grid"
-    assert payload["mutations"][8]["animation"]["ttlMs"] == 2600
-    assert payload["mutations"][8]["animation"]["expiresAtMs"] == 2700
+    assert payload["mutations"][7]["animation"]["targetId"] == "scan-grid"
+    assert payload["mutations"][7]["animation"]["ttlMs"] == 2600
+    assert payload["mutations"][7]["animation"]["expiresAtMs"] == 2700
 
 
 def test_default_mutations_capture_tracebacks() -> None:
@@ -361,7 +358,6 @@ def test_default_mutations_capture_tracebacks() -> None:
     assert [mutation.op for mutation in mutations] == [
         "patch",
         "append_log",
-        "patch",
         "upsert",
         "upsert",
         "upsert",

@@ -566,16 +566,6 @@
       }
     },
     "primitives": {
-      "decision-log": {
-        "children": [],
-        "id": "decision-log",
-        "kind": "code",
-        "props": {
-          "language": "json",
-          "text": "[]"
-        },
-        "region": "side"
-      },
       "event-feed": {
         "children": [],
         "id": "event-feed",
@@ -1654,7 +1644,6 @@
           "status",
           "event-feed",
           "trace-log",
-          "decision-log",
           "scan-grid"
         ],
         "id": "stage",

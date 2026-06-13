@@ -35,7 +35,6 @@ from harn_gibson.rendering import (
     coerce_context_limit,
     coerce_render_mode,
     coerce_render_timing_mode,
-    decisions_from_payload,
     render_accept_payload,
 )
 from harn_gibson.routing import (
@@ -848,7 +847,7 @@ def format_sse(payload: dict[str, Any]) -> str:
 
 def submit_event_to_renderer(payload: dict[str, Any], state: GibsonServerState) -> RenderSubmitResult:
     event = event_from_payload(payload)
-    route = state.router.route(event, decisions_from_payload(payload))
+    route = state.router.route(event)
     if route.dropped:
         return RenderSubmitResult(mode=state.pipeline.mode, queued=state.pipeline.pending_count())
     if not route.uses_renderer:
@@ -983,10 +982,6 @@ HTML = """<!doctype html>
         <div class="panel">
           <h2>Tracebacks</h2>
           <pre id="traceLog">[]</pre>
-        </div>
-        <div class="panel">
-          <h2>Hook Decisions</h2>
-          <pre id="decisionLog">[]</pre>
         </div>
       </aside>
     </main>
@@ -1300,13 +1295,6 @@ body.debug-open .debug-panel {
   line-height: 1.45;
   overflow-wrap: anywhere;
 }
-#decisionLog {
-  height: calc(100% - 32px);
-  margin: 0;
-  overflow: auto;
-  color: var(--amber);
-  white-space: pre-wrap;
-}
 #intentLog {
   height: calc(100% - 32px);
   margin: 0;
@@ -1376,7 +1364,6 @@ const signalSummary = document.getElementById("signalSummary");
 const streamPanel = document.getElementById("streamPanel");
 const streamTitle = document.getElementById("streamTitle");
 const streamText = document.getElementById("streamText");
-const decisionLog = document.getElementById("decisionLog");
 const intentLog = document.getElementById("intentLog");
 const traceLog = document.getElementById("traceLog");
 const debugToggle = document.getElementById("debugToggle");
@@ -7923,7 +7910,6 @@ function pushEvent(event) {
   const update = event.event ? event : {event, scene: null, mutations: []};
   const current = update.event;
   const scene = update.scene;
-  const decisions = update.decisions || [];
   statusEl.textContent = "linked";
   phaseEl.textContent = current.phase || "unknown";
   eventEl.textContent = current.eventType || "unknown";
@@ -7933,7 +7919,6 @@ function pushEvent(event) {
   if (scene) {
     renderScene(scene);
   } else {
-    decisionLog.textContent = JSON.stringify(decisions, null, 2);
     if (update.renderIntent) {
       intentLog.textContent = JSON.stringify([update.renderIntent], null, 2);
     }
@@ -7975,7 +7960,6 @@ function renderScene(scene) {
   const stream = scene.primitives?.["assistant-stream"]?.props || {};
   if (status.text) statusEl.textContent = status.text;
   renderStream(stream);
-  decisionLog.textContent = JSON.stringify(scene.primitives?.["decision-log"]?.props?.text || [], null, 2);
   intentLog.textContent = JSON.stringify(scene.metadata?.renderIntents || [], null, 2);
   traceLog.textContent = JSON.stringify(scene.primitives?.["trace-log"]?.props?.text || [], null, 2);
   feed.replaceChildren();

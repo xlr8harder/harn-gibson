@@ -1,4 +1,4 @@
-"""Event normalization for harn-gibson display and hook layers."""
+"""Event normalization for harn-gibson display layers."""
 
 from __future__ import annotations
 
@@ -49,7 +49,7 @@ _TITLE_OVERRIDES = {
 
 @dataclass(frozen=True, slots=True)
 class GibsonEvent:
-    """Normalized event passed to displays and hook handlers."""
+    """Normalized event passed to displays and renderers."""
 
     sequence: int
     timestamp_ms: int

@@ -84,11 +84,10 @@ def test_stream_binding_route_decision_and_defaults_to_dict() -> None:
 
 def test_event_router_routes_non_stream_events_to_renderer() -> None:
     router = EventRouter()
-    result = router.route(event(1, "tool_call"), [{"block": False}])
+    result = router.route(event(1, "tool_call"))
 
     assert result.uses_renderer is True
     assert result.decision.route == "renderer_agent"
-    assert result.request.decisions == ({"block": False},)
     assert result.request.metadata["route"]["reason"] == "default renderer route"
     assert result.batch.to_dict()["route"] == "renderer_agent"
 
@@ -103,7 +102,7 @@ def test_event_router_route_rules_cover_renderer_direct_debug_and_drop() -> None
         )
     )
 
-    direct = router.route(event(1, "tool_result", {"toolName": "bash"}), [{"reviewed": True}])
+    direct = router.route(event(1, "tool_result", {"toolName": "bash"}))
     debug = router.route(event(2, "session_tree"))
     dropped = router.route(event(3, "model_select"))
     renderer = router.route(event(4, "tool_call"))

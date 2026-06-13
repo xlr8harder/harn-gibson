@@ -9,7 +9,6 @@ from typing import Any
 import pytest
 
 from harn_gibson.events import GibsonEvent
-from harn_gibson.hooks import HookDecision
 from harn_gibson.sinks import (
     CompositeSink,
     EventBuffer,
@@ -27,40 +26,36 @@ def sample_event() -> GibsonEvent:
 
 class RecordingSink:
     def __init__(self) -> None:
-        self.events: list[tuple[GibsonEvent, list[HookDecision]]] = []
+        self.events: list[GibsonEvent] = []
 
-    async def publish(self, event: GibsonEvent, decisions: list[HookDecision] | None = None) -> None:
-        self.events.append((event, list(decisions or [])))
+    async def publish(self, event: GibsonEvent) -> None:
+        self.events.append(event)
 
 
 def test_event_payload_and_noop_sink() -> None:
-    decision = HookDecision(block=True, reason="no")
-    payload = event_payload(sample_event(), [decision])
+    payload = event_payload(sample_event())
 
     assert payload["eventType"] == "tool_call"
-    assert payload["decisions"] == [decision.to_dict()]
-    assert "decisions" not in event_payload(sample_event())
     assert asyncio.run(NoopSink().publish(sample_event())) is None
 
 
-def test_composite_sink_reuses_decisions() -> None:
+def test_composite_sink_reuses_event() -> None:
     first = RecordingSink()
     second = RecordingSink()
-    decision = HookDecision(metadata={"x": 1})
+    event = sample_event()
 
-    asyncio.run(CompositeSink([first, second]).publish(sample_event(), [decision]))
+    asyncio.run(CompositeSink([first, second]).publish(event))
 
-    assert first.events[0][1] == [decision]
-    assert second.events[0][1] == [decision]
+    assert first.events == [event]
+    assert second.events == [event]
 
 
 def test_jsonl_event_sink_writes_sorted_payload(tmp_path: Path) -> None:
     path = tmp_path / "events" / "gibson.jsonl"
-    asyncio.run(JsonlEventSink(path).publish(sample_event(), [HookDecision(reason="logged")]))
+    asyncio.run(JsonlEventSink(path).publish(sample_event()))
 
     data = json.loads(path.read_text(encoding="utf-8"))
     assert data["eventType"] == "tool_call"
-    assert data["decisions"][0]["reason"] == "logged"
 
 
 def test_http_event_sink_post_and_error(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -9,12 +9,11 @@ import shlex
 import traceback
 import urllib.error
 import urllib.request
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any
 
 from harn_gibson.events import GibsonEvent, diagnostic_event
-from harn_gibson.hooks import HookDispatcher, load_hook_module, result_for_harn
 from harn_gibson.renderers import (
     DEFAULT_RENDERER,
     RENDERERS,
@@ -68,36 +67,24 @@ class GibsonRelay:
     def __init__(
         self,
         sink: EventSink,
-        dispatcher: HookDispatcher | None = None,
         *,
         max_recent_events: int = 100,
     ) -> None:
         self.sink = sink
-        self.dispatcher = dispatcher or HookDispatcher()
         self.sequence = 0
         self.max_recent_events = max_recent_events
-        self.recent_events: list[tuple[GibsonEvent, list[Any]]] = []
+        self.recent_events: list[GibsonEvent] = []
 
     async def handle(self, raw_event: Any, ctx: Any = None) -> Any:
         self.sequence += 1
         event = GibsonEvent.from_raw(raw_event, self.sequence)
-        try:
-            decisions = await self.dispatcher.dispatch(event)
-        except Exception as error:  # noqa: BLE001
-            await self.publish_exception(
-                error,
-                "Gibson hook dispatch failed",
-                details=f"event={event.event_type} phase={event.phase}",
-            )
-            decisions = []
         _update_harn_ui(ctx, event)
-        await self.publish(event, decisions)
-        return result_for_harn(event.event_type, decisions)
+        await self.publish(event)
+        return None
 
-    async def publish(self, event: GibsonEvent, decisions: Iterable[Any] = ()) -> None:
-        cached = list(decisions)
-        self._remember(event, cached)
-        await self.sink.publish(event, cached)
+    async def publish(self, event: GibsonEvent) -> None:
+        self._remember(event)
+        await self.sink.publish(event)
 
     async def publish_diagnostic(
         self,
@@ -118,7 +105,7 @@ class GibsonRelay:
             message=message,
             details=details,
         )
-        await self.publish(event, ())
+        await self.publish(event)
 
     async def publish_exception(self, error: BaseException, message: str, *, details: str | None = None) -> None:
         self.sequence += 1
@@ -132,7 +119,7 @@ class GibsonRelay:
             details=details,
             traceback_text="".join(traceback.format_exception(error)),
         )
-        await self.publish(event, ())
+        await self.publish(event)
 
     def attach_http_endpoint(self, endpoint: str, environ: Mapping[str, str] | None = None) -> EventSink:
         env = os.environ if environ is None else environ
@@ -145,13 +132,13 @@ class GibsonRelay:
         return http_sink
 
     async def flush_recent(self, sink: EventSink) -> None:
-        for event, decisions in list(self.recent_events):
-            await sink.publish(event, decisions)
+        for event in list(self.recent_events):
+            await sink.publish(event)
 
-    def _remember(self, event: GibsonEvent, decisions: list[Any]) -> None:
+    def _remember(self, event: GibsonEvent) -> None:
         if self.max_recent_events <= 0:
             return
-        self.recent_events.append((event, list(decisions)))
+        self.recent_events.append(event)
         if len(self.recent_events) > self.max_recent_events:
             del self.recent_events[: len(self.recent_events) - self.max_recent_events]
 
@@ -315,7 +302,6 @@ class GibsonViewController:
 def extension_factory(harn: Any) -> None:
     relay = GibsonRelay(
         build_sink_from_env(),
-        build_dispatcher_from_env(),
         max_recent_events=_recent_event_limit_from_env(),
     )
     poller = BrowserInputPoller(
@@ -332,15 +318,6 @@ def extension_factory(harn: Any) -> None:
 
 
 default = extension_factory
-
-
-def build_dispatcher_from_env(environ: Mapping[str, str] | None = None) -> HookDispatcher:
-    env = os.environ if environ is None else environ
-    dispatcher = HookDispatcher()
-    hooks = env.get("HARN_GIBSON_HOOKS", "")
-    for hook_path in _split_paths(hooks):
-        load_hook_module(hook_path, dispatcher)
-    return dispatcher
 
 
 def extension_path() -> str:
@@ -536,10 +513,6 @@ def _coerce_port(value: str | None, *, default: int) -> int:
         return max(0, int(value))
     except ValueError:
         return default
-
-
-def _split_paths(value: str) -> list[str]:
-    return [part for part in value.split(os.pathsep) if part]
 
 
 def _register_view_command(harn: Any, view_controller: GibsonViewController) -> None:

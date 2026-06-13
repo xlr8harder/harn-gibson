@@ -14,7 +14,6 @@ from harn_gibson.external_renderer import (
     render_plan_from_external_response,
     renderer_timeout_seconds_from_env,
 )
-from harn_gibson.hooks import HookDecision, HookDispatcher, load_hook_module, result_for_harn
 from harn_gibson.model_renderer import (
     MODEL_RENDERER_REQUEST_SCHEMA,
     PromptCommandModelClient,
@@ -173,8 +172,6 @@ __all__ = [
     "EventRouteRule",
     "ExternalRenderer",
     "GibsonEvent",
-    "HookDecision",
-    "HookDispatcher",
     "DeterministicSceneRenderer",
     "EventRouter",
     "MODEL_RENDERER_REQUEST_SCHEMA",
@@ -250,14 +247,12 @@ __all__ = [
     "external_renderer_from_env",
     "external_renderer_payload",
     "initial_scene",
-    "load_hook_module",
     "model_renderer_from_env",
     "model_renderer_request_payload",
     "normalize_world_bindings",
     "outcome_from_event",
     "parse_renderer_command",
     "phase_for_event",
-    "result_for_harn",
     "renderer_event_interest_from_renderer",
     "renderer_event_interest_from_value",
     "renderer_prompt_from_context",

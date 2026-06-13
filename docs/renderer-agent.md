@@ -363,6 +363,6 @@ Use `uv run harn-gibson catalog` to inspect that vocabulary without starting the
 
 `camera_path` is a persistent `SceneAnimation` kind for scene-level pan/zoom/roll keyframes. Renderer plans choose a target or normalized `position`, duration, `loop`, optional `props.yoyo`, and bounded `props.keyframes` with `at`/`timeMs`, `x`, `y`, `scale`, and `rotation`. `props.targetRef` uses the same object-addressing shape as `camera_jolt`, so a camera path can orbit a specific city block, route hop, graph node, ribbon point, or terrain peak. Fractional `x`/`y` values are viewport-relative, while larger values are treated as device-scaled pixels. The browser composes camera paths with camera jolts, letting a coalesced 5-10 second window keep drifting while impact beats shake the same scene.
 
-## Hook Reuse
+## Renderer Inputs
 
-The renderer agent should observe the same normalized harn events and hook decisions as the deterministic renderer. Hook decisions are display inputs, not authoritative policy, by the time they reach the renderer. Blocking/interdiction still happens in the harn extension hook dispatcher.
+The renderer agent should observe the same normalized harn events, route metadata, world-model facts, and scene-continuity context as the deterministic renderer. Tool policy enforcement is outside the Gibson display contract.

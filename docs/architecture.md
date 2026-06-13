@@ -56,11 +56,11 @@ The display is a persistent scene, not a sequence of independent event rendering
 - `start_animation` / `stop_animation`: control transient visual activity;
 - `reset_scene`: return to the boot scene.
 
-The current display agent is deterministic and maps each harn event to status, log, decision, and pulse mutations. Later, the LLM display agent should receive recent harn context plus recent scene context and return the same mutation format.
+The current display agent is deterministic and maps each harn event to status, log, scene, and pulse mutations. Later, the LLM display agent should receive recent harn context plus recent scene context and return the same mutation format.
 
 The browser treats `SceneAnimation` records as persistent renderable state, not only one-shot SSE effects. Animations may include `ttlMs` or `expiresAtMs`; the scene engine prunes expired records before later renderer contexts are built, so temporary effects can disappear from continuity state without a cleanup mutation. Current browser-rendered animation kinds include phase pulses, packet bursts, timeline cues, scans, glitches, breach waves, camera jolts, scene camera paths, flythrough rays, extrusion frames, and hold brackets. Structured vector primitives also include numeric transform keyframes, path morph frames, bounded filter/clip presets, plus curated SVG-style symbols such as animated globes, filesystem gates, reticles, data tunnels, ICE walls, and mainframe cores while still avoiding raw SVG markup. `hologram` adds a structured projection primitive for spinning rings, scan planes, projector beams, floating panels, and orbiting motes without requiring the renderer to draw each part by hand. `signal_scope` adds a structured radar/oscilloscope instrument with browser-local sweeps, blip pulses, spokes, rings, and waveforms for telemetry or intrusion scenes. `tunnel_grid` adds a structured perspective corridor with animated rings, lanes, and packet motes for flythroughs or mainframe traversal. `data_vault` adds a rotating wireframe vault/core with nested layers, panels, orbiting locks, and packet motes for access targets. `black_ice` adds a faceted security barrier with scanner shutters, breach glow, fracture rays, and sentry locks for access gates or failure beats. `trace_route` adds structured hop/link navigation with animated packet pulses for network traversal, command routing, or filesystem flythrough scenes. `data_rain` adds a structured animated glyph curtain for code rain, telemetry waterfalls, and packet noise without requiring the renderer to place every glyph itself. Replay screenshots load final scene state and render those animations from the scene record, which gives renderer-side fixtures a way to review effects without a live harn stream.
 
-The raw event details, event feed, render intents, tracebacks, and hook decisions are treated as debug surfaces. They remain in scene state for inspection, but the default browser layout hides them behind a debug drawer.
+The raw event details, event feed, render intents, and tracebacks are treated as debug surfaces. They remain in scene state for inspection, but the default browser layout hides them behind a debug drawer.
 
 Display style is scene metadata, not a separate browser-only setting. `HARN_GIBSON_STYLE` or `--style` selects a style pack such as `gibson`, `neon-noir`, `mainframe`, or `satellite-uplink`. Non-default style packs are stored in `scene.metadata.stylePack`, applied to the browser palette and canvas backdrop, included in renderer context, and advertised through the backend contract so alternate display backends can apply the same tones and motifs. Style motifs also drive browser-local backdrop overlays, including packet routes, neon slashes, phosphor/audit frames, orbital grids, radar sweeps, and warning chevrons.
 
@@ -93,27 +93,3 @@ The pipeline also builds a `RendererContext` for renderers that opt into `render
 The deterministic renderer returns one render step per event today. An external renderer command can also receive the same context as JSON on stdin and return render-plan JSON on stdout. The prompt-command model adapter sits one layer closer to a real model provider: it receives provider-neutral system/user messages built from the same renderer context and returns model-style JSON text. Command failures are converted into visible trace/debug scene state while the deterministic renderer keeps harn progress fail-open. External and model plans are validated before scene application, with warning-only unsupported choices recorded as `renderPlanDiagnostics` metadata and unsafe plans rejected into deterministic fallback plus trace/debug state. A provider-backed renderer should return the same `RenderPlan` shape and may include multiple delayed steps for sequential effects.
 
 Repo topology and semantic graph data are already visual input, not only prompt metadata. `HARN_GIBSON_PROJECT_ROOT` selects the repository sampled for renderer context; `run --cwd PATH` sets it to the target harn workspace automatically, and `HARN_GIBSON_PROJECT_NAME` controls the display name. The deterministic renderer maps the bounded depth-2 repo sample into both a `node_graph` and a Gibson-style `city_block`, while the hard-coded stress renderer also maps it into a `wire_landscape`, `terminal_wall`, `access_matrix`, and `orbital_map`: top-level entries become districts, terrain peaks, terminal panels, grid cells, or uplink nodes, sampled children become smaller nearby blocks, bounded line-count metadata plus visible file/directory counts drive height, and touched files recolor/focus the matching district, peak, panel, access cell, or uplink node with particle, extrusion, terrain, route, and slow `cameraPath` drift effects. `context.project.semanticGraph` adds bounded package/file/symbol nodes, local import edges, and inferred test edges so future renderers can cluster city districts by package and route causality packets along project relationships instead of hash-only placement. The deterministic repo graph, repo city, and touched-particle field now emit world bindings for root labels, node labels, city building heights, focus, and touched-file particles, giving future renderers concrete examples of declarative fact-to-visual mappings. The world model separately remembers accumulated touched-file activity, command/change facts, test/build health, and recent outcomes across renderer batches, so future renderers can distinguish the current flash of activity from older hot spots and verification beats. Shell-command perception tokenizes command strings before extracting repo paths, skips quoted `sed`/`perl` edit programs, and treats `sed -i`/`perl -i` as conservative edit signals so touched files receive change facts even without exact line deltas.
-
-## Hook Phases
-
-Each harn event is assigned a phase:
-
-- `before`: input, provider request, agent start, tool calls, and session preflight events;
-- `during`: streaming message/tool updates;
-- `after`: completed messages, tools, turns, provider responses, and session changes;
-- `lifecycle`: session/model/resource events that do not naturally fit a mutation point.
-
-Before hooks can interdict where harn allows it. After hooks can inspect output and request supported mutations, such as replacing tool result content.
-
-## Current Mutation Support
-
-The dispatcher maps hook decisions back to harn result shapes:
-
-- `input`: `handled` or `transform`;
-- `tool_call`: `block`;
-- `tool_result`: `content`, `details`, `isError`;
-- `message_end`: `message`;
-- `before_agent_start`: `message`, `systemPrompt`;
-- `session_before_*`: `cancel`.
-
-Other events are display-only until harn exposes a mutation result for them.

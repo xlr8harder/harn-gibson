@@ -12,7 +12,7 @@
         "equals": "renderer:coverage locked"
       },
       {
-        "path": "primitives.decision-log.props.text.0.renderer",
+        "path": "primitives.trace-log.props.text.0.renderer",
         "equals": "fixture"
       },
       {
@@ -164,7 +164,7 @@
               },
               {
                 "op": "patch",
-                "targetId": "decision-log",
+                "targetId": "trace-log",
                 "props": {
                   "text": [
                     {

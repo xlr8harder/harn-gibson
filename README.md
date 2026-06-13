@@ -62,7 +62,7 @@ Delivery modes:
 - `queue`: default. Runs immediately if harn is idle, or queues as a follow-up if harn is streaming.
 - `steer`: queues steering input for the active agent run.
 
-Runtime diagnostics, tracebacks, raw events, render intents, and hook decisions are available in the browser debug drawer.
+Runtime diagnostics, tracebacks, raw events, and render intents are available in the browser debug drawer.
 
 ## One-Command Run
 

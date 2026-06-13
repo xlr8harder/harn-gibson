@@ -48,7 +48,6 @@ _INITIAL_PRIMITIVE_KINDS = {
     "status": "status",
     "event-feed": "feed",
     "trace-log": "code",
-    "decision-log": "code",
     "scan-grid": "grid",
 }
 _BROWSER_PRIMITIVE_KINDS = frozenset(
@@ -192,7 +191,6 @@ _SVG_KEYFRAME_PLAYBACK_BOOLEAN_KEYS = frozenset({"loop", "yoyo"})
 @dataclass(frozen=True, slots=True)
 class RenderRequest:
     event: GibsonEvent
-    decisions: tuple[dict[str, Any], ...] = ()
     route: str = "renderer_agent"
     timeline_offset_ms: int = 0
     coalesced_count: int = 1
@@ -200,8 +198,6 @@ class RenderRequest:
 
     def to_dict(self) -> dict[str, Any]:
         payload = {"event": self.event.to_dict()}
-        if self.decisions:
-            payload["decisions"] = list(self.decisions)
         if self.route != "renderer_agent":
             payload["route"] = self.route
         if self.timeline_offset_ms:
@@ -260,7 +256,6 @@ class RenderInputBatch:
         adjusted = tuple(
             RenderRequest(
                 event=request.event,
-                decisions=request.decisions,
                 route=request.route,
                 timeline_offset_ms=window.offset_for(request.event),
                 coalesced_count=max(request.coalesced_count, size),
@@ -1557,7 +1552,7 @@ class DeterministicSceneRenderer:
         for index, request in enumerate(requests):
             steps.append(
                 RenderStep(
-                    mutations=tuple(default_mutations_for_event(request.event, request.decisions)),
+                    mutations=tuple(default_mutations_for_event(request.event)),
                     event_index=index,
                 )
             )
@@ -3210,8 +3205,6 @@ def render_update_payload(
     update["events"] = [current.event.to_dict() for current in plan.requests]
     update["renderInput"] = render_input.to_dict()
     update["renderRequests"] = [current.to_dict() for current in plan.requests]
-    if request.decisions:
-        update["decisions"] = list(request.decisions)
     return update
 
 
@@ -3224,10 +3217,6 @@ def render_accept_payload(result: RenderSubmitResult, current_revision: int) -> 
     if result.mode == "async":
         payload["pendingRenderJobs"] = result.queued
     return payload
-
-
-def decisions_from_payload(payload: dict[str, Any]) -> tuple[dict[str, Any], ...]:
-    return tuple(decision for decision in payload.get("decisions", ()) if isinstance(decision, dict))
 
 
 def coerce_render_mode(value: str | None) -> RenderMode:

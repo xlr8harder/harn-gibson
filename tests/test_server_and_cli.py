@@ -265,7 +265,6 @@ def test_apply_event_to_scene_and_event_from_payload() -> None:
         "payload": {"type": "tool_call", "toolName": "bash"},
         "recentContext": ["ctx"],
         "visualizationContext": ["scene"],
-        "decisions": [{"block": True, "reason": "no"}],
     }
 
     event = event_from_payload(payload)
@@ -275,7 +274,6 @@ def test_apply_event_to_scene_and_event_from_payload() -> None:
     assert event.event_type == "tool_call"
     assert event.recent_context == ("ctx",)
     assert update["schema"] == "harn-gibson.scene-update.v1"
-    assert update["decisions"] == [{"block": True, "reason": "no"}]
     assert update["scene"]["revision"] == 1
     assert submit_result.scene_revision == 2
 
@@ -365,7 +363,6 @@ def test_direct_scene_route_rule_bypasses_renderer_and_updates_scene() -> None:
         "title": "Tool result",
         "summary": "bash completed: ok",
         "payload": {"type": "tool_result", "toolName": "bash"},
-        "decisions": [{"content": "ok"}],
     }
 
     result = submit_event_to_renderer(payload, state)

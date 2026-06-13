@@ -1808,9 +1808,6 @@ def _run_raw_event_step(index: int, step: Mapping[str, Any], state: GibsonServer
         visualization_context=_string_tuple(step.get("visualizationContext", ())),
     )
     payload = event.to_dict()
-    decisions = step.get("decisions")
-    if isinstance(decisions, list):
-        payload["decisions"] = [decision for decision in decisions if isinstance(decision, dict)]
     result = submit_event_to_renderer(payload, state)
     return _step_result(index, "raw_event", result, state)
 
@@ -1871,7 +1868,6 @@ def render_request_from_mapping(value: Mapping[str, Any]) -> RenderRequest:
         raise ValueError("render request must include event object")
     return RenderRequest(
         event=event_from_payload(dict(event_value)),
-        decisions=tuple(item for item in value.get("decisions", ()) if isinstance(item, dict)),
         route=str(value.get("route") or "renderer_agent"),
         timeline_offset_ms=int(value.get("timelineOffsetMs", value.get("timeline_offset_ms", 0))),
         coalesced_count=int(value.get("coalescedCount", value.get("coalesced_count", 1))),

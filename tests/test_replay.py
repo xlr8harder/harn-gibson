@@ -1650,7 +1650,7 @@ def test_checked_in_replay_fixtures_cover_agent_and_renderer_sides() -> None:
     assert renderer_result.steps[0].route == "saved_renderer_plan"
     assert renderer_result.steps[0].updates == 2
     assert renderer_result.scene.primitives["status"].props["text"] == "renderer:coverage locked"
-    assert renderer_result.scene.primitives["decision-log"].props["text"][0]["renderer"] == "fixture"
+    assert renderer_result.scene.primitives["trace-log"].props["text"][0]["renderer"] == "fixture"
 
     assert [step.kind for step in gallery_result.steps] == ["mutations"]
     assert len(gallery_result.expectations) == 66
@@ -2171,7 +2171,6 @@ def test_replay_raw_events_render_plans_and_mutations() -> None:
                     "timestampMs": 2222,
                     "recentContext": ["user asked for status"],
                     "visualizationContext": "ignored",
-                    "decisions": [{"block": False}, "not a decision"],
                 },
                 {
                     "type": "render_plan",
@@ -2182,7 +2181,6 @@ def test_replay_raw_events_render_plans_and_mutations() -> None:
                                 "route": "direct_scene",
                                 "timelineOffsetMs": 5,
                                 "coalescedCount": 2,
-                                "decisions": [{"reviewed": True}],
                                 "metadata": {"source": "fixture"},
                             }
                         ],
@@ -3244,7 +3242,7 @@ def test_replay_scene_visual_continuity_summary_covers_scene_state() -> None:
     assert _replay_scene_visual_continuity_summary(SceneState()) == {}
 
 
-def test_replay_raw_event_without_decisions_and_empty_plan() -> None:
+def test_replay_raw_event_and_empty_plan() -> None:
     result = run_replay_data(
         {
             "steps": [

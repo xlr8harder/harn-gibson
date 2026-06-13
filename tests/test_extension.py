@@ -22,22 +22,20 @@ from harn_gibson.extension import (
     _register_renderer_command,
     _register_view_command,
     _viewer_env_for_options,
-    build_dispatcher_from_env,
     build_input_endpoint_from_env,
     default,
     extension_factory,
     extension_path,
     fetch_browser_input,
 )
-from harn_gibson.hooks import HookDecision
 
 
 class FakeSink:
     def __init__(self) -> None:
-        self.published: list[tuple[object, list[HookDecision]]] = []
+        self.published: list[object] = []
 
-    async def publish(self, event: object, decisions: list[HookDecision] | None = None) -> None:
-        self.published.append((event, list(decisions or [])))
+    async def publish(self, event: object) -> None:
+        self.published.append(event)
 
 
 class FakeHarn:
@@ -108,33 +106,14 @@ class CommandUi:
         self.statuses.append((key, text))
 
 
-def test_relay_publishes_and_returns_hook_result() -> None:
+def test_relay_publishes_event_and_returns_none() -> None:
     sink = FakeSink()
     relay = GibsonRelay(sink)
-    relay.dispatcher.on("tool_call", "before", lambda _event: HookDecision(block=True, reason="no"))
-
-    result = asyncio.run(relay.handle({"type": "tool_call", "toolName": "bash"}, None))
-
-    assert result == {"block": True, "reason": "no"}
-    assert sink.published[0][0].event_type == "tool_call"  # type: ignore[attr-defined]
-    assert sink.published[0][1] == [HookDecision(block=True, reason="no")]
-
-
-def test_relay_publishes_hook_exceptions_as_runtime_errors() -> None:
-    sink = FakeSink()
-    relay = GibsonRelay(sink)
-
-    def broken(_event: object) -> None:
-        raise RuntimeError("hook failed")
-
-    relay.dispatcher.on("tool_call", "before", broken)
 
     result = asyncio.run(relay.handle({"type": "tool_call", "toolName": "bash"}, None))
 
     assert result is None
-    assert sink.published[0][0].event_type == "runtime_error"  # type: ignore[attr-defined]
-    assert "hook failed" in sink.published[0][0].payload["traceback"]  # type: ignore[attr-defined]
-    assert sink.published[1][0].event_type == "tool_call"  # type: ignore[attr-defined]
+    assert sink.published[0].event_type == "tool_call"  # type: ignore[attr-defined]
 
 
 def test_relay_buffers_recent_events_and_flushes_to_sink() -> None:
@@ -147,11 +126,11 @@ def test_relay_buffers_recent_events_and_flushes_to_sink() -> None:
     asyncio.run(relay.handle({"type": "tool_result", "toolName": "bash"}))
     asyncio.run(relay.flush_recent(flush_sink))
 
-    assert [event.sequence for event, _decisions in relay.recent_events] == [2, 3]
-    assert [event.sequence for event, _decisions in flush_sink.published] == [2, 3]  # type: ignore[attr-defined]
+    assert [event.sequence for event in relay.recent_events] == [2, 3]
+    assert [event.sequence for event in flush_sink.published] == [2, 3]  # type: ignore[attr-defined]
     relay.max_recent_events = 0
     asyncio.run(relay.handle({"type": "turn_end"}))
-    assert [event.sequence for event, _decisions in relay.recent_events] == [2, 3]
+    assert [event.sequence for event in relay.recent_events] == [2, 3]
 
 
 def test_relay_attaches_http_endpoint_without_event_log(monkeypatch: Any) -> None:
@@ -159,7 +138,7 @@ def test_relay_attaches_http_endpoint_without_event_log(monkeypatch: Any) -> Non
         def __init__(self, endpoint: str) -> None:
             self.endpoint = endpoint
 
-        async def publish(self, _event: object, _decisions: list[object] | None = None) -> None:
+        async def publish(self, _event: object) -> None:
             return None
 
     relay = GibsonRelay(FakeSink())
@@ -221,22 +200,8 @@ def test_extension_factory_registers_every_event(monkeypatch: Any) -> None:
     asyncio.run(shutdown({"type": "session_shutdown", "reason": "quit"}, FakeCtx(None)))  # type: ignore[operator]
 
 
-def test_build_dispatcher_from_env_loads_paths(tmp_path: Path) -> None:
-    hook = tmp_path / "hook.py"
-    hook.write_text(
-        "from harn_gibson import HookDecision\n"
-        "def register_gibson_hooks(dispatcher):\n"
-        "    dispatcher.on('input', 'before', lambda event: HookDecision(action='handled'))\n",
-        encoding="utf-8",
-    )
-    dispatcher = build_dispatcher_from_env({"HARN_GIBSON_HOOKS": f"{hook}:"})
-    relay = GibsonRelay(FakeSink(), dispatcher)
-
-    assert asyncio.run(relay.handle({"type": "input", "text": "x", "source": "rpc"})) == {"action": "handled"}
-    assert extension_path().endswith("extension.py")
-
-
 def test_input_endpoint_from_env() -> None:
+    assert extension_path().endswith("extension.py")
     assert build_input_endpoint_from_env({"HARN_GIBSON_INPUT_ENDPOINT": "http://x/custom"}) == "http://x/custom"
     assert build_input_endpoint_from_env({"HARN_GIBSON_ENDPOINT": "none"}) is None
     assert build_input_endpoint_from_env({"HARN_GIBSON_ENDPOINT": "http://x/events"}) == "http://x/input/next"
@@ -352,11 +317,11 @@ def test_gibson_view_controller_attaches_viewer_and_reuses_it(tmp_path: Path, mo
 
         def __init__(self, endpoint: str) -> None:
             self.endpoint = endpoint
-            self.published: list[tuple[object, list[object]]] = []
+            self.published: list[object] = []
             self.instances.append(self)
 
-        async def publish(self, event: object, decisions: list[object] | None = None) -> None:
-            self.published.append((event, list(decisions or [])))
+        async def publish(self, event: object) -> None:
+            self.published.append(event)
 
     class FakeViewer:
         display_url = "http://127.0.0.1:9900"
@@ -412,11 +377,11 @@ def test_gibson_view_controller_attaches_viewer_and_reuses_it(tmp_path: Path, mo
     assert poller.endpoint == "http://127.0.0.1:9900/input/next"
     assert harn.entries[0][0] == "gibson_view"
     assert "Gibson viewer attached" in ui.notifications[0][0]
-    assert [event.event_type for event, _decisions in FakeHttpSink.instances[0].published] == [  # type: ignore[attr-defined]
+    assert [event.event_type for event in FakeHttpSink.instances[0].published] == [  # type: ignore[attr-defined]
         "input",
         "viewer_attach",
     ]
-    assert [event.event_type for event, _decisions in FakeHttpSink.instances[1].published][-1] == "viewer_attach"  # type: ignore[attr-defined]
+    assert [event.event_type for event in FakeHttpSink.instances[1].published][-1] == "viewer_attach"  # type: ignore[attr-defined]
     assert "viewer_attach" in event_log.read_text(encoding="utf-8")
 
 
@@ -433,7 +398,7 @@ def test_gibson_renderer_list_command_reports_renderers() -> None:
 
     assert "default" in ui.notifications[0][0]
     assert harn.entries[0][0] == "gibson_view"
-    assert relay.recent_events[0][0].event_type == "viewer_renderers"
+    assert relay.recent_events[0].event_type == "viewer_renderers"
 
 
 def test_gibson_view_controller_reports_startup_errors(monkeypatch: Any) -> None:
@@ -450,8 +415,8 @@ def test_gibson_view_controller_reports_startup_errors(monkeypatch: Any) -> None
     asyncio.run(controller.handle("", FakeCtx(ui)))
 
     assert ui.notifications == [("Gibson viewer failed: viewer boom", "error")]
-    assert sink.published[0][0].event_type == "runtime_error"  # type: ignore[attr-defined]
-    assert "viewer boom" in sink.published[0][0].payload["message"]  # type: ignore[attr-defined]
+    assert sink.published[0].event_type == "runtime_error"  # type: ignore[attr-defined]
+    assert "viewer boom" in sink.published[0].payload["message"]  # type: ignore[attr-defined]
 
 
 def test_gibson_view_controller_default_factory_and_stop_without_close(monkeypatch: Any) -> None:
@@ -536,9 +501,9 @@ def test_browser_input_poller_reports_delivery_exceptions(monkeypatch: Any) -> N
     monkeypatch.setattr("harn_gibson.extension.fetch_browser_input", fake_fetch)
 
     assert asyncio.run(poller.poll_once()) is False
-    assert sink.published[0][0].event_type == "runtime_error"  # type: ignore[attr-defined]
-    assert "delivery failed" in sink.published[0][0].payload["message"]  # type: ignore[attr-defined]
-    assert "input=input-1" in sink.published[0][0].payload["details"]  # type: ignore[attr-defined]
+    assert sink.published[0].event_type == "runtime_error"  # type: ignore[attr-defined]
+    assert "delivery failed" in sink.published[0].payload["message"]  # type: ignore[attr-defined]
+    assert "input=input-1" in sink.published[0].payload["details"]  # type: ignore[attr-defined]
 
 
 def test_browser_input_poller_ignores_delivery_exception_without_relay(monkeypatch: Any) -> None:

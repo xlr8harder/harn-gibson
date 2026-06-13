@@ -1012,16 +1012,6 @@
       ]
     },
     "primitives": {
-      "decision-log": {
-        "children": [],
-        "id": "decision-log",
-        "kind": "code",
-        "props": {
-          "language": "json",
-          "text": "[]"
-        },
-        "region": "side"
-      },
       "dogfood-access-matrix": {
         "children": [],
         "id": "dogfood-access-matrix",
@@ -2689,7 +2679,6 @@
           "status",
           "event-feed",
           "trace-log",
-          "decision-log",
           "scan-grid"
         ],
         "id": "stage",
