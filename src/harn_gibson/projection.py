@@ -21,8 +21,8 @@ Engine-owned guarantees (the chronic renderer failures, fixed structurally):
 Every spec field is optional; missing pieces take the smart defaults below.
 ``ProjectionSceneRenderer`` adapts the engine to the existing renderer
 protocol, so the pipeline, replay, and review tooling work unchanged. Enable
-with ``HARN_GIBSON_PROJECTION=1`` (default projection) or
-``HARN_GIBSON_PROJECTION=<path.json>``.
+with ``HARN_GIBSON_RENDERER=perception`` or
+``HARN_GIBSON_RENDERER=<path.json>``.
 """
 
 from __future__ import annotations
@@ -116,12 +116,8 @@ DEFAULT_PROJECTION: dict[str, Any] = {
 
 
 def load_projection_spec(value: str) -> dict[str, Any]:
-    """Resolve an env/CLI projection setting: truthy flag -> defaults, path ->
-    JSON file (merged over defaults inside the engine)."""
-    text = value.strip()
-    if text.lower() in {"1", "true", "yes", "on", "default"}:
-        return {}
-    return json.loads(Path(text).expanduser().read_text(encoding="utf-8"))
+    """Load a perception renderer spec JSON file."""
+    return json.loads(Path(value.strip()).expanduser().read_text(encoding="utf-8"))
 
 
 class ProjectionEngine:

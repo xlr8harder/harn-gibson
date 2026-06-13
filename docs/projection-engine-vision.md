@@ -135,7 +135,7 @@ only *how beautifully* it gets there.
 
 `ProjectionSceneRenderer` implements the existing `SceneRenderer` protocol, so
 the pipeline, replay, review tooling, and server need no structural change:
-enable with `HARN_GIBSON_PROJECTION=<path.json|1>` (1 = default projection).
+enable with `HARN_GIBSON_RENDERER=<path.json|perception>` (`perception` = default projection).
 
 ## What this should feel like (UX commitments)
 

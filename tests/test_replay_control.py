@@ -67,7 +67,7 @@ def test_replay_status_payload_reports_registration() -> None:
 
 
 def test_reset_session_gives_a_fresh_world() -> None:
-    state = build_state_from_env({"HARN_GIBSON_PROJECTION": "1"})
+    state = build_state_from_env({"HARN_GIBSON_RENDERER": "perception"})
     try:
         submit_event_to_renderer(dict(EVENT_PAYLOAD), state)
         assert "projection-scene" in state.scene.state.primitives
@@ -101,7 +101,7 @@ def test_stream_route_decoration_is_dropped_under_projection() -> None:
         "summary": "streaming",
         "payload": {"type": "message_update", "text": "narrating"},
     }
-    projection_state = build_state_from_env({"HARN_GIBSON_PROJECTION": "1"})
+    projection_state = build_state_from_env({"HARN_GIBSON_RENDERER": "perception"})
     try:
         result = submit_event_to_renderer(dict(stream_event), projection_state)
         # a streamed chunk feeds perception but publishes NOTHING: no scene
@@ -130,7 +130,7 @@ def test_stream_route_decoration_is_dropped_under_projection() -> None:
 
 
 def test_reset_session_clears_stream_buffers() -> None:
-    state = build_state_from_env({"HARN_GIBSON_PROJECTION": "1"})
+    state = build_state_from_env({"HARN_GIBSON_RENDERER": "perception"})
     try:
         stream_event = {
             "schema": "harn-gibson.event.v1",
@@ -255,7 +255,7 @@ def test_rerun_replay_resets_and_plays_the_file(tmp_path: Path) -> None:
         "name": "mini",
         "steps": [{"type": "event", "event": EVENT_PAYLOAD}],
     }), encoding="utf-8")
-    state = build_state_from_env({"HARN_GIBSON_PROJECTION": "1"})
+    state = build_state_from_env({"HARN_GIBSON_RENDERER": "perception"})
     try:
         submit_event_to_renderer(dict(EVENT_PAYLOAD), state)
         engine_before = state.pipeline.renderer.engine

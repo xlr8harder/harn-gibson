@@ -70,7 +70,7 @@ def main() -> int:
     parser.add_argument("--model", default="gpt-5.5")
     parser.add_argument("--thinking", default="high")
     parser.add_argument(
-        "--projection",
+        "--renderer",
         default=str(REPO_ROOT / "examples" / "projections" / "gibson-organic.json"),
     )
     args = parser.parse_args()
@@ -89,7 +89,7 @@ def main() -> int:
 
     env = os.environ.copy()
     env.update({
-        "HARN_GIBSON_PROJECTION": args.projection,
+        "HARN_GIBSON_RENDERER": args.renderer,
         "HARN_GIBSON_PROJECT_ROOT": str(workspace),
         "HARN_GIBSON_PROJECT_NAME": workspace.name,
         "HARN_GIBSON_EVENT_LOG": str(event_log),

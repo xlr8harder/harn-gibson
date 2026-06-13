@@ -609,9 +609,7 @@ def test_renderer_adapter_produces_valid_plans() -> None:
     assert empty.steps[0].mutations[0].props["phase"] == "lifecycle"
 
 
-def test_load_projection_spec_flag_and_path(tmp_path: Path) -> None:
-    assert load_projection_spec("1") == {}
-    assert load_projection_spec("default") == {}
+def test_load_projection_spec_path(tmp_path: Path) -> None:
     spec_path = tmp_path / "spec.json"
     spec_path.write_text(json.dumps({"theme": "blueprint"}), encoding="utf-8")
     assert load_projection_spec(str(spec_path)) == {"theme": "blueprint"}
@@ -625,29 +623,36 @@ def test_spec_merge_keeps_defaults_for_missing_fields() -> None:
 
 
 def test_server_env_enables_projection_renderer() -> None:
-    from harn_gibson.server import projection_renderer_from_env
+    from harn_gibson.external_renderer import ExternalRenderer
+    from harn_gibson.rendering import DeterministicSceneRenderer
+    from harn_gibson.server import selected_renderer_from_env
 
-    assert projection_renderer_from_env(None) is None
-    assert projection_renderer_from_env("  ") is None
-    renderer = projection_renderer_from_env("1")
+    assert selected_renderer_from_env(None) is None
+    assert selected_renderer_from_env("  ") is None
+    assert isinstance(selected_renderer_from_env("none"), DeterministicSceneRenderer)
+    built_in_renderer = selected_renderer_from_env("dogfood", "250")
+    assert isinstance(built_in_renderer, ExternalRenderer)
+    assert built_in_renderer.timeout_seconds == 0.25
+    renderer = selected_renderer_from_env("perception")
     assert isinstance(renderer, ProjectionSceneRenderer)
+    spec_renderer = selected_renderer_from_env("examples/projections/gibson-sector.json")
+    assert isinstance(spec_renderer, ProjectionSceneRenderer)
 
 
-def test_cli_projection_flag_maps_to_env() -> None:
+def test_cli_renderer_spec_maps_to_env() -> None:
     import argparse
 
     from harn_gibson.cli import _explicit_replay_renderer_env_from_args
 
     args = argparse.Namespace(
         renderer_command=None, renderer_model_command=None,
-        renderer_preset=None,
         renderer_timeout_ms=None, renderer_model_timeout_ms=None,
-        projection="examples/projections/gibson-sector.json",
+        renderer="examples/projections/gibson-sector.json",
         discovery="stream",
     )
     env = _explicit_replay_renderer_env_from_args(args)
     assert env == {
-        "HARN_GIBSON_PROJECTION": "examples/projections/gibson-sector.json",
+        "HARN_GIBSON_RENDERER": "examples/projections/gibson-sector.json",
         "HARN_GIBSON_PERCEPTION_DISCOVERY": "stream",
     }
 
@@ -834,7 +839,7 @@ def test_projection_http_endpoints_redirect_live_sessions() -> None:
 
     from harn_gibson.server import build_state_from_env, create_server
 
-    state = build_state_from_env({"HARN_GIBSON_PROJECTION": "1"})
+    state = build_state_from_env({"HARN_GIBSON_RENDERER": "perception"})
     server = create_server("127.0.0.1", 0, state)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()

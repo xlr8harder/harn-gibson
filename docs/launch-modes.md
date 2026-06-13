@@ -38,7 +38,7 @@ HARN_GIBSON_VIEW_RENDERER=gibson1
 HARN_GIBSON_RECENT_EVENTS=100
 ```
 
-If `HARN_GIBSON_RENDERER_COMMAND`, `HARN_GIBSON_RENDERER_MODEL_COMMAND`, or `HARN_GIBSON_PROJECTION` is already set, `/gibson-view` preserves that environment unless `HARN_GIBSON_VIEW_RENDERER` or an explicit command option overrides it.
+If `HARN_GIBSON_RENDERER_COMMAND`, `HARN_GIBSON_RENDERER_MODEL_COMMAND`, or `HARN_GIBSON_RENDERER` is already set, `/gibson-view` preserves that environment unless `HARN_GIBSON_VIEW_RENDERER` or an explicit command option overrides it.
 
 Manual wiring is still available when you want separate process ownership:
 
@@ -81,13 +81,13 @@ Current support:
 uv run harn-gibson watch-replay examples/dogfood-replays/repo-map-trajectory.json
 ```
 
-Add `--playback-timing real-time` to use source timestamp deltas, or `--renderer-preset gibson1` / `--renderer-preset dogfood` to call a built-in renderer live during event replay.
+Add `--playback-timing real-time` to use source timestamp deltas, or `--renderer gibson1` / `--renderer dogfood` to call a built-in renderer live during event replay.
 
 For deterministic checks:
 
 ```bash
 uv run harn-gibson replay examples/claude-gibson-replays/linkjar-live-session.json \
-  --projection examples/projections/gibson-organic.json \
+  --renderer examples/projections/gibson-organic.json \
   --screenshot test-artifacts/replay.png
 ```
 

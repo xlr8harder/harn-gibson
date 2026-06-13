@@ -29,7 +29,7 @@ Two layers, replacing the renderer-in-the-hot-path design:
    Effects are entity-anchored: pulse, ring, breach, beam, shake, alarm,
    banner, peek (diff scroll box). A renderer is a JSON file
    (`examples/projections/`); no spec at all is a complete display
-   (`--projection 1`). `POST /projection` redirects a live session (the
+   (`--renderer perception`). `POST /projection` redirects a live session (the
    director hook); `GET /projection` introspects.
 
 Supporting: browser replay button (`POST /replay/restart` + session reset),
@@ -39,7 +39,7 @@ stand down structurally when a projection owns the stage.
 
 ## Proven against a real session
 
-`harn-gibson dogfood-capture` ran a real harn agent (gpt-5.5) on a seeded task
+`harn-gibson capture` ran a real harn agent (gpt-5.5) on a seeded task
 workspace (`~/git/gibson-demo-task`, the "linkjar" project): it fixed a bug,
 implemented search, added a CLI command, tests, docs — five staged commits, all
 green — while the projection rendered live. Captured 2,380 events
@@ -52,7 +52,7 @@ Demo command:
 ```bash
 uv run harn-gibson watch-replay examples/claude-gibson-replays/linkjar-live-session.json \
   --port 8765 --browser --hold --playback-timing real-time --speed 4 --max-step-delay-ms 4000 \
-  --projection examples/projections/gibson-organic.json \
+  --renderer examples/projections/gibson-organic.json \
   --project-root /home/user/git/gibson-demo-task --project-name linkjar
 ```
 

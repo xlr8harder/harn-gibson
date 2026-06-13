@@ -20,6 +20,7 @@ from harn_gibson.events import GibsonEvent, diagnostic_event
 from harn_gibson.external_renderer import external_renderer_from_env
 from harn_gibson.model_renderer import model_renderer_from_env
 from harn_gibson.projection import PROJECTION_SCHEMA, ProjectionSceneRenderer, load_projection_spec
+from harn_gibson.renderers import direct_renderer_command, normalize_renderer
 from harn_gibson.rendering import (
     DeterministicSceneRenderer,
     RendererContextBuilder,
@@ -275,6 +276,10 @@ def build_state_from_env(env: dict[str, str] | None = None) -> GibsonServerState
     source = environ if env is None else env
     project_root = project_root_from_env(source.get("HARN_GIBSON_PROJECT_ROOT"))
     renderer_interest = renderer_interest_from_env(source.get("HARN_GIBSON_RENDERER_INTEREST"))
+    selected_renderer = selected_renderer_from_env(
+        source.get("HARN_GIBSON_RENDERER"),
+        source.get("HARN_GIBSON_RENDERER_TIMEOUT_MS"),
+    )
     model_renderer = model_renderer_from_env(
         source.get("HARN_GIBSON_RENDERER_MODEL_COMMAND"),
         source.get("HARN_GIBSON_RENDERER_MODEL_TIMEOUT_MS") or source.get("HARN_GIBSON_RENDERER_TIMEOUT_MS"),
@@ -283,14 +288,13 @@ def build_state_from_env(env: dict[str, str] | None = None) -> GibsonServerState
         source.get("HARN_GIBSON_RENDERER_COMMAND"),
         source.get("HARN_GIBSON_RENDERER_TIMEOUT_MS"),
     )
-    projection_renderer = projection_renderer_from_env(source.get("HARN_GIBSON_PROJECTION"))
     return GibsonServerState(
         router=EventRouter(route_rules=route_rules_from_env(source.get("HARN_GIBSON_ROUTE_RULES"))),
         renderer_interest=renderer_interest,
         render_mode=coerce_render_mode(source.get("HARN_GIBSON_RENDER_MODE")),
         render_batch_window_ms=coerce_batch_window_ms(source.get("HARN_GIBSON_RENDER_BATCH_MS")),
         render_timing_mode=coerce_render_timing_mode(source.get("HARN_GIBSON_RENDER_TIMING")),
-        renderer=projection_renderer or model_renderer or renderer or DeterministicSceneRenderer(),
+        renderer=selected_renderer or model_renderer or renderer or DeterministicSceneRenderer(),
         style_pack=style_pack_from_name(source.get("HARN_GIBSON_STYLE")),
         project_name=project_name_from_env(source.get("HARN_GIBSON_PROJECT_NAME"), project_root),
         project_root=project_root,
@@ -298,10 +302,18 @@ def build_state_from_env(env: dict[str, str] | None = None) -> GibsonServerState
     )
 
 
-def projection_renderer_from_env(value: str | None) -> ProjectionSceneRenderer | None:
-    if value is None or not value.strip():
+def selected_renderer_from_env(value: str | None, timeout_ms: str | None = None) -> SceneRenderer | None:
+    renderer = normalize_renderer(value, default=None)
+    if renderer is None:
         return None
-    return ProjectionSceneRenderer(load_projection_spec(value))
+    if renderer == "none":
+        return DeterministicSceneRenderer()
+    command = direct_renderer_command(renderer)
+    if command is not None:
+        return external_renderer_from_env(command, timeout_ms)
+    if renderer == "perception":
+        return ProjectionSceneRenderer({})
+    return ProjectionSceneRenderer(load_projection_spec(renderer))
 
 
 def project_root_from_env(value: str | None) -> str | None:
@@ -502,7 +514,7 @@ def make_handler(state: GibsonServerState) -> type[BaseHTTPRequestHandler]:
             if not isinstance(renderer, ProjectionSceneRenderer):
                 self._json(
                     HTTPStatus.CONFLICT,
-                    {"error": "active renderer is not projection-driven; start with HARN_GIBSON_PROJECTION"},
+                    {"error": "active renderer is not projection-driven; start with HARN_GIBSON_RENDERER=perception"},
                 )
                 return
             renderer.redirect(spec)

@@ -271,7 +271,6 @@ def test_view_command_arg_parsing_and_recent_limit() -> None:
         "browser": True,
         "renderer": "dogfood",
         "renderer_command": None,
-        "projection": None,
         "style": "mainframe",
         "renderer_timeout_ms": "1234",
         "list_renderers": False,
@@ -286,20 +285,19 @@ def test_view_command_arg_parsing_and_recent_limit() -> None:
     }
     assert _parse_view_command_args("--unknown", {"HARN_GIBSON_VIEW_BROWSER": "no"})["browser"] is False
     assert _parse_view_command_args(
-        "--renderer=bad --renderer-preset=none --renderer-command='python renderer.py'",
+        "--renderer=bad --renderer none --renderer-command='python renderer.py'",
         {},
     )["renderer"] == "command"
-    assert _parse_view_command_args("--projection=1 --list-renderers", {})["list_renderers"] is True
+    assert _parse_view_command_args("--renderer=perception --list-renderers", {})["list_renderers"] is True
     parsed = _parse_view_command_args(
-        "--renderer-command python-custom --projection projection.json --style=neon-noir --renderer-timeout-ms=333",
+        "--renderer-command python-custom --renderer examples/renderer.json "
+        "--style=neon-noir --renderer-timeout-ms=333",
         {},
     )
-    assert parsed["renderer"] == "projection"
+    assert parsed["renderer"] == "examples/renderer.json"
     assert parsed["renderer_command"] == "python-custom"
-    assert parsed["projection"] == "projection.json"
     assert parsed["style"] == "neon-noir"
     assert parsed["renderer_timeout_ms"] == "333"
-    assert _parse_view_command_args("--renderer env", {})["renderer"] is None
     assert _parse_view_command_args(
         "",
         {"HARN_GIBSON_RENDERER_COMMAND": "python renderer.py"},
@@ -313,38 +311,39 @@ def test_viewer_env_for_renderer_options() -> None:
     base_env = {
         "HARN_GIBSON_RENDERER_COMMAND": "python old.py",
         "HARN_GIBSON_RENDERER_MODEL_COMMAND": "python model.py",
-        "HARN_GIBSON_PROJECTION": "old",
+        "HARN_GIBSON_RENDERER": "old",
     }
 
     preset_env = _viewer_env_for_options(
         base_env,
-        {"renderer": "gibson1", "renderer_command": None, "projection": None, "style": "mainframe"},
+        {"renderer": "gibson1", "renderer_command": None, "style": "mainframe"},
     )
     assert "gibson1_renderer.py" in preset_env["HARN_GIBSON_RENDERER_COMMAND"]
     assert preset_env["HARN_GIBSON_STYLE"] == "mainframe"
     assert "HARN_GIBSON_RENDERER_MODEL_COMMAND" not in preset_env
-    assert "HARN_GIBSON_PROJECTION" not in preset_env
+    assert "HARN_GIBSON_RENDERER" not in preset_env
 
     none_env = _viewer_env_for_options(
         base_env,
-        {"renderer": "none", "renderer_command": None, "projection": None, "renderer_timeout_ms": "500"},
+        {"renderer": "none", "renderer_command": None, "renderer_timeout_ms": "500"},
     )
+    assert none_env["HARN_GIBSON_RENDERER"] == "none"
     assert "HARN_GIBSON_RENDERER_COMMAND" not in none_env
     assert "HARN_GIBSON_RENDERER_TIMEOUT_MS" not in none_env
 
     command_env = _viewer_env_for_options(
         base_env,
-        {"renderer": "command", "renderer_command": "python custom.py", "projection": None},
+        {"renderer": "command", "renderer_command": "python custom.py"},
     )
     assert command_env["HARN_GIBSON_RENDERER_COMMAND"] == "python custom.py"
-    assert "HARN_GIBSON_PROJECTION" not in command_env
+    assert "HARN_GIBSON_RENDERER" not in command_env
 
-    projection_env = _viewer_env_for_options(
+    perception_env = _viewer_env_for_options(
         base_env,
-        {"renderer": "projection", "renderer_command": None, "projection": "examples/projection.json"},
+        {"renderer": "examples/renderer.json", "renderer_command": None},
     )
-    assert projection_env["HARN_GIBSON_PROJECTION"] == "examples/projection.json"
-    assert "HARN_GIBSON_RENDERER_COMMAND" not in projection_env
+    assert perception_env["HARN_GIBSON_RENDERER"] == "examples/renderer.json"
+    assert "HARN_GIBSON_RENDERER_COMMAND" not in perception_env
 
 
 def test_gibson_view_controller_attaches_viewer_and_reuses_it(tmp_path: Path, monkeypatch: Any) -> None:
@@ -420,7 +419,7 @@ def test_gibson_view_controller_attaches_viewer_and_reuses_it(tmp_path: Path, mo
     assert "viewer_attach" in event_log.read_text(encoding="utf-8")
 
 
-def test_gibson_renderer_list_command_reports_presets() -> None:
+def test_gibson_renderer_list_command_reports_renderers() -> None:
     harn = FakeHarn()
     relay = GibsonRelay(FakeSink())
     poller = BrowserInputPoller(harn, None)
