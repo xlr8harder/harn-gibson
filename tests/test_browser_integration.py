@@ -360,6 +360,89 @@ def test_browser_terminal_wall_does_not_repeat_short_panel_lines() -> None:
         server.server_close()
 
 
+def test_browser_activity_roll_uses_flat_primary_grid_language() -> None:
+    state = GibsonServerState()
+    state.scene.apply(
+        [
+            SceneMutation(
+                op="upsert",
+                primitive=ScenePrimitive(
+                    id="projection-scene",
+                    kind="projection_scene",
+                    region="stage",
+                    props={
+                        "theme": "gibson",
+                        "title": "ACTIVITY ROLL",
+                        "revision": 1,
+                        "mood": {"name": "work", "label": "AGENT ACTIVE", "tone": "base"},
+                        "hud": {"focus": "src/app.py", "workspace": "main @ abc123d", "ticker": []},
+                        "nodes": [],
+                        "edges": [],
+                        "effects": [],
+                        "camera": {},
+                        "physics": {"layers": []},
+                        "grid": {
+                            "kind": "epoch-grid",
+                            "presentation": {"stage": "primary", "narration": False, "spatial": False},
+                            "columns": [
+                                {"id": "file:src/app.py", "label": "src/app.py", "group": "src"},
+                                {"id": "file:tests/test_app.py", "label": "tests/test_app.py", "group": "tests"},
+                            ],
+                            "epochs": [
+                                {"id": "epoch:1", "label": "cmd ok", "tone": "good"},
+                                {"id": "epoch:2", "label": "cmd error", "tone": "alarm"},
+                            ],
+                            "cells": [
+                                {"epoch": "epoch:1", "entity": "file:src/app.py", "height": 0.8,
+                                 "tone": "good", "commands": 1, "churn": 0},
+                                {"epoch": "epoch:2", "entity": "file:tests/test_app.py", "height": 0.5,
+                                 "tone": "alarm", "commands": 1, "churn": 0.2},
+                            ],
+                            "pending": [
+                                {"epoch": "pending", "entity": "file:src/app.py", "height": 0.35,
+                                 "tone": "accent", "pending": True, "edits": 1, "churn": 0.3},
+                            ],
+                            "summary": {
+                                "columnCount": 2,
+                                "epochCount": 2,
+                                "cellCount": 2,
+                                "pendingCellCount": 1,
+                                "activeColumnCount": 2,
+                            },
+                        },
+                    },
+                ),
+            )
+        ]
+    )
+    server, state, base = start_display_server(state)
+    try:
+        with sync_playwright() as driver:
+            try:
+                browser = driver.chromium.launch()
+            except Error as exc:
+                pytest.skip(f"Chromium is not installed for Playwright: {exc}")
+            try:
+                page = browser.new_page(viewport={"width": 960, "height": 700})
+                page.goto(base, wait_until="domcontentloaded")
+                page.wait_for_function("window.__gibsonProjectionState?.gridLayout === 'activity-roll-flat'")
+                projection_state = page.evaluate("window.__gibsonProjectionState")
+                assert projection_state["nodeCount"] == 0
+                assert projection_state["effectCount"] == 0
+                assert projection_state["gridColumnCount"] == 2
+                assert projection_state["gridEpochCount"] == 2
+                assert projection_state["gridCellCount"] == 2
+                assert projection_state["gridPendingCount"] == 1
+                assert projection_state["gridSummary"]["activeColumnCount"] == 2
+                assert_canvas_nonblank(page)
+            finally:
+                browser.close()
+    finally:
+        state.pipeline.stop()
+        server.shutdown()
+        server.server_close()
+
+
 def test_browser_display_renders_vector_symbols_and_data_rain() -> None:
     state = GibsonServerState()
     run_replay_file(EXAMPLE_REPLAYS / "primitive-gallery.json", state)
