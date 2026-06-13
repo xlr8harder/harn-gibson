@@ -91,6 +91,7 @@ def test_browser_display_renders_events_debug_and_input_queue() -> None:
                 expect(page.get_by_role("heading", name="GIBSON LINK")).to_be_visible()
                 expect(page.locator("#inputStatus")).to_have_text("ready")
                 expect(page.locator("#bridgeStatus")).to_have_text("harn bridge idle")
+                assert page.evaluate("wrapNarration('GIBSON_BROWSER_STREAM_OK')[0]") == "GIBSON_BROWSER_STREAM_OK"
                 page.wait_for_timeout(120)
                 assert_canvas_nonblank(page)
 

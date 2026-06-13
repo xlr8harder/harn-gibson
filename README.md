@@ -1,5 +1,7 @@
 # harn-gibson
 
+> They don't want you to know this, but the most productive agentic coding setup is a 90s hacker movie.
+
 `harn-gibson` adds a cinematic browser viewer to a live [secemp9/harn](https://github.com/secemp9/harn) agent session. The normal setup has three steps:
 
 1. install harn;

@@ -343,6 +343,41 @@ def test_event_router_routes_text_streams_to_local_buffer() -> None:
     assert router.stream_snapshot()["assistant-main"]["updateCount"] == 2
 
 
+def test_event_router_streams_only_deltas_from_harn_text_lifecycle_events() -> None:
+    router = EventRouter()
+    partial = {"content": [{"type": "text", "text": "GIBSON_INTEGRATION_OK"}]}
+
+    start = router.route(
+        event(1, "message_update", {"assistantMessageEvent": {"type": "text_start", "partial": partial}})
+    )
+    first = router.route(
+        event(2, "message_update", {"assistantMessageEvent": {"type": "text_delta", "delta": "GIBSON_"}})
+    )
+    second = router.route(
+        event(3, "message_update", {"assistantMessageEvent": {"type": "text_delta", "delta": "INTEGRATION_OK"}})
+    )
+    end = router.route(
+        event(
+            4,
+            "message_update",
+            {
+                "assistantMessageEvent": {
+                    "type": "text_end",
+                    "content": "GIBSON_INTEGRATION_OK",
+                    "partial": partial,
+                }
+            },
+        )
+    )
+
+    assert start.decision.route == "debug_only"
+    assert first.decision.route == "stream_buffer"
+    assert second.decision.route == "stream_buffer"
+    assert end.decision.route == "debug_only"
+    assert router.stream_snapshot()["assistant-main"]["text"] == "GIBSON_INTEGRATION_OK"
+    assert router.stream_snapshot()["assistant-main"]["updateCount"] == 2
+
+
 def test_event_router_routes_empty_stream_updates_debug_only() -> None:
     result = EventRouter().route(event(1, "message_update", {"assistantMessageEvent": {"type": "ping"}}))
 
@@ -354,6 +389,28 @@ def test_event_router_routes_empty_stream_updates_debug_only() -> None:
 
 def test_stream_text_extraction_variants_and_clipping() -> None:
     assert stream_text_for_event(event(1, "message_update", {"delta": "a"})) == "a"
+    assert (
+        stream_text_for_event(
+            event(1, "message_update", {"assistantMessageEvent": {"type": "text_delta", "delta": "a"}})
+        )
+        == "a"
+    )
+    assert (
+        stream_text_for_event(
+            event(
+                1,
+                "message_update",
+                {"assistantMessageEvent": {"type": "text_start", "partial": {"content": [{"text": "full"}]}}},
+            )
+        )
+        == ""
+    )
+    assert (
+        stream_text_for_event(
+            event(1, "message_update", {"assistantMessageEvent": {"type": "text_end", "content": "full"}})
+        )
+        == ""
+    )
     assert stream_text_for_event(event(1, "message_update", {"content": [{"text": "b"}, {"text": "c"}]})) == "bc"
     assert stream_text_for_event(event(1, "message_update", {"content": [{"image": "x"}]})) == ""
     assert stream_text_for_event(event(1, "message_update", {"content": ["x"]})) == ""

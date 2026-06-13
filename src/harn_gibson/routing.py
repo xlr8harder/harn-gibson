@@ -428,6 +428,11 @@ def stream_text_for_event(event: GibsonEvent) -> str:
     payload = event.payload
     nested = payload.get("assistantMessageEvent")
     if isinstance(nested, Mapping):
+        delta = nested.get("delta")
+        if isinstance(delta, str) and delta:
+            return delta
+        if nested.get("type") in {"text_start", "text_end"}:
+            return ""
         text = _first_text_field(nested)
         if text:
             return text

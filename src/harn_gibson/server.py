@@ -7080,7 +7080,7 @@ const NARRATION_WRAP_CHARS = 56;
 
 function wrapNarration(text) {
   const lines = [];
-  const cleaned = text.replace(/[*_`#]+/g, "");
+  const cleaned = text.replace(/[*`#]+/g, "");
   for (const paragraph of cleaned.split(/\\n+/)) {
     let current = "";
     for (const word of paragraph.split(/\\s+/)) {
