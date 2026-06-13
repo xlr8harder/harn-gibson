@@ -1400,7 +1400,7 @@ def test_cli_replay_renderer_env_helpers(monkeypatch: Any) -> None:
     renderer_no_timeout = parser.parse_args(["replay", "fixture.json", "--renderer", "classic"])
     renderer_default = parser.parse_args(["watch-replay", "fixture.json", "--renderer", "default"])
     renderer_spec = parser.parse_args(
-        ["replay", "fixture.json", "--renderer", "examples/projections/gibson-sector.json"]
+        ["replay", "fixture.json", "--renderer", "examples/projections/blueprint-web.json"]
     )
     default_state = cli._replay_state_from_args(deterministic)
     try:
@@ -1445,7 +1445,7 @@ def test_cli_replay_renderer_env_helpers(monkeypatch: Any) -> None:
     assert "HARN_GIBSON_RENDERER_TIMEOUT_MS" not in renderer_no_timeout_env
     assert cli._explicit_replay_renderer_env_from_args(renderer_default) == {"HARN_GIBSON_RENDERER": "default"}
     assert cli._explicit_replay_renderer_env_from_args(renderer_spec) == {
-        "HARN_GIBSON_RENDERER": "examples/projections/gibson-sector.json"
+        "HARN_GIBSON_RENDERER": "examples/projections/blueprint-web.json"
     }
     assert cli._explicit_replay_state_env_from_args(project_only) == {
         "HARN_GIBSON_RENDERER_SEMANTIC_GRAPH": "1",

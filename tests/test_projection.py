@@ -628,6 +628,11 @@ def test_spec_merge_keeps_defaults_for_missing_fields() -> None:
     assert ProjectionEngine(None).spec["theme"] == "gibson"
 
 
+def test_organic_projection_example_matches_builtin_default() -> None:
+    organic = json.loads(Path("examples/projections/gibson-organic.json").read_text(encoding="utf-8"))
+    assert organic == DEFAULT_PROJECTION
+
+
 def test_server_env_enables_projection_renderer() -> None:
     from harn_gibson.external_renderer import ExternalRenderer
     from harn_gibson.server import selected_renderer_from_env
@@ -639,7 +644,7 @@ def test_server_env_enables_projection_renderer() -> None:
     built_in_renderer = selected_renderer_from_env("stress", "250")
     assert isinstance(built_in_renderer, ExternalRenderer)
     assert built_in_renderer.timeout_seconds == 0.25
-    spec_renderer = selected_renderer_from_env("examples/projections/gibson-sector.json")
+    spec_renderer = selected_renderer_from_env("examples/projections/blueprint-web.json")
     assert isinstance(spec_renderer, ProjectionSceneRenderer)
 
 
@@ -651,12 +656,12 @@ def test_cli_renderer_spec_maps_to_env() -> None:
     args = argparse.Namespace(
         renderer_command=None, renderer_model_command=None,
         renderer_timeout_ms=None, renderer_model_timeout_ms=None,
-        renderer="examples/projections/gibson-sector.json",
+        renderer="examples/projections/blueprint-web.json",
         discovery="stream",
     )
     env = _explicit_replay_renderer_env_from_args(args)
     assert env == {
-        "HARN_GIBSON_RENDERER": "examples/projections/gibson-sector.json",
+        "HARN_GIBSON_RENDERER": "examples/projections/blueprint-web.json",
         "HARN_GIBSON_PERCEPTION_DISCOVERY": "stream",
     }
 
