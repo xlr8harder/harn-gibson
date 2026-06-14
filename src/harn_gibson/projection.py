@@ -612,6 +612,7 @@ class ProjectionEngine:
         return {
             "kind": "epoch-grid",
             "seq": latest_seq,
+            "window": window,
             "presentation": {
                 "stage": str(view.get("stage") or "primary"),
                 "narration": bool(view.get("narration", False)),

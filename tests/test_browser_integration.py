@@ -360,7 +360,7 @@ def test_browser_terminal_wall_does_not_repeat_short_panel_lines() -> None:
         server.server_close()
 
 
-def test_browser_activity_roll_uses_flat_primary_grid_language() -> None:
+def test_browser_activity_roll_uses_file_tracks_over_time() -> None:
     state = GibsonServerState()
     state.scene.apply(
         [
@@ -425,14 +425,16 @@ def test_browser_activity_roll_uses_flat_primary_grid_language() -> None:
             try:
                 page = browser.new_page(viewport={"width": 960, "height": 700})
                 page.goto(base, wait_until="domcontentloaded")
-                page.wait_for_function("window.__gibsonProjectionState?.gridLayout === 'activity-roll-flat'")
+                page.wait_for_function("window.__gibsonProjectionState?.gridLayout === 'activity-roll-tracks'")
                 projection_state = page.evaluate("window.__gibsonProjectionState")
                 assert projection_state["nodeCount"] == 0
                 assert projection_state["effectCount"] == 0
+                assert projection_state["gridAxis"] == {"x": "time", "y": "files"}
                 assert projection_state["gridColumnCount"] == 2
                 assert projection_state["gridEpochCount"] == 2
                 assert projection_state["gridCellCount"] == 2
                 assert projection_state["gridPendingCount"] == 1
+                assert projection_state["gridWindow"] == 0
                 assert projection_state["gridSummary"]["activeColumnCount"] == 2
                 assert_canvas_nonblank(page)
             finally:

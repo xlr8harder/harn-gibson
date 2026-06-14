@@ -6389,50 +6389,83 @@ function drawProjectionEpochGrid(grid, theme, rect, now) {
   const primary = presentation.stage === "primary";
   if (!columns.length) return;
 
-  const lanes = epochs.concat([{id: "pending", label: "LIVE", tone: "accent", pending: true}]);
-  const rowCount = Math.max(1, lanes.length);
-  const top = rect.y + rect.height * (primary ? 0.14 : 0.15);
-  const left = rect.x + rect.width * (primary ? 0.15 : 0.08);
-  const width = rect.width * (primary ? 0.78 : 0.78);
-  const height = rect.height * (primary ? 0.62 : 0.52);
-  const colStep = width / Math.max(1, columns.length);
-  const rowStep = height / rowCount;
-  const originX = left;
-  const originY = top;
-  const labelWidth = Math.max(78 * devicePixelRatio, rect.width * 0.095);
-  const panelX = originX - labelWidth - 18 * devicePixelRatio;
-  const panelY = originY - 42 * devicePixelRatio;
-  const panelW = width + labelWidth + 36 * devicePixelRatio;
-  const panelH = height + 102 * devicePixelRatio;
-  const cellWidth = Math.max(4 * devicePixelRatio, colStep * 0.72);
-  const cellHeight = Math.max(3 * devicePixelRatio, rowStep * 0.56);
-  const cellPadX = Math.max(1, Math.min(4 * devicePixelRatio, colStep * 0.08));
-  const cellPadY = Math.max(1, Math.min(3 * devicePixelRatio, rowStep * 0.10));
+  const hasPending = pending.length > 0;
+  const slots = epochs.concat(hasPending ? [{id: "pending", label: "LIVE", tone: "accent", pending: true}] : []);
+  const rowCount = Math.max(1, columns.length);
+  const slotCount = Math.max(1, slots.length);
+  const declaredWindow = Number(grid.window || presentation.window || 0);
+  const slotCapacity = Math.max(
+    slotCount,
+    Number.isFinite(declaredWindow) && declaredWindow > 0 ? declaredWindow : slotCount,
+  );
+  const slotOffset = Math.max(0, slotCapacity - slots.length);
+  const panelX = rect.x + rect.width * (primary ? 0.035 : 0.06);
+  const panelY = rect.y + rect.height * (primary ? 0.085 : 0.12);
+  const panelW = rect.width * (primary ? 0.93 : 0.86);
+  const panelH = rect.height * (primary ? 0.80 : 0.64);
+  const headerH = (primary ? 54 : 42) * devicePixelRatio;
+  const footerH = (primary ? 20 : 12) * devicePixelRatio;
+  const labelWidth = Math.min(panelW * 0.34, Math.max((primary ? 168 : 112) * devicePixelRatio, panelW * 0.22));
+  const timelineX = panelX + labelWidth + 14 * devicePixelRatio;
+  const timelineY = panelY + headerH;
+  const timelineW = Math.max(1, panelW - labelWidth - 30 * devicePixelRatio);
+  const timelineH = Math.max(1, panelH - headerH - footerH);
+  const nowX = timelineX + timelineW;
+  const rowStep = timelineH / rowCount;
+  const slotStep = timelineW / slotCapacity;
+  const trackHeight = Math.max(2 * devicePixelRatio, Math.min(10 * devicePixelRatio, rowStep * 0.62));
+  const tickWidth = Math.max(2 * devicePixelRatio, Math.min(7 * devicePixelRatio, slotStep * 0.46));
   const byKey = new Map();
   for (const cell of cells.concat(pending)) {
     byKey.set(`${cell.epoch}|${cell.entity}`, cell);
   }
+  const activeEntities = new Set();
+  for (const cell of pending) {
+    if (cell && cell.entity) activeEntities.add(String(cell.entity));
+  }
+  for (const column of columns) {
+    if (column.focus) activeEntities.add(String(column.id));
+  }
+  const groups = [];
+  for (let index = 0; index < columns.length; index++) {
+    const group = String(columns[index].group || ".");
+    const previous = groups[groups.length - 1];
+    if (!previous || previous.group !== group) {
+      groups.push({group, start: index, end: index + 1});
+    } else {
+      previous.end = index + 1;
+    }
+  }
+  const fitTailLabel = (value, maxWidth) => {
+    const text = String(value || "");
+    if (ctx.measureText(text).width <= maxWidth) return text;
+    let tail = text;
+    while (tail.length > 1 && ctx.measureText(`...${tail}`).width > maxWidth) {
+      tail = tail.slice(1);
+    }
+    return `...${tail}`;
+  };
   const shortLabel = (value, length = 28) => {
     const text = String(value || "");
     return text.length <= length ? text : `...${text.slice(-(length - 3))}`;
   };
-  const semanticTone = (cell, lane) => {
-    if (cell.pending) return "accent";
+  const semanticTone = (cell, slot) => {
     if (Number(cell.checks || 0) > 0 || Number(cell.commands || 0) > 0) {
-      return lane.tone || cell.tone || "base";
+      return (cell.tone && cell.tone !== "base") ? cell.tone : (slot.tone || "base");
     }
     if (Number(cell.edits || 0) > 0 || Number(cell.churn || 0) > 0) return "base";
-    return cell.tone && cell.tone !== "base" ? cell.tone : (lane.tone || "base");
+    return (cell.tone && cell.tone !== "base") ? cell.tone : (slot.tone || "base");
   };
-  const semanticLabel = (cell) => {
-    if (Number(cell.checks || 0) > 0) return "CHECK";
-    if (Number(cell.commands || 0) > 0) return "CMD";
-    if (Number(cell.edits || 0) > 0) return "EDIT";
-    return "HIT";
+  const isTestBoundary = (slot) => {
+    if (!slot || slot.pending) return false;
+    return String(slot.kind || "") === "check_completed" || Number(slot.checks || 0) > 0;
   };
+  const slotCenterX = (slotIndex) => timelineX + (slotOffset + slotIndex + 0.5) * slotStep;
+  const rowCenterY = (rowIndex) => timelineY + (rowIndex + 0.5) * rowStep;
+  const filledStartX = slots.length ? timelineX + slotOffset * slotStep : nowX;
 
   ctx.save();
-  ctx.font = `${9 * devicePixelRatio}px ui-monospace, monospace`;
+  ctx.font = `${8.5 * devicePixelRatio}px ui-monospace, monospace`;
   ctx.textBaseline = "middle";
   ctx.lineWidth = devicePixelRatio;
   ctx.fillStyle = primary ? "rgba(1,5,8,0.94)" : projectionTone(theme, "base", 0.025);
@@ -6449,21 +6482,21 @@ function drawProjectionEpochGrid(grid, theme, rect, now) {
   ctx.textAlign = "left";
   ctx.fillStyle = projectionTone(theme, "accent", 0.9);
   ctx.font = `${10 * devicePixelRatio}px ui-monospace, monospace`;
-  ctx.fillText("FILE ACTIVITY ROLL", panelX + 9 * devicePixelRatio, panelY + 13 * devicePixelRatio);
+  ctx.fillText("AGENT ACTIVITY ROLL", panelX + 9 * devicePixelRatio, panelY + 14 * devicePixelRatio);
   ctx.textAlign = "right";
   ctx.fillStyle = projectionTone(theme, "base", 0.76);
   const summaryText = [
-    `${Number(summary.columnCount || columns.length)} FILES`,
-    `${Number(summary.epochCount || epochs.length)} EPOCHS`,
+    `${Number(summary.columnCount || columns.length)} TRACKS`,
+    `${Number(summary.epochCount || epochs.length)} STEPS`,
     `${Number(summary.activeColumnCount || 0)} HOT`,
   ].join("  //  ");
   ctx.fillText(summaryText, panelX + panelW - 9 * devicePixelRatio, panelY + 13 * devicePixelRatio);
 
   const legend = [
-    ["good", "ok boundary"],
-    ["alarm", "error boundary"],
-    ["base", "file edit"],
-    ["accent", "live/pending"],
+    ["base", "edit"],
+    ["good", "ok"],
+    ["alarm", "error"],
+    ["accent", "now"],
   ];
   ctx.font = `${8.5 * devicePixelRatio}px ui-monospace, monospace`;
   ctx.textAlign = "left";
@@ -6477,67 +6510,88 @@ function drawProjectionEpochGrid(grid, theme, rect, now) {
     legendX += (label.length * 6 + 40) * devicePixelRatio;
   }
 
-  for (let row = 0; row < lanes.length; row++) {
-    const lane = lanes[row];
-    const y = originY + row * rowStep;
-    const x0 = originX;
-    const x1 = x0 + columns.length * colStep;
-    const tone = lane.tone || "base";
-    ctx.fillStyle = projectionTone(theme, tone, lane.pending ? 0.08 + 0.025 * Math.sin(now * 0.007) : 0.026);
-    ctx.fillRect(x0, y + rowStep * 0.13, Math.max(1, x1 - x0), Math.max(1, rowStep * 0.70));
-    ctx.strokeStyle = projectionTone(theme, tone, lane.pending ? 0.38 : 0.18);
+  const progressY = panelY + 42 * devicePixelRatio;
+  ctx.fillStyle = projectionTone(theme, "ghost", 0.18);
+  ctx.fillRect(timelineX, progressY, timelineW, Math.max(1, 2 * devicePixelRatio));
+  if (filledStartX < nowX) {
+    ctx.fillStyle = projectionTone(theme, "base", 0.48);
+    ctx.fillRect(filledStartX, progressY, nowX - filledStartX, Math.max(1, 2 * devicePixelRatio));
+  }
+
+  for (let index = 0; index < groups.length; index++) {
+    const group = groups[index];
+    const y = timelineY + group.start * rowStep;
+    const h = Math.max(1, (group.end - group.start) * rowStep);
+    ctx.fillStyle = projectionTone(theme, index % 2 === 0 ? "base" : "ghost", index % 2 === 0 ? 0.028 : 0.018);
+    ctx.fillRect(panelX + 8 * devicePixelRatio, y, panelW - 16 * devicePixelRatio, h);
+    if (h > 13 * devicePixelRatio) {
+      ctx.textAlign = "left";
+      ctx.font = `${7.5 * devicePixelRatio}px ui-monospace, monospace`;
+      ctx.fillStyle = projectionTone(theme, "warn", 0.58);
+      ctx.fillText(shortLabel(group.group, 18), panelX + 10 * devicePixelRatio, y + h * 0.5);
+    }
+    ctx.strokeStyle = projectionTone(theme, "ghost", 0.15);
     ctx.beginPath();
-    ctx.moveTo(x0, y + rowStep * 0.86);
-    ctx.lineTo(x1, y + rowStep * 0.86);
+    ctx.moveTo(timelineX, y);
+    ctx.lineTo(nowX, y);
+    ctx.stroke();
+  }
+
+  const gridEvery = Math.max(1, Math.ceil(slotCapacity / 12));
+  for (let slotIndex = 0; slotIndex < slots.length; slotIndex++) {
+    const slot = slots[slotIndex];
+    const x = slotCenterX(slotIndex);
+    const testBoundary = isTestBoundary(slot);
+    const tone = testBoundary ? (slot.tone || "good") : "ghost";
+    const alpha = testBoundary ? (slot.tone === "alarm" ? 0.34 : 0.22) : (slotIndex % gridEvery === 0 ? 0.07 : 0.0);
+    if (alpha <= 0) continue;
+    ctx.strokeStyle = projectionTone(theme, tone, alpha);
+    ctx.lineWidth = Math.max(devicePixelRatio, testBoundary ? 1.4 * devicePixelRatio : devicePixelRatio);
+    ctx.beginPath();
+    ctx.moveTo(x, timelineY);
+    ctx.lineTo(x, timelineY + timelineH);
+    ctx.stroke();
+  }
+
+  ctx.lineWidth = Math.max(devicePixelRatio, 1.1 * devicePixelRatio);
+  for (let row = 0; row < columns.length; row++) {
+    const column = columns[row];
+    const y = rowCenterY(row);
+    const active = activeEntities.has(String(column.id));
+    if (active) {
+      const glowW = Math.min(timelineW, Math.max(slotStep * 2.4, 34 * devicePixelRatio));
+      const pulse = 0.04 + 0.025 * Math.sin(now * 0.008 + row);
+      ctx.fillStyle = projectionTone(theme, "accent", pulse);
+      ctx.fillRect(nowX - glowW, y - rowStep * 0.46, glowW, Math.max(1, rowStep * 0.92));
+    }
+    ctx.strokeStyle = projectionTone(theme, active ? "accent" : "base", active ? 0.30 : 0.11);
+    ctx.beginPath();
+    ctx.moveTo(timelineX, y);
+    ctx.lineTo(nowX, y);
     ctx.stroke();
     ctx.textAlign = "right";
-    ctx.fillStyle = projectionTone(theme, tone, lane.pending ? 0.86 : 0.58);
-    ctx.fillText(shortLabel(lane.label || lane.kind || lane.seq || "", 13), x0 - 8 * devicePixelRatio,
-      y + rowStep * 0.52);
+    ctx.font = `${Math.max(6.5, Math.min(9, rowStep * 0.62)) * devicePixelRatio}px ui-monospace, monospace`;
+    ctx.fillStyle = projectionTone(theme, active ? "accent" : "ghost", active ? 0.88 : 0.68);
+    const label = fitTailLabel(column.label || column.id || "", labelWidth - 26 * devicePixelRatio);
+    ctx.fillText(label, timelineX - 10 * devicePixelRatio, y);
   }
 
-  const labelEvery = Math.max(1, Math.ceil(columns.length / 18));
-  let lastGroup = "";
-  for (let col = 0; col < columns.length; col++) {
-    const column = columns[col];
-    const x = originX + col * colStep;
-    const bottomY = originY + rowCount * rowStep + rect.height * 0.025;
-    ctx.strokeStyle = projectionTone(theme, column.focus ? "warn" : "base", column.focus ? 0.45 : 0.12);
-    ctx.beginPath();
-    ctx.moveTo(x + colStep * 0.5, originY + rowStep * 0.14);
-    ctx.lineTo(x + colStep * 0.5, originY + rowCount * rowStep);
-    ctx.stroke();
-    if (column.group && column.group !== lastGroup) {
-      lastGroup = column.group;
-      ctx.textAlign = "left";
-      ctx.fillStyle = projectionTone(theme, "warn", 0.55);
-      ctx.fillText(shortLabel(column.group, 16), x, originY - 8 * devicePixelRatio);
-    }
-    if (col % labelEvery === 0 || column.focus) {
-      ctx.save();
-      ctx.translate(x + colStep * 0.5, bottomY);
-      ctx.rotate(-Math.PI / 5);
-      ctx.textAlign = "right";
-      ctx.fillStyle = projectionTone(theme, column.focus ? "warn" : "base", column.focus ? 0.9 : 0.55);
-      ctx.fillText(shortLabel(column.label || column.id || "", 24), 0, 0);
-      ctx.restore();
-    }
-  }
-
-  for (let row = 0; row < lanes.length; row++) {
-    const lane = lanes[row];
-    for (let col = 0; col < columns.length; col++) {
-      const column = columns[col];
-      const cell = byKey.get(`${lane.id}|${column.id}`);
+  for (let slotIndex = 0; slotIndex < slots.length; slotIndex++) {
+    const slot = slots[slotIndex];
+    const x = slotCenterX(slotIndex);
+    for (let row = 0; row < columns.length; row++) {
+      const column = columns[row];
+      const cell = byKey.get(`${slot.id}|${column.id}`);
       if (!cell) continue;
       const height = Math.max(0.08, Math.min(1, Number(cell.height || 0.08)));
-      const x = originX + col * colStep + (colStep - cellWidth) * 0.5 + cellPadX;
-      const centerY = originY + row * rowStep + rowStep * 0.50;
-      const markerH = Math.max(2 * devicePixelRatio, cellHeight * (0.34 + height * 0.66));
+      const centerY = rowCenterY(row);
+      const markerH = Math.max(2 * devicePixelRatio, Math.min(rowStep * 0.88, trackHeight * (0.38 + height * 0.92)));
       const markerY = centerY - markerH * 0.5;
-      const markerW = Math.max(2 * devicePixelRatio, cellWidth - cellPadX * 2);
-      const tone = semanticTone(cell, lane);
-      const pulse = cell.pending ? 0.2 + 0.18 * Math.sin(now * 0.008) : 0;
+      const tone = semanticTone(cell, slot);
+      const pulse = cell.pending ? 0.10 + 0.06 * Math.sin(now * 0.008) : 0;
+      const jitter = tone === "alarm"
+        ? Math.sin(now * 0.052 + row * 1.7) * Math.min(2.5 * devicePixelRatio, slotStep * 0.08)
+        : 0;
       ctx.save();
       ctx.shadowColor = projectionTone(theme, tone, 0.7);
       ctx.shadowBlur = theme.glow * devicePixelRatio * (0.08 + height * 0.35 + pulse);
@@ -6545,30 +6599,50 @@ function drawProjectionEpochGrid(grid, theme, rect, now) {
       ctx.strokeStyle = projectionTone(theme, tone, 0.72 + pulse);
       ctx.lineWidth = Math.max(devicePixelRatio, 1.1 * devicePixelRatio);
       ctx.beginPath();
-      ctx.rect(x, markerY, markerW, markerH);
+      ctx.rect(x - tickWidth * 0.5 + jitter, markerY, tickWidth, markerH);
       ctx.fill();
       ctx.stroke();
       if (Number(cell.churn || 0) > 0) {
-        const churnW = Math.max(1, markerW * Math.min(1, Number(cell.churn || 0)));
+        const capH = Math.max(1, markerH * Math.min(0.75, Number(cell.churn || 0)));
         ctx.fillStyle = projectionTone(theme, "accent", Math.min(0.72, 0.20 + Number(cell.churn) * 0.48));
-        ctx.fillRect(x, markerY, churnW, Math.max(1, markerH * 0.22));
-      }
-      if (primary && rowStep > 24 * devicePixelRatio && markerW > 30 * devicePixelRatio) {
-        ctx.shadowBlur = 0;
-        ctx.font = `${7.5 * devicePixelRatio}px ui-monospace, monospace`;
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.fillStyle = `rgba(${theme.ink},0.62)`;
-        ctx.fillText(semanticLabel(cell), x + markerW * 0.5, markerY + markerH * 0.5);
+        ctx.fillRect(x - tickWidth * 0.5 + jitter, markerY + markerH - capH, tickWidth, capH);
       }
       ctx.restore();
     }
   }
+
+  for (let row = 0; row < columns.length; row++) {
+    const column = columns[row];
+    if (!activeEntities.has(String(column.id))) continue;
+    const y = rowCenterY(row);
+    ctx.save();
+    ctx.shadowColor = projectionTone(theme, "accent", 0.9);
+    ctx.shadowBlur = theme.glow * devicePixelRatio * (0.3 + 0.1 * Math.sin(now * 0.009));
+    ctx.fillStyle = projectionTone(theme, "accent", 0.82);
+    ctx.beginPath();
+    ctx.arc(nowX - 2.5 * devicePixelRatio, y, Math.max(2.5 * devicePixelRatio, trackHeight * 0.42), 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  ctx.strokeStyle = projectionTone(theme, "accent", 0.86 + 0.08 * Math.sin(now * 0.006));
+  ctx.lineWidth = Math.max(2 * devicePixelRatio, 2.4 * devicePixelRatio);
+  ctx.shadowColor = projectionTone(theme, "accent", 0.8);
+  ctx.shadowBlur = theme.glow * devicePixelRatio * 0.38;
+  ctx.beginPath();
+  ctx.moveTo(nowX, timelineY - 7 * devicePixelRatio);
+  ctx.lineTo(nowX, timelineY + timelineH + 7 * devicePixelRatio);
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+  ctx.textAlign = "right";
+  ctx.font = `${8.5 * devicePixelRatio}px ui-monospace, monospace`;
+  ctx.fillStyle = projectionTone(theme, "accent", 0.82);
+  ctx.fillText("NOW", nowX - 6 * devicePixelRatio, timelineY - 12 * devicePixelRatio);
+
   ctx.textAlign = "left";
   ctx.font = `${8.5 * devicePixelRatio}px ui-monospace, monospace`;
-  ctx.fillStyle = projectionTone(theme, "ghost", 0.68);
-  ctx.fillText("rows are command/test/commit epochs; columns are files; marker height shows intensity",
-    panelX + 9 * devicePixelRatio, panelY + panelH - 18 * devicePixelRatio);
+  ctx.fillStyle = projectionTone(theme, "ghost", 0.56);
+  ctx.fillText("TIME >", timelineX, panelY + panelH - 10 * devicePixelRatio);
   ctx.restore();
 }
 
@@ -6737,7 +6811,9 @@ function drawProjectionScene(primitive, w, h, now) {
       gridEpochCount: epochGrid && Array.isArray(epochGrid.epochs) ? epochGrid.epochs.length : 0,
       gridPendingCount: epochGrid && Array.isArray(epochGrid.pending) ? epochGrid.pending.length : 0,
       gridSummary: epochGrid ? (epochGrid.summary || {}) : {},
-      gridLayout: gridPrimary ? "activity-roll-flat" : "",
+      gridWindow: epochGrid ? Number(epochGrid.window || 0) : 0,
+      gridAxis: gridPrimary ? {x: "time", y: "files"} : {},
+      gridLayout: gridPrimary ? "activity-roll-tracks" : "",
       mood: String(mood.name || ""),
       revision: Number(props.revision || 0),
     };

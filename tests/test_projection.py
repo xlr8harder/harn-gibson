@@ -155,6 +155,7 @@ def test_epoch_grid_accumulates_pending_file_activity() -> None:
     assert scene["nodes"] == []
     grid = scene["grid"]
     assert grid["kind"] == "epoch-grid"
+    assert grid["window"] == 4
     assert grid["presentation"] == {"stage": "primary", "narration": False, "spatial": False}
     assert [column["id"] for column in grid["columns"]] == [
         "file:README.md",
