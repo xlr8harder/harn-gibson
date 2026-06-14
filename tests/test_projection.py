@@ -294,6 +294,8 @@ def test_thermal_roll_accumulates_focus_heat_and_quenches() -> None:
     grid = scene["grid"]
     assert grid["kind"] == "thermal-roll"
     assert grid["windowMs"] == 60_000
+    assert grid["visualWindowMs"] == 60_000
+    assert grid["idleCoastMs"] == 4500
     assert [column["id"] for column in grid["columns"]] == [
         "file:README.md",
         "file:src/app.py",
@@ -320,7 +322,7 @@ def test_thermal_roll_accumulates_focus_heat_and_quenches() -> None:
         cell["entity"]: cell for cell in grid["cells"]
         if cell["sample"] == second_edit_id
     }
-    assert second_edit_cells["file:src/app.py"]["heat"] > 0.6
+    assert 0.35 < second_edit_cells["file:src/app.py"]["heat"] < 0.5
     assert second_edit_cells["file:src/app.py"]["edited"] is True
     assert second_edit_cells["file:src/app.py"]["focus"] is True
 

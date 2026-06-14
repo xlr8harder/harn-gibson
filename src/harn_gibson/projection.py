@@ -744,6 +744,8 @@ class ProjectionEngine:
         self._thermal_samples = self._thermal_samples[-archive_samples:]
         visible_samples = self._thermal_samples[-max_samples:]
         visible_sample_ids = {str(sample.get("id") or "") for sample in visible_samples}
+        visual_window_ms = max(1000, _int(view.get("visualWindowMs"), window_ms))
+        idle_coast_ms = max(0, _int(view.get("idleCoastMs"), 4500))
         columns = [
             {
                 "id": file_id,
@@ -773,6 +775,8 @@ class ProjectionEngine:
             "seq": latest_seq,
             "nowMs": now_ms,
             "windowMs": window_ms,
+            "visualWindowMs": visual_window_ms,
+            "idleCoastMs": idle_coast_ms,
             "presentation": {
                 "stage": str(view.get("stage") or "primary"),
                 "narration": bool(view.get("narration", False)),
@@ -1326,7 +1330,7 @@ def _thermal_edit_delta(event: Mapping[str, Any], *, heat_gain: float, fallback_
 
 
 def _thermal_visual_heat(raw_heat: float) -> float:
-    return 1.0 - math.exp(-max(0.0, raw_heat))
+    return 1.0 - math.exp(-max(0.0, raw_heat) * 0.45)
 
 
 def _thermal_summary(samples: Sequence[Mapping[str, Any]], heat: Sequence[Mapping[str, Any]]) -> dict[str, Any]:

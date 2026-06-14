@@ -6329,6 +6329,7 @@ function drawSpatialMap(primitive, w, h, now) {
 const projectionTweens = new Map();
 const projectionEdgeTweens = new Map();
 const projectionEffectClocks = new Map();
+let thermalRollTimelineClock = {sourceNowMs: 0, targetSourceNowMs: 0, wallNowMs: 0, initialized: false};
 let projectionCameraState = {x: 0.5, y: 0.5, zoom: 1.0};
 let projectionLastNow = 0;
 
@@ -6649,12 +6650,12 @@ function drawProjectionEpochGrid(grid, theme, rect, now) {
 function thermalRollColor(heat, alpha) {
   const value = Math.max(0, Math.min(1, Number(heat || 0)));
   const stops = [
-    [0.00, [25, 7, 18]],
-    [0.18, [118, 18, 30]],
-    [0.45, [235, 61, 28]],
-    [0.68, [255, 156, 34]],
-    [0.86, [255, 232, 92]],
-    [1.00, [255, 255, 245]],
+    [0.00, [28, 4, 8]],
+    [0.18, [96, 7, 13]],
+    [0.42, [198, 25, 16]],
+    [0.66, [255, 98, 18]],
+    [0.86, [255, 185, 36]],
+    [1.00, [255, 232, 104]],
   ];
   let lower = stops[0];
   let upper = stops[stops.length - 1];
@@ -6669,6 +6670,55 @@ function thermalRollColor(heat, alpha) {
   const t = Math.max(0, Math.min(1, (value - lower[0]) / span));
   const channel = (offset) => Math.round(lower[1][offset] + (upper[1][offset] - lower[1][offset]) * t);
   return `rgba(${channel(0)},${channel(1)},${channel(2)},${alpha})`;
+}
+
+function resetThermalRollTimelineClock() {
+  thermalRollTimelineClock = {sourceNowMs: 0, targetSourceNowMs: 0, wallNowMs: 0, initialized: false};
+}
+
+function syncThermalRollTimelineClock(samples, grid, now) {
+  const sourceTimes = samples.map((sample) => Number(sample.ts || 0)).filter((value) => value > 0);
+  const latestSampleMs = sourceTimes.length ? Math.max(...sourceTimes) : 0;
+  const targetSourceNowMs = Math.max(Number(grid.nowMs || 0), latestSampleMs);
+  const visualWindowMs = Math.max(1000, Number(grid.visualWindowMs || grid.windowMs || 180000));
+  const idleCoastMs = Math.max(0, Number(grid.idleCoastMs || 4500));
+  if (!targetSourceNowMs) {
+    resetThermalRollTimelineClock();
+    thermalRollTimelineClock.wallNowMs = now;
+    return now;
+  }
+  if (
+    !thermalRollTimelineClock.initialized
+    || targetSourceNowMs < thermalRollTimelineClock.targetSourceNowMs - visualWindowMs
+  ) {
+    thermalRollTimelineClock = {
+      sourceNowMs: targetSourceNowMs,
+      targetSourceNowMs,
+      wallNowMs: now,
+      initialized: true,
+    };
+    return targetSourceNowMs;
+  }
+
+  const elapsed = Math.max(0, Math.min(1000, now - thermalRollTimelineClock.wallNowMs));
+  let sourceNowMs = thermalRollTimelineClock.sourceNowMs + elapsed;
+  if (targetSourceNowMs > sourceNowMs) {
+    const gap = targetSourceNowMs - sourceNowMs;
+    const easedCatchup = gap * (1 - Math.exp(-elapsed / 420));
+    const catchup = Math.max(elapsed * 2.5, easedCatchup);
+    sourceNowMs += Math.min(gap, catchup);
+  }
+
+  const idleCeilingMs = targetSourceNowMs + idleCoastMs;
+  sourceNowMs = Math.max(sourceNowMs, thermalRollTimelineClock.sourceNowMs);
+  sourceNowMs = Math.min(sourceNowMs, idleCeilingMs);
+  thermalRollTimelineClock = {
+    sourceNowMs,
+    targetSourceNowMs,
+    wallNowMs: now,
+    initialized: true,
+  };
+  return sourceNowMs;
 }
 
 function drawProjectionThermalRoll(grid, theme, rect, now) {
@@ -6696,16 +6746,14 @@ function drawProjectionThermalRoll(grid, theme, rect, now) {
   const nowX = timelineX + timelineW;
   const rowStep = timelineH / rowCount;
   const trackHeight = Math.max(2 * devicePixelRatio, Math.min(12 * devicePixelRatio, rowStep * 0.66));
-  const windowMs = Math.max(1000, Number(grid.windowMs || 180000));
-  const sampleTimes = samples.map((sample) => Number(sample.ts || 0)).filter((value) => value > 0);
-  const lastSampleMs = sampleTimes.length ? Math.max(...sampleTimes) : 0;
-  const sourceNow = Math.max(Number(grid.nowMs || 0), lastSampleMs);
-  const startMs = sourceNow - windowMs;
-  const xForMs = (timestamp) => {
-    if (!timestamp || !sourceNow) return timelineX;
-    return timelineX + Math.max(0, Math.min(1, (Number(timestamp) - startMs) / windowMs)) * timelineW;
+  const sourceWindowMs = Math.max(1000, Number(grid.windowMs || 180000));
+  const visualWindowMs = Math.max(1000, Number(grid.visualWindowMs || sourceWindowMs));
+  const visualSourceNowMs = syncThermalRollTimelineClock(samples, grid, now);
+  const visualStartMs = visualSourceNowMs - visualWindowMs;
+  const xForDisplayMs = (timestamp) => {
+    if (!timestamp) return timelineX;
+    return timelineX + Math.max(0, Math.min(1, (Number(timestamp) - visualStartMs) / visualWindowMs)) * timelineW;
   };
-  const sampleById = new Map(samples.map((sample, index) => [String(sample.id || ""), {sample, index}]));
   const cellsBySample = new Map();
   for (const cell of cells) {
     const key = String(cell.sample || "");
@@ -6834,9 +6882,13 @@ function drawProjectionThermalRoll(grid, theme, rect, now) {
     }
   }
 
-  const gridEveryMs = Math.max(1000, Math.round(windowMs / 10));
-  for (let tick = Math.ceil(startMs / gridEveryMs) * gridEveryMs; tick <= sourceNow; tick += gridEveryMs) {
-    const x = xForMs(tick);
+  const gridEveryMs = Math.max(1000, Math.round(visualWindowMs / 10));
+  for (
+    let tick = Math.ceil(visualStartMs / gridEveryMs) * gridEveryMs;
+    tick <= visualSourceNowMs;
+    tick += gridEveryMs
+  ) {
+    const x = xForDisplayMs(tick);
     ctx.strokeStyle = projectionTone(theme, "ghost", 0.065);
     ctx.lineWidth = devicePixelRatio;
     ctx.beginPath();
@@ -6866,9 +6918,11 @@ function drawProjectionThermalRoll(grid, theme, rect, now) {
 
   for (let sampleIndex = 0; sampleIndex < samples.length; sampleIndex++) {
     const sample = samples[sampleIndex];
-    const x1 = xForMs(Number(sample.ts || 0));
+    const sampleTs = Number(sample.ts || 0);
+    const x1 = xForDisplayMs(sampleTs);
     const next = samples[sampleIndex + 1];
-    const x2 = next ? xForMs(Number(next.ts || 0)) : nowX;
+    const nextTs = next ? Number(next.ts || 0) : 0;
+    const x2 = nextTs ? xForDisplayMs(nextTs) : nowX;
     if (x2 < timelineX || x1 > nowX) continue;
     const left = Math.max(timelineX, Math.min(x1, nowX));
     const right = Math.max(left + devicePixelRatio, Math.min(x2, nowX));
@@ -6894,8 +6948,8 @@ function drawProjectionThermalRoll(grid, theme, rect, now) {
         ctx.shadowBlur = theme.glow * devicePixelRatio * (0.04 + heatValue * 0.28);
         ctx.fillStyle = thermalRollColor(heatValue, 0.24 + heatValue * 0.54);
         ctx.fillRect(left, y - h * 0.5, right - left, h);
-        if (heatValue > 0.82) {
-          ctx.fillStyle = thermalRollColor(1, 0.40);
+        if (heatValue > 0.94) {
+          ctx.fillStyle = thermalRollColor(0.98, 0.36);
           ctx.fillRect(left, y - Math.max(1, h * 0.12), right - left, Math.max(1, h * 0.24));
         }
         ctx.restore();
@@ -6904,7 +6958,7 @@ function drawProjectionThermalRoll(grid, theme, rect, now) {
   }
 
   for (const sample of samples) {
-    const x = xForMs(Number(sample.ts || 0));
+    const x = xForDisplayMs(Number(sample.ts || 0));
     if (x < timelineX || x > nowX) continue;
     if (sample.quench) {
       const pulse = 0.16 + 0.06 * Math.sin(now * 0.008 + Number(sample.seq || 0));
@@ -6933,11 +6987,6 @@ function drawProjectionThermalRoll(grid, theme, rect, now) {
     const liveHeat = currentHeat.get(String(column.id || ""));
     const heatValue = Number(liveHeat ? liveHeat.heat || 0 : 0);
     const y = rowCenterY(row);
-    if (column.focus) {
-      const reticleLeft = Math.max(timelineX, nowX - Math.min(timelineW, 46 * devicePixelRatio));
-      drawFocusReticle(reticleLeft, nowX - 1.5 * devicePixelRatio, y, false, false,
-        0.66 + 0.08 * Math.sin(now * 0.008 + row));
-    }
     if (heatValue > 0) {
       ctx.save();
       ctx.shadowColor = thermalRollColor(heatValue, 0.95);
@@ -6947,8 +6996,8 @@ function drawProjectionThermalRoll(grid, theme, rect, now) {
       ctx.arc(nowX - 3 * devicePixelRatio, y, Math.max(2.3 * devicePixelRatio, trackHeight * (0.3 + heatValue * 0.34)),
         0, Math.PI * 2);
       ctx.fill();
-      if (heatValue > 0.88) {
-        ctx.fillStyle = thermalRollColor(1, 0.62);
+      if (heatValue > 0.96) {
+        ctx.fillStyle = thermalRollColor(0.98, 0.58);
         for (let spark = 0; spark < 3; spark++) {
           const angle = now * 0.006 + row + spark * 2.1;
           const radius = (5 + spark * 3) * devicePixelRatio;
@@ -6975,7 +7024,7 @@ function drawProjectionThermalRoll(grid, theme, rect, now) {
   ctx.fillText("NOW", nowX - 6 * devicePixelRatio, timelineY - 12 * devicePixelRatio);
   ctx.textAlign = "left";
   ctx.fillStyle = projectionTone(theme, "ghost", 0.56);
-  ctx.fillText("SOURCE TIME >", timelineX, panelY + panelH - 10 * devicePixelRatio);
+  ctx.fillText("VISUAL TIME >", timelineX, panelY + panelH - 10 * devicePixelRatio);
   ctx.restore();
 }
 
@@ -6987,6 +7036,7 @@ function drawProjectionScene(primitive, w, h, now) {
     projectionTweens.clear();
     projectionEdgeTweens.clear();
     projectionEffectClocks.clear();
+    resetThermalRollTimelineClock();
     projectionPeekWindows.clear();
     projectionPeekConsumed.clear();
     projectionNarrationStack.length = 0;
@@ -7151,6 +7201,11 @@ function drawProjectionScene(primitive, w, h, now) {
       gridSummary: projectionGrid ? (projectionGrid.summary || {}) : {},
       gridWindow: epochGrid ? Number(epochGrid.window || 0) : 0,
       gridWindowMs: thermalRoll ? Number(thermalRoll.windowMs || 0) : 0,
+      gridVisualWindowMs: thermalRoll
+        ? Number(thermalRoll.visualWindowMs || Number(thermalRoll.windowMs || 180000))
+        : 0,
+      gridIdleCoastMs: thermalRoll ? Number(thermalRoll.idleCoastMs || 0) : 0,
+      gridTimelineMode: thermalRoll ? "smooth-source-time" : (epochGrid ? "event-time" : ""),
       gridAxis: gridPrimary ? {x: "time", y: "files"} : {},
       gridLayout: gridPrimary ? (thermalRoll ? "thermal-roll" : "activity-roll-tracks") : "",
       mood: String(mood.name || ""),

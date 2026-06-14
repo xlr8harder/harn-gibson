@@ -473,6 +473,8 @@ def test_browser_thermal_roll_renders_heat_quench_and_focus() -> None:
                             "seq": 4,
                             "nowMs": 4000,
                             "windowMs": 60000,
+                            "visualWindowMs": 60000,
+                            "idleCoastMs": 4500,
                             "presentation": {"stage": "primary", "narration": False, "spatial": False},
                             "columns": [
                                 {"id": "file:src/app.py", "label": "src/app.py", "group": "src", "focus": True},
@@ -550,6 +552,9 @@ def test_browser_thermal_roll_renders_heat_quench_and_focus() -> None:
                 assert projection_state["gridSampleCount"] == 3
                 assert projection_state["gridHeatCount"] == 2
                 assert projection_state["gridWindowMs"] == 60000
+                assert projection_state["gridVisualWindowMs"] == 60000
+                assert projection_state["gridIdleCoastMs"] == 4500
+                assert projection_state["gridTimelineMode"] == "smooth-source-time"
                 assert projection_state["gridSummary"]["quenchCount"] == 1
                 assert_canvas_nonblank(page)
             finally:

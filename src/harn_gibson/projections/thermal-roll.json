@@ -11,6 +11,8 @@
     "spatial": false,
     "narration": false,
     "windowMs": 180000,
+    "visualWindowMs": 180000,
+    "idleCoastMs": 4500,
     "samples": 96,
     "archiveSamples": 192,
     "fallbackEditHeat": 0.22,
