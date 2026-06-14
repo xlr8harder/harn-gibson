@@ -93,6 +93,10 @@ class ProjectionEngine:
         self._grid_seen_events: set[tuple[int, str, str, str]] = set()
         self._grid_pending: dict[str, dict[str, float | str]] = {}
         self._grid_epochs: list[dict[str, Any]] = []
+        self._thermal_seen_events: set[tuple[int, str, str, str]] = set()
+        self._thermal_heat: dict[str, float] = {}
+        self._thermal_samples: list[dict[str, Any]] = []
+        self._thermal_focus = ""
         self._attr_max: dict[tuple[str, str], float] = {}
         self._resolve_now_ms = 0
         self._last_force_ms: int | None = None
@@ -185,7 +189,10 @@ class ProjectionEngine:
             # the engine's deterministic positions
             "physics": {"layers": physics_layers},
         }
-        grid = self._epoch_grid(_dict(self.spec.get("view")), entities, relations, events, focus, latest_seq)
+        view = _dict(self.spec.get("view"))
+        grid = self._epoch_grid(view, entities, relations, events, focus, latest_seq)
+        if grid is None:
+            grid = self._thermal_roll(view, entities, relations, events, focus, latest_seq, now_ms)
         if grid is not None:
             resolved["grid"] = grid
         return resolved
@@ -684,6 +691,197 @@ class ProjectionEngine:
         })
         self._grid_pending = {}
 
+    # -- thermal roll ------------------------------------------------------------
+
+    def _thermal_roll(
+        self,
+        view: Mapping[str, Any],
+        entities: Mapping[str, Mapping[str, Any]],
+        relations: list[Mapping[str, Any]],
+        events: list[Mapping[str, Any]],
+        focus: str,
+        latest_seq: int,
+        now_ms: int,
+    ) -> dict[str, Any] | None:
+        if str(view.get("kind") or "") != "thermal-roll":
+            return None
+        entity_spec = _dict(view.get("entities"))
+        limit = max(1, _int(entity_spec.get("limit"), 48))
+        file_ids = sorted(
+            entity_id for entity_id, entity in entities.items()
+            if str(entity.get("type")) == "file"
+        )[:limit]
+        file_set = set(file_ids)
+        if focus in file_set:
+            self._thermal_focus = focus
+        heat_gain = max(0.05, _float(view.get("heatGain"), 1.0))
+        fallback_heat = max(0.05, _float(view.get("fallbackEditHeat"), 0.22))
+        for event in events:
+            key = self._event_seen_key(event)
+            if key in self._thermal_seen_events:
+                continue
+            self._thermal_seen_events.add(key)
+            self._apply_thermal_event(
+                event,
+                relations,
+                file_set,
+                heat_gain=heat_gain,
+                fallback_heat=fallback_heat,
+                fallback_now_ms=now_ms,
+            )
+        if events:
+            min_seq = min(_int(event.get("seq"), 0) for event in events)
+            self._thermal_seen_events = {key for key in self._thermal_seen_events if key[0] >= min_seq}
+        if len(self._thermal_seen_events) > 4096:
+            self._thermal_seen_events = set(sorted(self._thermal_seen_events)[-2048:])
+        self._thermal_heat = {
+            entity_id: heat for entity_id, heat in self._thermal_heat.items()
+            if entity_id in file_set and heat > 0
+        }
+        window_ms = max(1000, _int(view.get("windowMs"), 180_000))
+        max_samples = max(1, _int(view.get("samples"), 96))
+        archive_samples = max(max_samples, _int(view.get("archiveSamples"), max_samples * 2))
+        self._thermal_samples = self._thermal_samples[-archive_samples:]
+        visible_samples = self._thermal_samples[-max_samples:]
+        visible_sample_ids = {str(sample.get("id") or "") for sample in visible_samples}
+        columns = [
+            {
+                "id": file_id,
+                "label": file_id.removeprefix("file:"),
+                "group": _file_group(file_id),
+                "focus": file_id == self._thermal_focus,
+            }
+            for file_id in file_ids
+        ]
+        cells = [
+            dict(cell)
+            for sample in visible_samples
+            for cell in _list(sample.get("cells"))
+            if str(cell.get("entity") or "") in file_set and str(cell.get("sample") or "") in visible_sample_ids
+        ]
+        heat = [
+            {
+                "entity": file_id,
+                "heat": round(_thermal_visual_heat(self._thermal_heat.get(file_id, 0.0)), 4),
+                "rawHeat": round(self._thermal_heat.get(file_id, 0.0), 4),
+                "focus": file_id == self._thermal_focus,
+            }
+            for file_id in file_ids
+        ]
+        return {
+            "kind": "thermal-roll",
+            "seq": latest_seq,
+            "nowMs": now_ms,
+            "windowMs": window_ms,
+            "presentation": {
+                "stage": str(view.get("stage") or "primary"),
+                "narration": bool(view.get("narration", False)),
+                "spatial": bool(view.get("spatial", False)),
+            },
+            "columns": columns,
+            "samples": [
+                {key: value for key, value in sample.items() if key != "cells"}
+                for sample in visible_samples
+            ],
+            "cells": cells,
+            "heat": heat,
+            "summary": _thermal_summary(visible_samples, heat),
+        }
+
+    def _apply_thermal_event(
+        self,
+        event: Mapping[str, Any],
+        relations: list[Mapping[str, Any]],
+        file_set: set[str],
+        *,
+        heat_gain: float,
+        fallback_heat: float,
+        fallback_now_ms: int,
+    ) -> None:
+        kind = str(event.get("kind") or "")
+        status = str(event.get("status") or "")
+        entity_id = str(event.get("entity") or "")
+        targets = _thermal_targets(event, relations, file_set)
+        focus_target = entity_id if entity_id in file_set else next(iter(sorted(targets)), "")
+        edited: set[str] = set()
+        quench = False
+        shock = False
+        changed = False
+        energy_before = sum(self._thermal_heat.values())
+        if focus_target and focus_target != self._thermal_focus:
+            self._thermal_focus = focus_target
+            changed = True
+        if kind == "file_changed":
+            delta = _thermal_edit_delta(event, heat_gain=heat_gain, fallback_heat=fallback_heat)
+            for target in sorted(targets):
+                self._thermal_heat[target] = self._thermal_heat.get(target, 0.0) + delta
+                edited.add(target)
+            changed = bool(edited) or changed
+        if kind in {"check_completed", "command_completed"} and status == "ok":
+            if kind == "check_completed" or targets:
+                quench = True
+                self._thermal_heat = {entity_id: 0.0 for entity_id in self._thermal_heat}
+                changed = True
+        elif kind in {"check_completed", "command_completed"} and status == "error":
+            shock = True
+            changed = True
+        if changed:
+            self._thermal_samples.append(
+                self._thermal_sample(
+                    event,
+                    file_set,
+                    fallback_now_ms=fallback_now_ms,
+                    edited=edited,
+                    targets=targets,
+                    quench=quench,
+                    shock=shock,
+                    energy_before=energy_before,
+                )
+            )
+
+    def _thermal_sample(
+        self,
+        event: Mapping[str, Any],
+        file_set: set[str],
+        *,
+        fallback_now_ms: int,
+        edited: set[str],
+        targets: set[str],
+        quench: bool,
+        shock: bool,
+        energy_before: float,
+    ) -> dict[str, Any]:
+        seq = _int(event.get("seq"), len(self._thermal_samples) + 1)
+        ts = _event_ts_ms(event, fallback_now_ms)
+        sample_id = f"thermal:{seq}:{len(self._thermal_samples) + 1}"
+        cells = [
+            {
+                "sample": sample_id,
+                "entity": entity_id,
+                "heat": round(_thermal_visual_heat(self._thermal_heat.get(entity_id, 0.0)), 4),
+                "rawHeat": round(self._thermal_heat.get(entity_id, 0.0), 4),
+                "focus": entity_id == self._thermal_focus,
+                "edited": entity_id in edited,
+                "target": entity_id in targets,
+                "quench": quench,
+                "shock": shock and (not targets or entity_id in targets or self._thermal_heat.get(entity_id, 0) > 0),
+            }
+            for entity_id in sorted(file_set)
+        ]
+        return {
+            "id": sample_id,
+            "seq": seq,
+            "ts": ts,
+            "kind": str(event.get("kind") or ""),
+            "status": str(event.get("status") or ""),
+            "focus": self._thermal_focus,
+            "quench": quench,
+            "shock": shock,
+            "energy": round(energy_before, 4) if quench else round(sum(self._thermal_heat.values()), 4),
+            "targets": sorted(targets),
+            "cells": cells,
+        }
+
     # -- mood / camera / hud --------------------------------------------------------
 
     def _mood(self, entities: Mapping[str, Mapping[str, Any]]) -> dict[str, Any]:
@@ -1107,6 +1305,53 @@ def _grid_summary(
     }
 
 
+def _thermal_targets(event: Mapping[str, Any], relations: list[Mapping[str, Any]], file_set: set[str]) -> set[str]:
+    kind = str(event.get("kind") or "")
+    entity_id = str(event.get("entity") or "")
+    targets: set[str] = set()
+    if entity_id.startswith("file:"):
+        targets.add(entity_id)
+    if entity_id.startswith("command:"):
+        targets.update(_touched_files_for_command(entity_id, relations))
+    if kind == "check_completed":
+        targets.update(_blast_for_check(entity_id, relations))
+    return targets & file_set
+
+
+def _thermal_edit_delta(event: Mapping[str, Any], *, heat_gain: float, fallback_heat: float) -> float:
+    churn = event.get("churnFraction")
+    if isinstance(churn, (int, float)) and not isinstance(churn, bool):
+        return min(1.35, max(0.08, float(churn) * heat_gain))
+    return fallback_heat
+
+
+def _thermal_visual_heat(raw_heat: float) -> float:
+    return 1.0 - math.exp(-max(0.0, raw_heat))
+
+
+def _thermal_summary(samples: Sequence[Mapping[str, Any]], heat: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+    hot = [
+        item for item in heat
+        if isinstance(item.get("rawHeat"), (int, float)) and not isinstance(item.get("rawHeat"), bool)
+        and float(item.get("rawHeat") or 0) > 0
+    ]
+    sample_times = [
+        _int(sample.get("ts"), 0)
+        for sample in samples
+        if _int(sample.get("ts"), 0) > 0
+    ]
+    return {
+        "sampleCount": len(samples),
+        "hotFileCount": len(hot),
+        "maxHeat": round(max((float(item.get("heat") or 0.0) for item in heat), default=0.0), 4),
+        "rawHeat": round(sum(float(item.get("rawHeat") or 0.0) for item in hot), 4),
+        "quenchCount": sum(1 for sample in samples if bool(sample.get("quench"))),
+        "shockCount": sum(1 for sample in samples if bool(sample.get("shock"))),
+        "historyStartMs": min(sample_times) if sample_times else 0,
+        "historyEndMs": max(sample_times) if sample_times else 0,
+    }
+
+
 def _file_group(file_id: str) -> str:
     path = file_id.removeprefix("file:")
     return path.split("/", 1)[0] if "/" in path else "."
@@ -1330,6 +1575,14 @@ def _list(value: Any) -> list[Any]:
     return value if isinstance(value, list) else []
 
 
+def _float(value: Any, fallback: float) -> float:
+    if isinstance(value, bool):
+        return fallback
+    if isinstance(value, (int, float)):
+        return float(value)
+    return fallback
+
+
 def _int(value: Any, fallback: int) -> int:
     if isinstance(value, bool):
         return fallback
@@ -1338,6 +1591,13 @@ def _int(value: Any, fallback: int) -> int:
     if isinstance(value, float) and value.is_integer():
         return int(value)
     return fallback
+
+
+def _event_ts_ms(event: Mapping[str, Any], fallback: int) -> int:
+    timestamp = _int(event.get("ts"), 0)
+    if timestamp:
+        return timestamp
+    return _int(event.get("timestampMs"), fallback)
 
 
 __all__ = [

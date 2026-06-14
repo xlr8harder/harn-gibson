@@ -7,12 +7,16 @@ import sys
 from pathlib import Path
 
 DIRECT_RENDERERS = ("classic", "stress")
-PROJECTION_RENDERER_RESOURCES = {"activity-roll": "projections/activity-roll.json"}
-RENDERERS = ("default", "activity-roll", "classic", "stress")
+PROJECTION_RENDERER_RESOURCES = {
+    "activity-roll": "projections/activity-roll.json",
+    "thermal-roll": "projections/thermal-roll.json",
+}
+RENDERERS = ("default", "activity-roll", "thermal-roll", "classic", "stress")
 DEFAULT_RENDERER = "default"
 RENDERER_DESCRIPTIONS = {
     "default": "built-in organic force-layout visualization driven by the perception model",
     "activity-roll": "temporal file activity piano-roll visualization driven by the perception model",
+    "thermal-roll": "real-time thermal file-attention roll driven by the perception model",
     "classic": "older coherent hard-coded visualization for everyday sessions",
     "stress": "showcase/stress visualization with the full cinematic primitive set",
 }

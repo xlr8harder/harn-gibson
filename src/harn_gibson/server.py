@@ -6646,6 +6646,339 @@ function drawProjectionEpochGrid(grid, theme, rect, now) {
   ctx.restore();
 }
 
+function thermalRollColor(heat, alpha) {
+  const value = Math.max(0, Math.min(1, Number(heat || 0)));
+  const stops = [
+    [0.00, [25, 7, 18]],
+    [0.18, [118, 18, 30]],
+    [0.45, [235, 61, 28]],
+    [0.68, [255, 156, 34]],
+    [0.86, [255, 232, 92]],
+    [1.00, [255, 255, 245]],
+  ];
+  let lower = stops[0];
+  let upper = stops[stops.length - 1];
+  for (let index = 1; index < stops.length; index++) {
+    if (value <= stops[index][0]) {
+      lower = stops[index - 1];
+      upper = stops[index];
+      break;
+    }
+  }
+  const span = Math.max(0.0001, upper[0] - lower[0]);
+  const t = Math.max(0, Math.min(1, (value - lower[0]) / span));
+  const channel = (offset) => Math.round(lower[1][offset] + (upper[1][offset] - lower[1][offset]) * t);
+  return `rgba(${channel(0)},${channel(1)},${channel(2)},${alpha})`;
+}
+
+function drawProjectionThermalRoll(grid, theme, rect, now) {
+  const columns = Array.isArray(grid.columns) ? grid.columns : [];
+  const samples = Array.isArray(grid.samples) ? grid.samples : [];
+  const cells = Array.isArray(grid.cells) ? grid.cells : [];
+  const heat = Array.isArray(grid.heat) ? grid.heat : [];
+  const summary = grid.summary || {};
+  const presentation = grid.presentation || {};
+  const primary = presentation.stage === "primary";
+  if (!columns.length) return;
+
+  const rowCount = Math.max(1, columns.length);
+  const panelX = rect.x + rect.width * (primary ? 0.035 : 0.06);
+  const panelY = rect.y + rect.height * (primary ? 0.085 : 0.12);
+  const panelW = rect.width * (primary ? 0.93 : 0.86);
+  const panelH = rect.height * (primary ? 0.80 : 0.64);
+  const headerH = (primary ? 58 : 44) * devicePixelRatio;
+  const footerH = (primary ? 18 : 12) * devicePixelRatio;
+  const labelWidth = Math.min(panelW * 0.34, Math.max((primary ? 168 : 112) * devicePixelRatio, panelW * 0.22));
+  const timelineX = panelX + labelWidth + 14 * devicePixelRatio;
+  const timelineY = panelY + headerH;
+  const timelineW = Math.max(1, panelW - labelWidth - 30 * devicePixelRatio);
+  const timelineH = Math.max(1, panelH - headerH - footerH);
+  const nowX = timelineX + timelineW;
+  const rowStep = timelineH / rowCount;
+  const trackHeight = Math.max(2 * devicePixelRatio, Math.min(12 * devicePixelRatio, rowStep * 0.66));
+  const windowMs = Math.max(1000, Number(grid.windowMs || 180000));
+  const sampleTimes = samples.map((sample) => Number(sample.ts || 0)).filter((value) => value > 0);
+  const lastSampleMs = sampleTimes.length ? Math.max(...sampleTimes) : 0;
+  const sourceNow = Math.max(Number(grid.nowMs || 0), lastSampleMs);
+  const startMs = sourceNow - windowMs;
+  const xForMs = (timestamp) => {
+    if (!timestamp || !sourceNow) return timelineX;
+    return timelineX + Math.max(0, Math.min(1, (Number(timestamp) - startMs) / windowMs)) * timelineW;
+  };
+  const sampleById = new Map(samples.map((sample, index) => [String(sample.id || ""), {sample, index}]));
+  const cellsBySample = new Map();
+  for (const cell of cells) {
+    const key = String(cell.sample || "");
+    if (!cellsBySample.has(key)) cellsBySample.set(key, new Map());
+    cellsBySample.get(key).set(String(cell.entity || ""), cell);
+  }
+  const currentHeat = new Map();
+  for (const item of heat) {
+    currentHeat.set(String(item.entity || ""), item);
+  }
+  const groups = [];
+  for (let index = 0; index < columns.length; index++) {
+    const group = String(columns[index].group || ".");
+    const previous = groups[groups.length - 1];
+    if (!previous || previous.group !== group) {
+      groups.push({group, start: index, end: index + 1});
+    } else {
+      previous.end = index + 1;
+    }
+  }
+  const fitTailLabel = (value, maxWidth) => {
+    const text = String(value || "");
+    if (ctx.measureText(text).width <= maxWidth) return text;
+    let tail = text;
+    while (tail.length > 1 && ctx.measureText(`...${tail}`).width > maxWidth) {
+      tail = tail.slice(1);
+    }
+    return `...${tail}`;
+  };
+  const shortLabel = (value, length = 28) => {
+    const text = String(value || "");
+    return text.length <= length ? text : `...${text.slice(-(length - 3))}`;
+  };
+  const rowCenterY = (rowIndex) => timelineY + (rowIndex + 0.5) * rowStep;
+  const drawFocusReticle = (left, right, y, openLeft, closeRight, alpha = 0.58) => {
+    const top = y - Math.max(trackHeight * 1.05, rowStep * 0.28);
+    const bottom = y + Math.max(trackHeight * 1.05, rowStep * 0.28);
+    const cap = Math.min(9 * devicePixelRatio, Math.max(3 * devicePixelRatio, (right - left) * 0.16));
+    ctx.save();
+    ctx.shadowColor = projectionTone(theme, "warn", 0.75);
+    ctx.shadowBlur = theme.glow * devicePixelRatio * 0.16;
+    ctx.strokeStyle = projectionTone(theme, "warn", alpha);
+    ctx.lineWidth = Math.max(devicePixelRatio, 1.35 * devicePixelRatio);
+    ctx.beginPath();
+    ctx.moveTo(left, top);
+    ctx.lineTo(right, top);
+    ctx.moveTo(left, bottom);
+    ctx.lineTo(right, bottom);
+    if (openLeft) {
+      ctx.moveTo(left, top);
+      ctx.lineTo(left, top + cap);
+      ctx.moveTo(left, bottom);
+      ctx.lineTo(left, bottom - cap);
+    }
+    if (closeRight) {
+      ctx.moveTo(right, top);
+      ctx.lineTo(right, top + cap);
+      ctx.moveTo(right, bottom);
+      ctx.lineTo(right, bottom - cap);
+    }
+    ctx.stroke();
+    ctx.restore();
+  };
+
+  ctx.save();
+  ctx.font = `${8.5 * devicePixelRatio}px ui-monospace, monospace`;
+  ctx.textBaseline = "middle";
+  ctx.lineWidth = devicePixelRatio;
+  ctx.fillStyle = primary ? "rgba(4,2,4,0.95)" : projectionTone(theme, "base", 0.025);
+  ctx.fillRect(panelX, panelY, panelW, panelH);
+  const innerGradient = ctx.createLinearGradient(panelX, panelY + panelH, panelX + panelW, panelY);
+  innerGradient.addColorStop(0, "rgba(120,12,22,0.13)");
+  innerGradient.addColorStop(0.44, "rgba(0,0,0,0)");
+  innerGradient.addColorStop(1, projectionTone(theme, "accent", primary ? 0.04 : 0.018));
+  ctx.fillStyle = innerGradient;
+  ctx.fillRect(panelX, panelY, panelW, panelH);
+  ctx.strokeStyle = projectionTone(theme, "base", primary ? 0.26 : 0.16);
+  ctx.strokeRect(panelX, panelY, panelW, panelH);
+
+  ctx.textAlign = "left";
+  ctx.fillStyle = projectionTone(theme, "accent", 0.9);
+  ctx.font = `${10 * devicePixelRatio}px ui-monospace, monospace`;
+  ctx.fillText("THERMAL ROLL", panelX + 9 * devicePixelRatio, panelY + 14 * devicePixelRatio);
+  ctx.textAlign = "right";
+  ctx.fillStyle = Number(summary.maxHeat || 0) > 0
+    ? thermalRollColor(Number(summary.maxHeat || 0), 0.86)
+    : projectionTone(theme, "base", 0.76);
+  const summaryText = [
+    `${Number(summary.hotFileCount || 0)} HOT`,
+    `${Number(summary.sampleCount || samples.length)} SAMPLES`,
+    `${Number(summary.quenchCount || 0)} QUENCH`,
+    `${Number(summary.shockCount || 0)} SHOCK`,
+  ].join("  //  ");
+  ctx.fillText(summaryText, panelX + panelW - 9 * devicePixelRatio, panelY + 13 * devicePixelRatio);
+
+  const legend = [
+    [thermalRollColor(0.32, 0.8), "warming"],
+    [thermalRollColor(0.78, 0.9), "hot edit debt"],
+    [projectionTone(theme, "base", 0.76), "quench"],
+    [projectionTone(theme, "alarm", 0.78), "shock"],
+    [projectionTone(theme, "warn", 0.78), "focus"],
+  ];
+  ctx.font = `${8.5 * devicePixelRatio}px ui-monospace, monospace`;
+  ctx.textAlign = "left";
+  let legendX = panelX + 10 * devicePixelRatio;
+  const legendY = panelY + 31 * devicePixelRatio;
+  for (const [color, label] of legend) {
+    ctx.fillStyle = color;
+    ctx.fillRect(legendX, legendY - 4 * devicePixelRatio, 7 * devicePixelRatio, 7 * devicePixelRatio);
+    ctx.fillStyle = `rgba(${theme.ink},0.66)`;
+    ctx.fillText(label, legendX + 10 * devicePixelRatio, legendY);
+    legendX += (label.length * 6 + 40) * devicePixelRatio;
+  }
+
+  for (let index = 0; index < groups.length; index++) {
+    const group = groups[index];
+    const y = timelineY + group.start * rowStep;
+    const h = Math.max(1, (group.end - group.start) * rowStep);
+    ctx.fillStyle = index % 2 === 0 ? "rgba(15,22,24,0.30)" : "rgba(38,18,18,0.22)";
+    ctx.fillRect(panelX + 8 * devicePixelRatio, y, panelW - 16 * devicePixelRatio, h);
+    if (h > 13 * devicePixelRatio) {
+      ctx.textAlign = "left";
+      ctx.font = `${7.5 * devicePixelRatio}px ui-monospace, monospace`;
+      ctx.fillStyle = projectionTone(theme, "warn", 0.58);
+      ctx.fillText(shortLabel(group.group, 18), panelX + 10 * devicePixelRatio, y + h * 0.5);
+    }
+  }
+
+  const gridEveryMs = Math.max(1000, Math.round(windowMs / 10));
+  for (let tick = Math.ceil(startMs / gridEveryMs) * gridEveryMs; tick <= sourceNow; tick += gridEveryMs) {
+    const x = xForMs(tick);
+    ctx.strokeStyle = projectionTone(theme, "ghost", 0.065);
+    ctx.lineWidth = devicePixelRatio;
+    ctx.beginPath();
+    ctx.moveTo(x, timelineY);
+    ctx.lineTo(x, timelineY + timelineH);
+    ctx.stroke();
+  }
+
+  for (let row = 0; row < columns.length; row++) {
+    const column = columns[row];
+    const y = rowCenterY(row);
+    ctx.strokeStyle = projectionTone(theme, column.focus ? "warn" : "base", column.focus ? 0.24 : 0.10);
+    ctx.beginPath();
+    ctx.moveTo(timelineX, y);
+    ctx.lineTo(nowX, y);
+    ctx.stroke();
+    ctx.textAlign = "right";
+    ctx.font = `${Math.max(6.5, Math.min(9, rowStep * 0.62)) * devicePixelRatio}px ui-monospace, monospace`;
+    const liveHeat = currentHeat.get(String(column.id || ""));
+    const heatValue = Number(liveHeat ? liveHeat.heat || 0 : 0);
+    ctx.fillStyle = column.focus
+      ? projectionTone(theme, "warn", 0.88)
+      : (heatValue > 0 ? thermalRollColor(heatValue, 0.78) : projectionTone(theme, "ghost", 0.62));
+    const label = fitTailLabel(column.label || column.id || "", labelWidth - 26 * devicePixelRatio);
+    ctx.fillText(label, timelineX - 10 * devicePixelRatio, y);
+  }
+
+  for (let sampleIndex = 0; sampleIndex < samples.length; sampleIndex++) {
+    const sample = samples[sampleIndex];
+    const x1 = xForMs(Number(sample.ts || 0));
+    const next = samples[sampleIndex + 1];
+    const x2 = next ? xForMs(Number(next.ts || 0)) : nowX;
+    if (x2 < timelineX || x1 > nowX) continue;
+    const left = Math.max(timelineX, Math.min(x1, nowX));
+    const right = Math.max(left + devicePixelRatio, Math.min(x2, nowX));
+    const sampleCells = cellsBySample.get(String(sample.id || "")) || new Map();
+    for (let row = 0; row < columns.length; row++) {
+      const column = columns[row];
+      const cell = sampleCells.get(String(column.id || ""));
+      if (!cell) continue;
+      const y = rowCenterY(row);
+      if (cell.focus) {
+        const previous = samples[sampleIndex - 1];
+        const previousCells = previous ? cellsBySample.get(String(previous.id || "")) : null;
+        const previousCell = previousCells ? previousCells.get(String(column.id || "")) : null;
+        const nextCells = next ? cellsBySample.get(String(next.id || "")) : null;
+        const nextCell = nextCells ? nextCells.get(String(column.id || "")) : null;
+        drawFocusReticle(left, right, y, !previousCell?.focus, Boolean(next && !nextCell?.focus), 0.55);
+      }
+      const heatValue = Math.max(0, Math.min(1, Number(cell.heat || 0)));
+      if (heatValue > 0) {
+        const h = Math.max(2 * devicePixelRatio, trackHeight * (0.24 + heatValue * 0.92));
+        ctx.save();
+        ctx.shadowColor = thermalRollColor(heatValue, 0.85);
+        ctx.shadowBlur = theme.glow * devicePixelRatio * (0.04 + heatValue * 0.28);
+        ctx.fillStyle = thermalRollColor(heatValue, 0.24 + heatValue * 0.54);
+        ctx.fillRect(left, y - h * 0.5, right - left, h);
+        if (heatValue > 0.82) {
+          ctx.fillStyle = thermalRollColor(1, 0.40);
+          ctx.fillRect(left, y - Math.max(1, h * 0.12), right - left, Math.max(1, h * 0.24));
+        }
+        ctx.restore();
+      }
+    }
+  }
+
+  for (const sample of samples) {
+    const x = xForMs(Number(sample.ts || 0));
+    if (x < timelineX || x > nowX) continue;
+    if (sample.quench) {
+      const pulse = 0.16 + 0.06 * Math.sin(now * 0.008 + Number(sample.seq || 0));
+      ctx.strokeStyle = projectionTone(theme, "base", 0.45 + pulse);
+      ctx.lineWidth = Math.max(devicePixelRatio, 1.6 * devicePixelRatio);
+      ctx.beginPath();
+      ctx.moveTo(x, timelineY - 3 * devicePixelRatio);
+      ctx.lineTo(x, timelineY + timelineH + 3 * devicePixelRatio);
+      ctx.stroke();
+      ctx.fillStyle = projectionTone(theme, "base", 0.08 + pulse * 0.35);
+      ctx.fillRect(x - 9 * devicePixelRatio, timelineY, 18 * devicePixelRatio, timelineH);
+    }
+    if (sample.shock) {
+      const jitter = Math.sin(now * 0.043 + Number(sample.seq || 0)) * 1.5 * devicePixelRatio;
+      ctx.strokeStyle = projectionTone(theme, "alarm", 0.68);
+      ctx.lineWidth = Math.max(1.4 * devicePixelRatio, 1.8 * devicePixelRatio);
+      ctx.beginPath();
+      ctx.moveTo(x + jitter, timelineY - 5 * devicePixelRatio);
+      ctx.lineTo(x - jitter, timelineY + timelineH + 5 * devicePixelRatio);
+      ctx.stroke();
+    }
+  }
+
+  for (let row = 0; row < columns.length; row++) {
+    const column = columns[row];
+    const liveHeat = currentHeat.get(String(column.id || ""));
+    const heatValue = Number(liveHeat ? liveHeat.heat || 0 : 0);
+    const y = rowCenterY(row);
+    if (column.focus) {
+      const reticleLeft = Math.max(timelineX, nowX - Math.min(timelineW, 46 * devicePixelRatio));
+      drawFocusReticle(reticleLeft, nowX - 1.5 * devicePixelRatio, y, false, false,
+        0.66 + 0.08 * Math.sin(now * 0.008 + row));
+    }
+    if (heatValue > 0) {
+      ctx.save();
+      ctx.shadowColor = thermalRollColor(heatValue, 0.95);
+      ctx.shadowBlur = theme.glow * devicePixelRatio * (0.12 + heatValue * 0.45);
+      ctx.fillStyle = thermalRollColor(heatValue, 0.72 + heatValue * 0.22);
+      ctx.beginPath();
+      ctx.arc(nowX - 3 * devicePixelRatio, y, Math.max(2.3 * devicePixelRatio, trackHeight * (0.3 + heatValue * 0.34)),
+        0, Math.PI * 2);
+      ctx.fill();
+      if (heatValue > 0.88) {
+        ctx.fillStyle = thermalRollColor(1, 0.62);
+        for (let spark = 0; spark < 3; spark++) {
+          const angle = now * 0.006 + row + spark * 2.1;
+          const radius = (5 + spark * 3) * devicePixelRatio;
+          ctx.fillRect(nowX - 3 * devicePixelRatio + Math.cos(angle) * radius,
+            y + Math.sin(angle * 1.3) * radius * 0.5, 1.4 * devicePixelRatio, 1.4 * devicePixelRatio);
+        }
+      }
+      ctx.restore();
+    }
+  }
+
+  ctx.strokeStyle = projectionTone(theme, "accent", 0.86 + 0.08 * Math.sin(now * 0.006));
+  ctx.lineWidth = Math.max(2 * devicePixelRatio, 2.4 * devicePixelRatio);
+  ctx.shadowColor = projectionTone(theme, "accent", 0.8);
+  ctx.shadowBlur = theme.glow * devicePixelRatio * 0.34;
+  ctx.beginPath();
+  ctx.moveTo(nowX, timelineY - 7 * devicePixelRatio);
+  ctx.lineTo(nowX, timelineY + timelineH + 7 * devicePixelRatio);
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+  ctx.textAlign = "right";
+  ctx.font = `${8.5 * devicePixelRatio}px ui-monospace, monospace`;
+  ctx.fillStyle = projectionTone(theme, "accent", 0.82);
+  ctx.fillText("NOW", nowX - 6 * devicePixelRatio, timelineY - 12 * devicePixelRatio);
+  ctx.textAlign = "left";
+  ctx.fillStyle = projectionTone(theme, "ghost", 0.56);
+  ctx.fillText("SOURCE TIME >", timelineX, panelY + panelH - 10 * devicePixelRatio);
+  ctx.restore();
+}
+
 function drawProjectionScene(primitive, w, h, now) {
   const props = primitive.props || {};
   // a session reset rebuilds the engine and its revision counter restarts:
@@ -6664,9 +6997,11 @@ function drawProjectionScene(primitive, w, h, now) {
   const nodes = Array.isArray(props.nodes) ? props.nodes : [];
   const edges = Array.isArray(props.edges) ? props.edges : [];
   const effects = Array.isArray(props.effects) ? props.effects : [];
-  const epochGrid = props.grid && props.grid.kind === "epoch-grid" ? props.grid : null;
-  const gridPresentation = epochGrid && epochGrid.presentation ? epochGrid.presentation : {};
-  const gridPrimary = Boolean(epochGrid && gridPresentation.stage === "primary");
+  const projectionGrid = props.grid && ["epoch-grid", "thermal-roll"].includes(props.grid.kind) ? props.grid : null;
+  const epochGrid = projectionGrid && projectionGrid.kind === "epoch-grid" ? projectionGrid : null;
+  const thermalRoll = projectionGrid && projectionGrid.kind === "thermal-roll" ? projectionGrid : null;
+  const gridPresentation = projectionGrid && projectionGrid.presentation ? projectionGrid.presentation : {};
+  const gridPrimary = Boolean(projectionGrid && gridPresentation.stage === "primary");
   const drawSpatialProjection = !gridPrimary || gridPresentation.spatial === true;
   const drawHudNarration = !gridPrimary || gridPresentation.narration === true;
   const mood = props.mood || {};
@@ -6806,14 +7141,18 @@ function drawProjectionScene(primitive, w, h, now) {
       nodeCount: nodes.length,
       edgeCount: edges.length,
       effectCount: effects.length,
-      gridCellCount: epochGrid && Array.isArray(epochGrid.cells) ? epochGrid.cells.length : 0,
-      gridColumnCount: epochGrid && Array.isArray(epochGrid.columns) ? epochGrid.columns.length : 0,
+      gridKind: projectionGrid ? String(projectionGrid.kind || "") : "",
+      gridCellCount: projectionGrid && Array.isArray(projectionGrid.cells) ? projectionGrid.cells.length : 0,
+      gridColumnCount: projectionGrid && Array.isArray(projectionGrid.columns) ? projectionGrid.columns.length : 0,
       gridEpochCount: epochGrid && Array.isArray(epochGrid.epochs) ? epochGrid.epochs.length : 0,
       gridPendingCount: epochGrid && Array.isArray(epochGrid.pending) ? epochGrid.pending.length : 0,
-      gridSummary: epochGrid ? (epochGrid.summary || {}) : {},
+      gridSampleCount: thermalRoll && Array.isArray(thermalRoll.samples) ? thermalRoll.samples.length : 0,
+      gridHeatCount: thermalRoll && Array.isArray(thermalRoll.heat) ? thermalRoll.heat.length : 0,
+      gridSummary: projectionGrid ? (projectionGrid.summary || {}) : {},
       gridWindow: epochGrid ? Number(epochGrid.window || 0) : 0,
+      gridWindowMs: thermalRoll ? Number(thermalRoll.windowMs || 0) : 0,
       gridAxis: gridPrimary ? {x: "time", y: "files"} : {},
-      gridLayout: gridPrimary ? "activity-roll-tracks" : "",
+      gridLayout: gridPrimary ? (thermalRoll ? "thermal-roll" : "activity-roll-tracks") : "",
       mood: String(mood.name || ""),
       revision: Number(props.revision || 0),
     };
@@ -6848,6 +7187,7 @@ function drawProjectionScene(primitive, w, h, now) {
     }
   }
   if (epochGrid) drawProjectionEpochGrid(epochGrid, theme, rect, now);
+  if (thermalRoll) drawProjectionThermalRoll(thermalRoll, theme, rect, now);
 
   const pointFor = (id) => {
     const tween = projectionTweens.get(id);

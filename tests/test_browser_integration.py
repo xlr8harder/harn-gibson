@@ -445,6 +445,121 @@ def test_browser_activity_roll_uses_file_tracks_over_time() -> None:
         server.server_close()
 
 
+def test_browser_thermal_roll_renders_heat_quench_and_focus() -> None:
+    state = GibsonServerState()
+    state.scene.apply(
+        [
+            SceneMutation(
+                op="upsert",
+                primitive=ScenePrimitive(
+                    id="projection-scene",
+                    kind="projection_scene",
+                    region="stage",
+                    props={
+                        "schema": "harn-gibson.projection-scene.v1",
+                        "theme": "gibson",
+                        "title": "THERMAL ROLL",
+                        "seq": 4,
+                        "revision": 1,
+                        "mood": {"name": "work", "label": "AGENT ACTIVE", "tone": "base"},
+                        "nodes": [],
+                        "edges": [],
+                        "effects": [],
+                        "camera": {},
+                        "hud": {},
+                        "physics": {"layers": []},
+                        "grid": {
+                            "kind": "thermal-roll",
+                            "seq": 4,
+                            "nowMs": 4000,
+                            "windowMs": 60000,
+                            "presentation": {"stage": "primary", "narration": False, "spatial": False},
+                            "columns": [
+                                {"id": "file:src/app.py", "label": "src/app.py", "group": "src", "focus": True},
+                                {"id": "file:tests/test_app.py", "label": "tests/test_app.py",
+                                 "group": "tests", "focus": False},
+                            ],
+                            "samples": [
+                                {"id": "thermal:1:1", "seq": 1, "ts": 1000, "kind": "file_seen",
+                                 "status": "", "focus": "file:src/app.py", "quench": False,
+                                 "shock": False, "energy": 0.0, "targets": ["file:src/app.py"]},
+                                {"id": "thermal:2:2", "seq": 2, "ts": 2000, "kind": "file_changed",
+                                 "status": "", "focus": "file:src/app.py", "quench": False,
+                                 "shock": False, "energy": 0.9, "targets": ["file:src/app.py"]},
+                                {"id": "thermal:3:3", "seq": 3, "ts": 3000, "kind": "check_completed",
+                                 "status": "ok", "focus": "file:src/app.py", "quench": True,
+                                 "shock": False, "energy": 0.9, "targets": ["file:src/app.py"]},
+                            ],
+                            "cells": [
+                                {"sample": "thermal:1:1", "entity": "file:src/app.py", "heat": 0.0,
+                                 "rawHeat": 0.0, "focus": True, "edited": False, "target": True,
+                                 "quench": False, "shock": False},
+                                {"sample": "thermal:1:1", "entity": "file:tests/test_app.py", "heat": 0.0,
+                                 "rawHeat": 0.0, "focus": False, "edited": False, "target": False,
+                                 "quench": False, "shock": False},
+                                {"sample": "thermal:2:2", "entity": "file:src/app.py", "heat": 0.59,
+                                 "rawHeat": 0.9, "focus": True, "edited": True, "target": True,
+                                 "quench": False, "shock": False},
+                                {"sample": "thermal:2:2", "entity": "file:tests/test_app.py", "heat": 0.0,
+                                 "rawHeat": 0.0, "focus": False, "edited": False, "target": False,
+                                 "quench": False, "shock": False},
+                                {"sample": "thermal:3:3", "entity": "file:src/app.py", "heat": 0.0,
+                                 "rawHeat": 0.0, "focus": True, "edited": False, "target": True,
+                                 "quench": True, "shock": False},
+                                {"sample": "thermal:3:3", "entity": "file:tests/test_app.py", "heat": 0.0,
+                                 "rawHeat": 0.0, "focus": False, "edited": False, "target": False,
+                                 "quench": True, "shock": False},
+                            ],
+                            "heat": [
+                                {"entity": "file:src/app.py", "heat": 0.0, "rawHeat": 0.0, "focus": True},
+                                {"entity": "file:tests/test_app.py", "heat": 0.0,
+                                 "rawHeat": 0.0, "focus": False},
+                            ],
+                            "summary": {
+                                "sampleCount": 3,
+                                "hotFileCount": 0,
+                                "maxHeat": 0.0,
+                                "rawHeat": 0.0,
+                                "quenchCount": 1,
+                                "shockCount": 0,
+                                "historyStartMs": 1000,
+                                "historyEndMs": 3000,
+                            },
+                        },
+                    },
+                ),
+            )
+        ]
+    )
+    server, state, base = start_display_server(state)
+    try:
+        with sync_playwright() as driver:
+            try:
+                browser = driver.chromium.launch()
+            except Error as exc:
+                pytest.skip(f"Chromium is not installed for Playwright: {exc}")
+            try:
+                page = browser.new_page(viewport={"width": 960, "height": 700})
+                page.goto(base, wait_until="domcontentloaded")
+                page.wait_for_function("window.__gibsonProjectionState?.gridLayout === 'thermal-roll'")
+                projection_state = page.evaluate("window.__gibsonProjectionState")
+                assert projection_state["gridKind"] == "thermal-roll"
+                assert projection_state["gridAxis"] == {"x": "time", "y": "files"}
+                assert projection_state["gridColumnCount"] == 2
+                assert projection_state["gridCellCount"] == 6
+                assert projection_state["gridSampleCount"] == 3
+                assert projection_state["gridHeatCount"] == 2
+                assert projection_state["gridWindowMs"] == 60000
+                assert projection_state["gridSummary"]["quenchCount"] == 1
+                assert_canvas_nonblank(page)
+            finally:
+                browser.close()
+    finally:
+        state.pipeline.stop()
+        server.shutdown()
+        server.server_close()
+
+
 def test_browser_display_renders_vector_symbols_and_data_rain() -> None:
     state = GibsonServerState()
     run_replay_file(EXAMPLE_REPLAYS / "primitive-gallery.json", state)

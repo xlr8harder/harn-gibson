@@ -274,6 +274,124 @@ def test_epoch_grid_records_command_commit_ok_and_windows_history() -> None:
     assert util_cell["height"] == 0.25
 
 
+def test_thermal_roll_accumulates_focus_heat_and_quenches() -> None:
+    engine = ProjectionEngine({
+        "layers": [],
+        "on": [],
+        "view": {"kind": "thermal-roll", "windowMs": 60_000, "samples": 8, "entities": {"limit": 4}},
+    })
+    events = [
+        {"seq": 9, "ts": 9000, "kind": "file_seen", "entity": "file:README.md"},
+        {"seq": 10, "ts": 10000, "kind": "file_changed", "entity": "file:src/app.py", "churnFraction": 0.4},
+        {"seq": 11, "ts": 11000, "kind": "file_changed", "entity": "file:src/app.py", "churnFraction": 0.7},
+        {"seq": 12, "ts": 12000, "kind": "check_completed", "entity": "check:test:6",
+         "category": "test", "status": "error"},
+        {"seq": 13, "ts": 13000, "kind": "check_completed", "entity": "check:test:6",
+         "category": "test", "status": "ok"},
+    ]
+
+    scene = engine.resolve(_perception(events=events, latest_seq=13), now_ms=13000)
+    grid = scene["grid"]
+    assert grid["kind"] == "thermal-roll"
+    assert grid["windowMs"] == 60_000
+    assert [column["id"] for column in grid["columns"]] == [
+        "file:README.md",
+        "file:src/app.py",
+        "file:src/util.py",
+    ]
+    assert [sample["kind"] for sample in grid["samples"]] == [
+        "file_seen",
+        "file_changed",
+        "file_changed",
+        "check_completed",
+        "check_completed",
+    ]
+    assert grid["samples"][1]["focus"] == "file:src/app.py"
+    assert grid["samples"][3]["shock"] is True
+    assert grid["samples"][4]["quench"] is True
+    assert grid["samples"][4]["energy"] > 0
+    assert grid["summary"]["quenchCount"] == 1
+    assert grid["summary"]["shockCount"] == 1
+    assert grid["summary"]["hotFileCount"] == 0
+    current_heat = {item["entity"]: item for item in grid["heat"]}
+    assert current_heat["file:src/app.py"]["rawHeat"] == 0.0
+    second_edit_id = grid["samples"][2]["id"]
+    second_edit_cells = {
+        cell["entity"]: cell for cell in grid["cells"]
+        if cell["sample"] == second_edit_id
+    }
+    assert second_edit_cells["file:src/app.py"]["heat"] > 0.6
+    assert second_edit_cells["file:src/app.py"]["edited"] is True
+    assert second_edit_cells["file:src/app.py"]["focus"] is True
+
+    deduped = engine.resolve(_perception(events=events, latest_seq=13), now_ms=14000)
+    assert len(deduped["grid"]["samples"]) == len(grid["samples"])
+
+
+def test_thermal_roll_reports_empty_focused_state() -> None:
+    relations = [
+        relation | {"lastSeq": 9} if relation["type"] == "focused_on" else relation
+        for relation in _default_relations()
+    ]
+    engine = ProjectionEngine({
+        "layers": [],
+        "on": [],
+        "view": {"kind": "thermal-roll", "heatGain": True},
+    })
+
+    scene = engine.resolve(_perception(relations=relations, events=[], latest_seq=9), now_ms=9000)
+    grid = scene["grid"]
+
+    assert grid["kind"] == "thermal-roll"
+    assert grid["samples"] == []
+    assert grid["summary"]["sampleCount"] == 0
+    assert grid["summary"]["historyStartMs"] == 0
+    assert next(column for column in grid["columns"] if column["id"] == "file:src/app.py")["focus"] is True
+
+
+def test_thermal_roll_handles_command_targets_fallback_timestamps_and_pruning() -> None:
+    engine = ProjectionEngine({
+        "layers": [],
+        "on": [],
+        "view": {
+            "kind": "thermal-roll",
+            "samples": 2,
+            "archiveSamples": 2,
+            "heatGain": 2.0,
+            "fallbackEditHeat": True,
+        },
+    })
+    events = [
+        {"seq": 1, "timestampMs": 1000, "kind": "file_changed", "entity": "file:src/app.py"},
+        {"seq": 2, "timestampMs": 2000, "kind": "command_completed",
+         "entity": "command:unknown", "status": "ok"},
+        {"seq": 3, "timestampMs": 3000, "kind": "command_completed",
+         "entity": "command:5", "status": "error"},
+        {"seq": 4, "timestampMs": 4000, "kind": "command_completed",
+         "entity": "command:5", "status": "ok"},
+    ]
+
+    scene = engine.resolve(_perception(events=events, latest_seq=4), now_ms=4000)
+    grid = scene["grid"]
+
+    assert [sample["status"] for sample in grid["samples"]] == ["error", "ok"]
+    assert grid["samples"][0]["shock"] is True
+    assert grid["samples"][1]["quench"] is True
+    assert grid["samples"][1]["ts"] == 4000
+    assert grid["summary"]["sampleCount"] == 2
+    assert grid["summary"]["shockCount"] == 1
+    assert grid["summary"]["quenchCount"] == 1
+
+    bulk_engine = ProjectionEngine({"layers": [], "on": [], "view": {"kind": "thermal-roll"}})
+    bulk_events = [
+        {"seq": seq, "ts": seq, "kind": "noop", "entity": ""}
+        for seq in range(1, 4102)
+    ]
+    bulk_scene = bulk_engine.resolve(_perception(events=bulk_events, latest_seq=4101), now_ms=4101)
+    assert bulk_scene["grid"]["samples"] == []
+    assert len(bulk_engine._thermal_seen_events) == 2048
+
+
 def test_event_rules_fire_effects_once_with_blast_and_recovery() -> None:
     engine = ProjectionEngine()
     error_events = [
@@ -775,6 +893,9 @@ def test_builtin_default_projection_loads_from_packaged_json() -> None:
     activity_roll = load_packaged_projection("projections/activity-roll.json")
     assert activity_roll["title"] == "ACTIVITY ROLL"
     assert activity_roll["view"]["kind"] == "epoch-grid"
+    thermal_roll = load_packaged_projection("projections/thermal-roll.json")
+    assert thermal_roll["title"] == "THERMAL ROLL"
+    assert thermal_roll["view"]["kind"] == "thermal-roll"
 
 
 def test_server_env_enables_projection_renderer() -> None:
@@ -789,6 +910,10 @@ def test_server_env_enables_projection_renderer() -> None:
     assert isinstance(activity_roll, ProjectionSceneRenderer)
     assert activity_roll.engine.spec["title"] == "ACTIVITY ROLL"
     assert activity_roll.engine.spec["view"]["kind"] == "epoch-grid"
+    thermal_roll = selected_renderer_from_env("thermal-roll")
+    assert isinstance(thermal_roll, ProjectionSceneRenderer)
+    assert thermal_roll.engine.spec["title"] == "THERMAL ROLL"
+    assert thermal_roll.engine.spec["view"]["kind"] == "thermal-roll"
     built_in_renderer = selected_renderer_from_env("stress", "250")
     assert isinstance(built_in_renderer, ExternalRenderer)
     assert built_in_renderer.timeout_seconds == 0.25

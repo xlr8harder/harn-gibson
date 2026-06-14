@@ -1,0 +1,22 @@
+{
+  "schema": "harn-gibson.projection.v1",
+  "theme": "gibson",
+  "title": "THERMAL ROLL",
+  "layers": [],
+  "camera": {},
+  "on": [],
+  "view": {
+    "kind": "thermal-roll",
+    "stage": "primary",
+    "spatial": false,
+    "narration": false,
+    "windowMs": 180000,
+    "samples": 96,
+    "archiveSamples": 192,
+    "fallbackEditHeat": 0.22,
+    "heatGain": 1.0,
+    "entities": {
+      "limit": 48
+    }
+  }
+}

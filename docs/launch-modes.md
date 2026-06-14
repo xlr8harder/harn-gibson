@@ -23,6 +23,7 @@ Current support:
 /gibson-view
 /gibson-view --renderer default
 /gibson-view --renderer activity-roll
+/gibson-view --renderer thermal-roll
 /gibson-view --renderer classic
 /gibson-view --renderer stress
 /gibson-view --port 8765
@@ -82,7 +83,7 @@ Current support:
 uv run harn-gibson watch-replay examples/dogfood-replays/repo-map-trajectory.json
 ```
 
-Add `--playback-timing real-time` to use source timestamp deltas, or `--renderer activity-roll` / `--renderer classic` / `--renderer stress` to call a built-in visualization live during event replay.
+Add `--playback-timing real-time` to use source timestamp deltas, or `--renderer activity-roll` / `--renderer thermal-roll` / `--renderer classic` / `--renderer stress` to call a built-in visualization live during event replay.
 
 For deterministic checks:
 

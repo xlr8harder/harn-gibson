@@ -29,6 +29,8 @@ def test_acceptance_script_dry_run_lists_release_gates() -> None:
     assert "--renderer default" in output
     assert "--renderer activity-roll" in output
     assert "activity-roll-long-session.png" in output
+    assert "--renderer thermal-roll" in output
+    assert "thermal-roll-long-session.png" in output
     assert (
         "+ env HARN_GIBSON_RENDERER_SEMANTIC_GRAPH=1 uv run harn-gibson replay-dir examples/gibson1-replays"
         in output
