@@ -447,6 +447,12 @@ def test_browser_activity_roll_uses_file_tracks_over_time() -> None:
 
 def test_browser_thermal_roll_renders_heat_quench_and_focus() -> None:
     state = GibsonServerState()
+    state.scene.state.metadata["replayPlayback"] = {
+        "schema": "harn-gibson.replay-playback.v1",
+        "timing": "real-time",
+        "timeScale": 3.0,
+        "wallDelayScale": 0.333333,
+    }
     state.scene.apply(
         [
             SceneMutation(
@@ -475,6 +481,7 @@ def test_browser_thermal_roll_renders_heat_quench_and_focus() -> None:
                             "windowMs": 60000,
                             "visualWindowMs": 60000,
                             "idleCoastMs": 4500,
+                            "heatIgnitionMs": 1400,
                             "presentation": {"stage": "primary", "narration": False, "spatial": False},
                             "columns": [
                                 {"id": "file:src/app.py", "label": "src/app.py", "group": "src", "focus": True},
@@ -554,8 +561,132 @@ def test_browser_thermal_roll_renders_heat_quench_and_focus() -> None:
                 assert projection_state["gridWindowMs"] == 60000
                 assert projection_state["gridVisualWindowMs"] == 60000
                 assert projection_state["gridIdleCoastMs"] == 4500
+                assert projection_state["gridHeatIgnitionMs"] == 1400
+                assert projection_state["gridReplayTimeScale"] == 3
                 assert projection_state["gridTimelineMode"] == "smooth-source-time"
                 assert projection_state["gridSummary"]["quenchCount"] == 1
+                assert_canvas_nonblank(page)
+            finally:
+                browser.close()
+    finally:
+        state.pipeline.stop()
+        server.shutdown()
+        server.server_close()
+
+
+def test_browser_thermal_roll_does_not_pin_stale_effects_to_left_edge() -> None:
+    state = GibsonServerState()
+    state.scene.apply(
+        [
+            SceneMutation(
+                op="upsert",
+                primitive=ScenePrimitive(
+                    id="projection-scene",
+                    kind="projection_scene",
+                    region="stage",
+                    props={
+                        "schema": "harn-gibson.projection-scene.v1",
+                        "theme": "gibson",
+                        "title": "THERMAL ROLL",
+                        "seq": 5,
+                        "revision": 1,
+                        "mood": {"name": "work", "label": "AGENT ACTIVE", "tone": "base"},
+                        "nodes": [],
+                        "edges": [],
+                        "effects": [],
+                        "camera": {},
+                        "hud": {},
+                        "physics": {"layers": []},
+                        "grid": {
+                            "kind": "thermal-roll",
+                            "seq": 5,
+                            "nowMs": 200_000,
+                            "windowMs": 60_000,
+                            "visualWindowMs": 60_000,
+                            "idleCoastMs": 0,
+                            "heatIgnitionMs": 1400,
+                            "presentation": {"stage": "primary", "narration": False, "spatial": False},
+                            "columns": [
+                                {"id": "file:src/app.py", "label": "src/app.py", "group": "src", "focus": False},
+                            ],
+                            "samples": [
+                                {"id": "thermal:1:1", "seq": 1, "ts": 1000, "kind": "file_changed",
+                                 "status": "", "focus": "file:src/app.py", "quench": False,
+                                 "shock": True, "energy": 0.8, "targets": ["file:src/app.py"]},
+                                {"id": "thermal:2:2", "seq": 2, "ts": 2000, "kind": "focus_cleared",
+                                 "status": "", "focus": "", "quench": False,
+                                 "shock": False, "energy": 0.8, "targets": []},
+                                {"id": "thermal:3:3", "seq": 3, "ts": 3000, "kind": "check_completed",
+                                 "status": "ok", "focus": "", "quench": True,
+                                 "shock": False, "energy": 0.8, "targets": ["file:src/app.py"]},
+                            ],
+                            "cells": [
+                                {"sample": "thermal:1:1", "entity": "file:src/app.py", "heat": 0.8,
+                                 "rawHeat": 1.6, "focus": True, "edited": True, "target": True,
+                                 "quench": False, "shock": True},
+                                {"sample": "thermal:2:2", "entity": "file:src/app.py", "heat": 0.8,
+                                 "rawHeat": 1.6, "focus": False, "edited": False, "target": False,
+                                 "quench": False, "shock": False},
+                                {"sample": "thermal:3:3", "entity": "file:src/app.py", "heat": 0.0,
+                                 "rawHeat": 0.0, "focus": False, "edited": False, "target": True,
+                                 "quench": True, "shock": False},
+                            ],
+                            "heat": [
+                                {"entity": "file:src/app.py", "heat": 0.0, "rawHeat": 0.0, "focus": False},
+                            ],
+                            "summary": {
+                                "sampleCount": 3,
+                                "hotFileCount": 0,
+                                "maxHeat": 0.0,
+                                "rawHeat": 0.0,
+                                "quenchCount": 1,
+                                "shockCount": 1,
+                                "historyStartMs": 1000,
+                                "historyEndMs": 3000,
+                            },
+                        },
+                    },
+                ),
+            )
+        ]
+    )
+    server, state, base = start_display_server(state)
+    try:
+        with sync_playwright() as driver:
+            try:
+                browser = driver.chromium.launch()
+            except Error as exc:
+                pytest.skip(f"Chromium is not installed for Playwright: {exc}")
+            try:
+                page = browser.new_page(viewport={"width": 960, "height": 700})
+                page.goto(base, wait_until="domcontentloaded")
+                page.wait_for_function("window.__gibsonThermalRollDebug?.visualStartMs > 100000")
+                debug = page.evaluate("window.__gibsonThermalRollDebug")
+                assert debug["visibleShockCount"] == 0
+                assert debug["offscreenShockCount"] == 1
+                assert debug["visibleQuenchCount"] == 0
+                assert debug["offscreenQuenchCount"] == 1
+                assert debug["focusSegmentCount"] == 0
+                left_edge_alarm_pixels = page.locator("#grid").evaluate(
+                    """canvas => {
+                      const context = canvas.getContext("2d");
+                      const debug = window.__gibsonThermalRollDebug;
+                      const x0 = Math.max(0, Math.floor(debug.timelineX - 2));
+                      const x1 = Math.min(canvas.width, Math.ceil(debug.timelineX + 8));
+                      const y0 = Math.max(0, Math.floor(debug.timelineY));
+                      const y1 = Math.min(canvas.height, Math.ceil(debug.timelineY + debug.timelineH));
+                      const data = context.getImageData(x0, y0, x1 - x0, y1 - y0).data;
+                      let alarm = 0;
+                      for (let index = 0; index < data.length; index += 4) {
+                        const red = data[index];
+                        const green = data[index + 1];
+                        const blue = data[index + 2];
+                        if (red > 150 && red > green * 1.35 && red > blue * 1.35) alarm += 1;
+                      }
+                      return alarm;
+                    }"""
+                )
+                assert left_edge_alarm_pixels < 20
                 assert_canvas_nonblank(page)
             finally:
                 browser.close()

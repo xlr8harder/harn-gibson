@@ -126,16 +126,31 @@ class ReplayControl:
     runner: Callable[[], None]
     runs: int = 0
     _thread: threading.Thread | None = field(default=None, repr=False)
+    _running: bool = field(default=False, repr=False)
+    _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
 
     @property
     def running(self) -> bool:
-        return self._thread is not None and self._thread.is_alive()
+        with self._lock:
+            return self._running or (self._thread is not None and self._thread.is_alive())
+
+    def set_running(self, running: bool) -> None:
+        with self._lock:
+            self._running = running
+
+    def _run_restart(self) -> None:
+        try:
+            self.runner()
+        finally:
+            self.set_running(False)
 
     def restart(self) -> bool:
-        if self.running:
-            return False
-        self.runs += 1
-        self._thread = threading.Thread(target=self.runner, name="harn-gibson-replay-restart", daemon=True)
+        with self._lock:
+            if self._running or (self._thread is not None and self._thread.is_alive()):
+                return False
+            self.runs += 1
+            self._running = True
+        self._thread = threading.Thread(target=self._run_restart, name="harn-gibson-replay-restart", daemon=True)
         self._thread.start()
         return True
 
@@ -1418,6 +1433,14 @@ debugToggle.addEventListener("click", () => {
 });
 
 const replayButton = document.getElementById("replayButton");
+async function refreshSceneSnapshot() {
+  try {
+    const response = await fetch("/scene", {cache: "no-store"});
+    renderScene(await response.json());
+  } catch {
+    statusEl.textContent = "scene fetch failed";
+  }
+}
 async function initReplayControl() {
   try {
     const response = await fetch("/replay");
@@ -1434,6 +1457,11 @@ replayButton.addEventListener("click", async () => {
     if (response.status === 202) {
       const payload = await response.json();
       statusEl.textContent = payload.restarted ? "replay restarting" : "replay already running";
+      if (payload.restarted) {
+        setTimeout(refreshSceneSnapshot, 80);
+        setTimeout(refreshSceneSnapshot, 1700);
+        initReplayControl();
+      }
     } else {
       statusEl.textContent = "replay unavailable - reload page";
     }
@@ -6650,12 +6678,13 @@ function drawProjectionEpochGrid(grid, theme, rect, now) {
 function thermalRollColor(heat, alpha) {
   const value = Math.max(0, Math.min(1, Number(heat || 0)));
   const stops = [
-    [0.00, [28, 4, 8]],
-    [0.18, [96, 7, 13]],
-    [0.42, [198, 25, 16]],
-    [0.66, [255, 98, 18]],
-    [0.86, [255, 185, 36]],
-    [1.00, [255, 232, 104]],
+    [0.00, [46, 5, 10]],
+    [0.14, [126, 8, 13]],
+    [0.36, [232, 35, 15]],
+    [0.62, [255, 104, 18]],
+    [0.84, [255, 178, 34]],
+    [0.96, [255, 232, 104]],
+    [1.00, [255, 248, 210]],
   ];
   let lower = stops[0];
   let upper = stops[stops.length - 1];
@@ -6704,8 +6733,8 @@ function syncThermalRollTimelineClock(samples, grid, now) {
   let sourceNowMs = thermalRollTimelineClock.sourceNowMs + elapsed;
   if (targetSourceNowMs > sourceNowMs) {
     const gap = targetSourceNowMs - sourceNowMs;
-    const easedCatchup = gap * (1 - Math.exp(-elapsed / 420));
-    const catchup = Math.max(elapsed * 2.5, easedCatchup);
+    const easedCatchup = gap * (1 - Math.exp(-elapsed / 760));
+    const catchup = Math.max(elapsed * 1.35, easedCatchup);
     sourceNowMs += Math.min(gap, catchup);
   }
 
@@ -6748,11 +6777,30 @@ function drawProjectionThermalRoll(grid, theme, rect, now) {
   const trackHeight = Math.max(2 * devicePixelRatio, Math.min(12 * devicePixelRatio, rowStep * 0.66));
   const sourceWindowMs = Math.max(1000, Number(grid.windowMs || 180000));
   const visualWindowMs = Math.max(1000, Number(grid.visualWindowMs || sourceWindowMs));
+  const heatIgnitionMs = Math.max(0, Number(grid.heatIgnitionMs || 1400));
   const visualSourceNowMs = syncThermalRollTimelineClock(samples, grid, now);
   const visualStartMs = visualSourceNowMs - visualWindowMs;
+  const thermalDebug = {
+    timelineX,
+    nowX,
+    timelineY,
+    timelineH,
+    visualStartMs,
+    visualSourceNowMs,
+    visibleShockCount: 0,
+    offscreenShockCount: 0,
+    visibleQuenchCount: 0,
+    offscreenQuenchCount: 0,
+    focusSegmentCount: 0,
+    clippedFocusSegmentCount: 0,
+  };
+  const xForDisplayMsRaw = (timestamp) => (
+    timelineX + ((Number(timestamp) - visualStartMs) / visualWindowMs) * timelineW
+  );
+  const clampDisplayX = (x) => Math.max(timelineX, Math.min(nowX, x));
   const xForDisplayMs = (timestamp) => {
     if (!timestamp) return timelineX;
-    return timelineX + Math.max(0, Math.min(1, (Number(timestamp) - visualStartMs) / visualWindowMs)) * timelineW;
+    return clampDisplayX(xForDisplayMsRaw(timestamp));
   };
   const cellsBySample = new Map();
   for (const cell of cells) {
@@ -6788,14 +6836,17 @@ function drawProjectionThermalRoll(grid, theme, rect, now) {
     return text.length <= length ? text : `...${text.slice(-(length - 3))}`;
   };
   const rowCenterY = (rowIndex) => timelineY + (rowIndex + 0.5) * rowStep;
+  const focusTone = (alpha) => projectionTone(theme, "good", alpha);
   const drawFocusReticle = (left, right, y, openLeft, closeRight, alpha = 0.58) => {
+    thermalDebug.focusSegmentCount += 1;
+    if (!openLeft) thermalDebug.clippedFocusSegmentCount += 1;
     const top = y - Math.max(trackHeight * 1.05, rowStep * 0.28);
     const bottom = y + Math.max(trackHeight * 1.05, rowStep * 0.28);
     const cap = Math.min(9 * devicePixelRatio, Math.max(3 * devicePixelRatio, (right - left) * 0.16));
     ctx.save();
-    ctx.shadowColor = projectionTone(theme, "warn", 0.75);
+    ctx.shadowColor = focusTone(0.75);
     ctx.shadowBlur = theme.glow * devicePixelRatio * 0.16;
-    ctx.strokeStyle = projectionTone(theme, "warn", alpha);
+    ctx.strokeStyle = focusTone(alpha);
     ctx.lineWidth = Math.max(devicePixelRatio, 1.35 * devicePixelRatio);
     ctx.beginPath();
     ctx.moveTo(left, top);
@@ -6854,7 +6905,7 @@ function drawProjectionThermalRoll(grid, theme, rect, now) {
     [thermalRollColor(0.78, 0.9), "hot edit debt"],
     [projectionTone(theme, "base", 0.76), "quench"],
     [projectionTone(theme, "alarm", 0.78), "shock"],
-    [projectionTone(theme, "warn", 0.78), "focus"],
+    [focusTone(0.78), "focus"],
   ];
   ctx.font = `${8.5 * devicePixelRatio}px ui-monospace, monospace`;
   ctx.textAlign = "left";
@@ -6900,7 +6951,7 @@ function drawProjectionThermalRoll(grid, theme, rect, now) {
   for (let row = 0; row < columns.length; row++) {
     const column = columns[row];
     const y = rowCenterY(row);
-    ctx.strokeStyle = projectionTone(theme, column.focus ? "warn" : "base", column.focus ? 0.24 : 0.10);
+    ctx.strokeStyle = column.focus ? focusTone(0.24) : projectionTone(theme, "base", 0.10);
     ctx.beginPath();
     ctx.moveTo(timelineX, y);
     ctx.lineTo(nowX, y);
@@ -6910,57 +6961,179 @@ function drawProjectionThermalRoll(grid, theme, rect, now) {
     const liveHeat = currentHeat.get(String(column.id || ""));
     const heatValue = Number(liveHeat ? liveHeat.heat || 0 : 0);
     ctx.fillStyle = column.focus
-      ? projectionTone(theme, "warn", 0.88)
+      ? focusTone(0.88)
       : (heatValue > 0 ? thermalRollColor(heatValue, 0.78) : projectionTone(theme, "ghost", 0.62));
     const label = fitTailLabel(column.label || column.id || "", labelWidth - 26 * devicePixelRatio);
     ctx.fillText(label, timelineX - 10 * devicePixelRatio, y);
   }
 
-  for (let sampleIndex = 0; sampleIndex < samples.length; sampleIndex++) {
-    const sample = samples[sampleIndex];
-    const sampleTs = Number(sample.ts || 0);
-    const x1 = xForDisplayMs(sampleTs);
-    const next = samples[sampleIndex + 1];
-    const nextTs = next ? Number(next.ts || 0) : 0;
-    const x2 = nextTs ? xForDisplayMs(nextTs) : nowX;
-    if (x2 < timelineX || x1 > nowX) continue;
-    const left = Math.max(timelineX, Math.min(x1, nowX));
-    const right = Math.max(left + devicePixelRatio, Math.min(x2, nowX));
-    const sampleCells = cellsBySample.get(String(sample.id || "")) || new Map();
-    for (let row = 0; row < columns.length; row++) {
-      const column = columns[row];
-      const cell = sampleCells.get(String(column.id || ""));
-      if (!cell) continue;
-      const y = rowCenterY(row);
-      if (cell.focus) {
-        const previous = samples[sampleIndex - 1];
-        const previousCells = previous ? cellsBySample.get(String(previous.id || "")) : null;
-        const previousCell = previousCells ? previousCells.get(String(column.id || "")) : null;
-        const nextCells = next ? cellsBySample.get(String(next.id || "")) : null;
-        const nextCell = nextCells ? nextCells.get(String(column.id || "")) : null;
-        drawFocusReticle(left, right, y, !previousCell?.focus, Boolean(next && !nextCell?.focus), 0.55);
-      }
-      const heatValue = Math.max(0, Math.min(1, Number(cell.heat || 0)));
-      if (heatValue > 0) {
-        const h = Math.max(2 * devicePixelRatio, trackHeight * (0.24 + heatValue * 0.92));
-        ctx.save();
-        ctx.shadowColor = thermalRollColor(heatValue, 0.85);
-        ctx.shadowBlur = theme.glow * devicePixelRatio * (0.04 + heatValue * 0.28);
-        ctx.fillStyle = thermalRollColor(heatValue, 0.24 + heatValue * 0.54);
-        ctx.fillRect(left, y - h * 0.5, right - left, h);
-        if (heatValue > 0.94) {
-          ctx.fillStyle = thermalRollColor(0.98, 0.36);
-          ctx.fillRect(left, y - Math.max(1, h * 0.12), right - left, Math.max(1, h * 0.24));
-        }
-        ctx.restore();
+  const drawHeatSpan = (span) => {
+    const left = Math.max(timelineX, span.left);
+    const right = Math.min(nowX, span.right);
+    if (right <= left) return;
+    const heatValue = span.heat;
+    const y = span.y;
+    const h = Math.max(2 * devicePixelRatio, trackHeight * (0.24 + heatValue * 0.92));
+    const rampVisible = span.rampEndX > left && span.rampStartHeat < heatValue - 0.01;
+    const rampEndX = rampVisible ? Math.max(left + devicePixelRatio, span.rampEndX) : left;
+    const rampRight = rampVisible ? Math.min(right, rampEndX) : left;
+    ctx.save();
+    if (rampRight > left) {
+      const rampMidHeat = Math.max(
+        span.rampStartHeat,
+        span.rampStartHeat + (heatValue - span.rampStartHeat) * 0.52,
+      );
+      const rampWidth = rampRight - left;
+      const rampSlices = Math.max(3, Math.min(44, Math.ceil(rampWidth / (3 * devicePixelRatio))));
+      ctx.shadowBlur = 0;
+      for (let slice = 0; slice < rampSlices; slice++) {
+        const sliceLeft = left + rampWidth * (slice / rampSlices);
+        const sliceRight = left + rampWidth * ((slice + 1) / rampSlices);
+        const t = (slice + 0.5) / rampSlices;
+        const heatAtSlice = rampMidHeat
+          + (heatValue - rampMidHeat) * Math.max(0, (t - 0.5) / 0.5);
+        const heatAtStart = span.rampStartHeat + (rampMidHeat - span.rampStartHeat) * Math.min(1, t / 0.5);
+        const heatAt = t < 0.5 ? heatAtStart : heatAtSlice;
+        const sliceH = Math.max(2 * devicePixelRatio, trackHeight * (0.24 + heatAt * 0.92));
+        ctx.fillStyle = thermalRollColor(heatAt, 0.24 + heatAt * 0.54);
+        ctx.fillRect(sliceLeft, y - sliceH * 0.5, Math.max(devicePixelRatio, sliceRight - sliceLeft), sliceH);
       }
     }
+    if (right > rampRight) {
+      const solidLeft = Math.max(left, rampRight);
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = thermalRollColor(heatValue, 0.24 + heatValue * 0.54);
+      ctx.fillRect(solidLeft, y - h * 0.5, right - solidLeft, h);
+    }
+    ctx.restore();
+  };
+  const focusRunEndX = (entityId, startIndex) => {
+    for (let index = startIndex + 1; index < samples.length; index++) {
+      const sampleCells = cellsBySample.get(String(samples[index].id || "")) || new Map();
+      const cell = sampleCells.get(entityId);
+      if (!cell?.focus) {
+        return xForDisplayMs(Number(samples[index].ts || 0));
+      }
+    }
+    return nowX;
+  };
+
+  for (let row = 0; row < columns.length; row++) {
+    const column = columns[row];
+    const y = rowCenterY(row);
+    let activeSpan = null;
+    const flushSpan = () => {
+      if (activeSpan) drawHeatSpan(activeSpan);
+      activeSpan = null;
+    };
+    for (let sampleIndex = 0; sampleIndex < samples.length; sampleIndex++) {
+      const sample = samples[sampleIndex];
+      const sampleTs = Number(sample.ts || 0);
+      const x1Raw = xForDisplayMsRaw(sampleTs);
+      const next = samples[sampleIndex + 1];
+      const nextTs = next ? Number(next.ts || 0) : 0;
+      const x2Raw = nextTs ? xForDisplayMsRaw(nextTs) : nowX;
+      if (x2Raw <= timelineX || x1Raw >= nowX) continue;
+      const left = clampDisplayX(x1Raw);
+      const right = Math.max(left + devicePixelRatio, clampDisplayX(x2Raw));
+      const sampleCells = cellsBySample.get(String(sample.id || "")) || new Map();
+      const cell = sampleCells.get(String(column.id || ""));
+      const heatValue = Math.max(0, Math.min(1, Number(cell ? cell.heat || 0 : 0)));
+      if (!cell || heatValue <= 0) {
+        flushSpan();
+        continue;
+      }
+      const previous = samples[sampleIndex - 1];
+      const previousCells = previous ? cellsBySample.get(String(previous.id || "")) : null;
+      const previousCell = previousCells ? previousCells.get(String(column.id || "")) : null;
+      const previousHeat = Math.max(0, Math.min(1, Number(previousCell ? previousCell.heat || 0 : 0)));
+      const heatRamps = Boolean(cell.edited) && heatIgnitionMs > 0 && heatValue > previousHeat + 0.01;
+      const rampEndX = heatRamps
+        ? (
+          cell.focus
+            ? focusRunEndX(String(column.id || ""), sampleIndex)
+            : xForDisplayMsRaw(sampleTs + heatIgnitionMs)
+        )
+        : left;
+      const mergesActiveRamp = activeSpan
+        && heatRamps
+        && left <= activeSpan.rampEndX + devicePixelRatio * 0.5;
+      if (mergesActiveRamp) {
+        activeSpan.right = Math.max(activeSpan.right, right);
+        activeSpan.heat = Math.max(activeSpan.heat, heatValue);
+        activeSpan.rampEndX = Math.max(activeSpan.rampEndX, rampEndX);
+        continue;
+      }
+      const continuous = activeSpan
+        && !heatRamps
+        && Math.abs(activeSpan.heat - heatValue) < 0.0001
+        && left <= activeSpan.right + devicePixelRatio * 0.5;
+      if (continuous) {
+        activeSpan.right = Math.max(activeSpan.right, right);
+        continue;
+      }
+      flushSpan();
+      activeSpan = {
+        left,
+        right,
+        y,
+        heat: heatValue,
+        rampStartHeat: heatRamps ? previousHeat : heatValue,
+        rampEndX,
+      };
+    }
+    flushSpan();
+  }
+
+  for (let row = 0; row < columns.length; row++) {
+    const column = columns[row];
+    const y = rowCenterY(row);
+    let focusSpan = null;
+    const flushFocusSpan = (closeRight) => {
+      if (focusSpan) {
+        drawFocusReticle(focusSpan.left, focusSpan.right, y, focusSpan.openLeft, closeRight, 0.55);
+      }
+      focusSpan = null;
+    };
+    for (let sampleIndex = 0; sampleIndex < samples.length; sampleIndex++) {
+      const sample = samples[sampleIndex];
+      const sampleTs = Number(sample.ts || 0);
+      const x1Raw = xForDisplayMsRaw(sampleTs);
+      const next = samples[sampleIndex + 1];
+      const nextTs = next ? Number(next.ts || 0) : 0;
+      const x2Raw = nextTs ? xForDisplayMsRaw(nextTs) : nowX;
+      if (x2Raw <= timelineX || x1Raw >= nowX) continue;
+      const left = clampDisplayX(x1Raw);
+      const right = Math.max(left + devicePixelRatio, clampDisplayX(x2Raw));
+      const sampleCells = cellsBySample.get(String(sample.id || "")) || new Map();
+      const cell = sampleCells.get(String(column.id || ""));
+      if (!cell?.focus) {
+        flushFocusSpan(true);
+        continue;
+      }
+      if (focusSpan && left <= focusSpan.right + devicePixelRatio * 0.5) {
+        focusSpan.right = Math.max(focusSpan.right, right);
+        continue;
+      }
+      const previous = samples[sampleIndex - 1];
+      const previousCells = previous ? cellsBySample.get(String(previous.id || "")) : null;
+      const previousCell = previousCells ? previousCells.get(String(column.id || "")) : null;
+      flushFocusSpan(true);
+      focusSpan = {left, right, openLeft: x1Raw >= timelineX && !previousCell?.focus};
+    }
+    flushFocusSpan(false);
   }
 
   for (const sample of samples) {
-    const x = xForDisplayMs(Number(sample.ts || 0));
-    if (x < timelineX || x > nowX) continue;
+    const xRaw = xForDisplayMsRaw(Number(sample.ts || 0));
+    if (xRaw < timelineX || xRaw > nowX) {
+      if (sample.shock) thermalDebug.offscreenShockCount += 1;
+      if (sample.quench) thermalDebug.offscreenQuenchCount += 1;
+      continue;
+    }
+    const x = clampDisplayX(xRaw);
     if (sample.quench) {
+      thermalDebug.visibleQuenchCount += 1;
       const pulse = 0.16 + 0.06 * Math.sin(now * 0.008 + Number(sample.seq || 0));
       ctx.strokeStyle = projectionTone(theme, "base", 0.45 + pulse);
       ctx.lineWidth = Math.max(devicePixelRatio, 1.6 * devicePixelRatio);
@@ -6972,6 +7145,7 @@ function drawProjectionThermalRoll(grid, theme, rect, now) {
       ctx.fillRect(x - 9 * devicePixelRatio, timelineY, 18 * devicePixelRatio, timelineH);
     }
     if (sample.shock) {
+      thermalDebug.visibleShockCount += 1;
       const jitter = Math.sin(now * 0.043 + Number(sample.seq || 0)) * 1.5 * devicePixelRatio;
       ctx.strokeStyle = projectionTone(theme, "alarm", 0.68);
       ctx.lineWidth = Math.max(1.4 * devicePixelRatio, 1.8 * devicePixelRatio);
@@ -6982,19 +7156,57 @@ function drawProjectionThermalRoll(grid, theme, rect, now) {
     }
   }
 
+  const liveHeatValues = columns.map((column) => {
+    const liveHeat = currentHeat.get(String(column.id || ""));
+    return Number(liveHeat ? liveHeat.heat || 0 : 0);
+  });
+  const hasFocusedTrack = columns.some((column) => Boolean(column.focus));
+  const edgeHeat = Math.max(0, ...liveHeatValues, hasFocusedTrack ? 0.18 : 0.08);
+  const edgeW = Math.min(timelineW * 0.10, Math.max(42 * devicePixelRatio, 86 * devicePixelRatio));
+  ctx.save();
+  const edgeGradient = ctx.createLinearGradient(nowX - edgeW, timelineY, nowX, timelineY);
+  edgeGradient.addColorStop(0, "rgba(255,244,214,0)");
+  edgeGradient.addColorStop(0.62, thermalRollColor(Math.max(0.34, edgeHeat), 0.02 + edgeHeat * 0.035));
+  edgeGradient.addColorStop(1, `rgba(255,246,216,${0.06 + edgeHeat * 0.10})`);
+  ctx.fillStyle = edgeGradient;
+  ctx.fillRect(nowX - edgeW, timelineY, edgeW, timelineH);
+  ctx.shadowColor = thermalRollColor(Math.max(0.48, edgeHeat), 0.38);
+  ctx.shadowBlur = theme.glow * devicePixelRatio * (0.06 + edgeHeat * 0.16);
+  ctx.strokeStyle = `rgba(255,248,220,${0.08 + edgeHeat * 0.12})`;
+  ctx.lineWidth = Math.max(devicePixelRatio, 1.2 * devicePixelRatio);
+  ctx.beginPath();
+  ctx.moveTo(nowX - devicePixelRatio * 0.75, timelineY + 5 * devicePixelRatio);
+  ctx.lineTo(nowX - devicePixelRatio * 0.75, timelineY + timelineH - 5 * devicePixelRatio);
+  ctx.stroke();
+  ctx.restore();
+
   for (let row = 0; row < columns.length; row++) {
     const column = columns[row];
     const liveHeat = currentHeat.get(String(column.id || ""));
     const heatValue = Number(liveHeat ? liveHeat.heat || 0 : 0);
     const y = rowCenterY(row);
     if (heatValue > 0) {
+      const rowGlowW = Math.min(edgeW * 0.88, Math.max(20 * devicePixelRatio, edgeW * (0.26 + heatValue * 0.62)));
+      const rowEdgeGradient = ctx.createLinearGradient(nowX - rowGlowW, y, nowX, y);
+      rowEdgeGradient.addColorStop(0, thermalRollColor(heatValue, 0));
+      rowEdgeGradient.addColorStop(0.78, thermalRollColor(heatValue, 0.11 + heatValue * 0.13));
+      rowEdgeGradient.addColorStop(1, `rgba(255,250,226,${0.14 + heatValue * 0.22})`);
       ctx.save();
+      ctx.fillStyle = rowEdgeGradient;
+      ctx.fillRect(nowX - rowGlowW, y - trackHeight * 0.78, rowGlowW, trackHeight * 1.56);
       ctx.shadowColor = thermalRollColor(heatValue, 0.95);
       ctx.shadowBlur = theme.glow * devicePixelRatio * (0.12 + heatValue * 0.45);
       ctx.fillStyle = thermalRollColor(heatValue, 0.72 + heatValue * 0.22);
       ctx.beginPath();
-      ctx.arc(nowX - 3 * devicePixelRatio, y, Math.max(2.3 * devicePixelRatio, trackHeight * (0.3 + heatValue * 0.34)),
-        0, Math.PI * 2);
+      ctx.ellipse(
+        nowX - 3 * devicePixelRatio,
+        y,
+        Math.max(2.6 * devicePixelRatio, trackHeight * (0.34 + heatValue * 0.42)),
+        Math.max(2.0 * devicePixelRatio, trackHeight * (0.24 + heatValue * 0.30)),
+        0,
+        0,
+        Math.PI * 2,
+      );
       ctx.fill();
       if (heatValue > 0.96) {
         ctx.fillStyle = thermalRollColor(0.98, 0.58);
@@ -7009,22 +7221,12 @@ function drawProjectionThermalRoll(grid, theme, rect, now) {
     }
   }
 
-  ctx.strokeStyle = projectionTone(theme, "accent", 0.86 + 0.08 * Math.sin(now * 0.006));
-  ctx.lineWidth = Math.max(2 * devicePixelRatio, 2.4 * devicePixelRatio);
-  ctx.shadowColor = projectionTone(theme, "accent", 0.8);
-  ctx.shadowBlur = theme.glow * devicePixelRatio * 0.34;
-  ctx.beginPath();
-  ctx.moveTo(nowX, timelineY - 7 * devicePixelRatio);
-  ctx.lineTo(nowX, timelineY + timelineH + 7 * devicePixelRatio);
-  ctx.stroke();
-  ctx.shadowBlur = 0;
-  ctx.textAlign = "right";
-  ctx.font = `${8.5 * devicePixelRatio}px ui-monospace, monospace`;
-  ctx.fillStyle = projectionTone(theme, "accent", 0.82);
-  ctx.fillText("NOW", nowX - 6 * devicePixelRatio, timelineY - 12 * devicePixelRatio);
   ctx.textAlign = "left";
   ctx.fillStyle = projectionTone(theme, "ghost", 0.56);
   ctx.fillText("VISUAL TIME >", timelineX, panelY + panelH - 10 * devicePixelRatio);
+  if (typeof window !== "undefined") {
+    window.__gibsonThermalRollDebug = thermalDebug;
+  }
   ctx.restore();
 }
 
@@ -7205,6 +7407,8 @@ function drawProjectionScene(primitive, w, h, now) {
         ? Number(thermalRoll.visualWindowMs || Number(thermalRoll.windowMs || 180000))
         : 0,
       gridIdleCoastMs: thermalRoll ? Number(thermalRoll.idleCoastMs || 0) : 0,
+      gridHeatIgnitionMs: thermalRoll ? Number(thermalRoll.heatIgnitionMs || 0) : 0,
+      gridReplayTimeScale: thermalRoll ? Number(currentScene?.metadata?.replayPlayback?.timeScale || 1) : 1,
       gridTimelineMode: thermalRoll ? "smooth-source-time" : (epochGrid ? "event-time" : ""),
       gridAxis: gridPrimary ? {x: "time", y: "files"} : {},
       gridLayout: gridPrimary ? (thermalRoll ? "thermal-roll" : "activity-roll-tracks") : "",
@@ -8749,7 +8953,7 @@ source.onopen = () => {
     // a stale tab just reconnected (server restarted): resync the scene and
     // the replay control instead of showing the previous session's frame
     streamWasLost = false;
-    fetch("/scene").then((r) => r.json()).then(renderScene).catch(() => {});
+    refreshSceneSnapshot();
     initReplayControl();
   }
 };
@@ -8762,10 +8966,7 @@ source.onmessage = (message) => {
   }
 };
 
-fetch("/scene")
-  .then((response) => response.json())
-  .then((scene) => renderScene(scene))
-  .catch(() => { statusEl.textContent = "scene fetch failed"; });
+refreshSceneSnapshot();
 
 refreshHealth();
 setInterval(refreshHealth, 1000);

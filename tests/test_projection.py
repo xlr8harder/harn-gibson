@@ -296,6 +296,7 @@ def test_thermal_roll_accumulates_focus_heat_and_quenches() -> None:
     assert grid["windowMs"] == 60_000
     assert grid["visualWindowMs"] == 60_000
     assert grid["idleCoastMs"] == 4500
+    assert grid["heatIgnitionMs"] == 1400
     assert [column["id"] for column in grid["columns"]] == [
         "file:README.md",
         "file:src/app.py",
@@ -311,6 +312,7 @@ def test_thermal_roll_accumulates_focus_heat_and_quenches() -> None:
     assert grid["samples"][1]["focus"] == "file:src/app.py"
     assert grid["samples"][3]["shock"] is True
     assert grid["samples"][4]["quench"] is True
+    assert grid["samples"][4]["focus"] == ""
     assert grid["samples"][4]["energy"] > 0
     assert grid["summary"]["quenchCount"] == 1
     assert grid["summary"]["shockCount"] == 1
@@ -351,6 +353,50 @@ def test_thermal_roll_reports_empty_focused_state() -> None:
     assert next(column for column in grid["columns"] if column["id"] == "file:src/app.py")["focus"] is True
 
 
+def test_thermal_roll_clears_file_focus_when_projection_focus_is_not_file() -> None:
+    engine = ProjectionEngine({
+        "layers": [],
+        "on": [],
+        "view": {"kind": "thermal-roll"},
+    })
+    events = [
+        {"seq": 1, "ts": 1000, "kind": "file_changed", "entity": "file:src/app.py", "churnFraction": 0.4},
+    ]
+    focused = engine.resolve(_perception(events=events, latest_seq=1), now_ms=1000)["grid"]
+    assert next(column for column in focused["columns"] if column["id"] == "file:src/app.py")["focus"] is True
+
+    root_relations = [
+        relation for relation in _default_relations()
+        if relation["type"] != "focused_on"
+    ] + [{"type": "focused_on", "from": "agent", "to": "dir:.", "lastSeq": 2}]
+    cleared = engine.resolve(_perception(relations=root_relations, events=[], latest_seq=2), now_ms=2000)["grid"]
+
+    assert not any(column["focus"] for column in cleared["columns"])
+    assert not any(item["focus"] for item in cleared["heat"])
+
+
+def test_thermal_roll_check_targets_do_not_become_focus() -> None:
+    relations = [
+        relation for relation in _default_relations()
+        if relation["type"] != "focused_on"
+    ] + [{"type": "focused_on", "from": "agent", "to": "dir:.", "lastSeq": 12}]
+    engine = ProjectionEngine({
+        "layers": [],
+        "on": [],
+        "view": {"kind": "thermal-roll"},
+    })
+    events = [
+        {"seq": 12, "ts": 12000, "kind": "check_completed", "entity": "check:test:6",
+         "category": "test", "status": "error"},
+    ]
+
+    grid = engine.resolve(_perception(relations=relations, events=events, latest_seq=12), now_ms=12000)["grid"]
+
+    assert grid["samples"][0]["shock"] is True
+    assert grid["samples"][0]["focus"] == ""
+    assert not any(column["focus"] for column in grid["columns"])
+
+
 def test_thermal_roll_handles_command_targets_fallback_timestamps_and_pruning() -> None:
     engine = ProjectionEngine({
         "layers": [],
@@ -379,6 +425,7 @@ def test_thermal_roll_handles_command_targets_fallback_timestamps_and_pruning() 
     assert [sample["status"] for sample in grid["samples"]] == ["error", "ok"]
     assert grid["samples"][0]["shock"] is True
     assert grid["samples"][1]["quench"] is True
+    assert grid["samples"][1]["focus"] == ""
     assert grid["samples"][1]["ts"] == 4000
     assert grid["summary"]["sampleCount"] == 2
     assert grid["summary"]["shockCount"] == 1

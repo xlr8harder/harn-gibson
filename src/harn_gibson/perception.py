@@ -55,6 +55,9 @@ _MAX_UNTRACKED_FILES = 200
 _MAX_COMMAND_PREVIEW_CHARS = 200
 _MAX_NARRATION_CHARS = 6000
 _TRANSCRIPT_EVENT_TYPES = frozenset({"context", "before_provider_request"})
+_PAYLOAD_CHANGE_EVENT_TYPES = frozenset(
+    {"tool_call", "tool_execution_start", "tool_execution_update", "tool_result", "tool_execution_end", "user_bash"}
+)
 
 _EXCLUDED_NAMES = {
     ".coverage",
@@ -403,6 +406,7 @@ class PerceptionModel:
         self._relations: dict[tuple[str, str, str], dict[str, Any]] = {}
         self._events: list[dict[str, Any]] = []
         self._seen_event_keys: set[tuple[str, int, int, str]] = set()
+        self._seen_payload_change_keys: set[tuple[str, str, str]] = set()
         self._git: GitSnapshot = GitSnapshot(available=False)
         self._last_head_sha: str | None = None
         self._reconciled_once = False
@@ -673,10 +677,18 @@ class PerceptionModel:
         # Event-local change facts from tool payloads (e.g. edit deltas). Sizes
         # are unknown at this point, so churn follows the "observed but
         # unmeasured" rule; git reconciliation supplies measured sizes later.
+        if event.event_type not in _PAYLOAD_CHANGE_EVENT_TYPES:
+            return
+        if event.phase == "during":
+            return
         diff_preview = _diff_preview_from_payload(event.payload)
         for change in changes_from_event(event, touches, None):
             if not _path_visible(change.path) or not _plausible_touch_path(change.path):
                 continue
+            change_key = self._payload_change_key(event, change.path, change.operation)
+            if change_key in self._seen_payload_change_keys:
+                continue
+            self._seen_payload_change_keys.add(change_key)
             payload: dict[str, Any] = {
                 "seq": event.sequence,
                 "ts": event.timestamp_ms,
@@ -693,6 +705,13 @@ class PerceptionModel:
             if diff_preview and event.phase == "before":
                 payload["diffPreview"] = diff_preview
             self._append_event(payload)
+
+    @staticmethod
+    def _payload_change_key(event: GibsonEvent, path: str, operation: str) -> tuple[str, str, str]:
+        tool_call_id = event.payload.get("toolCallId")
+        if isinstance(tool_call_id, str) and tool_call_id:
+            return (tool_call_id, path, operation)
+        return (f"event:{event.sequence}", path, operation)
 
     # -- reconciliation --------------------------------------------------------
 

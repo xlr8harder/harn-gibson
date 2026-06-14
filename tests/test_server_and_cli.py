@@ -37,6 +37,7 @@ from harn_gibson.server import (
     BrowserInputQueue,
     GibsonServerState,
     HarnBridgeState,
+    ReplayControl,
     apply_event_to_scene,
     backend_contract_payload,
     browser_input_event_payload,
@@ -94,6 +95,88 @@ def start_server() -> tuple[ThreadingHTTPServer, str]:
     return server, f"http://{host}:{port}"
 
 
+def test_replay_control_rejects_restart_while_marked_running() -> None:
+    calls: list[str] = []
+    control = ReplayControl(description="fixture", runner=lambda: calls.append("restart"))
+
+    control.set_running(True)
+    assert control.running is True
+    assert control.restart() is False
+    assert control.runs == 0
+    assert calls == []
+
+    control.set_running(False)
+    assert control.restart() is True
+    assert control.runs == 1
+    assert control._thread is not None  # noqa: SLF001 - test waits for restart worker
+    control._thread.join(timeout=2)  # noqa: SLF001 - test waits for restart worker
+    assert calls == ["restart"]
+    assert control.running is False
+
+
+def test_replay_playback_metadata_helpers_ignore_non_scene_state() -> None:
+    assert cli._replay_playback_metadata("fixed", 99) == {  # noqa: SLF001 - internal watch-replay helper
+        "schema": "harn-gibson.replay-playback.v1",
+        "timing": "fixed",
+        "timeScale": 1.0,
+        "wallDelayScale": 1.0,
+    }
+    cli._set_replay_playback_metadata(object(), playback_timing="real-time", speed=4.0)  # noqa: SLF001
+
+
+def test_watch_replay_rerun_preserves_selected_range(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: dict[str, Any] = {}
+
+    def fake_reset_session(state: object) -> None:
+        calls["reset_state"] = state
+
+    def fake_play_replay_file(path: str, state: object, **kwargs: Any) -> None:
+        calls["path"] = path
+        calls["state"] = state
+        calls["kwargs"] = kwargs
+
+    monkeypatch.setattr("harn_gibson.server.reset_session", fake_reset_session)
+    monkeypatch.setattr("harn_gibson.replay.play_replay_file", fake_play_replay_file)
+    state = GibsonServerState()
+    try:
+        cli._rerun_replay(  # noqa: SLF001 - browser /replay/restart owns this private runner
+            "fixture.json",
+            state,
+            start_delay_ms=250,
+            step_delay_ms=125,
+            playback_timing="real-time",
+            speed=2.5,
+            max_step_delay_ms=5000,
+            quiet_step_delay_ms=10,
+            min_step_delay_ms=80,
+            start_index=1,
+            end_index=4,
+            progress=lambda *_args: None,
+        )
+    finally:
+        state.pipeline.stop()
+
+    assert calls["reset_state"] is state
+    assert calls["path"] == "fixture.json"
+    assert calls["state"] is state
+    assert calls["kwargs"]["start_delay_ms"] == 250
+    assert calls["kwargs"]["step_delay_ms"] == 125
+    assert calls["kwargs"]["playback_timing"] == "real-time"
+    assert calls["kwargs"]["time_scale"] == 2.5
+    assert calls["kwargs"]["max_step_delay_ms"] == 5000
+    assert calls["kwargs"]["quiet_step_delay_ms"] == 10
+    assert calls["kwargs"]["min_step_delay_ms"] == 80
+    assert calls["kwargs"]["start_index"] == 1
+    assert calls["kwargs"]["end_index"] == 4
+    assert calls["kwargs"]["check_expectations"] is False
+    assert state.scene.state.metadata["replayPlayback"] == {
+        "schema": "harn-gibson.replay-playback.v1",
+        "timing": "real-time",
+        "timeScale": 2.5,
+        "wallDelayScale": 0.4,
+    }
+
+
 def test_http_server_routes() -> None:
     server, base = start_server()
     try:
@@ -107,6 +190,8 @@ def test_http_server_routes() -> None:
         app_status, app_content_type, app_js = request_text(f"{base}/assets/app.js")
         assert (app_status, app_content_type) == (200, "application/javascript; charset=utf-8")
         assert 'fetch("/health"' in app_js
+        assert 'fetch("/replay/restart", {method: "POST"})' in app_js
+        assert "refreshSceneSnapshot" in app_js
         assert 'EventSource("/events/stream")' in app_js
         health = json.loads(request_text(f"{base}/healthz")[2])
         health_alias = json.loads(request_text(f"{base}/health?probe=1")[2])

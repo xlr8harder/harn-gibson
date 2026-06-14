@@ -852,6 +852,24 @@ def _await_replay_directive(state: object, *, poll_seconds: float = 0.4) -> str 
         return None
 
 
+def _replay_playback_metadata(playback_timing: str, speed: float) -> dict[str, object]:
+    time_scale = float(speed) if playback_timing == "real-time" else 1.0
+    return {
+        "schema": "harn-gibson.replay-playback.v1",
+        "timing": playback_timing,
+        "timeScale": time_scale,
+        "wallDelayScale": round(1.0 / time_scale, 6),
+    }
+
+
+def _set_replay_playback_metadata(state: object, *, playback_timing: str, speed: float) -> None:
+    scene = getattr(state, "scene", None)
+    scene_state = getattr(scene, "state", None)
+    metadata = getattr(scene_state, "metadata", None)
+    if isinstance(metadata, dict):
+        metadata["replayPlayback"] = _replay_playback_metadata(playback_timing, speed)
+
+
 def _rerun_replay(
     path: str,
     state: object,
@@ -860,9 +878,12 @@ def _rerun_replay(
     playback_timing: str,
     speed: float,
     max_step_delay_ms: int | None,
+    progress: object,
+    start_delay_ms: int = 1500,
     quiet_step_delay_ms: int | None = None,
     min_step_delay_ms: int | None = None,
-    progress: object,
+    start_index: int = 0,
+    end_index: int | None = None,
 ) -> None:
     """Runner registered behind the browser replay button: reset the session
     (fresh perception/scene under the same config) and play the file again."""
@@ -870,16 +891,19 @@ def _rerun_replay(
     from harn_gibson.server import reset_session
 
     reset_session(state)
+    _set_replay_playback_metadata(state, playback_timing=playback_timing, speed=speed)
     play_replay_file(
         path,
         state,
-        start_delay_ms=1500,
+        start_delay_ms=start_delay_ms,
         step_delay_ms=step_delay_ms,
         playback_timing=playback_timing,
         time_scale=speed,
         max_step_delay_ms=max_step_delay_ms,
         quiet_step_delay_ms=quiet_step_delay_ms,
         min_step_delay_ms=min_step_delay_ms,
+        start_index=start_index,
+        end_index=end_index,
         check_expectations=False,
         progress=progress,
     )
@@ -910,12 +934,17 @@ def run_watch_replay(args: argparse.Namespace) -> int:
         return 2
 
     state = _replay_state_from_args(args)
+    _set_replay_playback_metadata(state, playback_timing=args.playback_timing, speed=args.speed)
     server = create_server(args.host, args.port, state)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     actual_host, actual_port = server.server_address
     display_url = f"http://{actual_host}:{actual_port}"
     interrupted = False
+    start_index = args.start_step - 1
+    end_index = args.end_step
+    partial_playback = args.start_step != 1 or args.end_step is not None
+    check_expectations = (not partial_playback) if args.check_expectations is None else args.check_expectations
 
     def report_progress(step: ReplayStepResult, position: int, total: int, scene: SceneState) -> None:
         print(
@@ -924,21 +953,25 @@ def run_watch_replay(args: argparse.Namespace) -> int:
         )
 
     print(f"harn-gibson replay display: {display_url}", file=sys.stderr)
-    state.replay_control = ReplayControl(
+    replay_control = ReplayControl(
         description=str(args.path),
         runner=functools.partial(
             _rerun_replay,
             args.path,
             state,
+            start_delay_ms=args.start_delay_ms,
             step_delay_ms=args.step_delay_ms,
             playback_timing=args.playback_timing,
             speed=args.speed,
             max_step_delay_ms=args.max_step_delay_ms,
             quiet_step_delay_ms=args.quiet_step_delay_ms,
             min_step_delay_ms=args.min_step_delay_ms,
+            start_index=start_index,
+            end_index=end_index,
             progress=report_progress,
         ),
     )
+    state.replay_control = replay_control
     if args.browser:
         webbrowser.open(display_url)
     if args.wait_for_input:
@@ -962,27 +995,27 @@ def run_watch_replay(args: argparse.Namespace) -> int:
             message=f"DIRECTIVE RECEIVED :: {directive[:80]}",
             event_type="lobby_directive", title="Directive",
         )
-    start_index = args.start_step - 1
-    end_index = args.end_step
-    partial_playback = args.start_step != 1 or args.end_step is not None
-    check_expectations = (not partial_playback) if args.check_expectations is None else args.check_expectations
     try:
         try:
-            result = play_replay_file(
-                args.path,
-                state,
-                start_delay_ms=args.start_delay_ms,
-                step_delay_ms=args.step_delay_ms,
-                playback_timing=args.playback_timing,
-                time_scale=args.speed,
-                max_step_delay_ms=args.max_step_delay_ms,
-                quiet_step_delay_ms=args.quiet_step_delay_ms,
-                min_step_delay_ms=args.min_step_delay_ms,
-                start_index=start_index,
-                end_index=end_index,
-                check_expectations=check_expectations,
-                progress=report_progress,
-            )
+            replay_control.set_running(True)
+            try:
+                result = play_replay_file(
+                    args.path,
+                    state,
+                    start_delay_ms=args.start_delay_ms,
+                    step_delay_ms=args.step_delay_ms,
+                    playback_timing=args.playback_timing,
+                    time_scale=args.speed,
+                    max_step_delay_ms=args.max_step_delay_ms,
+                    quiet_step_delay_ms=args.quiet_step_delay_ms,
+                    min_step_delay_ms=args.min_step_delay_ms,
+                    start_index=start_index,
+                    end_index=end_index,
+                    check_expectations=check_expectations,
+                    progress=report_progress,
+                )
+            finally:
+                replay_control.set_running(False)
         except ReplayExpectationError as error:
             for failure in error.failures:
                 print(f"replay expectation failed: {failure.message}", file=sys.stderr)

@@ -712,8 +712,7 @@ class ProjectionEngine:
             if str(entity.get("type")) == "file"
         )[:limit]
         file_set = set(file_ids)
-        if focus in file_set:
-            self._thermal_focus = focus
+        self._thermal_focus = focus if focus in file_set else ""
         heat_gain = max(0.05, _float(view.get("heatGain"), 1.0))
         fallback_heat = max(0.05, _float(view.get("fallbackEditHeat"), 0.22))
         for event in events:
@@ -746,6 +745,7 @@ class ProjectionEngine:
         visible_sample_ids = {str(sample.get("id") or "") for sample in visible_samples}
         visual_window_ms = max(1000, _int(view.get("visualWindowMs"), window_ms))
         idle_coast_ms = max(0, _int(view.get("idleCoastMs"), 4500))
+        heat_ignition_ms = max(0, _int(view.get("heatIgnitionMs"), 1400))
         columns = [
             {
                 "id": file_id,
@@ -777,6 +777,7 @@ class ProjectionEngine:
             "windowMs": window_ms,
             "visualWindowMs": visual_window_ms,
             "idleCoastMs": idle_coast_ms,
+            "heatIgnitionMs": heat_ignition_ms,
             "presentation": {
                 "stage": str(view.get("stage") or "primary"),
                 "narration": bool(view.get("narration", False)),
@@ -806,7 +807,7 @@ class ProjectionEngine:
         status = str(event.get("status") or "")
         entity_id = str(event.get("entity") or "")
         targets = _thermal_targets(event, relations, file_set)
-        focus_target = entity_id if entity_id in file_set else next(iter(sorted(targets)), "")
+        focus_target = entity_id if entity_id in file_set else ""
         edited: set[str] = set()
         quench = False
         shock = False
@@ -825,6 +826,7 @@ class ProjectionEngine:
             if kind == "check_completed" or targets:
                 quench = True
                 self._thermal_heat = {entity_id: 0.0 for entity_id in self._thermal_heat}
+                self._thermal_focus = ""
                 changed = True
         elif kind in {"check_completed", "command_completed"} and status == "error":
             shock = True

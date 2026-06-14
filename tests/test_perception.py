@@ -169,6 +169,101 @@ def test_perception_emits_measured_file_changed_events(tmp_path: Path) -> None:
     assert by_id["file:src/app_pkg/app.py"]["attrs"]["dirty"] is True
 
 
+def test_perception_ignores_streamed_partial_changes_for_heat(tmp_path: Path) -> None:
+    root = _git_fixture(tmp_path)
+    model = PerceptionModel(project_root=str(root), discovery="stream")
+    events = tuple(
+        GibsonEvent.from_raw(
+            {
+                "type": "message_update",
+                "assistantMessageEvent": {
+                    "delta": '{"path":"src/app_pkg/app.py","oldString":"VALUE","newString":"NEXT"}',
+                    "partial": {"content": [{"type": "toolCall", "name": "edit"}]},
+                },
+            },
+            sequence=sequence,
+            timestamp_ms=sequence * 100,
+        )
+        for sequence in range(1, 4)
+    )
+    update = GibsonEvent.from_raw(
+        {
+            "type": "tool_execution_update",
+            "toolName": "edit",
+            "toolCallId": "call-streaming-edit",
+            "args": {"path": "src/app_pkg/app.py", "oldString": "VALUE", "newString": "NEXT"},
+        },
+        sequence=4,
+        timestamp_ms=400,
+    )
+    touched = {
+        "schema": "harn-gibson.touched-files.v1",
+        "files": [
+            {
+                "path": "src/app_pkg/app.py",
+                "operation": "edit:during",
+                "firstSequence": 1,
+                "lastSequence": 4,
+                "phases": ["during"],
+                "sources": ["assistantMessageEvent.partial"],
+            }
+        ],
+        "count": 1,
+        "truncated": False,
+    }
+
+    model.apply_batch((*events, update), touched)
+
+    assert [event for event in model.to_dict()["events"] if event["kind"] == "file_changed"] == []
+
+
+def test_perception_dedupes_tool_lifecycle_file_changes(tmp_path: Path) -> None:
+    root = _git_fixture(tmp_path)
+    model = PerceptionModel(project_root=str(root), discovery="stream")
+    payloads = [
+        {"type": "message_end", "message": {
+            "content": "replace src/app_pkg/app.py oldString hello newString hello world"
+        }},
+        {"type": "tool_execution_start", "toolName": "edit", "toolCallId": "call-1",
+         "args": {"path": "src/app_pkg/app.py", "oldString": "hello", "newString": "hello world"}},
+        {"type": "tool_call", "toolName": "edit", "toolCallId": "call-1",
+         "input": {"path": "src/app_pkg/app.py", "oldString": "hello", "newString": "hello world"}},
+        {"type": "tool_result", "toolName": "edit", "toolCallId": "call-1", "isError": False,
+         "input": {"path": "src/app_pkg/app.py", "oldString": "hello", "newString": "hello world"}},
+        {"type": "tool_execution_end", "toolName": "edit", "toolCallId": "call-1", "isError": False,
+         "result": {"path": "src/app_pkg/app.py", "oldString": "hello", "newString": "hello world"}},
+        {"type": "turn_end", "toolResults": [{
+            "input": {"path": "src/app_pkg/app.py", "oldString": "hello", "newString": "hello world"}
+        }]},
+    ]
+    events = tuple(
+        GibsonEvent.from_raw(payload, sequence=index, timestamp_ms=index * 100)
+        for index, payload in enumerate(payloads, start=1)
+    )
+    touched = {
+        "schema": "harn-gibson.touched-files.v1",
+        "files": [
+            {
+                "path": "src/app_pkg/app.py",
+                "operation": "edit:before",
+                "firstSequence": 1,
+                "lastSequence": 6,
+                "phases": ["before", "after"],
+                "sources": ["input.path"],
+            }
+        ],
+        "count": 1,
+        "truncated": False,
+    }
+
+    model.apply_batch(events, touched)
+
+    changed = [event for event in model.to_dict()["events"] if event["kind"] == "file_changed"]
+    assert len(changed) == 1
+    assert changed[0]["seq"] == 2
+    assert changed[0]["entity"] == "file:src/app_pkg/app.py"
+
+
 def test_perception_records_commit_milestones(tmp_path: Path) -> None:
     root = _git_fixture(tmp_path)
     model = PerceptionModel(project_root=str(root))
